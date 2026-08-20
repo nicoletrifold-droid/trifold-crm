@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>@view-transition{navigation:auto}</style>
+<title>Empreendimentos — Trifold Engenharia</title>
+<meta name="description" content="Conheça os empreendimentos residenciais da Trifold Engenharia em Maringá e região.">
+<link rel="preload" as="image" href="assets/card-vind.webp" fetchpriority="high">
+<link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-variable.woff2" crossorigin>
+<script src="./support.js" defer></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<link href="assets/fonts/fonts.css" rel="stylesheet">
+<style>
+  html{scroll-behavior:smooth}
+  ::view-transition-old(root),::view-transition-new(root){animation-duration:.38s;animation-timing-function:cubic-bezier(.4,0,.2,1)}
+  body{margin:0;background:#000;color:#fff;font-family:'Space Grotesk',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  ::selection{background:#F27A5E;color:#000}
+  a{color:inherit;text-decoration:none}
+</style>
+</helmet>
+
+<div style="background:#000;color:#fff;font-family:'Space Grotesk',system-ui,sans-serif">
+
+  <!-- ============ NAV ============ -->
+  <div style="position:fixed;top:0;left:0;right:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:20px {{ sidePad }};box-sizing:border-box;background:linear-gradient(180deg,rgba(0,0,0,0.65),rgba(0,0,0,0))">
+    <a href="Home.dc.html" aria-label="Ir para a Home" style="display:flex;align-items:center"><dc-import name="Logo" tone="dark" size="{{ 26 }}" hint-size="220px,30px"></dc-import></a>
+    <div style="{{ navLinksStyle }}">
+      <a href="Home.dc.html" style="color:#C9C9C9;white-space:nowrap;transition:color .2s ease" style-hover="color:#fff">HOME</a>
+      <a href="Sobre Nós.dc.html" style="color:#C9C9C9;white-space:nowrap;transition:color .2s ease" style-hover="color:#fff">SOBRE NÓS</a>
+      <a href="#" style="color:#fff;border-bottom:1px solid #F27A5E;padding-bottom:3px;white-space:nowrap">EMPREENDIMENTOS</a>
+      <a href="B2B.dc.html" style="color:#C9C9C9;white-space:nowrap;transition:color .2s ease" style-hover="color:#fff">CORPORATIVAS</a>
+      <a href="Blog.dc.html" style="color:#C9C9C9;white-space:nowrap;transition:color .2s ease" style-hover="color:#fff">BLOG</a>
+      <a href="Home.dc.html#contato" style="padding:11px 22px;background:#F27A5E;color:#000;border-radius:2px;font-weight:600;letter-spacing:0.02em;white-space:nowrap;transition:filter .25s ease,transform .25s ease" style-hover="filter:brightness(1.08);transform:scale(1.02)">CONTATO</a>
+    </div>
+    <button onClick="{{ toggleMenu }}" style="{{ hamburgerBtnStyle }}">
+      <span style="{{ barStyle }}"></span><span style="{{ barStyle }}"></span><span style="{{ barStyle }}"></span>
+    </button>
+  </div>
+
+  <!-- ============ MOBILE MENU OVERLAY ============ -->
+  <sc-if value="{{ menuOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;inset:0;z-index:200;background:#050505;display:flex;flex-direction:column;padding:26px 28px 40px;overflow-y:auto">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:52px">
+        <a href="Home.dc.html" aria-label="Ir para a Home" style="display:flex;align-items:center"><dc-import name="Logo" tone="dark" size="{{ 26 }}" hint-size="200px,28px"></dc-import></a>
+        <button onClick="{{ toggleMenu }}" style="width:38px;height:38px;background:none;border:1px solid rgba(255,255,255,0.2);border-radius:6px;color:#fff;font-size:18px;cursor:pointer">✕</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;font-size:24px;font-weight:500">
+        <a href="Home.dc.html" style="padding:14px 4px;border-bottom:1px solid rgba(255,255,255,0.08)">Home</a>
+        <a href="Sobre Nós.dc.html" style="padding:14px 4px;border-bottom:1px solid rgba(255,255,255,0.08)">Sobre nós</a>
+        <a href="#" onClick="{{ toggleMenu }}" style="padding:14px 4px;border-bottom:1px solid rgba(255,255,255,0.08);color:#F27A5E">Empreendimentos</a>
+        <a href="B2B.dc.html" style="padding:14px 4px;border-bottom:1px solid rgba(255,255,255,0.08)">Corporativas</a>
+        <a href="Blog.dc.html" style="padding:14px 4px;border-bottom:1px solid rgba(255,255,255,0.08)">Blog</a>
+      </div>
+      <a href="Home.dc.html#contato" style="display:inline-flex;align-items:center;justify-content:center;margin-top:32px;padding:16px 24px;background:#F27A5E;color:#000;border-radius:2px;font-weight:600;font-size:15px">Contato</a>
+    </div>
+  </sc-if>
+
+  <!-- ============ HEADER ============ -->
+  <section style="padding:{{ heroPadTop }} {{ sidePad }} 64px;max-width:1120px;margin:0 auto">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
+      <span style="font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.22em;text-transform:uppercase;color:#9A9A9A">Empreendimentos</span>
+    </div>
+    <h1 style="margin:0;font-size:clamp(28px,4.6vw,54px);font-weight:500;letter-spacing:-0.02em;max-width:820px">Descubra qual empreendimento é o melhor para você e sua família</h1>
+  </section>
+
+  <!-- ============ GRID DE EMPREENDIMENTOS ============ -->
+  <section style="padding:0 {{ sidePad }} {{ sectionPadV }};max-width:1120px;margin:0 auto">
+    <div style="display:grid;grid-template-columns:{{ cols3 }};gap:20px">
+      <sc-for list="{{ empre }}" as="e" hint-placeholder-count="3">
+        <div onMouseEnter="{{ e.onEnter }}" onMouseLeave="{{ e.onLeave }}" style="{{ e.cardStyle }}">
+          <div style="{{ e.photoBoxStyle }}">
+            <div style="{{ e.imgStyle }}"></div>
+          </div>
+          <div style="padding:26px 24px;display:flex;flex-direction:column;flex:1">
+            <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:14px">
+              <h3 style="margin:0;font-size:19px;font-weight:600;min-width:0">{{ e.name }}</h3>
+              <span style="display:inline-flex;align-items:center;padding:5px 10px;border-radius:2px;background:#1C1C1C;font-family:'Space Mono',monospace;font-size:9.5px;letter-spacing:0.06em;font-weight:700;color:{{ e.badgeColor }};white-space:nowrap;flex:none;margin-top:3px">{{ e.badge }}</span>
+            </div>
+            <p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:#9A9A9A;flex:1">{{ e.desc }}</p>
+            <sc-if value="{{ e.showProgress }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-bottom:18px">
+                <div style="display:flex;justify-content:space-between;font-family:'Space Mono',monospace;font-size:10px;letter-spacing:0.1em;color:#F27A5E;margin-bottom:7px"><span>{{ e.progressLabel }}</span><span>{{ e.progressPct }}</span></div>
+                <div style="height:3px;background:rgba(255,255,255,0.12)"><div style="{{ e.progressStyle }}"></div></div>
+              </div>
+            </sc-if>
+            <sc-if value="{{ e.showCta }}" hint-placeholder-val="{{ true }}">
+              <a href="Home.dc.html#contato" style="display:inline-flex;align-items:center;gap:9px;align-self:flex-start;padding:12px 22px;border:1px solid rgba(255,255,255,0.3);border-radius:2px;font-size:13px;font-weight:500;transition:background .25s ease,border-color .25s ease,transform .25s ease" style-hover="background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.55);transform:translateY(-2px)">Saiba mais <span style="font-size:15px;display:inline-block;transition:transform .25s ease" style-hover="transform:translateX(4px)">→</span></a>
+            </sc-if>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <!-- ============ CTA FINAL ============ -->
+  <section style="padding:{{ sectionPadV }} {{ sidePad }};border-top:1px solid rgba(255,255,255,0.08);text-align:center">
+    <div style="max-width:700px;margin:0 auto;display:flex;flex-direction:column;align-items:center">
+      <span style="font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.22em;text-transform:uppercase;color:#F27A5E;margin-bottom:24px">Não encontrou o que procurava?</span>
+      <h2 style="margin:0 0 34px;font-size:clamp(26px,4vw,46px);font-weight:600;letter-spacing:-0.025em;line-height:1.1">Fale com nosso time e descubra as próximas oportunidades.</h2>
+      <a href="Home.dc.html#contato" style="display:inline-flex;align-items:center;gap:10px;padding:16px 34px;background:#F27A5E;color:#000;border-radius:2px;font-size:15px;font-weight:600;letter-spacing:0.02em;transition:transform .25s ease,filter .25s ease" style-hover="filter:brightness(1.08);transform:translateY(-2px)">Fale com a Trifold <span style="font-size:17px;display:inline-block;transition:transform .25s ease" style-hover="transform:translateX(4px)">→</span></a>
+    </div>
+  </section>
+
+  <!-- ============ FOOTER ============ -->
+  <footer style="padding:64px {{ sidePad }} 44px;border-top:1px solid rgba(255,255,255,0.08);background:#050505">
+    <div style="max-width:1120px;margin:0 auto">
+      <div style="display:flex;flex-wrap:wrap;gap:32px;justify-content:space-between;align-items:flex-start;padding-bottom:44px;border-bottom:1px solid rgba(255,255,255,0.08)">
+        <div style="max-width:320px">
+          <dc-import name="Logo" tone="dark" size="{{ 30 }}" hint-size="280px,34px"></dc-import>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:20px 26px;font-size:13px;letter-spacing:0.04em;color:#9A9A9A">
+          <a href="Home.dc.html" style="transition:color .2s ease" style-hover="color:#fff">HOME</a><a href="Sobre Nós.dc.html" style="transition:color .2s ease" style-hover="color:#fff">SOBRE</a><a href="#" style="transition:color .2s ease" style-hover="color:#fff">EMPREENDIMENTOS</a><a href="B2B.dc.html" style="transition:color .2s ease" style-hover="color:#fff">CORPORATIVAS</a><a href="Blog.dc.html" style="transition:color .2s ease" style-hover="color:#fff">BLOG</a>
+        </div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:20px;justify-content:space-between;align-items:center;padding-top:28px;font-family:'Space Mono',monospace;font-size:11px;color:#5A5A5A">
+        <span>© 2026 Trifold Engenharia. Todos os direitos reservados.</span>
+        <span style="display:inline-flex;align-items:center;gap:8px">Desenvolvido por <img src="assets/dois-logo.svg" alt="Dois" style="height:12px;width:auto;opacity:0.7" /></span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- WhatsApp float -->
+  <a href="https://wa.me/5544991089698?text=Ol%C3%A1%2C%20estava%20no%20site%20da%20Trifold%20e%20gostaria%20de%20mais%20informa%C3%A7%C3%B5es%20sobre..." target="_blank" rel="noopener" style="position:fixed;right:20px;bottom:20px;z-index:120;width:58px;height:58px;border-radius:50%;background:#111111;border:1px solid #F27A5E;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 20px rgba(0,0,0,0.4);transition:transform .25s ease,box-shadow .25s ease" style-hover="transform:scale(1.08);box-shadow:0 8px 26px rgba(0,0,0,0.5)" title="WhatsApp">
+    <svg viewBox="0 0 32 32" width="30" height="30" fill="#fff"><path fill-rule="evenodd" clip-rule="evenodd" d="M16 3C8.82 3 3 8.82 3 16c0 2.49.69 4.82 1.9 6.81L3 29l6.37-1.85A12.94 12.94 0 0 0 16 29c7.18 0 13-5.82 13-13S23.18 3 16 3zm0 23.8a10.7 10.7 0 0 1-5.46-1.49l-.39-.23-4.06 1.18 1.21-3.96-.25-.41A10.75 10.75 0 1 1 16 26.8z"/><path d="M21.6 18.9c-.32-.16-1.88-.93-2.17-1.03-.29-.11-.5-.16-.72.16-.21.32-.82 1.03-1 1.24-.19.21-.37.24-.69.08-.32-.16-1.34-.5-2.55-1.58-.94-.84-1.58-1.87-1.76-2.19-.19-.32-.02-.49.14-.65.14-.14.32-.37.48-.55.16-.19.21-.32.32-.53.11-.21.05-.4-.03-.56-.08-.16-.72-1.74-.99-2.38-.26-.62-.53-.54-.72-.55-.19-.01-.4-.01-.61-.01-.21 0-.56.08-.85.4-.29.32-1.11 1.09-1.11 2.65 0 1.56 1.14 3.07 1.29 3.28.16.21 2.24 3.42 5.42 4.8.76.33 1.35.52 1.81.67.76.24 1.45.21 2 .13.61-.09 1.88-.77 2.14-1.51.27-.75.27-1.39.19-1.52-.08-.14-.29-.21-.61-.37z"/></svg>
+  </a>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{}">
+class Component extends DCLogic {
+  state = { hoverEmpre: -1, menuOpen: false, vw: (typeof window !== 'undefined' ? window.innerWidth : 1280) };
+  componentDidMount() {
+    this._onResize = () => this.setState({ vw: window.innerWidth });
+    window.addEventListener('resize', this._onResize);
+  }
+  componentWillUnmount() {
+    window.removeEventListener('resize', this._onResize);
+  }
+  toggleMenu() { this.setState(s => ({ menuOpen: !s.menuOpen })); }
+  renderVals() {
+    const vw = this.state.vw || 1280;
+    const isMobile = vw < 900;
+    const menuOpen = this.state.menuOpen;
+
+    const sidePad = vw < 520 ? '24px' : isMobile ? '34px' : '48px';
+    const sectionPadV = isMobile ? '64px' : '120px';
+    const heroPadTop = isMobile ? '130px' : '170px';
+    const cols3 = isMobile ? '1fr' : 'repeat(3,1fr)';
+
+    const navLinksStyle = { display: isMobile ? 'none' : 'flex', alignItems: 'center', flexWrap: 'nowrap', gap: '26px', marginLeft: '56px', fontSize: '12.5px', letterSpacing: '0.05em' };
+    const hamburgerBtnStyle = { display: isMobile ? 'flex' : 'none', flexDirection: 'column', justifyContent: 'center', gap: '5px', width: '38px', height: '38px', background: 'none', border: 'none', cursor: 'pointer', padding: 0 };
+    const barStyle = { width: '22px', height: '2px', background: '#fff', display: 'block' };
+
+    const empreRaw = [
+      { name:'Vind Residence', badge:'ÚLTIMAS UNIDADES', badgeColor:'#F27A5E', desc:'No Jardim Novo Horizonte, Maringá. Apartamentos de 2 suítes com varanda gourmet e área de lazer completa.', bgImage:'url(assets/card-vind.webp)', showProgress:true, progressLabel:'OBRA EM ANDAMENTO', progressPct:'45%', progressStyle:{ width:'45%', height:'3px', background:'#F27A5E' }, showCta:true },
+      { name:'Yarden', badge:'LANÇAMENTO', badgeColor:'#F27A5E', desc:'Quando sofisticação e natureza se encontram, algo único acontece. Projeto biofílico na Gleba Itororó.', bgImage:'url(assets/card-yarden.webp)', showProgress:true, progressLabel:'PROJETOS APROVADOS', progressPct:'25%', progressStyle:{ width:'25%', height:'3px', background:'#F27A5E' }, showCta:true },
+      { name:'Rua Assaí, 153', badge:'EM BREVE', badgeColor:'#F27A5E', desc:'Um novo empreendimento em uma localização única, ao lado da Av. Cerro Azul. Em breve.', bgImage:'url(assets/card-assai.webp?v=2)', showProgress:true, progressLabel:'PROJETOS EM APROVAÇÃO', progressPct:'10%', progressStyle:{ width:'10%', height:'3px', background:'#F27A5E' }, showCta:false },
+      { name:'Avenida Paranavaí, 972', badge:'EM BREVE', badgeColor:'#F27A5E', desc:'Um novo empreendimento a poucos metros do Shopping Catuaí. Em breve.', bgImage:'url(assets/card-paranavai.webp?v=2)', showProgress:true, progressLabel:'PROJETOS EM APROVAÇÃO', progressPct:'10%', progressStyle:{ width:'10%', height:'3px', background:'#F27A5E' }, showCta:false },
+    ];
+    const hoverEmpre = this.state.hoverEmpre;
+    const empre = empreRaw.map((e, i) => {
+      const active = hoverEmpre === i;
+      return {
+        ...e,
+        onEnter: () => this.setState({ hoverEmpre: i }),
+        onLeave: () => this.setState({ hoverEmpre: -1 }),
+        cardStyle: {
+          display: 'flex', flexDirection: 'column', borderRadius: '6px', overflow: 'hidden', border: '1px solid ' + (active ? 'rgba(242,122,94,0.5)' : 'rgba(255,255,255,0.08)'), background: '#0A0A0A',
+          transform: active ? 'translateY(-6px)' : 'translateY(0)',
+          boxShadow: active ? '0 18px 40px rgba(0,0,0,0.45)' : '0 0px 0px rgba(0,0,0,0)',
+          transition: 'transform .35s ease, box-shadow .35s ease, border-color .35s ease',
+          cursor: 'pointer',
+        },
+        photoBoxStyle: { position: 'relative', aspectRatio: '4/3', overflow: 'hidden' },
+        imgStyle: {
+          position: 'absolute', inset: '-4%', backgroundImage: e.bgImage, backgroundSize: 'cover', backgroundPosition: 'center',
+          transform: active ? 'scale(1.08)' : 'scale(1)', transition: 'transform .6s ease',
+        },
+      };
+    });
+
+    return { sidePad, sectionPadV, heroPadTop, cols3, navLinksStyle, hamburgerBtnStyle, barStyle, menuOpen, toggleMenu: () => this.toggleMenu(), empre };
+  }
+}
+</script>
+</body>
+</html>

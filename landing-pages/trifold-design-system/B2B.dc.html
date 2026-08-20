@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>@view-transition{navigation:auto}</style>
+<title>Corporativas — Trifold Engenharia</title>
+<meta name="description" content="Soluções de engenharia e construção corporativa da Trifold para empresas de todos os portes.">
+<link rel="preload" as="image" href="assets/hero-b2b.webp?v=2" fetchpriority="high">
+<link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-variable.woff2" crossorigin>
+<script src="./support.js" defer></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics="">
+<link href="assets/fonts/fonts.css" rel="stylesheet">
+<style>
+  html{scroll-behavior:smooth}
+  ::view-transition-old(root),::view-transition-new(root){animation-duration:.38s;animation-timing-function:cubic-bezier(.4,0,.2,1)}
+  body{margin:0;background:#000;color:#fff;font-family:'Space Grotesk',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  ::selection{background:#F27A5E;color:#000}
+  a{color:inherit;text-decoration:none}
+</style>
+</helmet>
+
+<div style="background:#000;color:#fff;font-family:'Space Grotesk',system-ui,sans-serif">
+
+  <!-- ============ NAV ============ -->
+  <div style="position:fixed;top:0;left:0;right:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:20px {{ sidePad }};box-sizing:border-box;background:linear-gradient(180deg,rgba(0,0,0,0.65),rgba(0,0,0,0))">
+    <a href="Home.dc.html" aria-label="Ir para a Home" style="display:flex;align-items:center"><dc-import name="Logo" tone="dark" size="{{ 26 }}" hint-size="220px,30px"></dc-import></a>
+    <div style="{{ navLinksStyle }}">
+      <a href="Home.dc.html" style="color:#C9C9C9;white-space:nowrap;transition:color .2s ease" style-hover="color:#fff">HOME</a>
+      <a href="Sobre Nós.dc.html" style="color:#C9C9C9;white-space:nowrap;transition:color .2s ease" style-hover="color:#fff">SOBRE NÓS</a>
+      <a href="Empreendimentos.dc.html" style="color:#C9C9C9;white-space:nowrap;transition:color .2s ease" style-hover="color:#fff">EMPREENDIMENTOS</a>
+      <a href="#" style="color:#fff;border-bottom:1px solid #F27A5E;padding-bottom:3px;white-space:nowrap">CORPORATIVAS</a>
+      <a href="Blog.dc.html" style="color:#C9C9C9;white-space:nowrap;transition:color .2s ease" style-hover="color:#fff">BLOG</a>
+      <a href="Home.dc.html#contato" style="padding:11px 22px;background:#F27A5E;color:#000;border-radius:2px;font-weight:600;letter-spacing:0.02em;white-space:nowrap;transition:filter .25s ease,transform .25s ease" style-hover="filter:brightness(1.08);transform:scale(1.02)">CONTATO</a>
+    </div>
+    <button onClick="{{ toggleMenu }}" style="{{ hamburgerBtnStyle }}">
+      <span style="{{ barStyle }}"></span><span style="{{ barStyle }}"></span><span style="{{ barStyle }}"></span>
+    </button>
+  </div>
+
+  <!-- ============ MOBILE MENU OVERLAY ============ -->
+  <sc-if value="{{ menuOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;inset:0;z-index:200;background:#050505;display:flex;flex-direction:column;padding:26px 28px 40px;overflow-y:auto">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:52px">
+        <a href="Home.dc.html" aria-label="Ir para a Home" style="display:flex;align-items:center"><dc-import name="Logo" tone="dark" size="{{ 26 }}" hint-size="200px,28px"></dc-import></a>
+        <button onClick="{{ toggleMenu }}" style="width:38px;height:38px;background:none;border:1px solid rgba(255,255,255,0.2);border-radius:6px;color:#fff;font-size:18px;cursor:pointer">✕</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;font-size:24px;font-weight:500">
+        <a href="Home.dc.html" style="padding:14px 4px;border-bottom:1px solid rgba(255,255,255,0.08)">Home</a>
+        <a href="Sobre Nós.dc.html" style="padding:14px 4px;border-bottom:1px solid rgba(255,255,255,0.08)">Sobre nós</a>
+        <a href="Empreendimentos.dc.html" style="padding:14px 4px;border-bottom:1px solid rgba(255,255,255,0.08)">Empreendimentos</a>
+        <a href="#" onClick="{{ toggleMenu }}" style="padding:14px 4px;border-bottom:1px solid rgba(255,255,255,0.08);color:#F27A5E">Corporativas</a>
+        <a href="Blog.dc.html" style="padding:14px 4px;border-bottom:1px solid rgba(255,255,255,0.08)">Blog</a>
+      </div>
+      <a href="Home.dc.html#contato" style="display:inline-flex;align-items:center;justify-content:center;margin-top:32px;padding:16px 24px;background:#F27A5E;color:#000;border-radius:2px;font-weight:600;font-size:15px">Contato</a>
+    </div>
+  </sc-if>
+
+  <!-- ============ HERO ============ -->
+  <section style="position:relative;padding:{{ heroPadTop }} {{ sidePad }} {{ sectionPadV }};overflow:hidden">
+    <div style="position:absolute;inset:0;background-image:url(assets/hero-b2b.webp?v=2);background-size:130%;background-position:center 65%"></div>
+    <div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,0.55) 0%,rgba(0,0,0,0.82) 55%,#000 100%)"></div>
+    <div style="position: relative; max-width: 1120px; margin: 0 auto">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <span style="font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.22em;text-transform:uppercase;color:#9A9A9A">Corporativas</span>
+    </div>
+    <h1 style="margin:0;font-size:clamp(30px,5.2vw,64px);font-weight:600;line-height:1.1;letter-spacing:-0.03em;max-width:920px">Engenharia especializada para quem não pode parar de operar.</h1>
+    
+    <p style="margin:22px 0 0;font-size:clamp(15px,1.6vw,19px);font-weight:300;color:#C9C9C9;max-width:620px;line-height:1.65">Indústrias, hospitais, redes de varejo e instituições confiam na Trifold para planejar, orçar e executar obras corporativas, comerciais, industriais e hospitalares.</p><div style="display:grid;grid-template-columns:{{ statsCols }};gap:{{ statsGap }};margin-top:44px">
+      <sc-for list="{{ heroStats }}" as="hs" hint-placeholder-count="4">
+        <div>
+          <div style="font-size:clamp(28px,3.2vw,42px);font-weight:600;color:#F27A5E;letter-spacing:-0.02em;white-space:nowrap">{{ hs.value }}</div>
+          <div style="font-family:'Space Mono',monospace;font-size:10.5px;letter-spacing:0.14em;text-transform:uppercase;color:#9A9A9A;margin-top:3px">{{ hs.label }}</div>
+        </div>
+      </sc-for>
+    </div>
+    <a href="Home.dc.html#contato" style="display:inline-flex;align-items:center;gap:10px;margin-top:42px;padding:16px 32px;background:#F27A5E;color:#000;border-radius:2px;font-size:15px;font-weight:600;letter-spacing:0.02em;transition:transform .25s ease,filter .25s ease" style-hover="filter:brightness(1.08);transform:translateY(-2px)">Solicitar orçamento <span style="font-size:17px;display:inline-block;transition:transform .25s ease" style-hover="transform:translateX(4px)">→</span></a>
+    </div>
+  </section>
+
+  <!-- ============ OBRAS ============ -->
+  <section style="padding:60px {{ sidePad }} 20px;max-width:1120px;margin:0 auto">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+      <span style="font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.22em;text-transform:uppercase;color:#9A9A9A">Obras corporativas</span>
+    </div>
+    <h2 style="margin:0 0 56px;font-size:clamp(24px,3.4vw,40px);font-weight:500;letter-spacing:-0.02em;max-width:720px">Um histórico construído obra a obra, cliente a cliente</h2>
+
+    <div style="display:flex;flex-direction:column">
+      <sc-for list="{{ obras }}" as="o" hint-placeholder-count="17">
+        <div onMouseEnter="{{ o.onEnter }}" onMouseLeave="{{ o.onLeave }}" style="{{ o.rowStyle }}">
+          <div style="{{ o.imgBoxWrapStyle }}">
+            <div style="{{ o.imgStyle }}"></div>
+          </div>
+          <div>
+            <div style="display:flex;flex-direction:column;align-items:flex-start;text-align:left;gap:10px;margin-bottom:16px">
+              <span style="display:inline-flex;align-items:center;padding:8px 16px;border-radius:6px;background:linear-gradient(90deg,#2E3033,#000000);border:2px solid rgba(255,255,255,0.14);font-size:13px;font-weight:500;color:#E6E6E6;white-space:nowrap">{{ o.category }}</span>
+              <h3 style="margin:0;font-size:21px;font-weight:600;letter-spacing:-0.01em;text-align:left">{{ o.name }}</h3>
+            </div>
+            <div style="font-family:'Space Mono',monospace;font-size:9.5px;letter-spacing:0.1em;font-weight:700;color:{{ o.badgeColor }};margin-bottom:14px">{{ o.badge }}</div>
+            <p style="margin:0 0 18px;font-size:13.5px;color:#9A9A9A">{{ o.loc }}</p>
+            <ul style="margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px">
+              <sc-for list="{{ o.bullets }}" as="b" hint-placeholder-count="3">
+                <li style="display:flex;gap:10px;font-size:14px;line-height:1.55;color:#C9C9C9">
+                  <span style="flex:none;color:#F27A5E;margin-top:2px">—</span>{{ b }}
+                </li>
+              </sc-for>
+            </ul>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <!-- ============ DIRETOR B2B ============ -->
+  <section style="padding:{{ sectionPadV }} {{ sidePad }};border-top:1px solid rgba(255,255,255,0.08);background:#0A0A0A">
+    <div style="max-width:1120px;margin:0 auto;display:grid;grid-template-columns:{{ diretorCols }};gap:44px;align-items:center">
+      <div style="position:relative;aspect-ratio:{{ diretorImgRatio }};overflow:hidden;border-radius:6px;background:#161616;max-width:{{ diretorImgMaxW }}">
+        <img src="assets/caio-volpato.png" alt="Caio Volpato" style="width:100%;height:100%;object-fit:cover;object-position:50% 15%;display:block">
+      </div>
+      <div>
+        <span style="font-family:'Space Mono',monospace;font-size:12px;text-transform:uppercase;color:#F27A5E">Liderança Corporativa</span>
+        <p style="margin:26px 0 28px;font-size:clamp(20px,2.6vw,32px);font-weight:500;line-height:1.4;letter-spacing:-0.01em;max-width:640px">"Cada obra corporativa carrega a operação de um cliente. Nosso compromisso é entregar no prazo, com transparência total, qualidade, permitindo o crescimento da sua operação."</p>
+        <div style="display:flex;flex-direction:column;gap:2px">
+          <span style="font-size:17px;font-weight:600">Caio Volpato</span>
+          <span style="font-family:'Space Mono',monospace;font-size:11.5px;color:#9A9A9A">Diretor Corporativo · Trifold Engenharia</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ DEPOIMENTOS DE CLIENTES ============ -->
+  <section style="padding:{{ sectionPadV }} {{ sidePad }};border-top:1px solid rgba(255,255,255,0.08)">
+    <div style="max-width:1120px;margin:0 auto">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
+        <span style="font-family:'Space Mono',monospace;font-size:12px;text-transform:uppercase;color:#9A9A9A">Depoimentos</span>
+      </div>
+      <h2 style="margin:0 0 56px;font-size:clamp(24px,3.4vw,40px);font-weight:500;letter-spacing:-0.02em;max-width:640px">Quem já construiu com a gente</h2>
+      <div style="display:grid;grid-template-columns:{{ cols2 }};gap:{{ testimonialsGap }}">
+        <sc-for list="{{ testimonials }}" as="t" hint-placeholder-count="2">
+          <div style="padding:32px;border-radius:6px;border:1px solid rgba(255,255,255,0.08);background:#0A0A0A;display:flex;flex-direction:column;box-sizing:border-box">
+            <p style="margin:0 0 32px;font-size:17px;line-height:1.65;font-weight:300;color:#E6E6E6;flex:1">"{{ t.quote }}"</p>
+            <div style="display:flex;align-items:center;gap:14px">
+              <div style="width:48px;height:48px;border-radius:50%;background:#161616;flex:none;display:flex;align-items:center;justify-content:center;overflow:hidden">
+                <sc-if value="{{ t.photo }}" hint-placeholder-val="{{ false }}">
+                  <img src="{{ t.photo }}" alt="{{ t.name }}" style="{{ t.photoStyle }}">
+                </sc-if>
+                <sc-if value="{{ t.noPhoto }}" hint-placeholder-val="{{ true }}">
+                  <svg viewBox="0 0 100 100" width="60%" height="60%" fill="none"><circle cx="50" cy="36" r="18" fill="#3A3A3A"></circle><path d="M12 92c4-24 20-38 38-38s34 14 38 38" fill="#3A3A3A"></path></svg>
+                </sc-if>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:1px">
+                <span style="font-size:14.5px;font-weight:600">{{ t.name }}</span>
+                <span style="font-family:'Space Mono',monospace;font-size:10.5px;color:#9A9A9A">{{ t.role }}</span>
+              </div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CTA FINAL ============ -->
+  <section style="padding:{{ sectionPadV }} {{ sidePad }};border-top:1px solid rgba(255,255,255,0.08);text-align:center">
+    <div style="max-width:700px;margin:0 auto;display:flex;flex-direction:column;align-items:center">
+      <span style="font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.22em;text-transform:uppercase;color:#F27A5E;margin-bottom:24px">Sua próxima obra corporativa</span>
+      <h2 style="margin:0 0 34px;font-size:clamp(26px,4vw,46px);font-weight:600;letter-spacing:-0.025em;line-height:1.1">Vamos planejar sua obra?</h2>
+      <a href="Home.dc.html#contato" style="display:inline-flex;align-items:center;gap:10px;padding:16px 34px;background:#F27A5E;color:#000;border-radius:2px;font-size:15px;font-weight:600;letter-spacing:0.02em;transition:transform .25s ease,filter .25s ease" style-hover="filter:brightness(1.08);transform:translateY(-2px)">Solicitar orçamento <span style="font-size:17px;display:inline-block;transition:transform .25s ease" style-hover="transform:translateX(4px)">→</span></a>
+    </div>
+  </section>
+
+  <!-- ============ FOOTER ============ -->
+  <footer style="padding:64px {{ sidePad }} 44px;border-top:1px solid rgba(255,255,255,0.08);background:#050505">
+    <div style="max-width:1120px;margin:0 auto">
+      <div style="display:flex;flex-wrap:wrap;gap:32px;justify-content:space-between;align-items:flex-start;padding-bottom:44px;border-bottom:1px solid rgba(255,255,255,0.08)">
+        <div style="max-width:320px">
+          <dc-import name="Logo" tone="dark" size="{{ 30 }}" hint-size="280px,34px"></dc-import>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:20px 26px;font-size:13px;letter-spacing:0.04em;color:#9A9A9A">
+          <a href="Home.dc.html" style="transition:color .2s ease" style-hover="color:#fff">HOME</a><a href="Sobre Nós.dc.html" style="transition:color .2s ease" style-hover="color:#fff">SOBRE</a><a href="Empreendimentos.dc.html" style="transition:color .2s ease" style-hover="color:#fff">EMPREENDIMENTOS</a><a href="#" style="transition:color .2s ease" style-hover="color:#fff">CORPORATIVAS</a><a href="Blog.dc.html" style="transition:color .2s ease" style-hover="color:#fff">BLOG</a>
+        </div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:20px;justify-content:space-between;align-items:center;padding-top:28px;font-family:'Space Mono',monospace;font-size:11px;color:#5A5A5A">
+        <span>© 2026 Trifold Engenharia. Todos os direitos reservados.</span>
+        <span style="display:inline-flex;align-items:center;gap:8px">Desenvolvido por <img src="assets/dois-logo.svg" alt="Dois" style="height:12px;width:auto;opacity:0.7"></span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- WhatsApp float -->
+  <a href="https://wa.me/5544991089698?text=Ol%C3%A1%2C%20estava%20no%20site%20da%20Trifold%20e%20gostaria%20de%20mais%20informa%C3%A7%C3%B5es%20sobre..." target="_blank" rel="noopener" style="position:fixed;right:20px;bottom:20px;z-index:120;width:58px;height:58px;border-radius:50%;background:#111111;border:1px solid #F27A5E;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 20px rgba(0,0,0,0.4);transition:transform .25s ease,box-shadow .25s ease" style-hover="transform:scale(1.08);box-shadow:0 8px 26px rgba(0,0,0,0.5)" title="WhatsApp">
+    <svg viewBox="0 0 32 32" width="30" height="30" fill="#fff"><path fill-rule="evenodd" clip-rule="evenodd" d="M16 3C8.82 3 3 8.82 3 16c0 2.49.69 4.82 1.9 6.81L3 29l6.37-1.85A12.94 12.94 0 0 0 16 29c7.18 0 13-5.82 13-13S23.18 3 16 3zm0 23.8a10.7 10.7 0 0 1-5.46-1.49l-.39-.23-4.06 1.18 1.21-3.96-.25-.41A10.75 10.75 0 1 1 16 26.8z"></path><path d="M21.6 18.9c-.32-.16-1.88-.93-2.17-1.03-.29-.11-.5-.16-.72.16-.21.32-.82 1.03-1 1.24-.19.21-.37.24-.69.08-.32-.16-1.34-.5-2.55-1.58-.94-.84-1.58-1.87-1.76-2.19-.19-.32-.02-.49.14-.65.14-.14.32-.37.48-.55.16-.19.21-.32.32-.53.11-.21.05-.4-.03-.56-.08-.16-.72-1.74-.99-2.38-.26-.62-.53-.54-.72-.55-.19-.01-.4-.01-.61-.01-.21 0-.56.08-.85.4-.29.32-1.11 1.09-1.11 2.65 0 1.56 1.14 3.07 1.29 3.28.16.21 2.24 3.42 5.42 4.8.76.33 1.35.52 1.81.67.76.24 1.45.21 2 .13.61-.09 1.88-.77 2.14-1.51.27-.75.27-1.39.19-1.52-.08-.14-.29-.21-.61-.37z"></path></svg>
+  </a>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{}">
+class Component extends DCLogic {
+  state = { hoverObra: -1, menuOpen: false, vw: (typeof window !== 'undefined' ? window.innerWidth : 1280) };
+  componentDidMount() {
+    this._onResize = () => this.setState({ vw: window.innerWidth });
+    window.addEventListener('resize', this._onResize);
+  }
+  componentWillUnmount() {
+    window.removeEventListener('resize', this._onResize);
+  }
+  toggleMenu() { this.setState(s => ({ menuOpen: !s.menuOpen })); }
+  renderVals() {
+    const hoverObra = this.state.hoverObra;
+    const vw = this.state.vw || 1280;
+    const isMobile = vw < 900;
+    const isNarrow = vw < 520;
+    const menuOpen = this.state.menuOpen;
+    const ANDAMENTO = '#F27A5E';
+    const ENTREGUE = '#9A9A9A';
+
+    const sidePad = isNarrow ? '24px' : isMobile ? '34px' : '48px';
+    const sectionPadV = isMobile ? '72px' : '120px';
+    const heroPadTop = isMobile ? '140px' : '190px';
+    const statsCols = isNarrow ? '1fr 1fr' : isMobile ? 'repeat(2,auto)' : 'repeat(4,auto)';
+    const statsGap = isMobile ? '20px 28px' : '48px';
+    const diretorCols = isMobile ? '1fr' : '0.6fr 1.4fr';
+    const diretorImgRatio = isMobile ? '16/10' : '4/5';
+    const diretorImgMaxW = isMobile ? '340px' : 'none';
+    const cols2 = isMobile ? '1fr' : 'repeat(3,1fr)';
+    const testimonialsGap = '20px';
+
+    const navLinksStyle = { display: isMobile ? 'none' : 'flex', alignItems: 'center', flexWrap: 'nowrap', gap: '26px', marginLeft: '56px', fontSize: '12.5px', letterSpacing: '0.05em' };
+    const hamburgerBtnStyle = { display: isMobile ? 'flex' : 'none', flexDirection: 'column', justifyContent: 'center', gap: '5px', width: '38px', height: '38px', background: 'none', border: 'none', cursor: 'pointer', padding: 0 };
+    const barStyle = { width: '22px', height: '2px', background: '#fff', display: 'block' };
+
+    const obras = [
+      { name:'FORTGREEN Comercial Agrícola', category:'Industrial', loc:'R. Curitiba, 805 — Paiçandu, PR', badge:'EM ANDAMENTO', badgeColor:ANDAMENTO, img:'assets/b2b-fortgreen.png', bullets:['Mais de 1.300 m² de área construída','Execução de base e tanque de contenção para 3 reservatórios de óleo, 60 mil litros cada','Barracão de resíduos e barracão de inflamáveis completos'] },
+      { name:'Igreja Matriz de Marialva', category:'Religioso', loc:'Paróquia Nossa Senhora de Fátima — Centro, Marialva/PR', badge:'EM ANDAMENTO', badgeColor:ANDAMENTO, img:'assets/b2b-marialva.png', bullets:['Mais de 3.500 m² de área construída','Reforma completa de telhado, com cobertura tipo Shingle','Reforma de calçadas, acessos, esquadrias, cúpulas e pintura da fachada'] },
+      { name:'Comunidade Evangélica de Maringá', category:'Religioso', loc:'Centro de Estudos Waltermino P. da S. Jr — Av. Itororó, Maringá/PR', badge:'EM ANDAMENTO', badgeColor:ANDAMENTO, img:'assets/b2b-comunidadeevangelica.png', bullets:['Mais de 4.000 m² de área construída','Estrutura em concreto armado, concreto protendido e lajes treliçadas pré-protendidas em grandes vãos'] },
+      { name:'Angelus Cemitério Vertical Grupo Prever', category:'Contemplativo', loc:'Av. Alziro Zahrur, Maringá/PR', badge:'EM ANDAMENTO', badgeColor:ANDAMENTO, img:'assets/b2b-angeluscemiterio.png', bullets:['Mais de 7.400 m² de área construída','Estrutura em concreto armado, concreto protendido e lajes treliçadas pré-protendidas em grandes vãos'] },
+      { name:'Espaço Sete — 1ª Igreja Presbiteriana Independente', category:'Religioso', loc:'Av. Bento Munhoz da Rocha Neto, Maringá/PR', badge:'EM ANDAMENTO', badgeColor:ANDAMENTO, img:'assets/b2b-espacosete.png', bullets:['Mais de 6.000 m² de área construída · nave para 1.900 lugares','Salas de aula, salas de reuniões, auditórios e cafeterias','Reforma e ampliação com mezaninos metálicos, acabamentos curvos e iluminação de alta complexidade'] },
+      { name:'Auto Posto P2 Grupo CPA', category:'Comercial', loc:'Av. Pref. Sincler Sambatti, Maringá/PR', badge:'ENTREGUE EM 2025', badgeColor:ENTREGUE, img:'assets/b2b-autoposto.png', bullets:['Mais de 1.500 m² de área construída','Revitalização geral, construção de lojas, edificações acessórias, convivência, sanitários e área administrativa'] },
+      { name:'Coca-Cola FEMSA', category:'Industrial', loc:'Maringá/PR', badge:'ENTREGUE EM 2024', badgeColor:ENTREGUE, img:'assets/b2b-cocacola.png', bullets:['Mais de 200 m² de área construída','Reforma de vestiários: vedações, forros, pintura, pisos, revestimentos, instalações elétricas e hidrossanitárias','Trabalho realizado durante a operação da indústria'] },
+      { name:'Hospital Geral Unimed', category:'Hospitalar', loc:'Av. Carlos Correia Borges, Maringá/PR', badge:'ENTREGUE EM 2023–2024', badgeColor:ENTREGUE, img:'assets/b2b-unimedgeral.png', bullets:['Mais de 3.000 m² de área construída','Reforma interna e externa completa, com automatização','Trabalho realizado durante a operação do hospital'] },
+      { name:'Espaço Tuiuti — MAFIP Administradora de Bens', category:'Comercial', loc:'Av. Tuiuti esq. com Av. Centenário, Maringá/PR', badge:'ENTREGUE EM 2024', badgeColor:ENTREGUE, img:'assets/b2b-tuiuti.png', bullets:['Mais de 2.500 m² de área construída','Do movimento de terra ao habite-se: fundações, estrutura, alvenarias e acabamentos','Estrutura em concreto armado e cobertura metálica com telhas termoacústicas'] },
+      { name:'Unimed Centro', category:'Hospitalar', loc:'Av. Prudente de Moraes, Maringá/PR', badge:'ENTREGUE EM 2023', badgeColor:ENTREGUE, img:'assets/b2b-unimedcentro.png', bullets:['Mais de 4.000 m² de área construída','Novo layout interno completo, com elevadores e automatização','Retrofit da fachada'] },
+      { name:'Unimed Maringá', category:'Hospitalar', loc:'Av. Bento Munhoz da Rocha Neto, Maringá/PR', badge:'CONTRATOS ENTRE 2016–2022', badgeColor:ENTREGUE, img:'assets/b2b-unimedmaringa.png', bullets:['Mais de 2.500 m² de área construída','Revitalização, ampliação e implantação do Pronto Atendimento, consultórios, fisioterapia e administração'] },
+      { name:'Capela Mortuária Grupo Prever', category:'Contemplativo', loc:'Distrito de Floriano, Maringá/PR', badge:'ENTREGUE EM 2022', badgeColor:ENTREGUE, img:'assets/b2b-capelamortuaria.png', bullets:['Mais de 250 m² de área construída','Execução completa: fundações, estrutura, alvenarias, instalações e acabamentos','Parceria com a Prefeitura Municipal de Maringá'] },
+      { name:'BTS MAFIP Administradora de Bens', category:'Comercial', loc:'Av. Alexandre Rasgulaeff, Maringá/PR', badge:'ENTREGUE EM 2021', badgeColor:ENTREGUE, img:'assets/b2b-btsmafip.png', bullets:['Mais de 900 m² de área construída','Estrutura em concreto pré-moldado e cobertura metálica com telhas termoacústicas'] },
+      { name:'GT Foods', category:'Industrial', loc:'Maringá · Paranavaí · Nova Esperança · Indianópolis · São Jorge do Ivaí · Paraíso do Norte', badge:'CONTRATOS ENTRE 2019–2021', badgeColor:ENTREGUE, img:'assets/b2b-gtfoods.png', bullets:['Mais de 3.000 m² de área construída e 4.000 m de infraestrutura hidráulica e pluvial','Mais de 600 m³ em concretagem de estruturas diversas e arrimos'] },
+      { name:'Centro de Oncologia Unimed Maringá', category:'Hospitalar', loc:'Av. Bento Munhoz da Rocha Neto, Maringá/PR', badge:'ENTREGUE EM 2019', badgeColor:ENTREGUE, img:'assets/b2b-oncologia.png', bullets:['Mais de 1.250 m² de área construída','Reforma interna completa com instalação de mobiliário e equipamentos'] },
+      { name:'Frigorífico Frangobrás', category:'Industrial', loc:'Campo Mourão/PR', badge:'ENTREGUE EM 2008', badgeColor:ENTREGUE, img:'assets/b2b-frangobras.png', bullets:['Mais de 22.000 m² de área construída','Execução completa: movimento de terra, fundações, estrutura, alvenarias e acabamentos','Estrutura em concreto armado e cobertura metálica com telhas termoacústicas'] },
+      { name:'Centro Médico R. Suzuki', category:'Hospitalar', loc:'Av. Independência, Maringá/PR', badge:'ENTREGUE EM 2002', badgeColor:ENTREGUE, img:'assets/b2b-rsuzuki.png', bullets:['Mais de 4.000 m² de área construída em 40 consultórios','Execução completa: movimento de terra, fundações, estrutura, alvenarias e acabamentos'] },
+    ];
+
+    const heroStats = [
+      { value:'+28 anos', label:'De experiência técnica' },
+      { value:'+300mil m²', label:'Entregues' },
+      { value:'13 engenheiros', label:'Corpo de engenharia próprio' },
+    ];
+
+    const testimonials = [
+      { quote:'A Trifold foi a empresa que menos nos deu dor de cabeça e a mais fácil de lidar em todos esses anos de obra.', name:'Matheus Rufo', role:'Supervisor de Obras · Grupo Angelus', photo:'assets/matheus-rufo.jpg', noPhoto:false, zoom:2.0, focusX:'32%', focusY:'0%' },
+      { quote:'A experiência com a Trifold é muito válida: o projeto já vem bem desenvolvido, antecipando muita coisa da obra. E quando surge algo novo no canteiro, eles ficam de prontidão para colaborar.', name:'André Valêncio', role:'Arquiteto', photo:'assets/andre-valencio.jpg', noPhoto:false, zoom:1.30, focusY:'18%' },
+      { quote:'Com base na nossa experiência, recomendo a Trifold para clientes que exigem segurança e gestão eficiente, tanto em obras de galpões industriais quanto administrativas.', name:'Rodrigo Silvestre', role:'Coordenador de Engenharia · Fortgreen', photo:'assets/rodrigo-silvestre.jpg', noPhoto:false, zoom:1.15, focusY:'20%' },
+    ].map(t => ({
+      ...t,
+      photoStyle: { width:'100%', height:'100%', objectFit:'cover', objectPosition:(t.focusX || '50%') + ' ' + (t.focusY || '8%'), transform:'scale(' + (t.zoom || 1.6) + ')' },
+    }));
+
+    const obrasWithHover = obras.map((o, i) => {
+      const active = hoverObra === i;
+      return {
+        ...o,
+        onEnter: () => this.setState({ hoverObra: i }),
+        onLeave: () => this.setState({ hoverObra: -1 }),
+        rowStyle: {
+          display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.15fr 0.85fr', gap: isMobile ? '20px' : '44px', alignItems: 'center',
+          padding: isMobile ? '32px 20px' : '44px 32px', margin: isMobile ? '-1px -20px 0' : '-1px -32px 0', borderRadius: '6px',
+          border: '1px solid ' + (active ? 'rgba(242,122,94,0.5)' : 'rgba(255,255,255,0.08)'),
+          background: active ? 'rgba(255,255,255,0.02)' : 'transparent',
+          transform: active ? 'translateY(-2px)' : 'translateY(0)',
+          transition: 'border-color .3s ease, background .3s ease, transform .3s ease',
+          cursor: 'pointer',
+        },
+        imgBoxWrapStyle: { position: 'relative', aspectRatio: '16/10', overflow: 'hidden', borderRadius: '6px', order: isMobile ? -1 : 1 },
+        imgStyle: {
+          width: '100%', height: '100%', backgroundImage: 'url(' + o.img + ')', backgroundSize: 'cover', backgroundPosition: 'center',
+          transform: active ? 'scale(1.06)' : 'scale(1)', transition: 'transform .6s ease',
+        },
+      };
+    });
+
+    return { sidePad, sectionPadV, heroPadTop, statsCols, statsGap, diretorCols, diretorImgRatio, diretorImgMaxW, cols2, testimonialsGap, navLinksStyle, hamburgerBtnStyle, barStyle, menuOpen, toggleMenu: () => this.toggleMenu(), obras: obrasWithHover, heroStats, testimonials };
+  }
+}
+</script>
+</body>
+</html>
