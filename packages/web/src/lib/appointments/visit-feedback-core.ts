@@ -185,7 +185,11 @@ export async function applyVisitFeedback(
         // A decisão de "o que gravar" é a MESMA dos dois lados (post-visit-record).
         const registro = registroDoPosVisita(envio, body.interest_after)
 
-        await supabase.from("follow_up_log").insert({
+        // Story 75-351 — o erro deste insert era descartado e ele falhava sempre
+        // (a coluna `metadata` só nasceu na migration 233). Sem esta linha, o cron
+        // reprocessava o mesmo agendamento a cada 2h: o `throw` faz o catch de
+        // baixo registrar em `system_events` em vez de sumir.
+        const { error: erroDoLog } = await supabase.from("follow_up_log").insert({
           org_id: appointment.org_id,
           lead_id: appointment.lead_id,
           type: "post_visit",
@@ -200,6 +204,9 @@ export async function applyVisitFeedback(
             ...(envio.reason ? { reason: envio.reason } : {}),
           },
         })
+        if (erroDoLog) {
+          throw new Error(`follow_up_log não gravou (cooldown de 48h comprometido): ${erroDoLog.message}`)
+        }
 
         if (registro.gravarMensagem && conv) {
           await supabase.from("messages").insert({

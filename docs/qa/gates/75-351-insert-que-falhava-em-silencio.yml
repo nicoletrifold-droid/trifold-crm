@@ -1,0 +1,88 @@
+schema: 1
+storyId: "75-351"
+story: "docs/stories/75-351-insert-que-falhava-em-silencio.story.md"
+title: "Quality Gate — O insert que falhava em silêncio (follow_up_log.metadata)"
+epic: 75
+gate: PASS
+verdict: PASS
+review_round: 1
+reviewed_by: "@qa (Quinn)"
+reviewed_at: "2026-08-19"
+branch: "75-351-insert-que-falhava-em-silencio"
+migrations: ["233_follow_up_log_metadata.sql — APLICADA em prod 19/08 20:05 UTC, additiva e idempotente"]
+
+escopo: >
+  Um insert que falhava 100% das vezes sem sintoma, matando a janela de cooldown de 48h por lead, mais
+  o contador do cron que reportava entregas inexistentes. Achado ao VERIFICAR a 75-350 em produção —
+  não por teste, por ir olhar o número no banco.
+
+resumo: >
+  **`follow_up_log.metadata` nunca existiu.** Dois dos três inserts da tabela mandavam a coluna, o
+  PostgREST devolvia erro, e o código descartava o `{ error }` do `.insert()`. Prova em uma consulta:
+  `alert_broker` 465 linhas (o único insert sem `metadata`), `nicole_sent` **0**, `post_visit` **0** —
+  desde que a funcionalidade subiu.
+
+  **O estrago não é o dado perdido, é o cooldown:** a janela de 48h por lead é lida dessa tabela, sem
+  filtro de tipo. Sem a linha, o lead volta a ser elegível a cada run de 2 horas, indefinidamente.
+
+  **Por que não virou spam:** a janela de 24h do WhatsApp barrava quase tudo (julho + agosto: 0
+  entregas, 4.493 puladas). O defeito estava armado esperando conversas ativas — e as conversas ficaram
+  ativas hoje. Conferido na run de 20:02: 84 puladas, todas por janela fechada, **zero entregas**,
+  nenhum lead impactado.
+
+status_reason: >
+  Liberado para merge. A mitigação que importava (a coluna) já está em produção; o PR traz o conserto
+  do padrão que esconde a falha.
+
+acoes_obrigatorias: []
+
+concerns:
+  - id: C1
+    severidade: MEDIUM
+    tipo: padrão-que-se-repete-no-repo
+    titulo: "`await supabase.from(x).insert(y)` descartando `{ error }` não é exclusividade deste arquivo"
+    detalhe: >
+      Esta story conserta os três inserts do caminho de follow-up, que era onde o defeito mordia. O
+      PADRÃO, porém, está espalhado: `.insert()` sem `.select()` não lança, e todo lugar que ignora o
+      retorno pode estar falhando em silêncio hoje. Uma varredura dirigida (inserts que alimentam
+      cooldown, dedup ou idempotência) é candidata a story própria — não entrou aqui para o PR do
+      incidente não virar refactor de repositório inteiro.
+  - id: C2
+    severidade: LOW
+    tipo: verificação-pendente-por-tempo
+    titulo: "A prova final acontece na run das 22:00 UTC"
+    detalhe: >
+      A coluna já está em produção e o código em produção já manda `metadata`, então o cooldown deve
+      voltar na próxima run — mas isso é previsão até a linha aparecer. A consulta de verificação está
+      no fim da story. Se não aparecer `nicole_sent`/`post_visit`, o diagnóstico está incompleto.
+
+verificacoes:
+  - id: V1
+    o_que: "A coluna existe em produção"
+    resultado: "PASS — `metadata jsonb NOT NULL default '{}'` confirmada por information_schema após aplicar."
+  - id: V2
+    o_que: "Os três inserts verificam erro"
+    resultado: >
+      PASS — `nicole_sent` grita (`FOLLOWUP_LOG_FALHOU`, level error, nomeando o cooldown comprometido);
+      os dois de pós-visita dão `throw`, capturados pelas guardas que a 75-350 criou.
+  - id: V3
+    o_que: "O recibo do cron para de mentir"
+    resultado: >
+      PASS — `messagesSent++` contava leads PROCESSADOS: a run de 20:02 reportou "16 messages" com zero
+      entregas e 84 puladas. Agora `messages_sent` / `messages_skipped` e `post_visit_sent` /
+      `post_visit_processados`.
+  - id: V4
+    o_que: "Nenhum lead recebeu mensagem duplicada"
+    resultado: >
+      PASS — `FOLLOWUP_MESSAGE_SENT` na janela: **zero**. 84 `FOLLOWUP_MESSAGE_SKIPPED`, todas
+      `WHATSAPP_WINDOW_CLOSED`. É o que dispensa backfill.
+  - id: V5
+    o_que: "Suíte, tipos, lint"
+    resultado: "PASS — 229 arquivos / 2.790 testes ✅ · type-check 8/8 ✅ · lint 0 erros ✅"
+
+evidencia:
+  consulta_que_revelou:
+    - "select type, count(*) from follow_up_log group by type → alert_broker 465 · nicole_sent 0 · post_visit 0"
+  run_de_2002_utc:
+    - "recibo: '98 processed, 0 alerts, 16 messages, 26 post-visit (0 erros)' — e 0 entregas de verdade"
+    - "84 FOLLOWUP_MESSAGE_SKIPPED, 100% WHATSAPP_WINDOW_CLOSED"
