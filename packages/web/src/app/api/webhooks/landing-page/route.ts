@@ -134,9 +134,10 @@ async function processLandingPageLead(
   fields: Record<string, string>,
   ctx: UtmContext,
 ): Promise<ProcessResult> {
-  // createAdminClient() precisa estar DENTRO do try: se as env vars estiverem
-  // ausentes/inválidas ele pode lançar, e essa falha tem que ser capturada e
-  // reportada (webhook_logs.processing_error + 5xx), não virar exceção solta.
+  // createAdminClient() precisa estar DENTRO do try: com env vars ausentes/inválidas
+  // ele não lança na criação do client, mas a primeira query feita com ele falha —
+  // e essa falha tem que ser capturada e reportada (webhook_logs.processing_error +
+  // 5xx), não virar exceção solta.
   let adminSupabase: SupabaseClient | null = null
 
   try {
