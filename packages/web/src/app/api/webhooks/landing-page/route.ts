@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse, after } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { SupabaseClient } from "@supabase/supabase-js"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { triggerAutomations } from "@web/lib/email-automations"
@@ -82,23 +82,37 @@ export async function POST(request: NextRequest) {
     .select("id")
     .single()
 
-  // Processar de forma async — responde 200 imediatamente
-  after(async () => {
-    await processLandingPageLead(fields, {
-      utmSource,
-      utmMedium,
-      utmCampaign,
-      utmContent,
-      pageName,
-      logId: logEntry?.id,
-    })
+  // Processar o lead de forma SÍNCRONA antes de responder.
+  //
+  // Antes usávamos `after()` (processamento após a resposta 200). Em produção na
+  // Vercel esse callback era descartado de forma intermitente antes de terminar,
+  // sem lançar exceção: o lead nunca era criado, webhook_logs.processed ficava
+  // false para sempre e o cliente já tinha recebido 200. Leads eram perdidos
+  // silenciosamente. Trocamos por await direto: a resposta demora um pouco mais
+  // (tempo de criar o lead + resolver org/dedup), mas só retornamos 200 se o
+  // lead foi realmente processado — e um 5xx claro se falhar, que o proxy
+  // consumidor já trata como erro.
+  const result = await processLandingPageLead(fields, {
+    utmSource,
+    utmMedium,
+    utmCampaign,
+    utmContent,
+    pageName,
+    logId: logEntry?.id,
   })
+
+  if (!result.ok) {
+    return NextResponse.json(
+      { error: "Lead processing failed" },
+      { status: 500, headers: CORS_HEADERS },
+    )
+  }
 
   return NextResponse.json({ status: "ok" }, { headers: CORS_HEADERS })
 }
 
 // ---------------------------------------------------------------------------
-// Processamento assíncrono
+// Processamento do lead (síncrono — awaited antes da resposta)
 // ---------------------------------------------------------------------------
 
 interface UtmContext {
@@ -110,13 +124,24 @@ interface UtmContext {
   logId?: string
 }
 
+// Resultado do processamento. `ok: false` faz o handler POST responder 5xx,
+// sinalizando ao proxy consumidor que o lead NÃO foi processado com sucesso.
+interface ProcessResult {
+  ok: boolean
+}
+
 async function processLandingPageLead(
   fields: Record<string, string>,
   ctx: UtmContext,
-) {
-  const adminSupabase = createAdminClient()
+): Promise<ProcessResult> {
+  // createAdminClient() precisa estar DENTRO do try: se as env vars estiverem
+  // ausentes/inválidas ele pode lançar, e essa falha tem que ser capturada e
+  // reportada (webhook_logs.processing_error + 5xx), não virar exceção solta.
+  let adminSupabase: SupabaseClient | null = null
 
   try {
+    adminSupabase = createAdminClient()
+
     // Normalizar campos — suporta nomes do WPForms, CF7, Elementor e genéricos
     const name = pick(fields, ["nome", "name", "your-name", "full_name", "fullname", "field_name"]) ?? null
     const email = pick(fields, ["email", "your-email", "e-mail", "field_email"]) ?? null
@@ -127,14 +152,27 @@ async function processLandingPageLead(
     const formName = fields.form_name?.trim() || null
 
     if (!name && !email && !phone) {
+      // Submissão vazia/inválida — descarte esperado, não é falha de processamento.
       console.warn("[LP-WEBHOOK] Lead sem nome, email ou telefone — ignorado", { fields })
-      return
+      if (ctx.logId) {
+        await adminSupabase
+          .from("webhook_logs")
+          .update({ processed: true })
+          .eq("id", ctx.logId)
+      }
+      return { ok: true }
     }
 
     const orgId = await resolveOrgId(adminSupabase)
     if (!orgId) {
       console.error("[LP-WEBHOOK] Nenhuma org ativa encontrada")
-      return
+      if (ctx.logId) {
+        await adminSupabase
+          .from("webhook_logs")
+          .update({ processing_error: "Nenhuma org ativa encontrada" })
+          .eq("id", ctx.logId)
+      }
+      return { ok: false }
     }
 
     const defaultStageId = await getDefaultStageId(adminSupabase, orgId)
@@ -188,6 +226,11 @@ async function processLandingPageLead(
         .single()
 
       if (newLead?.id) {
+        // Fire-and-forget deliberado: a criação do LEAD (acima) é a parte crítica
+        // que precisa estar concluída antes do 200. Automações e distribuição pro
+        // corretor NÃO eram a causa da perda silenciosa, então mantê-las sem await
+        // evita aumentar a latência da resposta e reduz risco de regressão. Se
+        // falharem, o lead já existe e pode ser reprocessado.
         void triggerAutomations("lead.created", {
           id: newLead.id,
           email: email ?? null,
@@ -202,7 +245,13 @@ async function processLandingPageLead(
 
     if (!leadId) {
       console.error("[LP-WEBHOOK] Falha ao criar lead", { name, email, phone })
-      return
+      if (ctx.logId) {
+        await adminSupabase
+          .from("webhook_logs")
+          .update({ processing_error: "Falha ao criar lead", org_id: orgId })
+          .eq("id", ctx.logId)
+      }
+      return { ok: false }
     }
 
     await adminSupabase.from("activities").insert({
@@ -231,15 +280,24 @@ async function processLandingPageLead(
       has_phone: Boolean(phone),
       has_email: Boolean(email),
     }))
+
+    return { ok: true }
   } catch (error) {
     console.error("[LP-WEBHOOK] Erro no processamento:", error)
-    if (ctx.logId) {
+    // Registrar o erro no log só é possível se o client foi criado. Se
+    // createAdminClient() foi a origem da falha, adminSupabase é null e não há
+    // como gravar processing_error — mas ainda retornamos ok:false para o 5xx.
+    if (ctx.logId && adminSupabase) {
       const msg = error instanceof Error ? error.message : String(error)
       await adminSupabase
         .from("webhook_logs")
         .update({ processing_error: msg })
         .eq("id", ctx.logId)
+        .then(undefined, (logErr) => {
+          console.error("[LP-WEBHOOK] Falha ao registrar processing_error:", logErr)
+        })
     }
+    return { ok: false }
   }
 }
 
