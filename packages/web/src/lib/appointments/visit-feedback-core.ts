@@ -1,4 +1,5 @@
 import { registroDoPosVisita } from "@web/lib/appointments/post-visit-record"
+import { claimFollowUp, fecharClaim } from "@web/lib/followup/claim"
 import { sendFollowUpMessage } from "@web/lib/whatsapp/send-followup-message"
 import { logEventOnce } from "@web/lib/logger"
 import type { SupabaseClient } from "@supabase/supabase-js"
@@ -116,17 +117,22 @@ export async function applyVisitFeedback(
 
   // Trigger Nicole post-visit follow-up based on interest level
   try {
-    // Check if there's already a post_visit log for this lead in the last 48h
-    const cooldown48h = new Date(Date.now() - 48 * 60 * 60 * 1000)
-    const { data: existingPostVisit } = await supabase
-      .from("follow_up_log")
-      .select("id")
-      .eq("lead_id", appointment.lead_id)
-      .eq("type", "post_visit")
-      .gte("created_at", cooldown48h.toISOString())
-      .limit(1)
+    // Story 75-352 — checar-e-depois-gravar virou um claim atômico. Esta porta é
+    // humana (o corretor salvando o feedback) e pode acontecer no meio de uma run
+    // do cron, que persegue exatamente o mesmo agendamento: as duas liam o
+    // cooldown antes de qualquer uma escrever, e o lead levava a mensagem duas
+    // vezes. O claim decide quem escreve — e vem antes da chamada ao modelo, que é
+    // a parte cara.
+    const claimPosVisita = await claimFollowUp({
+      supabase,
+      orgId: appointment.org_id,
+      leadId: appointment.lead_id,
+      type: "post_visit",
+      metadata: { appointment_id: appointment.id, origem: "feedback_do_corretor" },
+      blockingTypes: ["post_visit"],
+    })
 
-    if (!existingPostVisit || existingPostVisit.length === 0) {
+    if (claimPosVisita) {
       // Get property info from the appointment
       const { data: apptFull } = await supabase
         .from("appointments")
@@ -185,17 +191,12 @@ export async function applyVisitFeedback(
         // A decisão de "o que gravar" é a MESMA dos dois lados (post-visit-record).
         const registro = registroDoPosVisita(envio, body.interest_after)
 
-        // Story 75-351 — o erro deste insert era descartado e ele falhava sempre
-        // (a coluna `metadata` só nasceu na migration 233). Sem esta linha, o cron
-        // reprocessava o mesmo agendamento a cada 2h: o `throw` faz o catch de
-        // baixo registrar em `system_events` em vez de sumir.
-        const { error: erroDoLog } = await supabase.from("follow_up_log").insert({
-          org_id: appointment.org_id,
-          lead_id: appointment.lead_id,
-          type: "post_visit",
+        // Story 75-352 — a linha já existe desde o claim; aqui grava-se o desfecho.
+        // O `throw` da 75-351 saiu: ele protegia o cooldown, e o cooldown agora é a
+        // linha reivindicada, que já está no banco. `fecharClaim` grita se falhar.
+        await fecharClaim(supabase, claimPosVisita, {
           status: registro.status,
-          scheduled_at: new Date().toISOString(),
-          sent_at: registro.gravarSentAt ? new Date().toISOString() : null,
+          sentAt: registro.gravarSentAt ? new Date().toISOString() : null,
           message,
           metadata: {
             channel: envio.channel,
@@ -204,9 +205,6 @@ export async function applyVisitFeedback(
             ...(envio.reason ? { reason: envio.reason } : {}),
           },
         })
-        if (erroDoLog) {
-          throw new Error(`follow_up_log não gravou (cooldown de 48h comprometido): ${erroDoLog.message}`)
-        }
 
         if (registro.gravarMensagem && conv) {
           await supabase.from("messages").insert({
