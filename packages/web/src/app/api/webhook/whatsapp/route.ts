@@ -14,6 +14,7 @@ import {
 import { normalizePhoneBR } from "@trifold/shared"
 import type { WhatsAppReferral } from "@trifold/shared"
 import { buildCtwaMetadata } from "@web/app/api/webhook/whatsapp/ctwa-metadata"
+import { ehPedidoDeOptOut } from "@web/lib/followup/template-fallback"
 import {
   sendLibraryMediaIfRequested,
   resolveSendableMedia,
@@ -552,6 +553,52 @@ export async function POST(request: NextRequest) {
   if (!conversation) {
     console.error("Failed to find or create conversation")
     return NextResponse.json({ status: "ok" })
+  }
+
+  // ---- Opt-out de marketing (Story 75-353) -------------------------------
+  // O botão "Parar promoções" dos templates de MARKETING chega aqui como texto
+  // comum. Sem gravar o pedido, o lead continuaria recebendo template de
+  // reativação — e "ignorou quem pediu para parar" é o caminho mais curto para
+  // derrubar a nota de qualidade da WABA (que é o ativo de entrega da empresa).
+  //
+  // Só marca; não responde e não interrompe o fluxo. A conversa segue normal:
+  // ele pediu para não receber promoção, não para ser ignorado quando escreve.
+  if (text && ehPedidoDeOptOut(text)) {
+    // `.is(..., null)` em vez de ler antes: preserva a data do PRIMEIRO pedido e
+    // resolve em uma ida ao banco. O `.select()` diz se a linha mudou de fato —
+    // sem ele, repetir "parar promoções" geraria atividade duplicada.
+    const { data: optOutGravado, error: erroOptOut } = await supabase
+      .from("leads")
+      .update({ marketing_optout_at: new Date().toISOString() })
+      .eq("id", lead.id)
+      .is("marketing_optout_at", null)
+      .select("id")
+
+    const mudou = (optOutGravado ?? []).length > 0
+
+    if (erroOptOut || mudou) {
+      logEvent({
+        level: erroOptOut ? "error" : "info",
+        category: "webhook",
+        event_type: "LEAD_MARKETING_OPT_OUT",
+        message: erroOptOut
+          ? `Falha ao gravar opt-out do lead ${lead.id}: ${erroOptOut.message}`
+          : `Lead ${lead.id} pediu para nao receber mais template de marketing`,
+        metadata: { lead_id: lead.id, texto: text.slice(0, 120), erro: erroOptOut?.message },
+        org_id: orgId,
+        source: "api/webhook/whatsapp",
+      })
+    }
+
+    if (!erroOptOut && mudou) {
+      await supabase.from("activities").insert({
+        org_id: orgId,
+        lead_id: lead.id,
+        type: "lead_opt_out_marketing",
+        description: "Lead pediu para nao receber mais mensagens de divulgacao (opt-out de marketing)",
+        metadata: { texto: text.slice(0, 200) },
+      })
+    }
   }
 
   // ---- INSERT inbound message (sync) ------------------------------------

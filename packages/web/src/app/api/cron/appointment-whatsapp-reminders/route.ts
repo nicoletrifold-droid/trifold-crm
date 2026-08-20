@@ -192,7 +192,14 @@ export async function GET(request: NextRequest) {
 
         let appointmentSent = false
         for (const s of sends) {
-          const r = await sendVisitTemplate(config, s)
+          // Story 75-353 — passa o log: estes lembretes custam na Meta e não
+          // registravam nada em `whatsapp_send_log` (zero linhas em 7 dias, com os
+          // flags provando que saíram). `recipient_type` distingue lead de corretor.
+          const r = await sendVisitTemplate(config, s, {
+            admin: supabase,
+            orgId: appointment.org_id as string,
+            recipientType: s.template.endsWith("_cliente") ? "lead" : "corretor",
+          })
           if (r.ok) {
             sent++
             appointmentSent = true

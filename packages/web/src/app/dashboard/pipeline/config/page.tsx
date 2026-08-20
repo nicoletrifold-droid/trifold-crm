@@ -1,4 +1,5 @@
 import { createClient } from "@web/lib/supabase/server"
+import { OPENING_TEMPLATE_PARAMS } from "@web/lib/whatsapp/opening-templates"
 import { getServerUser } from "@web/lib/auth"
 import { canAccess } from "@web/lib/permissions"
 import { redirect } from "next/navigation"
@@ -72,6 +73,12 @@ function FollowUpStageCard({
   const nicoleDays = (rule?.nicole_takeover_days as number) ?? 2
   const template = (rule?.message_template as string) ?? ""
   const isActive = (rule?.is_active as boolean) ?? true
+  // Story 75-353 — template HSM usado quando a janela de 24h está fechada.
+  const hsmTemplate = (rule?.hsm_template as string | null) ?? ""
+  const hsmMinDays = (rule?.hsm_min_days as number) ?? 7
+  // Só os templates cujas variáveis o código sabe preencher (convenção 75-217):
+  // template novo = criar na Meta + registrar em OPENING_TEMPLATE_PARAMS.
+  const templatesDisponiveis = Object.keys(OPENING_TEMPLATE_PARAMS).sort()
 
   async function saveRule(formData: FormData) {
     "use server"
@@ -82,6 +89,9 @@ function FollowUpStageCard({
     const newNicoleDays = Number(formData.get("nicole_takeover_days"))
     const newTemplate = (formData.get("message_template") as string)?.trim() || null
     const newIsActive = formData.get("is_active") === "on"
+    const newHsmTemplate = (formData.get("hsm_template") as string)?.trim() || null
+    const parsedHsmMinDays = Number(formData.get("hsm_min_days"))
+    const newHsmMinDays = Number.isFinite(parsedHsmMinDays) && parsedHsmMinDays >= 0 ? parsedHsmMinDays : 7
 
     if (isNaN(newAlertDays) || isNaN(newNicoleDays)) return
     if (newAlertDays >= newNicoleDays) return
@@ -97,6 +107,8 @@ function FollowUpStageCard({
         nicole_takeover_days: newNicoleDays,
         message_template: newTemplate,
         is_active: newIsActive,
+        hsm_template: newHsmTemplate,
+        hsm_min_days: newHsmMinDays,
       },
       { onConflict: "org_id,stage_id" }
     )
@@ -172,6 +184,42 @@ function FollowUpStageCard({
         <p className="mt-1 text-xs text-gray-400 dark:text-stone-500">
           Variáveis disponíveis: {"{nome}"}, {"{empreendimento}"}
         </p>
+      </div>
+
+      {/* Story 75-353 — fora da janela de 24h do WhatsApp, texto livre NÃO é
+          entregue (medido: 20 dias, 0 entregas, ~4.700 tentativas puladas). Com um
+          template aprovado escolhido aqui, a mensagem sai e reabre a conversa. */}
+      <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div>
+          <label className={labelClass}>Fora da janela de 24h, enviar template</label>
+          <select name="hsm_template" defaultValue={hsmTemplate} className={inputClass}>
+            <option value="">Não enviar (comportamento padrão)</option>
+            {templatesDisponiveis.map((nome) => (
+              <option key={nome} value={nome}>
+                {nome}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-gray-400 dark:text-stone-500">
+            Template aprovado do WhatsApp. Sem isso, o lead que ficou mais de 24h
+            sem escrever <strong>não recebe</strong> o follow-up.
+          </p>
+        </div>
+
+        <div>
+          <label className={labelClass}>Intervalo mínimo entre templates (dias)</label>
+          <input
+            type="number"
+            name="hsm_min_days"
+            defaultValue={hsmMinDays}
+            min={0}
+            className={inputClass}
+          />
+          <p className="mt-1 text-xs text-gray-400 dark:text-stone-500">
+            Trava por lead. Template é envio pago e aparece como divulgação: 7 dias
+            é o padrão. Quem pediu para não receber nunca recebe.
+          </p>
+        </div>
       </div>
 
       <div className="mt-4 flex justify-end">
