@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
 import { SupabaseClient } from "@supabase/supabase-js"
 import { createAdminClient } from "@web/lib/supabase/admin"
-import { logEvent } from "@web/lib/logger"
+import { logEvent, logEventOnce } from "@web/lib/logger"
+import {
+  claimCronRun,
+  finishCronRun,
+  INTERVALO_MINIMO_FOLLOWUP_SEGUNDOS,
+} from "@web/lib/cron/claim-run"
+import { claimFollowUp, fecharClaim } from "@web/lib/followup/claim"
 import { notifyBrokerOfStalledLead } from "@web/lib/broker/notify-stalled-lead"
 import { isWithinWhatsAppWindow } from "@web/lib/broker/dispatch-broker-message"
 import { sendWhatsAppMessage } from "@web/lib/whatsapp/send-whatsapp-message"
@@ -71,6 +77,42 @@ export async function GET(request: NextRequest) {
     })
   }
 
+  // Story 75-352 — este cron estava sendo invocado DUAS vezes por agendamento.
+  // A prova em produção (system_events, 19/08 22:01:10): dois recibos
+  // `FOLLOWUP_EXECUTED` no mesmo segundo, "98 processed" e "99 processed" — duas
+  // execuções concorrentes, intercaladas lead a lead. O manifesto de cron da
+  // Vercel tem a rota UMA vez, `cron.job` não a chama e existe um só projeto: o
+  // segundo gatilho é externo ao repo. A trava não depende de descobrir qual é.
+  //
+  // A trava vem DEPOIS do horário comercial de propósito: run fora de janela não
+  // faz nada e não deve consumir o intervalo da run válida.
+  const { runId, claimed } = await claimCronRun(
+    supabase,
+    "followup",
+    INTERVALO_MINIMO_FOLLOWUP_SEGUNDOS
+  )
+
+  if (!claimed) {
+    // `logEventOnce` porque este é a ÚLTIMA escrita antes do response: o
+    // `logEvent` fire-and-forget morre no congelamento da lambda (Story 87-6),
+    // e aí a duplicata voltaria a ser invisível — que é o problema todo.
+    await logEventOnce({
+      level: "warn",
+      category: "cron",
+      event_type: "FOLLOWUP_RUN_DUPLICADA",
+      message: "Invocação duplicada do cron de follow-up — run anterior ainda dentro do intervalo mínimo. Nada foi processado.",
+      metadata: { job: "followup", intervalo_minimo_s: INTERVALO_MINIMO_FOLLOWUP_SEGUNDOS },
+      source: "api/cron/followup",
+    })
+
+    return NextResponse.json({
+      processed: 0,
+      alerts_created: 0,
+      messages_sent: 0,
+      skipped_reason: "already_running",
+    })
+  }
+
   let alertsCreated = 0
   // Story 75-351 — `messagesSent` contava LEADS PROCESSADOS, não mensagens
   // entregues: o `++` fica depois das duas ramificações (enviou / pulou). O recibo
@@ -80,6 +122,10 @@ export async function GET(request: NextRequest) {
   let messagesSent = 0
   let messagesSkipped = 0
   let processed = 0
+  // Story 75-352 — leads que outra invocação já havia reivindicado. Zero é o
+  // estado saudável; qualquer número acima disso é a prova de que a duplicata
+  // continua chegando (e de que o claim está segurando).
+  let duplicatasEvitadas = 0
 
   // Fetch all active follow-up rules with stage info
   const { data: rules, error: rulesError } = await supabase
@@ -202,6 +248,28 @@ export async function GET(request: NextRequest) {
 
       // Check nicole_takeover_days first (more severe)
       if (daysSinceLastContact >= rule.nicole_takeover_days) {
+        // Story 75-352 — a linha nasce ANTES do envio. O `cooldownSet` acima é só
+        // um pré-filtro em lote (barato, evita 800 RPCs); quem decide é este claim,
+        // que é atômico por lead. `blockingTypes: null` preserva a semântica do
+        // pré-filtro: qualquer tipo de follow-up nas últimas 48h bloqueia.
+        const claimId = await claimFollowUp({
+          supabase,
+          orgId: rule.org_id,
+          leadId: lead.id,
+          type: "nicole_sent",
+          ruleId: rule.id,
+          metadata: { stage_id: rule.stage_id, origem: "cron" },
+          blockingTypes: null,
+        })
+
+        if (!claimId) {
+          // Outra invocação já reivindicou este lead (ou o cooldown subiu entre o
+          // pré-filtro e agora). Nada é enviado — e o número aparece no recibo,
+          // porque duplicata evitada é a métrica que prova que esta story funciona.
+          duplicatasEvitadas++
+          continue
+        }
+
         // Render template
         const message = (rule.message_template || "")
           .replace(/\{nome\}/g, lead.name || "")
@@ -224,40 +292,21 @@ export async function GET(request: NextRequest) {
         //  - WhatsApp window closed   → status='skipped' + metadata.reason
         //  - other failure (best-effort) → status='sent' (message stored, retry by broker)
         const skipped = !result.sent && result.reason === "WHATSAPP_WINDOW_CLOSED"
-        // Story 75-351 — o `{ error }` deste insert era DESCARTADO, e ele falhava
-        // 100% das vezes: `follow_up_log.metadata` não existia (a coluna só nasceu
-        // na migration 233). Medido em 19/08: `alert_broker` 465 linhas — o único
-        // insert sem `metadata` — contra `nicole_sent` 0 e `post_visit` 0, sempre.
-        //
-        // 🔥 O ESTRAGO NÃO É O DADO, É O COOLDOWN: a janela de 48h por lead é lida
-        // desta tabela. Sem a linha, o mesmo lead volta a ser elegível a cada run
-        // de 2h — o follow-up podia repetir várias vezes ao dia para a mesma
-        // pessoa. Não explodiu antes só porque a janela de 24h do WhatsApp estava
-        // fechada para quase todos (0 enviadas em julho e agosto, 4.493 puladas).
-        const { error: erroDoLog } = await supabase.from("follow_up_log").insert({
-          org_id: rule.org_id,
-          lead_id: lead.id,
-          rule_id: rule.id,
-          type: "nicole_sent",
+        // Story 75-352 — a linha já existe (o claim a criou antes do envio); aqui
+        // só se grava o DESFECHO. A diferença prática em relação à 75-351: falhar
+        // nesta escrita não solta mais o cooldown, porque o cooldown é a linha, não
+        // o desfecho. Continua gritando — 'claimed' preso é sinal de run morta.
+        await fecharClaim(supabase, claimId, {
           status: skipped ? "skipped" : "sent",
-          scheduled_at: now.toISOString(),
-          sent_at: result.sent ? now.toISOString() : null,
+          sentAt: result.sent ? now.toISOString() : null,
           message,
-          metadata: skipped ? { reason: result.reason, channel: result.channel } : { channel: result.channel },
+          metadata: {
+            stage_id: rule.stage_id,
+            origem: "cron",
+            channel: result.channel,
+            ...(skipped ? { reason: result.reason } : {}),
+          },
         })
-        if (erroDoLog) {
-          // A mensagem já foi enviada; não há como desfazer. O que se pode fazer é
-          // GRITAR, porque sem esta linha o cooldown deste lead não existe.
-          logEvent({
-            level: "error",
-            category: "cron",
-            event_type: "FOLLOWUP_LOG_FALHOU",
-            message: `follow_up_log não gravou para o lead ${lead.id} — COOLDOWN DE 48H COMPROMETIDO: ${erroDoLog.message}`,
-            metadata: { lead_id: lead.id, type: "nicole_sent", enviado: result.sent, erro: erroDoLog.message },
-            org_id: rule.org_id,
-            source: "api/cron/followup",
-          })
-        }
 
         if (result.sent) {
           logEvent({
@@ -314,15 +363,31 @@ export async function GET(request: NextRequest) {
         if (result.sent) messagesSent++
         else messagesSkipped++
       } else if (daysSinceLastContact >= rule.alert_days) {
-        // Create alert for broker
-        await supabase.from("follow_up_log").insert({
-          org_id: rule.org_id,
-          lead_id: lead.id,
-          rule_id: rule.id,
+        // Story 75-352 — mesmo claim atômico do outro ramo, e aqui ele importa
+        // duas vezes: a run duplicada gerou 21 pares de `alert_broker` no mesmo
+        // dia, e a guarda anti-spam do `notifyBrokerOfStalledLead` decide olhando
+        // quantas linhas existem (`> 1` = alerta anterior aberto → não notifica).
+        // Com duas runs concorrentes inserindo, essa contagem era uma corrida: o
+        // corretor podia levar notificação dupla, ou nenhuma. O claim garante
+        // exatamente uma linha, e a guarda volta a medir o que ela pensa medir.
+        //
+        // `status: "pending"` porque é o que as telas de Alertas leem — nascer
+        // 'claimed' faria o alerta desaparecer da tela.
+        const claimAlerta = await claimFollowUp({
+          supabase,
+          orgId: rule.org_id,
+          leadId: lead.id,
           type: "alert_broker",
+          ruleId: rule.id,
+          metadata: { stage_id: rule.stage_id, origem: "cron" },
+          blockingTypes: null,
           status: "pending",
-          scheduled_at: now.toISOString(),
         })
+
+        if (!claimAlerta) {
+          duplicatasEvitadas++
+          continue
+        }
 
         // Create activity log
         await supabase.from("activities").insert({
@@ -383,8 +448,9 @@ export async function GET(request: NextRequest) {
     .eq("status", "completed")
 
   if (completedAppointments) {
-    const cooldown48h = new Date(now.getTime() - 48 * 60 * 60 * 1000)
-
+    // Story 75-352 — a janela de 48h do pós-visita agora é medida dentro do
+    // `claim_follow_up` (a checagem e a escrita precisam ser atômicas). Não há mais
+    // data calculada aqui.
     for (const appt of completedAppointments) {
       const leadData = Array.isArray(appt.lead) ? appt.lead[0] : appt.lead
       if (!leadData) continue
@@ -401,16 +467,24 @@ export async function GET(request: NextRequest) {
       // A regra que fica: falha de UM lead não pode calar o cron dos outros.
       try {
 
-        // Check if there's already a post_visit log in the last 48h
-        const { data: existingLog } = await supabase
-          .from("follow_up_log")
-          .select("id")
-          .eq("lead_id", appt.lead_id)
-          .eq("type", "post_visit")
-          .gte("created_at", cooldown48h.toISOString())
-          .limit(1)
+        // Story 75-352 — o claim entra ANTES da chamada ao modelo, não depois.
+        // A ordem antiga (checa cooldown → chama o modelo → envia → grava) fazia a
+        // run duplicada pagar a redação da mensagem de todos os 22 a 24
+        // agendamentos para jogar metade fora. `blockingTypes: ['post_visit']`
+        // preserva a semântica do `.eq("type","post_visit")` que estava aqui.
+        const claimPosVisita = await claimFollowUp({
+          supabase,
+          orgId: appt.org_id,
+          leadId: appt.lead_id,
+          type: "post_visit",
+          metadata: { appointment_id: appt.id, origem: "cron" },
+          blockingTypes: ["post_visit"],
+        })
 
-        if (existingLog && existingLog.length > 0) continue
+        if (!claimPosVisita) {
+          duplicatasEvitadas++
+          continue
+        }
 
         // Get feedback info
         const feedbackArr = Array.isArray(appt.feedback) ? appt.feedback : appt.feedback ? [appt.feedback] : []
@@ -465,28 +539,24 @@ export async function GET(request: NextRequest) {
         // `API_ERROR` da Graph API era gravado como `status: "sent"`.
         const registro = registroDoPosVisita(result, interestLevel)
 
-        // Create follow_up_log entry reflecting the send outcome (AC4/T3)
-        // Story 75-351 — `throw` de propósito: este insert é o que segura o
-        // cooldown de 48h do pós-visita. Falhar aqui em silêncio fazia o mesmo
-        // agendamento ser reprocessado a cada 2 horas, indefinidamente. Com o
-        // `throw`, o try/catch por agendamento da 75-350 registra e segue.
-        const { error: erroDoLogPosVisita } = await supabase.from("follow_up_log").insert({
-          org_id: appt.org_id,
-          lead_id: appt.lead_id,
-          type: "post_visit",
+        // Story 75-352 — a linha já existe desde o claim; aqui só se grava o
+        // desfecho. O `throw` da 75-351 saiu daqui de propósito: ele existia porque
+        // o insert ERA o cooldown, e falhar em silêncio fazia o mesmo agendamento
+        // voltar a cada 2h. Agora o cooldown é a linha reivindicada, que já está no
+        // banco — falhar no desfecho não reabre o agendamento, e derrubar o
+        // processamento deste lead por causa disso seria custo sem benefício.
+        // Continua ruidoso: `fecharClaim` grita se não gravar.
+        await fecharClaim(supabase, claimPosVisita, {
           status: registro.status,
-          scheduled_at: now.toISOString(),
-          sent_at: registro.gravarSentAt ? now.toISOString() : null,
+          sentAt: registro.gravarSentAt ? now.toISOString() : null,
           message,
           metadata: {
             channel: result.channel,
             appointment_id: appt.id,
+            origem: "cron",
             ...(result.reason ? { reason: result.reason } : {}),
           },
         })
-        if (erroDoLogPosVisita) {
-          throw new Error(`follow_up_log não gravou (cooldown de 48h comprometido): ${erroDoLogPosVisita.message}`)
-        }
 
         if (result.sent) {
           logEvent({
@@ -561,34 +631,36 @@ export async function GET(request: NextRequest) {
   }
 
   // AC13: Log cron execution result
-  logEvent({
-    level: processed > 0 ? "info" : "info",
-    category: "cron",
-    event_type: "FOLLOWUP_EXECUTED",
-    message: `Followup cron: ${processed} processed, ${alertsCreated} alerts, ${messagesSent} enviadas / ${messagesSkipped} puladas, pós-visita ${postVisitSent} enviadas de ${postVisitProcessados} (${postVisitErros} erros), ${noShowDetected} no-show`,
-    metadata: {
-      processed,
-      alerts_created: alertsCreated,
-      messages_sent: messagesSent,
-      messages_skipped: messagesSkipped,
-      post_visit_sent: postVisitSent,
-      post_visit_processados: postVisitProcessados,
-      post_visit_erros: postVisitErros,
-      no_show_detected: noShowDetected,
-    },
-    source: "api/cron/followup",
-  })
-
-  return NextResponse.json({
+  const recibo = {
     processed,
     alerts_created: alertsCreated,
     messages_sent: messagesSent,
     messages_skipped: messagesSkipped,
+    // Story 75-352 — duplicata evitada é métrica de primeira classe: é como se
+    // descobre que a segunda invocação continua chegando mesmo com a trava de run.
+    duplicatas_evitadas: duplicatasEvitadas,
     post_visit_sent: postVisitSent,
     post_visit_processados: postVisitProcessados,
     post_visit_erros: postVisitErros,
     no_show_detected: noShowDetected,
+  }
+
+  logEvent({
+    level: "info",
+    category: "cron",
+    event_type: "FOLLOWUP_EXECUTED",
+    message: `Followup cron: ${processed} processed, ${alertsCreated} alerts, ${messagesSent} enviadas / ${messagesSkipped} puladas, ${duplicatasEvitadas} duplicatas evitadas, pós-visita ${postVisitSent} enviadas de ${postVisitProcessados} (${postVisitErros} erros), ${noShowDetected} no-show`,
+    metadata: recibo,
+    source: "api/cron/followup",
   })
+
+  // Story 75-352 — o recibo também vai para `cron_locks.last_result`, que é escrita
+  // AGUARDADA. O `logEvent` acima é fire-and-forget e pode morrer no congelamento
+  // da lambda (foi o que aconteceu com o recibo da 87-6): a linha de `cron_locks` é
+  // a prova que sobra de que esta run terminou, e com que números.
+  await finishCronRun(supabase, runId, recibo)
+
+  return NextResponse.json(recibo)
 }
 
 import { STAGE_IDS } from "@trifold/shared"
