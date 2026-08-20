@@ -70,17 +70,20 @@ export function liquidFillFraction(count: number, maxCount: number): number {
 }
 
 /**
- * Story 75-323 — os slugs REAIS das etapas em prod não são os nomes delas. A etapa
- * chamada "Atendimento" tem slug `no-show` e a "Fechamento" tem slug `fechou`
- * (herança da nomenclatura antiga do pipeline). Os alvos originais eram
- * `atendimento` e `fechamento`, que não casam com nada — os dois andares só
- * funcionavam pelo fallback de NOME, e renomear a etapa em Configurações →
- * Pipeline zeraria o funil em silêncio. Agora cada andar aceita a lista de slugs
- * que já significam aquilo, e o nome segue como último recurso.
+ * Story 75-323 — os slugs REAIS das etapas em prod não são os nomes delas
+ * ("Fechamento" tem slug `fechou`, herança da nomenclatura antiga). Cada andar
+ * aceita a lista de slugs que significam aquilo, e o nome é o último recurso.
+ *
+ * Story 75-362 — o sinônimo `no-show` SAIU da lista de Atendimento. Ele existia
+ * porque a etapa "Atendimento" (…0009) carregou o slug `no-show` por 73 dias
+ * depois de renomeada na UI (ver 75-358) — a mig 236 consertou o slug para
+ * `atendimento`, e a mig 237 deu o slug `no-show` à etapa No-Show DE VERDADE
+ * (…0011). Manter o sinônimo aqui faria o andar de Atendimento poder casar com
+ * a coluna No-Show, dependendo só da ordem de posição no board.
  */
 export function pickFunnelTiers(stages: FunnelStageInput[]): FunnelTiers {
   return {
-    atendimento: pick(stages, ["atendimento", "no-show"], "Atendimento", "#e0526e"),
+    atendimento: pick(stages, ["atendimento"], "Atendimento", "#e0526e"),
     visitaAgendada: pick(stages, ["visita-agendada"], "Visita Agendada", "#7c5cd6"),
     visitou: pick(stages, ["visitou"], "Visitou", "#38a3c4"),
     proposta: pick(stages, ["proposta"], "Proposta", "#76a84e"),
