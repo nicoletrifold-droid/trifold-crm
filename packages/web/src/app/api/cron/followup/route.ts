@@ -8,7 +8,10 @@ import {
   INTERVALO_MINIMO_FOLLOWUP_SEGUNDOS,
 } from "@web/lib/cron/claim-run"
 import { claimFollowUp, fecharClaim } from "@web/lib/followup/claim"
-import { decidirTemplateDoFollowUp } from "@web/lib/followup/template-fallback"
+import {
+  decidirTemplateDoFollowUp,
+  podeFollowUpSemConversa,
+} from "@web/lib/followup/template-fallback"
 import {
   listApprovedOpeningTemplates,
   renderOpeningBody,
@@ -200,7 +203,7 @@ export async function GET(request: NextRequest) {
       .from("leads")
       .select(
         `id, name, phone, org_id, assigned_broker_id, property_interest_id, last_contact_at,
-         marketing_optout_at,
+         marketing_optout_at, created_at,
          properties:property_interest_id(name)`
       )
       .eq("org_id", rule.org_id)
@@ -271,36 +274,71 @@ export async function GET(request: NextRequest) {
       processed++
 
       const latestConv = latestConvByLead.get(lead.id)
-      const conversationId = latestConv?.id
+      let conversationId = latestConv?.id
       const conversationLastMessageAt = latestConv?.last_message_at ?? null
 
-      if (!conversationId) continue
+      // Story 75-355 — sem conversa NÃO é mais descarte automático. Era:
+      // `if (!conversationId) continue`, e isso excluía 37 dos 47 leads que batem
+      // o gatilho na etapa Atendimento (medido em 20/08) — gente de tráfego pago
+      // com telefone, que nunca trocou uma mensagem com a empresa. É justamente
+      // quem só alcança por template: quem nunca escreveu tem a janela de 24h
+      // fechada por definição.
+      //
+      // A liberação é estreita: só segue sem conversa quando a etapa tem template
+      // E o lead passou do limiar da MENSAGEM (não do alerta). O ramo de
+      // `alert_broker` continua exigindo conversa, para não virar rajada de
+      // notificação ao corretor.
+      const referenciaDeContato =
+        (lead as { last_contact_at?: string | null }).last_contact_at ??
+        (lead as { created_at?: string | null }).created_at ??
+        now.toISOString()
+      const diasSemContatoPreliminar =
+        (now.getTime() - new Date(referenciaDeContato).getTime()) / (1000 * 60 * 60 * 24)
 
-      // Get the last message from the conversation
-      const { data: lastMessages } = await supabase
-        .from("messages")
-        .select("role, created_at")
-        .eq("conversation_id", conversationId)
-        .order("created_at", { ascending: false })
-        .limit(10)
+      if (
+        !podeFollowUpSemConversa({
+          temConversa: !!conversationId,
+          hsmTemplate: (rule as { hsm_template?: string | null }).hsm_template ?? null,
+          atingiuTakeover: diasSemContatoPreliminar >= rule.nicole_takeover_days,
+        })
+      ) {
+        continue
+      }
 
-      if (!lastMessages || lastMessages.length === 0) continue
+      // Get the last message from the conversation (quando ela existe)
+      const { data: lastMessages } = conversationId
+        ? await supabase
+            .from("messages")
+            .select("role, created_at")
+            .eq("conversation_id", conversationId)
+            .order("created_at", { ascending: false })
+            .limit(10)
+        : { data: [] as Array<{ role: string; created_at: string }> }
 
-      const lastMessage = lastMessages[0]!
-      const lastMessageDate = new Date(lastMessage.created_at)
-      const daysSinceLastMessage =
-        (now.getTime() - lastMessageDate.getTime()) / (1000 * 60 * 60 * 24)
+      // Conversa existente porém vazia segue sendo descarte: é estado
+      // inconsistente, não lead novo. Sem conversa, a lista vazia é o normal.
+      if (conversationId && (!lastMessages || lastMessages.length === 0)) continue
+
+      const lastMessage = lastMessages && lastMessages.length > 0 ? lastMessages[0]! : null
+      const daysSinceLastMessage = lastMessage
+        ? (now.getTime() - new Date(lastMessage.created_at).getTime()) / (1000 * 60 * 60 * 24)
+        : diasSemContatoPreliminar
 
       // Story 75-110: os limiares de follow-up usam o ÚLTIMO CONTATO real (mensagem OU registro
       // manual no Histórico), via leads.last_contact_at — não só a última mensagem. Assim, um
       // contato manual ("liguei, sem retorno") adia o follow-up automático. A janela de 24h do
       // WhatsApp (brokerSentRecently / isWithinWhatsAppWindow) segue baseada na MENSAGEM real.
-      const lastContactRef = (lead as { last_contact_at?: string | null }).last_contact_at ?? lastMessage.created_at
+      const lastContactRef =
+        (lead as { last_contact_at?: string | null }).last_contact_at ??
+        lastMessage?.created_at ??
+        referenciaDeContato
       const daysSinceLastContact = (now.getTime() - new Date(lastContactRef).getTime()) / (1000 * 60 * 60 * 24)
 
       // Check if broker sent a message in the last 24h — if yes, broker owns the conversation until tomorrow
       const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000)
-      const brokerSentRecently = lastMessages.some(
+      // Story 75-355 — sem conversa não há mensagem de corretor, então a lista
+      // vazia é o estado correto: `false`, e o follow-up segue.
+      const brokerSentRecently = (lastMessages ?? []).some(
         (m) => m.role === "broker" && new Date(m.created_at) > oneDayAgo
       )
 
@@ -438,7 +476,36 @@ export async function GET(request: NextRequest) {
 
         // For the WhatsApp window-closed case the lead never received freeform
         // text, so we must NOT persist it as a delivered assistant message.
-        if (!skipped) {
+        // Story 75-355 — lead sem conversa que RECEBEU o template ganha a conversa
+        // agora, para que a mensagem tenha onde morar e a resposta dele caia no
+        // fluxo normal da Nicole. Mesmo padrão do botão manual "Iniciar
+        // atendimento" (start-whatsapp), que já cria a conversa quando falta.
+        //
+        // Só cria quando houve ENTREGA de fato: conversa criada por tentativa que
+        // falhou seria conversa fantasma na tela do corretor.
+        if (!conversationId && result.sent) {
+          const { data: novaConversa, error: erroConversa } = await supabase
+            .from("conversations")
+            .insert({ org_id: rule.org_id, lead_id: lead.id, channel: "whatsapp", status: "active" })
+            .select("id")
+            .single()
+
+          if (erroConversa || !novaConversa) {
+            logEvent({
+              level: "error",
+              category: "cron",
+              event_type: "FOLLOWUP_CONVERSA_NAO_CRIADA",
+              message: `Template entregue ao lead ${lead.id}, mas a conversa não foi criada: ${erroConversa?.message ?? "sem retorno"}`,
+              metadata: { lead_id: lead.id, template: result.template, erro: erroConversa?.message },
+              org_id: rule.org_id,
+              source: "api/cron/followup",
+            })
+          } else {
+            conversationId = novaConversa.id as string
+          }
+        }
+
+        if (!skipped && conversationId) {
           // Save message to conversation history (regardless of transport send status)
           // Story 75-353 — `textoEntregue`: quando saiu por template, a conversa
           // mostra o CORPO DO TEMPLATE que o lead leu, não o texto livre que ficou

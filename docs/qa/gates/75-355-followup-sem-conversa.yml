@@ -1,0 +1,96 @@
+schema: 1
+storyId: "75-355"
+story: "docs/stories/75-355-followup-sem-conversa.story.md"
+title: "Quality Gate — O lead sem conversa deixa de ser descartado pelo follow-up"
+epic: 75
+gate: PASS
+verdict: PASS
+review_round: 1
+reviewed_by: "@qa (Quinn)"
+reviewed_at: "2026-08-20"
+branch: "75-355-followup-sem-conversa"
+depends_on: "75-353 (template) — já em produção (238d241f)"
+migrations: []
+
+escopo: >
+  `if (!conversationId) continue` excluía do follow-up todo lead que nunca escreveu — 37 dos 47 que batem
+  o gatilho na etapa Atendimento. É exatamente a população que só o template alcança, porque quem nunca
+  mandou mensagem tem a janela de 24h fechada por definição.
+
+resumo: >
+  Achado ao MEDIR antes de disparar: com o template já ligado, a run seguinte enviaria **zero**
+  mensagens. Dos 47 leads no gatilho, 10 em cooldown e **37 sem conversa nenhuma** — 21 meta_ads, 11
+  other, 3 website, 2 broker_sponsored, todos com telefone, entrados entre 08/06 e 13/08. Ninguém falou
+  com eles, nem humano nem Nicole.
+
+  A liberação é estreita de propósito: só o caminho de template, e só depois do `nicole_takeover_days`.
+  Liberar em geral colocaria esses 37 leads no ramo de `alert_broker` de uma vez — rajada de notificação
+  ao corretor (o histórico de 30 dias tem 224 alertas na etapa), ou seja, consertar um problema criando
+  outro.
+
+status_reason: >
+  Liberado para merge. Sem migration, sem mudança para lead que já tem conversa, e o ramo de alerta
+  segue exigindo conversa.
+
+acoes_obrigatorias: []
+
+concerns:
+  - id: C1
+    severidade: MEDIUM
+    tipo: alcance-novo-de-envio
+    titulo: "37 leads passam a ser alcançáveis por template de marketing"
+    detalhe: >
+      É o objetivo da story, mas é envio pago a gente que nunca interagiu. Mitigado pelo que já existe:
+      cap de 7 dias por lead, opt-out, cooldown de 48h, horário 08–20 BRT e o claim atômico. O primeiro
+      lote é de até 47 mensagens ao longo de dias (não de uma vez, por causa do cooldown). Medir resposta
+      é story própria — sem isso, "funcionou" ainda é opinião.
+  - id: C2
+    severidade: LOW
+    tipo: efeito-colateral-controlado
+    titulo: "Conversas novas aparecendo na tela do corretor"
+    detalhe: >
+      Cada entrega por template cria uma conversa. É o comportamento desejado (a resposta do lead precisa
+      de onde cair), e só nasce COM mensagem — verificação 2 da story garante que não existe conversa
+      vazia. Sem backfill de propósito.
+  - id: C3
+    severidade: LOW
+    tipo: cobertura
+    titulo: "A guarda é testada; o laço do cron não"
+    detalhe: >
+      O projeto não tem teste de rota para este cron (nem jsdom). A decisão foi extraída para função pura
+      com 4 testes cobrindo os quatro quadrantes (com/sem conversa × com/sem template e takeover). O
+      encaixe no laço é verificado em produção pelas 3 consultas da story.
+
+verificacoes:
+  - id: V1
+    o_que: "Sem conversa + template + takeover → segue"
+    resultado: "PASS — teste dedicado; é o caso dos 37 leads."
+  - id: V2
+    o_que: "Comportamento anterior preservado onde não há template"
+    resultado: "PASS — sem conversa e sem template → descarta, igual a antes."
+  - id: V3
+    o_que: "Ramo de alert_broker não passa a valer para lead sem conversa"
+    resultado: >
+      PASS — a guarda exige `atingiuTakeover`, e com a mesma referência de contato o lead cai no ramo da
+      MENSAGEM, nunca no do alerta. Teste cobre o quadrante "template mas ainda no prazo → não segue".
+  - id: V4
+    o_que: "Conversa nasce só com entrega"
+    resultado: >
+      PASS — criação condicionada a `result.sent`; falha na criação registra
+      `FOLLOWUP_CONVERSA_NAO_CRIADA` sem derrubar a run (a mensagem já saiu, não há como desfazer).
+  - id: V5
+    o_que: "Limiar sem mensagem"
+    resultado: >
+      PASS — referência passa a ser `last_contact_at` → `created_at`. Conversa existente mas VAZIA segue
+      descartada (estado inconsistente, não lead novo).
+  - id: V6
+    o_que: "Suíte, tipos, lint"
+    resultado: "PASS — 233 arquivos / 2.828 testes ✅ · type-check 8/8 ✅ · eslint 0 erros."
+
+evidencia:
+  medicao_antes_de_disparar:
+    - "etapa Atendimento: 125 leads · 47 no gatilho (≥3 dias) · 10 em cooldown · 37 SEM conversa · 0 opt-out → 0 elegíveis"
+  perfil_dos_37:
+    - "meta_ads 21 (08/06–19/07) · other 11 (08/06–13/08) · website 3 · broker_sponsored 2 — todos com telefone"
+  linha_que_causava:
+    - "packages/web/src/app/api/cron/followup/route.ts — `if (!conversationId) continue`"
