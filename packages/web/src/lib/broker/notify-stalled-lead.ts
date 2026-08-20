@@ -126,6 +126,15 @@ export async function notifyBrokerOfStalledLead(
       context: {
         title: "Lead parado — ação necessária",
         body: `${leadDisplayName} está sem resposta há ${days} dia(s) após os follow-ups da Nicole. Ligue ou envie mensagem.`,
+        // Story 75-354 — este aviso vinha em texto livre e batia na janela de 24h
+        // do WhatsApp do PRÓPRIO corretor, que quase nunca escreve para o número
+        // da empresa: não entregava, e a falha nem log tinha. `lead_parado_corretor`
+        // é template UTILITY aprovado, entrega dentro e fora da janela.
+        // Ordem dos parâmetros = ordem do template: {{1}} corretor, {{2}} lead, {{3}} dias.
+        template: {
+          name: "lead_parado_corretor",
+          params: [recipient.name ?? "Corretor", leadDisplayName, String(days)],
+        },
       },
     })
 
