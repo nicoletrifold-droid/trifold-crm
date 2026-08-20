@@ -1,13 +1,25 @@
 /**
  * Kanban stage UUIDs — single source of truth.
  * Used by: pipeline.ts, feedback route, followup cron.
+ *
+ * 🔥 Story 75-358 — chave aqui é NOME DE CÓDIGO, não o nome que aparece no board.
+ * Os dois divergem: a `…0009` nasceu "No-Show" (mig 011) e foi renomeada para
+ * "Atendimento" na tela Configurações → Pipeline em 08/06/2026. A constante
+ * continuou chamada `no_show` por 73 dias, e `pipeline.ts` acusava de furar visita
+ * TODO lead em Atendimento — 4 de 4 leads que responderam ao cron de 20/08, os
+ * quatro sem uma única linha em `appointments`. Renomear etapa na UI é barato;
+ * renomear uma chave daqui exige varredura. Ao mexer numa, conferir a outra.
  */
 export const STAGE_IDS = {
   novo:           "00000000-0000-0000-0001-000000000001",
   em_qualificacao:"00000000-0000-0000-0001-000000000002",
   qualificado:    "00000000-0000-0000-0001-000000000003",
   visita_agendada:"00000000-0000-0000-0001-000000000004",
-  no_show:        "00000000-0000-0000-0001-000000000009",
+  // "Atendimento" no board (129 leads em 20/08). Era o antigo `no_show` — quem
+  // quer dizer Atendimento usa esta chave, e o `supremo-sync` é o caso principal.
+  atendimento:    "00000000-0000-0000-0001-000000000009",
+  // Etapa No-Show de verdade, criada pela mig 236 entre Visita Agendada e Visitou.
+  no_show:        "00000000-0000-0000-0001-000000000011",
   visitou:        "00000000-0000-0000-0001-000000000005",
   proposta:       "9d3ddf3c-8049-4dd8-9e8b-81bba99ee529", // Supremo id_situacao=10261
   negociando:     "00000000-0000-0000-0001-000000000006",

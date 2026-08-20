@@ -31,6 +31,7 @@ import {
   interestLevelFromScore,
 } from "../flows"
 import { extractFactsFromMessage } from "../flows/memory-extraction"
+import { deveReengajarNoShow } from "../flows/no-show-reengage"
 import { evaluateSlot, dayPartsToIso, isoToDayParts, checkSlotAvailability, resolveVisitSlotParts, detectCancelIntent, detectRescheduleIntent, dayPartsFromUtc, parsePeriodParts, freeSlotsInPeriod, slotToUtc, detectAffirmedSlot, VISIT_DURATION_MIN } from "../flows/visit-slot"
 import type { DayParts, DayPeriod } from "../flows/visit-slot"
 import { readAgendaState, writeAgendaState, stripLegacyAgendaKeys, buildAgendaState, isPendencia } from "../flows/agenda-state"
@@ -47,7 +48,7 @@ import {
   temFalaDeCorretor,
 } from "./conversation-history"
 import type { ConversationMessage } from "./conversation-history"
-import { STAGE_IDS, PERDIDO_STAGE_IDS, advanceToVisitaAgendada } from "@trifold/shared"
+import { PERDIDO_STAGE_IDS, advanceToVisitaAgendada } from "@trifold/shared"
 
 /**
  * Validates that a visit_availability string contains a day reference,
@@ -641,7 +642,6 @@ export async function processMessageWithMetadata(
 
   // 6.5 Get current lead summary + stage for context
   let currentSummary: string | null = null
-  let leadStageId: string | null = null
   let leadName: string | null = null
   let leadPhone: string | null = null
   let leadSource: string | null = null
@@ -655,14 +655,16 @@ export async function processMessageWithMetadata(
   // em todos.
   let leadFinalidade: string | null = null
   let leadPrazoCompra: string | null = null
+  // Story 75-358 — a decisão de reengajar por no-show sai daqui, dos AGENDAMENTOS,
+  // e não mais da etapa do lead. Ver `no-show-reengage.ts` para o porquê.
+  let leadFaltouSemVoltar = false
   if (conversation?.lead_id) {
     const { data: leadData } = await supabase
       .from("leads")
-      .select("ai_summary, stage_id, name, phone, source, qualification_status, utm_source, utm_campaign, finalidade, prazo_compra")
+      .select("ai_summary, name, phone, source, qualification_status, utm_source, utm_campaign, finalidade, prazo_compra")
       .eq("id", conversation.lead_id)
       .single()
     currentSummary = leadData?.ai_summary ?? null
-    leadStageId = leadData?.stage_id ?? null
     leadName = leadData?.name ?? null
     leadPhone = leadData?.phone ?? null
     leadSource = leadData?.source ?? null
@@ -671,6 +673,20 @@ export async function processMessageWithMetadata(
     leadUtmSource = leadData?.utm_source ?? null
     leadFinalidade = leadData?.finalidade ?? null
     leadPrazoCompra = leadData?.prazo_compra ?? null
+
+    // Story 75-358 — os agendamentos do lead. Só os 5 mais recentes: a decisão
+    // olha o último, e o `.order()` aqui é sobre `scheduled_at` (a data da visita),
+    // não `created_at` — remarcação criada antes pode ter data depois.
+    const { data: appts } = await supabase
+      .from("appointments")
+      .select("status, scheduled_at")
+      .eq("lead_id", conversation.lead_id)
+      // `nullsFirst: false` não é enfeite: em DESC o PostgREST põe NULL PRIMEIRO, e
+      // um agendamento sem data ocuparia as vagas do `limit` empurrando os reais
+      // para fora (mesma pegadinha de feedback-order-desc-nulls-first).
+      .order("scheduled_at", { ascending: false, nullsFirst: false })
+      .limit(5)
+    leadFaltouSemVoltar = deveReengajarNoShow(appts ?? [])
   }
 
   // 7. Build system prompt with flow context + datetime + memory
@@ -716,8 +732,16 @@ export async function processMessageWithMetadata(
       })
     : ""
 
-  // No-Show context — empathetic re-engagement
-  const noShowContext = leadStageId === STAGE_IDS.no_show
+  // No-Show context — empathetic re-engagement.
+  //
+  // 🔥 Story 75-358 — a condição era `leadStageId === STAGE_IDS.no_show`, e esse
+  // UUID virou a etapa "Atendimento" em 08/06/2026 (renomeada na tela Pipeline).
+  // O bloco passou a entrar para os 129 leads de Atendimento: em 20/08 os 4 de 4
+  // que responderam ao cron ouviram "não conseguimos nos encontrar" sem ter uma
+  // única linha em `appointments`. A condição agora é o FATO — o agendamento mais
+  // recente do lead estar `no_show` — e a etapa saiu da conta de propósito, para
+  // que renomear coluna não volte a fazer a Nicole mentir.
+  const noShowContext = leadFaltouSemVoltar
     ? "\n=== NO-SHOW CONTEXT ===\nEste lead faltou a uma visita agendada anteriormente. Seja empatica, NAO culpe e NAO mencione \"falta\" ou \"nao compareceu\". Pergunte naturalmente se quer remarcar: algo como \"Vi que nao conseguimos nos encontrar, quer marcar outro dia?\". Se o lead mencionar um dia, agende normalmente.\n=== END NO-SHOW CONTEXT ===\n"
     : ""
 
