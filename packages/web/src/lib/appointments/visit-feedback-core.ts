@@ -70,9 +70,14 @@ export async function applyVisitFeedback(
 
   // Move lead to "Visitou" stage — only if in earlier stages (prevent regression)
   const { STAGE_IDS } = await import("@trifold/shared")
+  // 🔥 Story 75-358 — `atendimento` é OBRIGATÓRIO nesta lista. Ela sempre continha
+  // a `…0009`, só que pela chave `no_show` (que apontava para "Atendimento"). Com o
+  // `no_show` agora sendo a etapa nova, deixar de nomear `atendimento` aqui faria o
+  // lead em Atendimento — a etapa com 129 leads, o caminho mais usado — parar de
+  // avançar para "Visitou" ao receber feedback de visita. Regressão silenciosa.
   const NON_REGRESSION_STAGES = [
     STAGE_IDS.novo, STAGE_IDS.em_qualificacao, STAGE_IDS.qualificado,
-    STAGE_IDS.visita_agendada, STAGE_IDS.no_show,
+    STAGE_IDS.visita_agendada, STAGE_IDS.atendimento, STAGE_IDS.no_show,
   ]
   const { data: leadForStage } = await supabase
     .from("leads")

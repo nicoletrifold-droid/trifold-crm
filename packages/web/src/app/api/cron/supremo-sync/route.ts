@@ -24,7 +24,7 @@ const SITUACAO_ID_TO_STAGE: Record<number, string> = {
   11031: STAGE_IDS.novo,             // AGUARDANDO ATENDIMENTO
   10496: STAGE_IDS.em_qualificacao,  // 1º CONTATO
   11493: STAGE_IDS.qualificado,      // AGENDAMENTO
-  11477: STAGE_IDS.no_show,          // ATENDIMENTO
+  11477: STAGE_IDS.atendimento,      // ATENDIMENTO
   10260: STAGE_IDS.visitou,          // VISITA
   10261: STAGE_IDS.proposta,         // PROPOSTA
   10263: STAGE_IDS.fechou,           // FECHAMENTO
@@ -37,7 +37,7 @@ const SITUACAO_NOME_TO_STAGE: Record<string, string> = {
   "aguardando atendimento": STAGE_IDS.novo,
   "1º contato":             STAGE_IDS.em_qualificacao,
   "1o contato":             STAGE_IDS.em_qualificacao,
-  "atendimento":            STAGE_IDS.no_show,
+  "atendimento":            STAGE_IDS.atendimento,
   "agendamento":            STAGE_IDS.qualificado,
   "visita":                 STAGE_IDS.visitou,
   "não qualificado":        "95327bd7-3e88-4038-aa16-250a74ab085c",
