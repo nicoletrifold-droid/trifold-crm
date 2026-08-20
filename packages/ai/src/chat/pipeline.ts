@@ -33,6 +33,7 @@ import {
 import { extractFactsFromMessage } from "../flows/memory-extraction"
 import { deveReengajarNoShow } from "../flows/no-show-reengage"
 import { podeGravarNomeDoLead } from "../flows/qualification"
+import { ehPedidoDePrecoDoLead } from "../flows/handoff"
 import { evaluateSlot, dayPartsToIso, isoToDayParts, checkSlotAvailability, resolveVisitSlotParts, detectCancelIntent, detectRescheduleIntent, dayPartsFromUtc, parsePeriodParts, freeSlotsInPeriod, slotToUtc, detectAffirmedSlot, VISIT_DURATION_MIN } from "../flows/visit-slot"
 import type { DayParts, DayPeriod } from "../flows/visit-slot"
 import { readAgendaState, writeAgendaState, stripLegacyAgendaKeys, buildAgendaState, isPendencia } from "../flows/agenda-state"
@@ -1365,6 +1366,30 @@ export async function processMessageWithMetadata(
 
   emit({ level: "info", category: "ai", event_type: "QUALIFICATION_UPDATE", message: `Score: ${updatedScore}/100, step: ${updatedStep}`, metadata: { score: updatedScore, step: updatedStep, collected_fields: Object.keys(finalData).filter(k => finalData[k] != null) } })
 
+  // Story 75-361 — quantas vezes este lead já pediu preço, contado no BANCO.
+  //
+  // Não sai do `history`: ele é limitado a 20 mensagens e o caso que motivou a
+  // story (7 repetições da mesma frase) se arrasta por semanas — a janela curta
+  // esconderia a insistência. E a régua é a MESMA função que decide o handoff,
+  // em vez de um `ilike` por termo replicando a regra em SQL.
+  let pedidosDePrecoDoLead = 0
+  if (ehPedidoDePrecoDoLead(message)) {
+    const { data: falasDoLead } = await supabase
+      .from("messages")
+      .select("content")
+      .eq("conversation_id", conversationId)
+      .eq("role", "user")
+      .order("created_at", { ascending: false })
+      .limit(200)
+    // +1 pela mensagem atual: ela pode ou não já estar gravada quando o pipeline
+    // roda (o webhook insere antes, o Chat interno não), então conto só as
+    // ANTERIORES e somo a de agora — nunca dá para contar duas vezes.
+    const anteriores = (falasDoLead ?? []).filter(
+      (m) => (m.content as string) !== message && ehPedidoDePrecoDoLead(m.content as string)
+    ).length
+    pedidosDePrecoDoLead = anteriores + 1
+  }
+
   const handoffResult = shouldHandoff({
     qualificationScore: updatedScore,
     message,
@@ -1372,6 +1397,7 @@ export async function processMessageWithMetadata(
       ...finalData,
       visit_proposed: state?.visit_proposed ?? false,
     },
+    pedidosDePrecoDoLead,
   })
 
   let handoffSummary: string | undefined
@@ -1707,6 +1733,22 @@ export async function processMessageWithMetadata(
     if (handoffResult.trigger && conversation.org_id) {
       leadPatch.ai_summary = handoffSummary
 
+      // Story 75-361 — esta consulta vem ANTES do INSERT de propósito: depois
+      // dele a própria activity desta rodada apareceria como "já avisado" e o
+      // corretor nunca seria chamado.
+      let primeiraEscalacaoDePreco = false
+      if (handoffResult.motivo === "preco_insistencia") {
+        const { data: jaAvisado } = await supabase
+          .from("activities")
+          .select("id")
+          .eq("lead_id", leadId)
+          .eq("type", "handoff")
+          .eq("metadata->>motivo", "preco_insistencia")
+          .limit(1)
+          .maybeSingle()
+        primeiraEscalacaoDePreco = !jaAvisado
+      }
+
       await supabase.from("activities").insert({
         org_id: conversation.org_id,
         lead_id: leadId,
@@ -1715,10 +1757,40 @@ export async function processMessageWithMetadata(
         metadata: {
           reason: handoffResult.reason,
           qualification_score: updatedScore,
+          // Story 75-361 — é por esta chave que a escalação de preço sabe que já
+          // avisou o corretor uma vez. Sem ela a dedupe não tem em que se apoiar.
+          motivo: handoffResult.motivo ?? null,
         },
       })
 
-      emit({ level: "info", category: "ai", event_type: "HANDOFF_TRIGGERED", message: `Handoff: ${handoffResult.reason} (score=${updatedScore})`, metadata: { lead_id: leadId, reason: handoffResult.reason, score: updatedScore, property_id: identifiedPropertyId } })
+      emit({ level: "info", category: "ai", event_type: "HANDOFF_TRIGGERED", message: `Handoff: ${handoffResult.reason} (score=${updatedScore})`, metadata: { lead_id: leadId, reason: handoffResult.reason, score: updatedScore, property_id: identifiedPropertyId, motivo: handoffResult.motivo ?? null } })
+
+      // Story 75-361 — insistência em preço é o único gatilho que CHAMA GENTE.
+      //
+      // Os outros seguem como sempre (registram o sinal e a Nicole continua
+      // atendendo — 75-187: ela nunca se cala sozinha). Este avisa o corretor,
+      // porque sem isso a story não muda nada do que foi medido: nas 8 conversas
+      // piores, 4 nunca tiveram uma fala de corretor, e `notifyBrokerOnReply`
+      // (63-12) só dispara para quem JÁ assumiu a conversa — exatamente quem não
+      // é o caso aqui.
+      //
+      // UMA vez por lead: senão o caso da Maria Inês (7 pedidos) viraria 6 pushes.
+      // A dedupe é no BANCO (`activities`), não em estado de conversa, para
+      // sobreviver a reprocessamento e a troca de conversa do mesmo lead.
+      if (primeiraEscalacaoDePreco) {
+        emit({
+          level: "warn",
+          category: "ai",
+          event_type: "PRECO_INSISTENCIA_ESCALADA",
+          message: `Lead pediu preço ${pedidosDePrecoDoLead}x sem receber número — chamando o corretor`,
+          metadata: {
+            lead_id: leadId,
+            lead_name: leadName,
+            broker_user_id: currentLead?.assigned_broker_id ?? null,
+            pedidos: pedidosDePrecoDoLead,
+          },
+        })
+      }
     }
 
     // Regra (Story 75-56, generaliza 65-1): a Nicole NUNCA escreve etapa.
