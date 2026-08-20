@@ -13,7 +13,11 @@
  */
 import { describe, it, expect } from "vitest"
 
-import { decidirTemplateDoFollowUp, ehPedidoDeOptOut } from "./template-fallback"
+import {
+  decidirTemplateDoFollowUp,
+  ehPedidoDeOptOut,
+  podeFollowUpSemConversa,
+} from "./template-fallback"
 
 const AGORA = new Date("2026-08-20T12:00:00.000Z")
 const APROVADOS = new Set(["abertura_basica", "abertura_atendimento_corretor"])
@@ -149,5 +153,29 @@ describe("ehPedidoDeOptOut", () => {
     ]) {
       expect(ehPedidoDeOptOut(texto as string | null), String(texto)).toBe(false)
     }
+  })
+})
+
+describe("podeFollowUpSemConversa (Story 75-355)", () => {
+  it("com conversa → segue, independentemente de template", () => {
+    expect(podeFollowUpSemConversa({ temConversa: true, hsmTemplate: null, atingiuTakeover: false })).toBe(true)
+  })
+
+  it("🔥 SEM conversa + template + passou do takeover → segue (os 37 leads que o cron descartava)", () => {
+    expect(
+      podeFollowUpSemConversa({ temConversa: false, hsmTemplate: "abertura_basica", atingiuTakeover: true })
+    ).toBe(true)
+  })
+
+  it("sem conversa e sem template → NÃO segue (comportamento anterior preservado)", () => {
+    expect(podeFollowUpSemConversa({ temConversa: false, hsmTemplate: null, atingiuTakeover: true })).toBe(false)
+  })
+
+  it("sem conversa, com template, mas ainda no prazo do takeover → NÃO segue", () => {
+    // Impede que o lead sem conversa caia no ramo de alert_broker: seriam 37
+    // notificações ao corretor de uma vez, consertando uma coisa e estragando outra.
+    expect(
+      podeFollowUpSemConversa({ temConversa: false, hsmTemplate: "abertura_basica", atingiuTakeover: false })
+    ).toBe(false)
   })
 })

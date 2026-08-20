@@ -104,6 +104,35 @@ export function decidirTemplateDoFollowUp(entrada: EntradaDaDecisao): DecisaoDeT
 }
 
 /**
+ * Story 75-355 — o lead que NUNCA escreveu também precisa de follow-up.
+ *
+ * O cron tinha `if (!conversationId) continue`: sem registro de conversa, o lead
+ * era descartado. Medido em produção (20/08, etapa Atendimento): dos 47 leads que
+ * batem o gatilho da regra, **37 não têm conversa nenhuma** — 21 de `meta_ads`,
+ * 11 `other`, 3 `website`, 2 `broker_sponsored`, todos com telefone, entrados
+ * entre 08/06 e 13/08. Ninguém falou com eles, nem humano nem Nicole.
+ *
+ * E são exatamente eles que mais precisam do template: quem nunca escreveu tem a
+ * janela de 24h fechada por definição.
+ *
+ * A liberação é ESTREITA de propósito — só o caminho de template, e só quando a
+ * etapa configurou um. Sem isso, o ramo de alerta ao corretor passaria a valer
+ * para esses 37 leads de uma vez, virando rajada de notificação (30 dias de
+ * histórico dão 224 alertas na etapa Atendimento; somar 37 de golpe é estragar
+ * uma coisa para consertar outra).
+ */
+export function podeFollowUpSemConversa(params: {
+  temConversa: boolean
+  /** `follow_up_rules.hsm_template` — null = etapa não manda template. */
+  hsmTemplate: string | null
+  /** Se o lead já passou do `nicole_takeover_days` (ramo da mensagem, não do alerta). */
+  atingiuTakeover: boolean
+}): boolean {
+  if (params.temConversa) return true
+  return !!params.hsmTemplate && params.atingiuTakeover
+}
+
+/**
  * Padrões de opt-out. O botão "Parar promoções" dos templates de MARKETING chega
  * pelo webhook como mensagem de texto comum — sem casar o texto, o pedido do lead
  * se perde e ele continua recebendo.
