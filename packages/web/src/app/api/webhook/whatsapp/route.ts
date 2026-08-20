@@ -26,6 +26,7 @@ import { uploadInboundMedia } from "@web/lib/media/inbound-media"
 import { sendWhatsAppTypingIndicator } from "@web/lib/whatsapp/send-typing-indicator"
 import { dividirResposta, divisaoEmBlocosLigada } from "@web/lib/whatsapp/split-response"
 import { calculateTypingDelay } from "@web/lib/whatsapp/typing-delay"
+import { deveAbortarPorMensagemMaisNova, janelaAntiRajadaMs } from "@web/lib/whatsapp/anti-rajada"
 import {
   alertCredencialMorta,
   isCredencialMorta,
@@ -601,24 +602,36 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // Story 75-359 — referência de tempo da mensagem que ESTA invocação trata.
+  // Fica fora do `if` porque a guarda anti-rajada, dentro do `after()`, precisa dela.
+  let inboundCreatedAt: string | null = null
+
   // ---- INSERT inbound message (sync) ------------------------------------
   // Even for image/document we insert a placeholder row now. The async path
   // will enrich the row's metadata if media is downloaded. Worst case: text
   // is empty for media-only messages — Nicole still has the conversation.
   if (text || mediaMetadata.media_type) {
-    const { error: insertErr } = await supabase.from("messages").insert({
-      conversation_id: conversation.id,
-      role: "user",
-      content: text || "",
-      // Story 75-222: colunas top-level já no sync (a URL chega no async, após o
-      // download; o tipo garante a bolha de mídia mesmo antes do upload terminar).
-      media_type: mediaMetadata.media_type ?? null,
-      media_url: mediaMetadata.media_url ?? null,
-      metadata: {
-        whatsapp_message_id: messageId,
-        ...mediaMetadata,
-      },
-    })
+    const { data: inseridas, error: insertErr } = await supabase
+      .from("messages")
+      .insert({
+        conversation_id: conversation.id,
+        role: "user",
+        content: text || "",
+        // Story 75-222: colunas top-level já no sync (a URL chega no async, após o
+        // download; o tipo garante a bolha de mídia mesmo antes do upload terminar).
+        media_type: mediaMetadata.media_type ?? null,
+        media_url: mediaMetadata.media_url ?? null,
+        metadata: {
+          whatsapp_message_id: messageId,
+          ...mediaMetadata,
+        },
+      })
+      // Story 75-359 — o `created_at` desta linha é a referência da guarda
+      // anti-rajada no `after()` abaixo: quem responde é a execução da mensagem
+      // MAIS NOVA do lead. O carimbo sai do BANCO, não do relógio da lambda —
+      // duas invocações concorrentes não compartilham relógio.
+      .select("created_at")
+    inboundCreatedAt = (inseridas?.[0]?.created_at as string | undefined) ?? null
 
     // Unique constraint violation (PG 23505) = duplicate wamid that slipped
     // past the application-level check due to a race condition. Discard
@@ -987,6 +1000,56 @@ export async function POST(request: NextRequest) {
         // enquanto a Nicole pensa. Fire-and-forget (nunca bloqueia/lança); a Meta
         // exige o wamid inbound e também marca a mensagem como lida (✓✓).
         void sendWhatsAppTypingIndicator(config, messageId)
+
+        // Story 75-359 — JANELA ANTI-RAJADA.
+        //
+        // O lead que escreve "Qual é esse empreendimento" e "?" em 0,79s abre DUAS
+        // invocações deste webhook, e cada uma respondia por conta própria: em
+        // 20/08 saíram duas vezes "Temos dois no momento!". Espera a rajada
+        // assentar e, se já existe mensagem do lead MAIS NOVA que a minha, cala:
+        // a execução dela responde, e com a rajada inteira no histórico.
+        //
+        // 🔥 A guarda fica AQUI, antes de gerar — `processMessage` grava a
+        // mensagem da assistente ele mesmo. Descartar depois de gerada deixaria
+        // resposta no histórico que o lead nunca recebeu, que é o defeito da 2ª
+        // porta do follow-up pós-visita (75-350).
+        //
+        // Mídia/áudio ficam FORA: a transcrição chega neste caminho assíncrono e
+        // abortar aqui perderia o conteúdo do áudio, não uma duplicata.
+        const janela = janelaAntiRajadaMs()
+        if (janela > 0 && !asyncMediaBlock && !isVoiceMessage) {
+          await new Promise((resolve) => setTimeout(resolve, janela))
+          const { data: maisNovas } = await supabase
+            .from("messages")
+            .select("created_at")
+            .eq("conversation_id", conversation!.id)
+            .eq("role", "user")
+            .gt("created_at", inboundCreatedAt ?? "1970-01-01T00:00:00Z")
+            .limit(1)
+          if (
+            inboundCreatedAt &&
+            deveAbortarPorMensagemMaisNova(
+              inboundCreatedAt,
+              (maisNovas ?? []).map((m) => m.created_at as string)
+            )
+          ) {
+            logEvent({
+              level: "info",
+              category: "webhook",
+              event_type: "rajada_resposta_suprimida",
+              message: `Rajada: mensagem mais nova do lead assume a resposta (wamid ${messageId})`,
+              metadata: {
+                wamid: messageId,
+                conversation_id: conversation!.id,
+                lead_id: lead!.id,
+                inbound_created_at: inboundCreatedAt,
+                janela_ms: janela,
+              },
+              source: "api/webhook/whatsapp",
+            })
+            return
+          }
+        }
 
         const { processMessage, createAnthropicClient } = await import(
           "@trifold/ai"
