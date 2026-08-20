@@ -1,0 +1,139 @@
+schema: 1
+storyId: "75-352"
+story: "docs/stories/75-352-run-duplicada-e-claim-atomico.story.md"
+title: "Quality Gate — Run duplicada do cron de follow-up e claim atômico"
+epic: 75
+gate: PASS
+verdict: PASS
+review_round: 1
+reviewed_by: "@qa (Quinn)"
+reviewed_at: "2026-08-20"
+branch: "75-352-run-duplicada-e-claim-atomico"
+depends_on: "PR #462 (Story 75-351) — esta branch nasce dele e toca as mesmas linhas"
+migrations: ["234_cron_lock_e_claim_atomico.sql — APLICADA em prod 20/08 10:49 UTC; additiva e idempotente (reaplicada, [] nas duas vezes); validada antes em transação REVERTIDA"]
+
+escopo: >
+  O cron de follow-up está sendo invocado duas vezes por agendamento, e as duas execuções passam pelo
+  cooldown porque a checagem acontece antes de qualquer escrita. Esta story torna a duplicata inofensiva
+  (trava de run + claim atômico por lead) sem depender de descobrir quem faz a segunda chamada.
+
+resumo: >
+  **Dois recibos `FOLLOWUP_EXECUTED` no mesmo segundo** (19/08 22:01:10, "98 processed" e "99
+  processed") — execuções concorrentes intercaladas lead a lead. Efeito medido em 7 dias: 1.560
+  tentativas para 46 leads na etapa "Atendimento" (≈34 por lead), 58 linhas duplicadas em
+  `follow_up_log` (todas em pares) e metade das 22 a 24 chamadas Anthropic do pós-visita jogada fora
+  por run.
+
+  **A corrida é de ordem de operações**, não de agendamento: lê o cooldown → ENVIA → grava. Entre a
+  leitura e a escrita cabe uma run inteira. A story inverte para grava → envia, com
+  `pg_advisory_xact_lock` por lead garantindo atomicidade.
+
+  **Ninguém recebeu mensagem repetida** porque a janela de 24h do WhatsApp está fechada para
+  praticamente todos (0 entregas no período). Mesmo padrão "armado e esperando" da 75-351 — e a 75-353
+  vai justamente abrir esse envio, o que torna esta trava pré-requisito.
+
+status_reason: >
+  Liberado para merge. A migration 234 já está em produção (20/08 10:49 UTC), então a ordem de deploy
+  obrigatória está cumprida; falta apenas mergear depois do #462.
+
+acoes_obrigatorias: []
+
+acoes_concluidas:
+  - id: A1
+    titulo: "Aplicar a migration 234 antes do merge"
+    resultado: >
+      ✅ FEITO em 20/08 10:49 UTC (Management API, um POST; reaplicada em seguida — `[]` nas duas
+      vezes). Conferido: `cron_locks` com RLS ligada, as três funções com a assinatura esperada, índice
+      criado, tabela vazia e zero linhas `claimed` (nada chamou as funções ainda, como esperado antes
+      do deploy). Era obrigatório porque o claim por lead é fail-closed: código sem o RPC pararia o
+      follow-up com `FOLLOWUP_CLAIM_FALHOU` por lead.
+
+concerns:
+  - id: C1
+    severidade: MEDIUM
+    tipo: causa-raiz-não-confirmada
+    titulo: "Quem faz a segunda chamada segue desconhecido"
+    detalhe: >
+      Verificado e descartado: manifesto de cron da Vercel (36 definições, a rota aparece 1 vez),
+      `cron.job` do Postgres (6 jobs, nenhum do follow-up), projetos da conta (2, o outro é o
+      design-system) e `/api/alertas/nicole-trigger` (405, nunca funcionou). Hipótese mais forte: retry
+      por timeout — a run levou ~70s e o arquivo faz ~800 queries sequenciais. A story conserta o
+      efeito; `FOLLOWUP_RUN_DUPLICADA` no log vai dizer se o gatilho persiste, e a 75-356 (encurtar a
+      run) ataca a hipótese.
+  - id: C2
+    severidade: LOW
+    tipo: efeito-colateral-conhecido
+    titulo: "Linha presa em `status='claimed'` se a run morrer no meio"
+    detalhe: >
+      O lead perde UM follow-up e ninguém recebe duas mensagens — é o lado seguro para errar, e é
+      consultável (query 4 da story). As telas de Alertas filtram `status in ('pending','sent')`, então
+      uma linha órfã não aparece na UI. Se a contagem crescer, o sintoma aponta para run morrendo.
+  - id: C3
+    severidade: LOW
+    tipo: interação-com-story-futura
+    titulo: "A 75-355 precisa de bypass explícito na trava"
+    detalhe: >
+      Se o botão "Acionar Nicole" (hoje 405) voltar a funcionar, um disparo manual dentro dos 90 min
+      será recusado pela trava. Consertar aquela rota exige passar um bypass explícito, não afrouxar o
+      intervalo.
+  - id: C4
+    severidade: LOW
+    tipo: dívida-de-histórico
+    titulo: "As 58 linhas duplicadas continuam no banco"
+    detalhe: >
+      Decisão consciente: são a evidência do incidente e não afetam o cooldown (qualquer linha no
+      período já bloqueia). Apagá-las só faria sentido para viabilizar um índice único, que esta story
+      não usa.
+
+verificacoes:
+  - id: V1
+    o_que: "A trava de run recusa a segunda invocação"
+    resultado: >
+      PASS — validado em produção dentro de transação revertida: 1ª chamada de `claim_cron_run` devolve
+      run_id, 2ª devolve NULL. No código, NULL → `{ skipped_reason: "already_running" }` sem processar
+      nada, com `logEventOnce` (aguardado, porque é a última escrita antes do response — Story 87-6).
+  - id: V2
+    o_que: "O claim por lead impede envio duplicado"
+    resultado: >
+      PASS — mesma transação revertida: 1º claim do lead devolve id, 2º devolve NULL, linha nasce
+      `claimed`. `pg_advisory_xact_lock` (transação, não sessão) — correto para pooler em modo
+      transação.
+  - id: V3
+    o_que: "Semântica do cooldown preservada, sem alargar"
+    resultado: >
+      PASS — `blockingTypes: null` no laço principal e em `alert_broker` (espelha o select sem filtro de
+      tipo do route.ts:120); `['post_visit']` nas duas portas de pós-visita (espelha os `.eq("type",…)`).
+      Confirmado na transação revertida: `nicole_sent` existente NÃO bloqueia `post_visit`.
+  - id: V4
+    o_que: "O claim vem antes da chamada ao modelo"
+    resultado: "PASS — nas duas portas de pós-visita o claim precede `generatePostVisitMessage`."
+  - id: V5
+    o_que: "A tela de Alertas não regride"
+    resultado: >
+      PASS — `alert_broker` nasce `'pending'` (o status que `api/followup/pending` e
+      `dashboard/alertas` leem). Só `nicole_sent`/`post_visit` usam o transitório `'claimed'`.
+  - id: V6
+    o_que: "Assimetria de fail-safe é a desejada"
+    resultado: >
+      PASS — coberta por teste: trava de run com RPC em erro → segue (fail-open, `CRON_LOCK_INDISPONIVEL`
+      level error); claim por lead com RPC em erro → não envia (fail-closed, `FOLLOWUP_CLAIM_FALHOU`
+      dizendo "NADA foi enviado").
+  - id: V7
+    o_que: "Suíte, tipos, lint"
+    resultado: >
+      PASS — 231 arquivos / 2.806 testes ✅ (16 novos) · type-check 8/8 ✅ · eslint 0 erros
+      (3 warnings pré-existentes de import morto, anteriores a esta story).
+
+evidencia:
+  recibos_concorrentes:
+    - "19/08 22:01:10 FOLLOWUP_EXECUTED '98 processed, 15 messages, 22 post-visit'"
+    - "19/08 22:01:10 FOLLOWUP_EXECUTED '99 processed, 16 messages, 24 post-visit'"
+  duplicatas_no_banco:
+    - "select lead_id, type, created_at::date, count(*) … having count(*) > 1 → 58 grupos, todos com n=2"
+  volume_por_etapa_7d:
+    - "Atendimento 1.560 tentativas / 46 leads · Visitou 312 / 7 · Visita Agendada 244 / 12"
+  onde_a_2a_chamada_nao_esta:
+    - "Vercel crons: 36 definições, /api/cron/followup aparece 1 vez (0 */2 * * *)"
+    - "cron.job: 6 jobs, nenhum do follow-up"
+    - "projetos Vercel do time: trifold-crm e trifold-design-system"
+    - "/api/alertas/nicole-trigger: POST numa rota que só exporta GET → 405"
