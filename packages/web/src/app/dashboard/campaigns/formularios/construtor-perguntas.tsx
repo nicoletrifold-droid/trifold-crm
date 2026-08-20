@@ -32,8 +32,19 @@ const CAMPO_CONTATO_LABELS: Record<CampoContato, string> = {
   telefone: "Telefone / WhatsApp",
 }
 
+// Story 75-357 — a base NÃO carrega largura, de propósito.
+//
+// Ela tinha `w-full`, e no Tailwind `w-20`/`w-auto` numa string depois NÃO vencem:
+// quem decide é a ordem no CSS gerado, não a ordem das classes. O campo do peso
+// ficava com largura cheia e esmagava o do rótulo até uns 30px — o texto estava
+// lá, invisível. Na tela parecia que "a opção virou número".
+//
+// A regra que fica: largura mora em quem usa. Em flex, o campo elástico leva
+// `min-w-0 flex-1` (sem `min-w-0` um input não encolhe abaixo do conteúdo e o
+// esmagamento volta por outro caminho) e o campo fixo leva `shrink-0`.
+// 3ª ocorrência desta classe de bug no projeto — ver memória feedback-tailwind-ordem-utilitarios.
 const inputCls =
-  "w-full rounded-lg border border-stone-300 px-3 py-2 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
+  "rounded-lg border border-stone-300 px-3 py-2 text-sm dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100"
 const labelCls = "block text-xs font-medium text-stone-600 dark:text-stone-400"
 const btnGhost =
   "rounded-lg border border-stone-300 px-2.5 py-1 text-xs text-stone-700 hover:bg-stone-50 disabled:opacity-40 dark:border-stone-700 dark:text-stone-200 dark:hover:bg-stone-800"
@@ -107,7 +118,7 @@ export function ConstrutorPerguntas({
                 value={p.titulo}
                 onChange={(e) => atualizar(i, { titulo: e.target.value })}
                 placeholder="Pergunta que o lead vê"
-                className={`${inputCls} font-medium`}
+                className={`${inputCls} w-full font-medium`}
               />
 
               <div className="grid gap-3 sm:grid-cols-2">
@@ -126,7 +137,7 @@ export function ConstrutorPerguntas({
                           : undefined,
                       })
                     }}
-                    className={inputCls}
+                    className={`${inputCls} w-full`}
                   >
                     {TIPOS_PERGUNTA.map((t) => (
                       <option key={t} value={t}>
@@ -147,7 +158,7 @@ export function ConstrutorPerguntas({
                         campo_contato: (e.target.value || undefined) as CampoContato | undefined,
                       })
                     }
-                    className={inputCls}
+                    className={`${inputCls} w-full`}
                   >
                     <option value="">— nenhum (só resposta)</option>
                     {CAMPOS_CONTATO.map((c) => (
@@ -163,7 +174,7 @@ export function ConstrutorPerguntas({
                 value={p.ajuda ?? ""}
                 onChange={(e) => atualizar(i, { ajuda: e.target.value || undefined })}
                 placeholder="Texto de ajuda (opcional)"
-                className={`${inputCls} text-xs`}
+                className={`${inputCls} w-full text-xs`}
               />
 
               {/* Story 75-336 — agrupar com a anterior e a frase de abertura do passo. */}
@@ -194,7 +205,7 @@ export function ConstrutorPerguntas({
                 onChange={(e) => atualizar(i, { intro: e.target.value || undefined })}
                 rows={2}
                 placeholder="Frase amigável acima desta tela (opcional)"
-                className={`${inputCls} text-xs`}
+                className={`${inputCls} w-full text-xs`}
               />
 
               <label className="flex items-center gap-2 text-sm text-stone-700 dark:text-stone-300">
@@ -222,7 +233,7 @@ export function ConstrutorPerguntas({
                               ),
                             })
                           }
-                          className={`${inputCls} flex-1`}
+                          className={`${inputCls} min-w-0 flex-1`}
                         />
                         <input
                           type="number"
@@ -237,7 +248,7 @@ export function ConstrutorPerguntas({
                             })
                           }
                           placeholder="peso"
-                          className={`${inputCls} w-20`}
+                          className={`${inputCls} w-20 shrink-0`}
                         />
                         <button
                           type="button"
@@ -289,7 +300,7 @@ export function ConstrutorPerguntas({
                         if (!alvo) return atualizar(i, { condicoes: undefined })
                         atualizar(i, { condicoes: [{ pergunta: alvo, em: [] }] })
                       }}
-                      className={`${inputCls} w-auto`}
+                      className={`${inputCls} w-auto shrink-0`}
                     >
                       <option value="">— sempre mostrar</option>
                       {candidatasParaCondicao(perguntas, i).map((c) => (
@@ -376,7 +387,7 @@ export function ConstrutorPerguntas({
           <select
             value={tipoNovo}
             onChange={(e) => setTipoNovo(e.target.value as TipoPergunta)}
-            className={`${inputCls} w-auto`}
+            className={`${inputCls} w-auto shrink-0`}
           >
             {TIPOS_PERGUNTA.map((t) => (
               <option key={t} value={t}>
@@ -402,7 +413,7 @@ export function ConstrutorPerguntas({
             value={mensagemFinal}
             onChange={(e) => setMensagemFinal(e.target.value)}
             placeholder="Recebemos suas respostas! Nossa equipe entra em contato."
-            className={inputCls}
+            className={`${inputCls} w-full`}
           />
         </div>
         <div>
@@ -425,7 +436,7 @@ export function ConstrutorPerguntas({
             value={agendaLocal}
             onChange={(e) => setAgendaLocal(e.target.value)}
             placeholder="Ex.: Decorado Vind (vazio = o lead escolhe)"
-            className={inputCls}
+            className={`${inputCls} w-full`}
           />
         </div>
       </div>
