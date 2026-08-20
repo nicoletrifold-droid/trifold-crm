@@ -347,8 +347,8 @@ export async function GET(request: NextRequest) {
       // Resolve property name for template
       const propertyArr = lead.properties as unknown as Array<{ name: string }> | null
       const propertyName = Array.isArray(propertyArr)
-        ? propertyArr[0]?.name ?? "seu imovel"
-        : (propertyArr as { name: string } | null)?.name ?? "seu imovel"
+        ? propertyArr[0]?.name ?? "seu imóvel"
+        : (propertyArr as { name: string } | null)?.name ?? "seu imóvel"
 
       // Resolve broker name for template — Story 59-1 (AC3)
       const brokerName = await resolveBrokerName(
@@ -541,6 +541,7 @@ export async function GET(request: NextRequest) {
           CAP_DE_FREQUENCIA: `ja recebeu template nos ultimos ${hsmMinDays} dia(s)`,
           TEMPLATE_DESCONHECIDO: "template nao reconhecido pelo codigo",
           TEMPLATE_NAO_APROVADO: "template nao aprovado na Meta",
+          VARIAVEL_VAZIA: "faltou dado do lead para preencher o template",
         }
         const activityDesc = result.sent
           ? result.via === "template"
@@ -701,7 +702,7 @@ export async function GET(request: NextRequest) {
 
         // Get property name
         const propertyData = Array.isArray(appt.property) ? appt.property[0] : appt.property
-        const propName = (propertyData as { name?: string } | null)?.name ?? "o imovel"
+        const propName = (propertyData as { name?: string } | null)?.name ?? "o imóvel"
 
         // Generate Nicole message
         const { createAnthropicClient } = await import("@trifold/ai")

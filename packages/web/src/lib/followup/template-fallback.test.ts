@@ -108,6 +108,29 @@ describe("decidirTemplateDoFollowUp", () => {
     expect(d.motivo).toBe("TEMPLATE_NAO_APROVADO")
   })
 
+  it("🔥 cenário 4d: nome vazio → NÃO envia (evita o 'Oi !' pago) e diz qual variável faltou", () => {
+    // Medido antes do primeiro envio: 6 leads da etapa Atendimento sem nome.
+    const d = decidirTemplateDoFollowUp({ ...base, contexto: { ...CTX, nomeLead: "" } })
+    expect(d.enviar).toBe(false)
+    expect(d.motivo).toBe("VARIAVEL_VAZIA")
+    expect(d.variavelVazia).toBe(1)
+  })
+
+  it("cenário 4e: nome só com espaços conta como vazio", () => {
+    const d = decidirTemplateDoFollowUp({ ...base, contexto: { ...CTX, nomeLead: "   " } })
+    expect(d.motivo).toBe("VARIAVEL_VAZIA")
+  })
+
+  it("cenário 4f: variável vazia numa posição posterior também barra (template de 3 vars)", () => {
+    const d = decidirTemplateDoFollowUp({
+      ...base,
+      hsmTemplate: "abertura_atendimento_corretor",
+      contexto: { ...CTX, empreendimento: "" },
+    })
+    expect(d.motivo).toBe("VARIAVEL_VAZIA")
+    expect(d.variavelVazia).toBe(3)
+  })
+
   it("cenário 5: caminho válido → envia com os parâmetros do template", () => {
     const d = decidirTemplateDoFollowUp(base)
     expect(d.enviar).toBe(true)
