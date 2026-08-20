@@ -1,0 +1,77 @@
+schema: 1
+storyId: "75-356"
+story: "docs/stories/75-356-guarda-variavel-vazia.story.md"
+title: "Quality Gate — Variável vazia não vira mensagem paga ('Oi !')"
+epic: 75
+gate: PASS
+verdict: PASS
+review_round: 1
+reviewed_by: "@qa (Quinn)"
+reviewed_at: "2026-08-20"
+branch: "75-356-guarda-variavel-vazia"
+migrations: []
+mitigacao_ja_aplicada: "hsm_template da etapa Atendimento DESLIGADO por config às 13:3x UTC, antes da run das 14:00 — nenhuma mensagem quebrada saiu"
+
+escopo: >
+  6 dos 125 leads da etapa Atendimento não têm nome, e o template escolhido começa com "Oi {{1}}!".
+  Sairia "Oi ! Tudo bem?" — mensagem paga ao lead com a variável vazia à mostra. Esta story barra
+  qualquer parâmetro vazio e acerta o acento dos fallbacks que chegam ao cliente.
+
+resumo: >
+  Achado ao MEDIR os dados das variáveis antes de escrever cópia nova — não por teste, por ir olhar.
+  A run das 14:00 seria a primeira a incluir esses leads, porque a 75-355 acabou de torná-los
+  alcançáveis. Mitigação imediata por config; conserto de código aqui.
+
+  Registro que muda prioridade: `nicole_sent` ENTREGUES na etapa Atendimento em 30 dias = 0, e é
+  estrutural (a regra dispara com 3+ dias sem contato; mensagem do lead atualiza `last_contact_at`, logo
+  a janela de 24h está sempre fechada quando ela dispara). O texto livre daquela regra é praticamente
+  inalcançável — quem fala com o lead é o template.
+
+status_reason: "Liberado. Depois do merge, religar o template na etapa Atendimento."
+
+acoes_obrigatorias:
+  - id: A1
+    titulo: "Religar hsm_template = 'abertura_interesse_prioridades' em Atendimento após o deploy"
+    detalhe: "Foi desligado como mitigação. Sem religar, o follow-up volta a não entregar nada fora da janela."
+
+concerns:
+  - id: C1
+    severidade: LOW
+    tipo: dado-incompleto-no-cadastro
+    titulo: "Os 6 leads sem nome continuam sem receber"
+    detalhe: >
+      Por desenho: a mensagem só sai quando o dado existir. Aparecem como `VARIAVEL_VAZIA` no
+      `follow_up_log.metadata` e na atividade em português, então é rastreável e acionável por quem
+      opera — não é perda silenciosa.
+  - id: C2
+    severidade: LOW
+    tipo: consistencia
+    titulo: "Outros fallbacks sem acento podem existir fora do caminho de follow-up"
+    detalhe: >
+      Esta story acertou os três que vão para o lead nos caminhos tocados (follow-up e pós-visita nas
+      duas portas). Uma varredura de strings sem acento no repo é faxina própria, não entrou aqui.
+
+verificacoes:
+  - id: V1
+    o_que: "Nome vazio barra o envio"
+    resultado: "PASS — teste dedicado; devolve VARIAVEL_VAZIA e a posição {{1}}."
+  - id: V2
+    o_que: "Espaços contam como vazio"
+    resultado: "PASS — `'   '` barra igual."
+  - id: V3
+    o_que: "Vazio em posição posterior também barra"
+    resultado: "PASS — `abertura_atendimento_corretor` com empreendimento vazio → VARIAVEL_VAZIA, posição 3."
+  - id: V4
+    o_que: "Caminho válido segue enviando"
+    resultado: "PASS — testes anteriores intactos (20 no arquivo)."
+  - id: V5
+    o_que: "Acento nos fallbacks que o lead lê"
+    resultado: "PASS — 'seu imóvel' / 'o imóvel' nos três pontos."
+  - id: V6
+    o_que: "Suíte, tipos, lint"
+    resultado: "PASS — 233 arquivos / 2.833 testes ✅ · type-check 8/8 ✅ · eslint 0 erros."
+
+evidencia:
+  medicao_antes_do_envio:
+    - "Atendimento: 125 leads · 6 SEM nome · 37 com nome de 1 palavra · 13 sem empreendimento · 0 sem corretor"
+    - "nicole_sent ENTREGUES na etapa em 30 dias: 0 (estrutural — janela sempre fechada quando a regra dispara)"

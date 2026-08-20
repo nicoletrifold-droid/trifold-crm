@@ -25,6 +25,7 @@ export type MotivoSemTemplate =
   | "CAP_DE_FREQUENCIA"
   | "TEMPLATE_DESCONHECIDO"
   | "TEMPLATE_NAO_APROVADO"
+  | "VARIAVEL_VAZIA"
 
 export interface DecisaoDeTemplate {
   enviar: boolean
@@ -33,6 +34,8 @@ export interface DecisaoDeTemplate {
   motivo?: MotivoSemTemplate
   /** Quando o cap barrou: quantos dias faltam para o lead poder receber de novo. */
   diasRestantes?: number
+  /** Qual posição ({{n}}) do template ficou vazia — para o log dizer o que faltou. */
+  variavelVazia?: number
 }
 
 export interface EntradaDaDecisao {
@@ -83,6 +86,20 @@ export function decidirTemplateDoFollowUp(entrada: EntradaDaDecisao): DecisaoDeT
   // daqui — a alternativa seria queimar chamada e levar erro 132000.
   if (!templatesAprovados.has(hsmTemplate)) {
     return { enviar: false, motivo: "TEMPLATE_NAO_APROVADO" }
+  }
+
+  // Story 75-356 — variável vazia NÃO sai. Medido antes do primeiro envio: 6 dos
+  // leads da etapa Atendimento não têm nome, e `abertura_interesse_prioridades`
+  // começa com "Oi {{1}}!". Sairia **"Oi ! Tudo bem?"** — mensagem paga, para o
+  // lead, com o buraco à mostra. (13 leads também não têm empreendimento; o
+  // template escolhido não usa essa variável, mas outro pode.)
+  //
+  // Não enviar é melhor que enviar quebrado: o lead continua no funil, o corretor
+  // pode preencher o nome, e a run seguinte manda certo. O motivo vira número no
+  // recibo, então "sumiu" tem explicação.
+  const indiceVazio = params.findIndex((p) => !p || !p.trim())
+  if (indiceVazio >= 0) {
+    return { enviar: false, motivo: "VARIAVEL_VAZIA", variavelVazia: indiceVazio + 1 }
   }
 
   // Cap de frequência: o cooldown de 48h do follow-up é curto demais para

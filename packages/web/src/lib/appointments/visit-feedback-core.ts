@@ -144,7 +144,7 @@ export async function applyVisitFeedback(
         const leadInfo = Array.isArray(apptFull.lead) ? apptFull.lead[0] : apptFull.lead
         const propInfo = Array.isArray(apptFull.property) ? apptFull.property[0] : apptFull.property
         const leadName = (leadInfo as { name?: string } | null)?.name || ""
-        const propName = (propInfo as { name?: string } | null)?.name || "o imovel"
+        const propName = (propInfo as { name?: string } | null)?.name || "o imóvel"
         const aiSummary = (leadInfo as { ai_summary?: string } | null)?.ai_summary || undefined
 
         const { createAnthropicClient, generatePostVisitMessage } = await import("@trifold/ai")
