@@ -24,11 +24,16 @@ INSERT INTO kanban_stages (id, org_id, name, slug, type, position, color, is_def
   ('00000000-0000-0000-0001-000000000002', '00000000-0000-0000-0000-000000000001', 'Em Qualificacao',   'em-qualificacao',  'qualificado', 2, '#F59E0B', false),
   ('00000000-0000-0000-0001-000000000003', '00000000-0000-0000-0000-000000000001', 'Qualificado',       'qualificado',      'qualificado', 3, '#10B981', false),
   ('00000000-0000-0000-0001-000000000004', '00000000-0000-0000-0000-000000000001', 'Visita Agendada',   'visita-agendada',  'agendado',    4, '#8B5CF6', false),
-  ('00000000-0000-0000-0001-000000000009', '00000000-0000-0000-0000-000000000001', 'No-Show',           'no-show',          'no_show',     5, '#F43F5E', false),
-  ('00000000-0000-0000-0001-000000000005', '00000000-0000-0000-0000-000000000001', 'Visitou',           'visitou',          'visitou',     6, '#06B6D4', false),
-  ('00000000-0000-0000-0001-000000000006', '00000000-0000-0000-0000-000000000001', 'Negociando',        'negociando',       'proposta',    7, '#F97316', false),
-  ('00000000-0000-0000-0001-000000000007', '00000000-0000-0000-0000-000000000001', 'Fechou',            'fechou',           'fechado',     8, '#22C55E', false),
-  ('00000000-0000-0000-0001-000000000008', '00000000-0000-0000-0000-000000000001', 'Perdido',           'perdido',          'perdido',     9, '#EF4444', false)
+  -- Story 75-362 — a …0009 foi renomeada para "Atendimento" na UI em 08/06/2026 e a
+  -- mig 236 alinhou o slug; a No-Show DE VERDADE é a …0011 (migs 236/237). O seed
+  -- antigo ainda criava a …0009 como No-Show: num banco pós-migração, o
+  -- ON CONFLICT (org_id, slug) casaria com a …0011 e sobrescreveria a etapa errada.
+  ('00000000-0000-0000-0001-000000000009', '00000000-0000-0000-0000-000000000001', 'Atendimento',       'atendimento',      'novo',        5, '#F59E0B', false),
+  ('00000000-0000-0000-0001-000000000011', '00000000-0000-0000-0000-000000000001', 'No-Show',           'no-show',          'no_show',     6, '#F43F5E', false),
+  ('00000000-0000-0000-0001-000000000005', '00000000-0000-0000-0000-000000000001', 'Visitou',           'visitou',          'visitou',     7, '#06B6D4', false),
+  ('00000000-0000-0000-0001-000000000006', '00000000-0000-0000-0000-000000000001', 'Negociando',        'negociando',       'proposta',    8, '#F97316', false),
+  ('00000000-0000-0000-0001-000000000007', '00000000-0000-0000-0000-000000000001', 'Fechou',            'fechou',           'fechado',     9, '#22C55E', false),
+  ('00000000-0000-0000-0001-000000000008', '00000000-0000-0000-0000-000000000001', 'Perdido',           'perdido',          'perdido',    10, '#EF4444', false)
 ON CONFLICT (org_id, slug) DO UPDATE SET
   name = EXCLUDED.name,
   type = EXCLUDED.type,

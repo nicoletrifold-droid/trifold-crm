@@ -40,17 +40,32 @@ describe("pickFunnelTiers", () => {
     expect(t.visitaAgendada.color).toBe("#123456")
   })
 
-  // Story 75-323 — em PROD a etapa "Atendimento" tem slug `no-show` e a "Fechamento"
-  // tem slug `fechou`. Os dois andares só funcionavam pelo fallback de nome; renomear
-  // a etapa em Configurações → Pipeline zerava o funil sem avisar. Este teste usa os
-  // slugs reais e nomes trocados de propósito, para provar que agora casa pelo slug.
+  // Story 75-323 — os andares casam pelo SLUG, com nome trocado de propósito;
+  // renomear a etapa em Configurações → Pipeline não pode zerar o funil.
+  // Story 75-362 — slugs atualizados para a realidade pós-mig 236/237: a
+  // "Atendimento" tem slug `atendimento` (o `no-show` que ela carregou por 73
+  // dias agora pertence à etapa No-Show de verdade).
   it("casa pelos slugs REAIS de prod, sem depender do nome", () => {
     const t = pickFunnelTiers([
-      { name: "Atendimento (renomeado)", slug: "no-show", color: "#111", count: 36 },
+      { name: "Atendimento (renomeado)", slug: "atendimento", color: "#111", count: 36 },
       { name: "Fechamento (renomeado)", slug: "fechou", color: "#222", count: 3 },
     ])
     expect(t.atendimento.count).toBe(36)
     expect(t.fechamento.count).toBe(3)
+  })
+
+  // Story 75-362 — a REGRESSÃO que motivou o slug feio `no-show-real` da mig 236:
+  // com o sinônimo `no-show` na lista de Atendimento, o andar podia casar com a
+  // coluna No-Show dependendo só da ordem de posição no board. Este teste põe a
+  // No-Show ANTES no array (como se viesse primeiro em posição) e prova que o
+  // andar de Atendimento não a captura mais.
+  it("a etapa No-Show (slug no-show) NUNCA é capturada pelo andar de Atendimento", () => {
+    const t = pickFunnelTiers([
+      { name: "No-Show", slug: "no-show", color: "#f43f5e", count: 7 },
+      { name: "Atendimento", slug: "atendimento", color: "#111", count: 36 },
+    ])
+    expect(t.atendimento.count).toBe(36)
+    expect(t.atendimento.label).toBe("Atendimento")
   })
 })
 

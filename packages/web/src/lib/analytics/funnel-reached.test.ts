@@ -93,7 +93,7 @@ describe("buildReachedCounts", () => {
 describe("buildPipelineRows", () => {
   const DEFS = [
     { id: NOVO, name: "Aguardando", slug: "novo", color: "#111", position: 0, is_active: true },
-    { id: ATENDIMENTO, name: "Atendimento", slug: "no-show", color: "#222", position: 4, is_active: true },
+    { id: ATENDIMENTO, name: "Atendimento", slug: "atendimento", color: "#222", position: 4, is_active: true },
     { id: VISITA, name: "Visita Agendada", slug: "visita-agendada", color: "#333", position: 6, is_active: true },
     { id: VISITOU, name: "Visitou", slug: "visitou", color: "#444", position: 7, is_active: true },
   ]
@@ -127,7 +127,7 @@ describe("buildPipelineRows", () => {
     expect(by("visitou").agora).toBe(1)
     expect(by("visita-agendada").agora).toBe(0) // saiu de lá
     expect(by("visita-agendada").chegaram).toBe(1) // mas passou por lá
-    expect(by("no-show").chegaram).toBe(1)
+    expect(by("atendimento").chegaram).toBe(1)
   })
 
   // Em prod, "Perdido" é `is_active = false` e guardava 11 dos 84 leads da janela.
