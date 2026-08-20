@@ -1,0 +1,75 @@
+schema: 1
+storyId: "75-357"
+story: "docs/stories/75-357-construtor-opcoes-esmagadas.story.md"
+title: "Quality Gate — Opções do formulário esmagadas pelo campo de peso"
+epic: 89
+gate: PASS
+verdict: PASS
+review_round: 1
+reviewed_by: "@qa (Quinn)"
+reviewed_at: "2026-08-20"
+branch: "75-357-construtor-opcoes-esmagadas"
+migrations: []
+
+escopo: >
+  Na tela Campanhas → Formulários as opções apareciam como números (10, 10, 8) e não davam para editar.
+  Causa: `w-full` na classe-base fazia `w-20`/`w-auto` perderem, o campo do peso ocupava a linha e o do
+  rótulo era comprimido a ~30px.
+
+resumo: >
+  **O dado nunca foi perdido** — conferido em `lead_forms.schema`: `rotulo` íntegro nas três opções, e o
+  formulário público sempre exibiu o texto certo ao lead. Defeito exclusivo da tela de edição.
+
+  No Tailwind a ordem na string de classes não decide o conflito — decide a ordem no CSS gerado. É a
+  **3ª ocorrência** desta classe de bug no projeto.
+
+status_reason: "Liberado. Sem migration, sem efeito em dado ou em formulário publicado."
+
+acoes_obrigatorias:
+  - id: A1
+    titulo: "Conferência visual na tela"
+    detalhe: >
+      Layout não tem teste automatizado aqui (sem jsdom). Abrir Campanhas → Formulários e confirmar: texto
+      da opção no campo largo, peso no campo estreito ao lado, e `+ Opção` criando linha legível.
+
+concerns:
+  - id: C1
+    severidade: LOW
+    tipo: teste-nao-convencional
+    titulo: "O teste de guarda lê o arquivo-fonte"
+    detalhe: >
+      Sem DOM não há como assertar largura renderizada. O teste trava as duas regras que evitam a recaída
+      (base sem `w-*`; `flex-1` sempre com `min-w-0`). Reconhecidamente feio — justificado por ser a
+      terceira reincidência.
+  - id: C2
+    severidade: LOW
+    tipo: mesmo-padrao-em-outros-arquivos
+    titulo: "A classe-base com largura pode existir em outras telas"
+    detalhe: >
+      Esta story arruma o construtor de formulários. Uma varredura por `const .*Cls = "w-full` no repo é
+      candidata a faxina própria — não entrou aqui para o diff do defeito não virar refactor de UI.
+
+verificacoes:
+  - id: V1
+    o_que: "Dado íntegro no banco"
+    resultado: "PASS — `rotulo` presente nas 3 opções da pergunta relatada; nada a recuperar."
+  - id: V2
+    o_que: "Base sem largura + larguras explícitas"
+    resultado: "PASS — 12 usos ajustados: `w-full`, `min-w-0 flex-1`, `w-20 shrink-0`, `w-auto shrink-0`."
+  - id: V3
+    o_que: "Defeito latente nos outros inputs"
+    resultado: "PASS — 2 selects com `w-auto` tinham o mesmo problema; corrigidos na mesma passada."
+  - id: V4
+    o_que: "Guarda contra reincidência"
+    resultado: "PASS — 2 testes lendo o fonte (base sem `w-*`; `flex-1` com `min-w-0`)."
+  - id: V5
+    o_que: "Suíte, tipos, lint"
+    resultado: "PASS — 234 arquivos / 2.835 testes ✅ · type-check 8/8 ✅ · eslint 0 erros."
+
+evidencia:
+  dado_intacto:
+    - '{"peso": 10, "valor": "protecao_valorizacao", "rotulo": "Proteção e valorização patrimonial"}'
+  causa:
+    - 'const inputCls = "w-full ..." + `${inputCls} w-20` → w-20 perde para w-full'
+  historico:
+    - "3ª ocorrência da classe (memória feedback-tailwind-ordem-utilitarios)"
