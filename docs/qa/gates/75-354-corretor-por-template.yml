@@ -1,0 +1,94 @@
+schema: 1
+storyId: "75-354"
+story: "docs/stories/75-354-corretor-por-template.story.md"
+title: "Quality Gate — Aviso de lead parado ao corretor por template (e a falha que era invisível)"
+epic: 75
+gate: PASS
+verdict: PASS
+review_round: 1
+reviewed_by: "@qa (Quinn)"
+reviewed_at: "2026-08-20"
+branch: "75-354-corretor-por-template"
+depends_on: "PRs #462 (75-351), #463 (75-352), #464 (75-353) — esta branch nasce da 353"
+migrations: []
+bloqueio_externo: "template `lead_parado_corretor` PENDING na Meta — NÃO mergear antes de APPROVED"
+
+escopo: >
+  O aviso "lead parado" ao corretor saía em texto livre e batia na janela de 24h do WhatsApp do próprio
+  corretor, que quase nunca escreve para o número da empresa. Não entregava — e falhava sem deixar
+  rastro nenhum. Esta story troca por template HSM aprovado e torna a falha visível.
+
+resumo: >
+  `notifyBroker` tinha dois caminhos: sem `context` ia por template (`novo_lead_corretor`, 38
+  msgs/semana entregues); com `context` — que é justamente o aviso de lead parado da 51-4 — ia por
+  texto livre. A diferença nunca foi intencional.
+
+  **Pior que não entregar: não deixava rastro.** `sendBrokerWhatsApp` não chamava `logWhatsappSend` em
+  nenhum caminho e o erro morria num `console.error`. Push e e-mail funcionavam, então o alerta
+  "existia" — só a perna do WhatsApp era ficção. Volume em 30 dias (`alert_broker`): 224 em
+  Atendimento, 31 em Visita Agendada, 22 em Visitou.
+
+status_reason: >
+  Aprovado no mérito, com bloqueio externo: mergear só quando a Meta aprovar o template. Sem
+  migration, sem mudança de comportamento para os fluxos que não informam template.
+
+acoes_obrigatorias:
+  - id: A1
+    titulo: "Confirmar APPROVED do template antes do merge"
+    detalhe: >
+      GET /v21.0/{waba_id}/message_templates?name=lead_parado_corretor&fields=name,status,rejected_reason.
+      Se subir PENDING, a Graph API recusa o envio: push e e-mail seguem e a falha agora aparece em
+      BROKER_WHATSAPP_FALHOU, mas o corretor continua sem WhatsApp — o deploy não entregaria a story.
+
+concerns:
+  - id: C1
+    severidade: LOW
+    tipo: escopo-deliberadamente-deixado
+    titulo: "O aviso de agendamento (51-3) continua em texto livre"
+    detalhe: >
+      Mesmo defeito, mesma cura — mas o texto do template é decisão de copy de quem opera, e escolher
+      por conta própria seria inventar a mensagem que o corretor lê. Fica como story própria. O caminho
+      sem `context.template` está preservado byte a byte.
+  - id: C2
+    severidade: LOW
+    tipo: custo
+    titulo: "Aviso ao corretor passa a ter custo por mensagem"
+    detalhe: >
+      Categoria UTILITY (a Meta aceitou), na mesma faixa de `novo_lead_corretor` e `alerta_sla_gestor`,
+      que já rodam. Volume estimado ~277/mês pelo histórico de alert_broker, e agora medido em
+      `whatsapp_send_log`.
+
+verificacoes:
+  - id: V1
+    o_que: "Template criado com a forma correta"
+    resultado: >
+      PASS — `lead_parado_corretor`, pt_BR, UTILITY, 3 variáveis de corpo + botão de URL dinâmica sobre
+      https://crm.trifold.eng.br/broker/leads/{{1}}, modelado no `novo_lead_corretor` aprovado.
+      Status na revisão: PENDING (ação A1).
+  - id: V2
+    o_que: "Ordem dos parâmetros"
+    resultado: >
+      PASS — 2 testes novos. Inverter {{1}}/{{2}} mandaria "Olá Maria Silva! O lead Corretor João…" —
+      mensagem entregue, paga e invertida. Coberto também o fallback para gerente (o nome de quem
+      RECEBE vai no {{1}}).
+  - id: V3
+    o_que: "Nenhuma regressão para quem não informa template"
+    resultado: "PASS — `context` sem `template` mantém o texto livre de antes; roleta sem `context` intocada."
+  - id: V4
+    o_que: "Falha deixa de ser invisível"
+    resultado: >
+      PASS — duas camadas: `logWhatsappSend` (custo/entrega, sucesso e falha) e `BROKER_WHATSAPP_FALHOU`
+      level error no catch compartilhado, valendo para os três caminhos de envio.
+  - id: V5
+    o_que: "Suíte, tipos, lint"
+    resultado: "PASS — 233 arquivos / 2.826 testes ✅ · type-check 8/8 ✅ · eslint 0 erros."
+
+evidencia:
+  assimetria_dos_dois_caminhos:
+    - "sem context → sendBrokerLeadTemplate (template, entrega dentro e fora da janela)"
+    - "com context → sendBrokerWhatsApp (texto livre, entrega só na janela) ← o aviso de lead parado"
+  falha_silenciosa:
+    - "sendBrokerWhatsApp não chamava logWhatsappSend em nenhum caminho"
+    - "erro morria em console.error dentro do .catch() de notifyBroker"
+  volume_30d_alert_broker:
+    - "Atendimento 224 · Visita Agendada 31 · Visitou 22"

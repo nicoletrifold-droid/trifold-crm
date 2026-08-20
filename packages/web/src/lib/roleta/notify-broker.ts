@@ -5,6 +5,7 @@ import { sendEmail } from "@web/lib/email"
 import { sendPushToUser } from "@web/lib/server/push-service"
 import { logWhatsappSend } from "@web/lib/whatsapp/log-send"
 import { leadDeepLink } from "@web/lib/leads/lead-url"
+import { logEvent } from "@web/lib/logger"
 
 interface NotifyBrokerParams {
   orgId: string
@@ -30,7 +31,22 @@ interface NotifyBrokerParams {
    * appointment-scheduling notification (Story 51-3) and future triggers (51-4).
    * Backward compatible: when absent, the original roulette copy is preserved.
    */
-  context?: { title?: string; body?: string }
+  context?: {
+    title?: string
+    body?: string
+    /**
+     * Story 75-354 — template HSM aprovado para ESTE aviso.
+     *
+     * Sem ele, o aviso com `context` sai em texto livre e só entrega se o corretor
+     * tiver escrito para o número da empresa nas últimas 24h — o que praticamente
+     * nunca acontece. Era falha silenciosa: o `catch` só fazia `console.error` e
+     * nem `whatsapp_send_log` registrava. Push e e-mail seguem inalterados.
+     *
+     * Quem tem template aprovado passa aqui; quem não tem continua em texto livre
+     * (agora com a falha registrada, nunca engolida).
+     */
+    template?: { name: string; params: string[] }
+  }
 }
 
 interface NotifyResult {
@@ -83,14 +99,37 @@ export async function notifyBroker(params: NotifyBrokerParams): Promise<NotifyRe
     : Promise.resolve()
 
   // Roleta → corretor (sem context): WhatsApp proativo via template HSM aprovado
-  // `novo_lead_corretor`. Fluxos com context (agendamento 51-3 / gestor) mantêm
-  // o texto livre (sem template dedicado) — entrega só na janela de 24h.
+  // `novo_lead_corretor`. Story 75-354: fluxo COM context também vai por template
+  // quando o chamador informa um — entrega dentro e fora da janela de 24h. Sem
+  // template informado, segue o texto livre de antes (que só entrega na janela).
   const waP = config.notify_whatsapp && broker.phone
-    ? (context
-        ? sendBrokerWhatsApp(admin, orgId, broker.phone, broker.name, leadName, lead.phone, leadUrl, context)
-        : sendBrokerLeadTemplate(admin, orgId, broker.phone, broker.name, leadName, lead.phone, lead.id))
+    ? (context?.template
+        ? sendBrokerContextTemplate(admin, orgId, broker.phone, context.template, lead.id)
+        : context
+          ? sendBrokerWhatsApp(admin, orgId, broker.phone, broker.name, leadName, lead.phone, leadUrl, context)
+          : sendBrokerLeadTemplate(admin, orgId, broker.phone, broker.name, leadName, lead.phone, lead.id))
         .then(() => { result.whatsapp = true })
-        .catch((err: unknown) => console.error("[roleta] whatsapp error:", err))
+        .catch((err: unknown) => {
+          // Story 75-354 — o `console.error` sozinho era o problema: em produção
+          // ninguém abre o log da Vercel, e a falha do WhatsApp do corretor não
+          // deixava rastro no banco. Agora deixa.
+          console.error("[roleta] whatsapp error:", err)
+          logEvent({
+            level: "error",
+            category: "system",
+            event_type: "BROKER_WHATSAPP_FALHOU",
+            message: `WhatsApp ao corretor falhou (lead ${lead.id}): ${err instanceof Error ? err.message : String(err)}`,
+            metadata: {
+              lead_id: lead.id,
+              broker_user_id: broker.userId,
+              via: context?.template ? "template" : context ? "texto_livre" : "template_roleta",
+              template: context?.template?.name ?? null,
+              erro: err instanceof Error ? err.message.slice(0, 300) : String(err).slice(0, 300),
+            },
+            org_id: orgId,
+            source: "lib/roleta/notify-broker",
+          })
+        })
     : Promise.resolve()
 
   await Promise.allSettled([pushP, emailP, waP])
@@ -170,6 +209,72 @@ async function sendBrokerLeadTemplate(
   void logWhatsappSend(admin, { orgId, template: "novo_lead_corretor", category: "utility", recipientType: "corretor", toPhone: phone, status: "sent", wamId: json?.messages?.[0]?.id ?? null })
 }
 
+/**
+ * Story 75-354 — aviso ao corretor por template HSM informado pelo chamador.
+ *
+ * Mesma mecânica do `novo_lead_corretor` (que entrega 38 msgs/semana): botão de
+ * URL dinâmica cujo parâmetro é o id do lead, sobre a base
+ * `https://crm.trifold.eng.br/broker/leads/{{1}}`. Categoria `utility` no log de
+ * custo — é aviso operacional, não divulgação.
+ */
+async function sendBrokerContextTemplate(
+  admin: ReturnType<typeof createAdminClient>,
+  orgId: string,
+  phone: string,
+  template: { name: string; params: string[] },
+  leadId: string
+): Promise<void> {
+  const { data: waConfig } = await admin
+    .from("whatsapp_config")
+    .select("phone_number_id, access_token")
+    .eq("org_id", orgId)
+    .eq("status", "active")
+    .maybeSingle()
+
+  if (!waConfig?.phone_number_id || !waConfig?.access_token) return
+
+  const res = await fetch(
+    `https://graph.facebook.com/v21.0/${waConfig.phone_number_id}/messages`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${waConfig.access_token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        to: phone,
+        type: "template",
+        template: {
+          name: template.name,
+          language: { code: "pt_BR" },
+          components: [
+            {
+              type: "body",
+              parameters: template.params.map((text) => ({ type: "text", text })),
+            },
+            {
+              type: "button",
+              sub_type: "url",
+              index: "0",
+              parameters: [{ type: "text", text: leadId }],
+            },
+          ],
+        },
+      }),
+      signal: AbortSignal.timeout(15000),
+    }
+  )
+
+  if (!res.ok) {
+    const errText = await res.text()
+    void logWhatsappSend(admin, { orgId, template: template.name, category: "utility", recipientType: "corretor", toPhone: phone, status: "failed", error: `${res.status} ${errText.slice(0, 300)}` })
+    throw new Error(`WhatsApp API error ${res.status}: ${errText}`)
+  }
+  const json = (await res.json().catch(() => null)) as { messages?: Array<{ id?: string }> } | null
+  void logWhatsappSend(admin, { orgId, template: template.name, category: "utility", recipientType: "corretor", toPhone: phone, status: "sent", wamId: json?.messages?.[0]?.id ?? null })
+}
+
 async function sendBrokerWhatsApp(
   admin: ReturnType<typeof createAdminClient>,
   orgId: string,
@@ -178,7 +283,22 @@ async function sendBrokerWhatsApp(
   leadName: string,
   leadPhone: string,
   leadUrl: string,
-  context?: { title?: string; body?: string }
+  context?: {
+    title?: string
+    body?: string
+    /**
+     * Story 75-354 — template HSM aprovado para ESTE aviso.
+     *
+     * Sem ele, o aviso com `context` sai em texto livre e só entrega se o corretor
+     * tiver escrito para o número da empresa nas últimas 24h — o que praticamente
+     * nunca acontece. Era falha silenciosa: o `catch` só fazia `console.error` e
+     * nem `whatsapp_send_log` registrava. Push e e-mail seguem inalterados.
+     *
+     * Quem tem template aprovado passa aqui; quem não tem continua em texto livre
+     * (agora com a falha registrada, nunca engolida).
+     */
+    template?: { name: string; params: string[] }
+  }
 ): Promise<void> {
   const { data: waConfig } = await admin
     .from("whatsapp_config")
@@ -386,7 +506,22 @@ function buildBrokerEmailHtml(p: {
   leadName: string
   leadPhone: string
   leadUrl: string
-  context?: { title?: string; body?: string }
+  context?: {
+    title?: string
+    body?: string
+    /**
+     * Story 75-354 — template HSM aprovado para ESTE aviso.
+     *
+     * Sem ele, o aviso com `context` sai em texto livre e só entrega se o corretor
+     * tiver escrito para o número da empresa nas últimas 24h — o que praticamente
+     * nunca acontece. Era falha silenciosa: o `catch` só fazia `console.error` e
+     * nem `whatsapp_send_log` registrava. Push e e-mail seguem inalterados.
+     *
+     * Quem tem template aprovado passa aqui; quem não tem continua em texto livre
+     * (agora com a falha registrada, nunca engolida).
+     */
+    template?: { name: string; params: string[] }
+  }
 }): string {
   const name = escHtml(p.brokerName)
   const lead = escHtml(p.leadName)

@@ -136,7 +136,33 @@ describe("notifyBrokerOfStalledLead", () => {
     expect(params.context).toEqual({
       title: "Lead parado — ação necessária",
       body: "Maria Silva está sem resposta há 5 dia(s) após os follow-ups da Nicole. Ligue ou envie mensagem.",
+      // Story 75-354 — o aviso vinha em texto livre e batia na janela de 24h do
+      // WhatsApp do próprio corretor; não entregava e a falha não deixava rastro.
+      template: {
+        name: "lead_parado_corretor",
+        params: ["Corretor João", "Maria Silva", "5"],
+      },
     })
+  })
+
+  it("(1b) 🔥 a ORDEM dos parâmetros do template é a do template: corretor, lead, dias", async () => {
+    // Errar a ordem aqui manda "Olá Maria Silva! O lead Corretor João..." para o
+    // corretor — mensagem entregue, paga, e invertida. Só um teste pega isso.
+    await notifyBrokerOfStalledLead({ ...BASE, leadName: "Ana Paula", daysSinceLastMessage: 12.9 })
+
+    const params = notifyBrokerMock.mock.calls[0]![0] as {
+      context: { template: { name: string; params: string[] } }
+    }
+    expect(params.context.template.params).toEqual(["Corretor João", "Ana Paula", "12"])
+  })
+
+  it("(1c) fallback para gerente usa o NOME de quem vai receber no {{1}}", async () => {
+    await notifyBrokerOfStalledLead({ ...BASE, assignedBrokerId: null })
+
+    const params = notifyBrokerMock.mock.calls[0]![0] as {
+      context: { template: { params: string[] } }
+    }
+    expect(params.context.template.params[0]).toBe("Gerente Ana")
   })
 
   it("(2) sem broker atribuído + gerente existe → notifica o gerente (fallback AC4)", async () => {
