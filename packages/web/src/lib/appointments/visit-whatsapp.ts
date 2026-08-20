@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { normalizePhoneBR } from "@trifold/shared"
+import { logWhatsappSend } from "@web/lib/whatsapp/log-send"
 
 /**
  * Story 75-191 — WhatsApp de visita via TEMPLATE aprovado (cliente + corretores).
@@ -44,9 +45,21 @@ export interface VisitTemplateSend {
   cancelToken?: string | null
 }
 
+/**
+ * Story 75-353 — `admin`/`orgId` opcionais para registrar o envio em
+ * `whatsapp_send_log`.
+ *
+ * Por que faltava importar: estes templates CUSTAM na Meta e não registravam
+ * nada. Conferido em produção — `whatsapp_send_log` não tinha uma linha de
+ * `lembrete_visita_cliente` em 7 dias, embora os flags `whatsapp_reminded_24h`/
+ * `_3h` provem que os lembretes saíram. Ou seja: o custo e a taxa de falha do
+ * caminho de visita estavam invisíveis, e uma queda de entrega passaria em branco.
+ * Sem os parâmetros, o comportamento é exatamente o de antes.
+ */
 export async function sendVisitTemplate(
   config: VisitWaConfig,
-  send: VisitTemplateSend
+  send: VisitTemplateSend,
+  log?: { admin: SupabaseClient; orgId: string; recipientType?: string }
 ): Promise<{ ok: boolean; error?: string }> {
   const components: Record<string, unknown>[] = [
     {
@@ -84,10 +97,48 @@ export async function sendVisitTemplate(
         signal: AbortSignal.timeout(15000),
       }
     )
-    if (!res.ok) return { ok: false, error: `${send.to}: ${res.status} ${await res.text()}` }
+    if (!res.ok) {
+      const erro = `${res.status} ${await res.text()}`
+      if (log) {
+        void logWhatsappSend(log.admin, {
+          orgId: log.orgId,
+          template: send.template,
+          category: "utility",
+          recipientType: log.recipientType ?? null,
+          toPhone: send.to,
+          status: "failed",
+          error: erro.slice(0, 300),
+        })
+      }
+      return { ok: false, error: `${send.to}: ${erro}` }
+    }
+    const json = (await res.json().catch(() => null)) as { messages?: Array<{ id?: string }> } | null
+    if (log) {
+      void logWhatsappSend(log.admin, {
+        orgId: log.orgId,
+        template: send.template,
+        category: "utility",
+        recipientType: log.recipientType ?? null,
+        toPhone: send.to,
+        status: "sent",
+        wamId: json?.messages?.[0]?.id ?? null,
+      })
+    }
     return { ok: true }
   } catch (e) {
-    return { ok: false, error: `${send.to}: ${e instanceof Error ? e.message : String(e)}` }
+    const erro = e instanceof Error ? e.message : String(e)
+    if (log) {
+      void logWhatsappSend(log.admin, {
+        orgId: log.orgId,
+        template: send.template,
+        category: "utility",
+        recipientType: log.recipientType ?? null,
+        toPhone: send.to,
+        status: "failed",
+        error: erro.slice(0, 300),
+      })
+    }
+    return { ok: false, error: `${send.to}: ${erro}` }
   }
 }
 

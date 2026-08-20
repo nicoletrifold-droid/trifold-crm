@@ -8,6 +8,11 @@ import {
   INTERVALO_MINIMO_FOLLOWUP_SEGUNDOS,
 } from "@web/lib/cron/claim-run"
 import { claimFollowUp, fecharClaim } from "@web/lib/followup/claim"
+import { decidirTemplateDoFollowUp } from "@web/lib/followup/template-fallback"
+import {
+  listApprovedOpeningTemplates,
+  renderOpeningBody,
+} from "@web/lib/whatsapp/opening-templates"
 import { notifyBrokerOfStalledLead } from "@web/lib/broker/notify-stalled-lead"
 import { isWithinWhatsAppWindow } from "@web/lib/broker/dispatch-broker-message"
 import { sendWhatsAppMessage } from "@web/lib/whatsapp/send-whatsapp-message"
@@ -126,6 +131,9 @@ export async function GET(request: NextRequest) {
   // estado saudável; qualquer número acima disso é a prova de que a duplicata
   // continua chegando (e de que o claim está segurando).
   let duplicatasEvitadas = 0
+  // Story 75-353 — entregues POR TEMPLATE (fora da janela de 24h). Antes desta
+  // story este número não existia porque não podia: 20 dias, 0 entregas.
+  let entregasPorTemplate = 0
 
   // Fetch all active follow-up rules with stage info
   const { data: rules, error: rulesError } = await supabase
@@ -139,6 +147,43 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     )
   }
+
+  // Story 75-353 — corpo REAL dos templates aprovados, uma chamada por run (não
+  // por lead). Só acontece se alguma regra optou por template; sem isso, zero
+  // chamada extra e comportamento idêntico ao anterior.
+  //
+  // Aprovação é fato da Meta, não do banco: se a listagem falhar, NENHUM template
+  // sai nesta run (fail-closed no caminho de template — o texto livre dentro da
+  // janela segue normal). Mandar sem validar renderia erro 132000 pago.
+  const templatesConfigurados = (rules as Array<{ hsm_template?: string | null; is_active?: boolean }>)
+    .some((r) => !!r.hsm_template)
+  const corpoDoTemplate = new Map<string, string>()
+
+  if (templatesConfigurados) {
+    const { data: waCfg } = await supabase
+      .from("whatsapp_config")
+      .select("waba_id, access_token")
+      .eq("status", "active")
+      .maybeSingle()
+
+    if (waCfg?.waba_id && waCfg?.access_token) {
+      try {
+        for (const t of await listApprovedOpeningTemplates(waCfg.waba_id, waCfg.access_token)) {
+          corpoDoTemplate.set(t.name, t.body)
+        }
+      } catch (err) {
+        logEvent({
+          level: "error",
+          category: "cron",
+          event_type: "FOLLOWUP_TEMPLATES_INDISPONIVEIS",
+          message: `Não foi possível listar templates aprovados na Meta — nenhum envio por template nesta run: ${err instanceof Error ? err.message : String(err)}`,
+          metadata: { erro: err instanceof Error ? err.message : String(err) },
+          source: "api/cron/followup",
+        })
+      }
+    }
+  }
+  const templatesAprovados = new Set(corpoDoTemplate.keys())
 
   for (const rule of rules) {
     const stageArr = rule.stage as unknown as Array<{ id: string; name: string; slug: string }> | null
@@ -155,6 +200,7 @@ export async function GET(request: NextRequest) {
       .from("leads")
       .select(
         `id, name, phone, org_id, assigned_broker_id, property_interest_id, last_contact_at,
+         marketing_optout_at,
          properties:property_interest_id(name)`
       )
       .eq("org_id", rule.org_id)
@@ -176,6 +222,32 @@ export async function GET(request: NextRequest) {
 
     const cooldownSet = new Set((inCooldown ?? []).map((r) => r.lead_id))
     const eligibleLeads = leads.filter((l) => !cooldownSet.has(l.id))
+
+    // Story 75-353 — cap de frequência do template: quando o lead recebeu o
+    // ÚLTIMO template desta esteira. Em lote, uma query por regra, e só quando a
+    // regra usa template. O cooldown de 48h acima é curto demais para marketing:
+    // sem este teto, lead frio receberia template a cada 2 dias para sempre.
+    const hsmTemplate = (rule as { hsm_template?: string | null }).hsm_template ?? null
+    const hsmMinDays = (rule as { hsm_min_days?: number }).hsm_min_days ?? 7
+    const ultimoTemplatePorLead = new Map<string, string>()
+
+    if (hsmTemplate && eligibleLeads.length > 0) {
+      const desde = new Date(now.getTime() - Math.max(hsmMinDays, 0) * 24 * 60 * 60 * 1000)
+      const { data: enviosDeTemplate } = await supabase
+        .from("follow_up_log")
+        .select("lead_id, created_at, metadata")
+        .in("lead_id", eligibleLeads.map((l) => l.id))
+        .not("metadata->>template", "is", null)
+        .gte("created_at", desde.toISOString())
+        .order("created_at", { ascending: false })
+
+      for (const linha of enviosDeTemplate ?? []) {
+        const id = (linha as { lead_id: string }).lead_id
+        if (!ultimoTemplatePorLead.has(id)) {
+          ultimoTemplatePorLead.set(id, (linha as { created_at: string }).created_at)
+        }
+      }
+    }
 
     if (eligibleLeads.length === 0) continue
 
@@ -276,16 +348,47 @@ export async function GET(request: NextRequest) {
           .replace(/\{empreendimento\}/g, propertyName)
           .replace(/\{corretor\}/g, brokerName)
 
-        // Send via the correct channel (Telegram or WhatsApp). The 24h WhatsApp
-        // window is checked inside; outside it, nothing is sent (AC4).
+        // Story 75-353 — o que fazer se a janela de 24h estiver fechada. A regra
+        // inteira (opt-out, cap de frequência, template conhecido e aprovado) mora
+        // numa função pura, testada sem banco e sem rede.
+        const decisao = decidirTemplateDoFollowUp({
+          hsmTemplate,
+          hsmMinDays,
+          marketingOptOutAt: (lead as { marketing_optout_at?: string | null }).marketing_optout_at ?? null,
+          ultimoTemplateEm: ultimoTemplatePorLead.get(lead.id) ?? null,
+          templatesAprovados,
+          contexto: { nomeLead: lead.name || "", corretor: brokerName, empreendimento: propertyName },
+          now,
+        })
+
+        // Send via the correct channel (Telegram or WhatsApp). Dentro da janela vai
+        // texto livre, como sempre; fora dela, o template aprovado (quando a decisão
+        // permite) — que é o que transforma "0 entregas em 20 dias" em entrega.
         const result = await sendFollowUpMessage(
           supabase,
           rule.org_id,
           lead.phone,
           message,
           conversationLastMessageAt,
-          now
+          now,
+          decisao.enviar
+            ? {
+                name: decisao.template!,
+                params: decisao.params!,
+                // `abertura_*` é MARKETING na Meta — mesma categoria que o botão
+                // manual "Iniciar atendimento" já registra (start-whatsapp).
+                category: "marketing",
+                recipientType: "lead",
+              }
+            : null
         )
+
+        // O texto que o lead REALMENTE leu: fora da janela é o corpo do template
+        // renderizado (vindo da Meta nesta run), não o texto livre que não saiu.
+        const textoEntregue =
+          result.via === "template" && result.template
+            ? renderOpeningBody(corpoDoTemplate.get(result.template) ?? "", decisao.params ?? [])
+            : message
 
         // follow_up_log status reflects the send outcome (AC4/T3):
         //  - sent ok                  → status='sent'
@@ -299,11 +402,16 @@ export async function GET(request: NextRequest) {
         await fecharClaim(supabase, claimId, {
           status: skipped ? "skipped" : "sent",
           sentAt: result.sent ? now.toISOString() : null,
-          message,
+          message: textoEntregue,
           metadata: {
             stage_id: rule.stage_id,
             origem: "cron",
             channel: result.channel,
+            ...(result.via ? { via: result.via } : {}),
+            // `template` no metadata é o que o cap de frequência lê na próxima run.
+            ...(result.template ? { template: result.template } : {}),
+            ...(skipped && decisao.motivo ? { motivo_sem_template: decisao.motivo } : {}),
+            ...(skipped && decisao.diasRestantes ? { dias_para_novo_template: decisao.diasRestantes } : {}),
             ...(skipped ? { reason: result.reason } : {}),
           },
         })
@@ -332,11 +440,21 @@ export async function GET(request: NextRequest) {
         // text, so we must NOT persist it as a delivered assistant message.
         if (!skipped) {
           // Save message to conversation history (regardless of transport send status)
+          // Story 75-353 — `textoEntregue`: quando saiu por template, a conversa
+          // mostra o CORPO DO TEMPLATE que o lead leu, não o texto livre que ficou
+          // no caminho. Espelho fiel é a regra desde a 75-166.
           await supabase.from("messages").insert({
             conversation_id: conversationId,
             role: "assistant",
-            content: message,
-            metadata: { source: "followup_cron", rule_id: rule.id, channel: result.channel, sent: result.sent },
+            content: textoEntregue,
+            metadata: {
+              source: "followup_cron",
+              rule_id: rule.id,
+              channel: result.channel,
+              sent: result.sent,
+              ...(result.via ? { via: result.via } : {}),
+              ...(result.template ? { template: result.template } : {}),
+            },
           })
 
           // Update conversation timestamp
@@ -347,21 +465,43 @@ export async function GET(request: NextRequest) {
         }
 
         // Create activity log
+        // Story 75-353 — a atividade diz COMO saiu (ou por que não): quem lê a
+        // ficha do lead precisa distinguir "conversa normal" de "template pago", e
+        // "janela fechada" de "lead pediu para parar".
+        const motivoLegivelSemTemplate: Record<string, string> = {
+          REGRA_SEM_TEMPLATE: "sem template configurado na etapa",
+          LEAD_EM_OPT_OUT: "lead pediu para nao receber",
+          CAP_DE_FREQUENCIA: `ja recebeu template nos ultimos ${hsmMinDays} dia(s)`,
+          TEMPLATE_DESCONHECIDO: "template nao reconhecido pelo codigo",
+          TEMPLATE_NAO_APROVADO: "template nao aprovado na Meta",
+        }
         const activityDesc = result.sent
-          ? `Nicole enviou follow-up automatico na etapa "${stage.name}" (${result.channel})`
+          ? result.via === "template"
+            ? `Nicole enviou follow-up por template "${result.template}" na etapa "${stage.name}" (fora da janela de 24h)`
+            : `Nicole enviou follow-up automatico na etapa "${stage.name}" (${result.channel})`
           : skipped
-            ? `Nicole NAO enviou follow-up (WhatsApp fora da janela de 24h) na etapa "${stage.name}"`
+            ? `Nicole NAO enviou follow-up (WhatsApp fora da janela de 24h — ${motivoLegivelSemTemplate[decisao.motivo ?? "REGRA_SEM_TEMPLATE"]}) na etapa "${stage.name}"`
             : `Nicole tentou follow-up na etapa "${stage.name}" (${result.channel}, envio pendente)`
         await supabase.from("activities").insert({
           org_id: rule.org_id,
           lead_id: lead.id,
           type: "followup_nicole_sent",
           description: activityDesc,
-          metadata: { rule_id: rule.id, stage_id: rule.stage_id, channel: result.channel, sent: result.sent, reason: result.reason },
+          metadata: {
+            rule_id: rule.id,
+            stage_id: rule.stage_id,
+            channel: result.channel,
+            sent: result.sent,
+            reason: result.reason,
+            ...(result.via ? { via: result.via } : {}),
+            ...(result.template ? { template: result.template } : {}),
+            ...(!result.sent && decisao.motivo ? { motivo_sem_template: decisao.motivo } : {}),
+          },
         })
 
         if (result.sent) messagesSent++
         else messagesSkipped++
+        if (result.via === "template" && result.sent) entregasPorTemplate++
       } else if (daysSinceLastContact >= rule.alert_days) {
         // Story 75-352 — mesmo claim atômico do outro ramo, e aqui ele importa
         // duas vezes: a run duplicada gerou 21 pares de `alert_broker` no mesmo
@@ -639,6 +779,8 @@ export async function GET(request: NextRequest) {
     // Story 75-352 — duplicata evitada é métrica de primeira classe: é como se
     // descobre que a segunda invocação continua chegando mesmo com a trava de run.
     duplicatas_evitadas: duplicatasEvitadas,
+    // Story 75-353 — quantas chegaram ao lead fora da janela, por template pago.
+    entregas_por_template: entregasPorTemplate,
     post_visit_sent: postVisitSent,
     post_visit_processados: postVisitProcessados,
     post_visit_erros: postVisitErros,
@@ -649,7 +791,7 @@ export async function GET(request: NextRequest) {
     level: "info",
     category: "cron",
     event_type: "FOLLOWUP_EXECUTED",
-    message: `Followup cron: ${processed} processed, ${alertsCreated} alerts, ${messagesSent} enviadas / ${messagesSkipped} puladas, ${duplicatasEvitadas} duplicatas evitadas, pós-visita ${postVisitSent} enviadas de ${postVisitProcessados} (${postVisitErros} erros), ${noShowDetected} no-show`,
+    message: `Followup cron: ${processed} processed, ${alertsCreated} alerts, ${messagesSent} enviadas (${entregasPorTemplate} por template) / ${messagesSkipped} puladas, ${duplicatasEvitadas} duplicatas evitadas, pós-visita ${postVisitSent} enviadas de ${postVisitProcessados} (${postVisitErros} erros), ${noShowDetected} no-show`,
     metadata: recibo,
     source: "api/cron/followup",
   })

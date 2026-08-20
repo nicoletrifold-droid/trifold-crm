@@ -1,6 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { isWithinWhatsAppWindow } from "@web/lib/broker/dispatch-broker-message"
 import { sendWhatsAppMessage } from "@web/lib/whatsapp/send-whatsapp-message"
+import { sendWhatsAppTemplate } from "@web/lib/whatsapp/send-template"
+import { logWhatsappSend, type WaCategory } from "@web/lib/whatsapp/log-send"
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN
 
@@ -30,6 +32,33 @@ export interface FollowUpSendResult {
   reason?: string
   /** Original transport error string when reason === "API_ERROR". */
   error?: string
+  /**
+   * Story 75-353 — COMO a mensagem saiu. `template` significa que o lead recebeu
+   * fora da janela de 24h, por HSM aprovado; `freeform` é o texto livre de
+   * sempre. O chamador precisa disso para gravar na conversa o que o lead de fato
+   * leu (o corpo do template, não o texto livre que nunca saiu).
+   */
+  via?: "freeform" | "template"
+  /** Nome do template quando `via === "template"`. */
+  template?: string
+}
+
+/**
+ * Story 75-353 — o que enviar quando a janela de 24h está FECHADA.
+ *
+ * Sem isto, fora da janela nada sai: 20 dias de produção com 0 entregas e ~4.700
+ * tentativas puladas por `WHATSAPP_WINDOW_CLOSED`. A decisão de mandar (e de qual
+ * template, respeitando opt-out e cap de frequência) mora em
+ * `lib/followup/template-fallback.ts` — aqui é só o transporte.
+ */
+export interface FollowUpTemplateFallback {
+  name: string
+  /** Parâmetros posicionais do corpo, já resolvidos. */
+  params: string[]
+  /** Categoria para o log de custo (`abertura_*` é marketing). */
+  category: WaCategory
+  /** Para o log: quem recebeu. */
+  recipientType?: string
 }
 
 /**
@@ -59,7 +88,9 @@ export async function sendFollowUpMessage(
   phone: string,
   message: string,
   conversationLastMessageAt: Date | string | null,
-  now: Date = new Date()
+  now: Date = new Date(),
+  /** Story 75-353 — presente: fora da janela manda ESTE template em vez de pular. */
+  fallbackTemplate?: FollowUpTemplateFallback | null
 ): Promise<FollowUpSendResult> {
   // --- Telegram branch (AC2): preserved verbatim ---
   if (phone.startsWith("tg:")) {
@@ -87,7 +118,7 @@ export async function sendFollowUpMessage(
         return { sent: false, channel: "telegram", reason: "API_ERROR", error: `HTTP_${res.status}` }
       }
 
-      return { sent: true, channel: "telegram" }
+      return { sent: true, channel: "telegram", via: "freeform" }
     } catch (err) {
       console.error("[FOLLOWUP] Telegram send failed:", err)
       return { sent: false, channel: "telegram", reason: "API_ERROR", error: String(err) }
@@ -95,8 +126,12 @@ export async function sendFollowUpMessage(
   }
 
   // --- WhatsApp branch (AC3/AC4) ---
-  // Check the 24h freeform window BEFORE attempting any send (AC4/AC6).
-  if (!isWithinWhatsAppWindow(conversationLastMessageAt, now)) {
+  const dentroDaJanela = isWithinWhatsAppWindow(conversationLastMessageAt, now)
+
+  // Story 75-353 — fora da janela SEM template continua sendo o que era: não se
+  // tenta nada. Com template, o envio sai por HSM aprovado, que entrega fora da
+  // janela. Esta é a linha que separa "0 entregas em 20 dias" de "entrega".
+  if (!dentroDaJanela && !fallbackTemplate) {
     return { sent: false, channel: "whatsapp", reason: "WHATSAPP_WINDOW_CLOSED" }
   }
 
@@ -112,12 +147,55 @@ export async function sendFollowUpMessage(
     return { sent: false, channel: "whatsapp", reason: "WHATSAPP_CONFIG_MISSING" }
   }
 
+  if (!dentroDaJanela && fallbackTemplate) {
+    try {
+      await sendWhatsAppTemplate(
+        waConfig.phone_number_id,
+        waConfig.access_token,
+        phone,
+        fallbackTemplate.name,
+        [
+          {
+            type: "body",
+            parameters: fallbackTemplate.params.map((text) => ({ type: "text", text })),
+          },
+        ]
+      )
+    } catch (err) {
+      const erro = err instanceof Error ? err.message : String(err)
+      // Template CUSTA na Meta: falha também vai para o log de envio, senão o
+      // custo e a taxa de erro do follow-up ficam invisíveis (foi o que aconteceu
+      // com os lembretes de visita, que nunca registraram nada).
+      void logWhatsappSend(supabase, {
+        orgId,
+        template: fallbackTemplate.name,
+        category: fallbackTemplate.category,
+        recipientType: fallbackTemplate.recipientType ?? "lead",
+        toPhone: phone,
+        status: "failed",
+        error: erro.slice(0, 300),
+      })
+      return { sent: false, channel: "whatsapp", reason: "API_ERROR", error: erro, via: "template", template: fallbackTemplate.name }
+    }
+
+    void logWhatsappSend(supabase, {
+      orgId,
+      template: fallbackTemplate.name,
+      category: fallbackTemplate.category,
+      recipientType: fallbackTemplate.recipientType ?? "lead",
+      toPhone: phone,
+      status: "sent",
+    })
+
+    return { sent: true, channel: "whatsapp", via: "template", template: fallbackTemplate.name }
+  }
+
   const result = await sendWhatsAppMessage(waConfig, phone, message)
 
   if (!result.sent) {
     return { sent: false, channel: "whatsapp", reason: "API_ERROR", error: result.error }
   }
 
-  return { sent: true, channel: "whatsapp" }
+  return { sent: true, channel: "whatsapp", via: "freeform" }
 }
 
