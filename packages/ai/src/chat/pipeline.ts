@@ -32,6 +32,7 @@ import {
 } from "../flows"
 import { extractFactsFromMessage } from "../flows/memory-extraction"
 import { deveReengajarNoShow } from "../flows/no-show-reengage"
+import { podeGravarNomeDoLead } from "../flows/qualification"
 import { evaluateSlot, dayPartsToIso, isoToDayParts, checkSlotAvailability, resolveVisitSlotParts, detectCancelIntent, detectRescheduleIntent, dayPartsFromUtc, parsePeriodParts, freeSlotsInPeriod, slotToUtc, detectAffirmedSlot, VISIT_DURATION_MIN } from "../flows/visit-slot"
 import type { DayParts, DayPeriod } from "../flows/visit-slot"
 import { readAgendaState, writeAgendaState, stripLegacyAgendaKeys, buildAgendaState, isPendencia } from "../flows/agenda-state"
@@ -1394,7 +1395,9 @@ export async function processMessageWithMetadata(
     // Fetch current lead state for conditional logic
     const { data: currentLead } = await supabase
       .from("leads")
-      .select("stage_id, property_interest_id, assigned_broker_id, interest_level_manual, finalidade")
+      // Story 75-360 — `name` entra aqui porque a decisão de gravar nome precisa
+      // saber o que JÁ existe no lead (o `collected_data` da conversa não sabe).
+      .select("stage_id, property_interest_id, assigned_broker_id, interest_level_manual, finalidade, name")
       .eq("id", leadId)
       .single()
 
@@ -1451,8 +1454,32 @@ export async function processMessageWithMetadata(
     }
 
     // Sync collected_data → lead fields
-    if (finalData.name && (finalData.name as string).toLowerCase() !== "nicole") {
+    //
+    // 🔥 Story 75-360 — antes era `if (finalData.name) leadPatch.name = …`, sem
+    // olhar o que havia no lead. Em 20/08/2026 isso apagou três nomes reais em
+    // minutos ("Melquiades Jesus" → "Já Comprei", "Cleonice Viana" → "Oii",
+    // "Amauri" → "Morar") porque a guarda do extrator consulta o `collected_data`
+    // da conversa, que vem vazio mesmo com `leads.name` preenchido pelo Meta.
+    if (podeGravarNomeDoLead(currentLead?.name, finalData.name, finalData.name_origin)) {
       leadPatch.name = finalData.name
+      // Troca de nome DEIXA RASTRO. As três de 20/08 foram silenciosas — nenhuma
+      // activity, nada na timeline — e por isso ninguém percebeu até o nome errado
+      // aparecer na tela.
+      const nomeAnterior = (currentLead?.name ?? "").trim()
+      if (nomeAnterior && nomeAnterior.toLowerCase() !== String(finalData.name).toLowerCase()) {
+        emit({
+          level: "info",
+          category: "ai",
+          event_type: "LEAD_NAME_REPLACED",
+          message: `Nome do lead trocado: "${nomeAnterior}" → "${String(finalData.name)}"`,
+          metadata: {
+            lead_id: leadId,
+            anterior: nomeAnterior,
+            novo: String(finalData.name),
+            origem: finalData.name_origin ?? null,
+          },
+        })
+      }
     }
     if (finalData.bedrooms) leadPatch.preferred_bedrooms = finalData.bedrooms
     if (finalData.floor) leadPatch.preferred_floor = finalData.floor

@@ -139,7 +139,80 @@ const NAME_STOPWORDS = new Set<string>([
   "info", "informacao", "informação", "informacoes", "informações", "material", "materiais",
   "foto", "fotos", "imagem", "imagens", "planta", "preco", "preço", "valor", "valores",
   "meu", "nome", "sou", "eu", "voce", "você", "aqui", "isso", "esse", "essa",
+  // Story 75-360 — o que a produção mostrou virando nome de lead em 45 dias:
+  // "Já Comprei", "Morar", "E Aí", "Tá bom", "É parcelado", "Pede senha", "Até".
+  "já", "ja", "comprei", "compramos", "comprar", "comprando", "vendi", "vender",
+  "morar", "moradia", "morando", "moro", "mora", "alugar", "aluguel", "alugado",
+  "investir", "investimento", "renda", "financiamento", "financiar", "parcelado",
+  "parcela", "parcelas", "entrada", "senha", "pede", "peço", "manda", "mandar",
+  "envia", "enviar", "ver", "vi", "vendo", "faz", "fez", "tempo", "ainda", "agora",
+  "tá", "ta", "está", "esta", "estou", "to", "tô", "e", "é", "aí", "ai", "até",
+  "ate", "depois", "amanhã", "amanha", "hoje", "ontem", "semana", "mes", "mês",
+  "quanto", "quantos", "quanta", "qual", "quais", "onde", "quando", "como", "porque",
+  "obg", "vlw", "certeza", "talvez", "pode", "posso", "consigo", "quanto",
 ])
+
+/**
+ * Story 75-360 — colapsa letras repetidas ("oii" → "oi", "simm" → "sim").
+ *
+ * A stoplist tinha "oi" e ainda assim gravou **"Oii"** como nome de lead em
+ * 20/08/2026 (a Cleonice Viana perdeu o nome dela para o próprio cumprimento).
+ * Caçar variante por variante — oii, oiii, oiiii — é jogo perdido; normalizar
+ * antes de comparar resolve a família toda.
+ */
+export function normalizaParaStopword(palavra: string): string {
+  return palavra.toLowerCase().replace(/(.)\1+/g, "$1")
+}
+
+/** A palavra é stopword, tolerando letra repetida ("Oii", "simm", "obggg")? */
+function ehStopword(palavra: string): boolean {
+  const p = palavra.toLowerCase()
+  return NAME_STOPWORDS.has(p) || NAME_STOPWORDS.has(normalizaParaStopword(p))
+}
+
+/** Minúsculas sem acento, para comparar nome de gente ("Joao" == "João"). */
+function semAcento(valor: string): string {
+  return valor
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
+/**
+ * Story 75-360 — o nome extraído pode SUBSTITUIR o que já está em `leads.name`?
+ *
+ * O bug de 20/08/2026: `pipeline.ts` fazia `leadPatch.name = finalData.name` sem
+ * olhar o que havia lá. A guarda do extrator (`if (!updated.name)`) olha o
+ * `collected_data` da CONVERSA, que vem vazio mesmo quando o lead chegou do Meta
+ * com nome completo — e foi assim que "Melquiades Jesus" virou **"Já Comprei"**,
+ * "Cleonice Viana" virou **"Oii"** e "Amauri" virou **"Morar"**, sem uma linha
+ * de activity registrando a troca.
+ *
+ * Regra: lead SEM nome aceita qualquer extração; lead COM nome só aceita nome
+ * que a pessoa DECLAROU ("meu nome é", "me chamo", "prazer, X"). Resposta curta a
+ * uma pergunta é boa para preencher vazio, não para apagar o que o Meta ou o
+ * corretor já sabiam.
+ */
+export function podeGravarNomeDoLead(
+  nomeAtual: string | null | undefined,
+  nomeNovo: unknown,
+  origem: unknown
+): boolean {
+  if (typeof nomeNovo !== "string") return false
+  const novo = nomeNovo.trim()
+  if (!novo || novo.toLowerCase() === "nicole") return false
+
+  const atual = (nomeAtual ?? "").trim()
+  if (!atual) return true
+  // Mesmo nome (só caixa, espaço ou ACENTO) não é troca: deixa passar para
+  // corrigir "joao" → "João" sem exigir declaração. Comparação sem acento pela
+  // mesma razão da busca de leads (`unaccent`) — "João" e "Joao" são a pessoa.
+  if (semAcento(atual) === semAcento(novo)) return true
+
+  return origem === "declarado"
+}
 
 /** Story 75-161 — capitaliza cada palavra do nome ("maicon" → "Maicon"). */
 function capitalizeName(raw: string): string {
@@ -197,6 +270,10 @@ export function extractCollectedData(
         const extractedName = match[1].trim()
         if (extractedName.toLowerCase() !== "nicole") {
           updated.name = capitalizeName(extractedName)
+          // Story 75-360 — a ORIGEM viaja junto: só nome DECLARADO ("meu nome é",
+          // "me chamo", "prazer, X") tem autoridade para trocar um nome que já
+          // existe. Chute de mensagem curta não tem.
+          updated.name_origin = "declarado"
           break
         }
       }
@@ -205,6 +282,15 @@ export function extractCollectedData(
     // Aceita quando começa com maiúscula OU (Story 75-161) quando a Nicole
     // ACABOU de perguntar o nome (nameExpected) — cobre respostas em minúsculas
     // como "maicon". Guarda contra falsos positivos via stoplist por palavra.
+    //
+    // Story 75-360 — o gatilho continua o mesmo ("João Silva" mandado sozinho É um
+    // nome, e o teste da 75-161 cobre isso), mas o que sai daqui é **inferido**, não
+    // declarado: em 20/08/2026 este bloco leu "Oii", "Já comprei" e "Morar" como
+    // nome. Duas mudanças, nesta ordem de importância:
+    //   1. `podeGravarNomeDoLead` (abaixo, usada pelo pipeline) impede que um
+    //      palpite APAGUE nome que o lead já tem. É a garantia estrutural.
+    //   2. `ehStopword` normaliza letra repetida, então "Oii" cai junto com "oi".
+    //      Stoplist é caça a caso — só vale como segunda camada.
     if (!updated.name) {
       const trimmed = aiResponse.trim()
       const words = trimmed.split(/\s+/)
@@ -212,10 +298,11 @@ export function extractCollectedData(
       const allowLower = opts?.nameExpected === true && words.length >= 1 && words.length <= 2
       if (words.length >= 1 && words.length <= 3 && (startsCapital || allowLower)) {
         const candidate = words.filter((w) => /^[A-Za-zÀ-ÿ]+$/.test(w)).join(" ")
-        const parts = candidate.toLowerCase().split(/\s+/).filter(Boolean)
-        const hasStopword = parts.some((w) => NAME_STOPWORDS.has(w))
+        const parts = candidate.split(/\s+/).filter(Boolean)
+        const hasStopword = parts.some((w) => ehStopword(w))
         if (candidate && !hasStopword && candidate.toLowerCase() !== "nicole" && candidate.length >= 2) {
           updated.name = capitalizeName(candidate)
+          updated.name_origin = "inferido"
         }
       }
     }
