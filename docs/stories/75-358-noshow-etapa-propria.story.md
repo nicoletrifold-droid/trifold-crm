@@ -1,6 +1,6 @@
 # Story 75-358 — A Nicole acusava de faltar à visita quem nunca teve visita: `no_show` era a etapa "Atendimento"
 
-**Status:** InReview — testes/lint/type-check verdes · **com migration (236, em 2 POSTs)**
+**Status:** InReview — testes/lint/type-check verdes · **migration 236 JÁ APLICADA em prod (20/08)** · falta o merge
 **Tipo:** Bug de dado/constante em produção (a etapa foi renomeada na UI e o código continuou apontando para ela)
 **Epic:** 75 — CRM Trifold
 **Complexidade:** S (~2 pts — 1 migration, 1 constante, 4 call-sites, 1 módulo puro + testes)
@@ -150,15 +150,38 @@ agendamento. Se alguém renomear uma coluna outra vez, a Nicole não passa a men
   Na validação o `type` foi `agendado` como placeholder — o valor `no_show` do enum não pode ser usado
   na mesma transação em que nasce.
 
-**Pendente no deploy (@devops)**
+**Migration 236 — ✅ APLICADA EM PRODUÇÃO em 20/08/2026**
 
-1. `ALTER TYPE stage_type ADD VALUE IF NOT EXISTS 'no_show';` — POST sozinho.
-2. Resto da migration 236 — POST seguinte.
-3. Merge do PR.
+Os dois POSTs rodaram na ordem, com o resultado conferido:
 
-Ordem importa: o código novo não depende da etapa `…0011` existir (a decisão é por `appointments`),
-mas `applyNoShowFeedback` passa a escrever `…0011` — sem a linha no banco, a FK de `leads.stage_id`
-recusaria o UPDATE. **Migration antes do merge.**
+1. `alter type stage_type add value if not exists 'no_show'` → `[]`. O enum passou de
+   `novo, qualificado, agendado, visitou, proposta, fechado, perdido, represamento` para a mesma
+   lista **+ `no_show`**. (Produção nunca teve esse valor: o `ALTER TYPE` da mig 011 não chegou lá —
+   é o que explicava `type='novo'` na linha renomeada, e por que a opção "No Show" dos modais de
+   etapa gravava 22P02.)
+2. Slug + shift de posição + INSERT. Estado final do board:
+
+```
+  4 | Atendimento      | atendimento    | novo      ← slug parou de mentir
+  6 | Visita Agendada  | visita-agendada| agendado
+  7 | No-Show          | no-show-real   | no_show   ← etapa nova
+  8 | Visitou          | visitou        | visitou   ← empurrada de 7 para 8
+```
+
+Conferência pós-aplicação: **Atendimento com 128 leads** (os mesmos de antes), **No-Show com 0** e
+`Visitou` intacta com 17. Nenhum lead se moveu.
+
+**Por que `no-show-real` e não `no-show`:** o slug `no-show` ainda está na lista de sinônimos de
+*Atendimento* em `funnel-tiers.ts` (`["atendimento", "no-show"]`, herança da 75-323). Se a etapa nova
+pegasse esse slug, o `pick()` — que faz `stages.find()` na ordem de POSIÇÃO, não na ordem dos alvos —
+passaria a depender de a No-Show vir depois da Atendimento no board. Funcionaria hoje por sorte.
+Efeito colateral bom: com o slug `atendimento` existindo, aquele andar do funil casa pelo **primeiro**
+alvo e sai do fallback por NOME, que era o que zerava o funil em silêncio quando alguém renomeava a
+coluna (a dor da 75-323).
+
+**Falta só o merge.** ⚠️ Enquanto o código não sobe, produção segue com `STAGE_IDS.no_show = …0009`:
+a Nicole continua acusando de furar visita os 128 leads de Atendimento, e a coluna No-Show fica
+visível e vazia no board. É estado transitório esperado — e é argumento para não deixar o PR parado.
 
 **Não incluído de propósito**
 
