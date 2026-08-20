@@ -7,6 +7,7 @@ import { logEvent } from "@web/lib/logger"
 import { triggerAutomations } from "@web/lib/email-automations"
 import { notifyBrokerOfAppointment } from "@web/lib/broker/notify-appointment"
 import { notifyBrokerOnReply } from "@web/lib/broker/notify-on-reply"
+import { notifyBrokerOfPriceEscalation } from "@web/lib/broker/notify-price-escalation"
 import {
   shouldReactivateAi,
   resolveTakeoverAnchor,
@@ -1105,6 +1106,22 @@ export async function POST(request: NextRequest) {
                 lead_id: lead!.id,
               },
             })
+
+            // Story 75-361 — insistência em preço chama o corretor. Mesmo padrão
+            // do 51-3 abaixo: o pipeline (packages/ai) só EMITE o sinal e o web
+            // decide como avisar, mantendo o pacote de IA desacoplado de push.
+            // Fire-and-forget: nunca bloqueia a resposta ao lead.
+            if (event.event_type === "PRECO_INSISTENCIA_ESCALADA") {
+              void notifyBrokerOfPriceEscalation({
+                supabase,
+                leadId: (event.metadata?.lead_id as string) ?? lead!.id,
+                orgId,
+                brokerUserId: (event.metadata?.broker_user_id as string | null) ?? null,
+                pedidos: Number(event.metadata?.pedidos ?? 2),
+              }).catch((err) =>
+                console.error("[75-361] push de insistência em preço falhou:", err)
+              )
+            }
 
             // Story 51-3: notify the assigned broker when Nicole schedules a visit.
             // Best-effort (fire-and-forget) — never blocks the pipeline response.

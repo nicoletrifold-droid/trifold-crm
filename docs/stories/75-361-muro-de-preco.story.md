@@ -1,10 +1,10 @@
 # Story 75-361 — 134 leads pediram preço em 90 dias; 2 receberam um número
 
-**Status:** Draft — **MEDIÇÃO FEITA, decisão de produto PENDENTE (Marcos)**
-**Tipo:** Medição de comportamento da Nicole (nenhuma linha de código nesta story)
+**Status:** InReview — **decisão tomada (caminho A) e implementada** · testes/lint/type-check verdes · sem migration
+**Tipo:** Medição de comportamento da Nicole + escalação na 2ª insistência
 **Epic:** 75 — CRM Trifold
-**Complexidade:** a definir — depende de qual caminho o Marcos escolher no fim
-**Fluxo:** @sm → **@po (decisão)** → @dev → @qa → @devops
+**Complexidade:** S (~2 pts — 1 gatilho, 1 contagem, 1 push, 12 testes)
+**Fluxo:** @sm → @po (decisão: **A**) → @dev → @qa → @devops
 
 ## De onde veio
 
@@ -96,6 +96,104 @@ chamar" e o resto), mas é o mais difícil de acertar sem piorar outras coisas.
 **Fora de escopo em qualquer um dos três:** o Amauri de 20/08, que motivou a anotação. O caso dele
 era rajada (#474) + a repetição isolada de "morar ou investimento", que a medição mostrou não ter
 escala.
+
+---
+
+# DECISÃO: caminho A (Marcos, 20/08) — implementado
+
+## AC1 — 2º pedido de preço escala, independente do score
+
+O gatilho de preço que já existia exige `qualificationScore >= 70`, e é por isso que quase ninguém
+escalava. Entra um segundo gatilho em `shouldHandoff`, sem piso de score:
+
+> **`pedidosDePrecoDoLead >= 2` E a mensagem de AGORA é pedido de preço → handoff.**
+
+A segunda condição não é redundante: a Maria Inês mandou "Sim.", "?" e "0k" depois de insistir, e sem
+ela essas mensagens virariam gatilho. Teste trava exatamente isso.
+
+O parâmetro é **opcional** — ausente, o `shouldHandoff` se comporta byte a byte como antes.
+`HandoffResult` ganhou `motivo` (`preco_qualificado` | `preco_insistencia` | `fora_de_escopo`) para o
+pipeline distinguir sem reinterpretar a string de `reason`.
+
+## AC2 — A contagem sai do BANCO, não do histórico
+
+`history` é limitado a 20 mensagens, e o caso pior se arrasta por **semanas** — a janela curta
+esconderia a insistência. O pipeline consulta as falas `role='user'` da conversa (limite 200) e conta
+com `ehPedidoDePrecoDoLead`, a **mesma** função que decide o handoff.
+
+Contar por `ilike` em SQL manteria a mesma regra em dois idiomas, que é a armadilha de
+`feedback-consultar-fonte-nao-duplicar-constante`. E a consulta só roda quando a mensagem atual já é
+pedido de preço — não custa nada nas outras.
+
+Conta as ANTERIORES e soma 1 pela atual (o webhook grava o inbound antes do pipeline, o Chat interno
+não; assim nunca conta duas vezes).
+
+## AC3 — O handoff passa a CHAMAR GENTE, uma vez
+
+🔥 Sem isto a story não muda nada do que foi medido. `shouldHandoff` só gravava activity + `ai_summary`
+e a Nicole seguia atendendo (75-187: ela nunca se cala sozinha). Nas 8 conversas piores, **4 nunca
+tiveram uma fala de corretor** — o sinal existia e ninguém via.
+
+Agora o pipeline emite `PRECO_INSISTENCIA_ESCALADA` e o webhook manda push ao dono do lead
+(`notifyBrokerOfPriceEscalation`), no mesmo padrão do 51-3 — o pacote `ai` continua sem saber o que é
+push.
+
+**Uma vez por lead**, senão a Maria Inês (7 pedidos) viraria 6 pushes. A dedupe lê `activities`
+(`type='handoff'`, `metadata->>motivo='preco_insistencia'`) — no banco, para sobreviver a
+reprocessamento, e **antes** do INSERT desta rodada, senão a própria activity da rodada apareceria
+como "já avisado" e o corretor nunca seria chamado.
+
+## AC4 — Não reusei o `notifyBrokerOnReply`
+
+O gate Q1 da 63-12 exige que o corretor **já tenha assumido** a conversa (`role='broker'` nas últimas
+24h) — o oposto do caso aqui. Afrouxar aquele gate faria a 63-12 notificar em toda mensagem de lead
+sem dono, que é o spam que ela evita de propósito. Helper novo, gate próprio.
+
+Sem `assigned_broker_id` → não notifica, sem fallback para gerente (mesma decisão Q3 da 63-12).
+Medido: das **73** conversas que cruzariam o limiar em 90 dias, **as 73 têm corretor atribuído** —
+fallback seria código morto. Volume: ~0,8 push/dia.
+
+## AC5 — A política de preço NÃO mudou
+
+A Nicole continua sem cotar. Nada de faixa, nada de "a partir de R$". Os caminhos B e C seguem
+abertos como decisão futura.
+
+## Furo conhecido, deixado de propósito
+
+`"E condiçõe de pagamento"` (mensagem real da Maria Inês, 25/06) **não** conta como pedido de preço.
+`PRICE_SIMULATION_PATTERNS` é **compartilhado** com o gatilho antigo de `score >= 70`: acrescentar
+"pagamento" mudaria quando *aquele* dispara, o que é comportamento novo fora do decidido aqui. Há
+teste nomeado `FURO CONHECIDO` fixando o estado atual — quando você quiser alargar, ele é o lugar.
+
+## Dev Agent Record
+
+**Branch:** `75-361-muro-de-preco` (worktree `~/tmp_claude/wt-75-361`)
+
+| arquivo | o quê |
+|---|---|
+| `packages/ai/src/flows/handoff.ts` | `ehPedidoDePrecoDoLead()` + `PEDIDOS_DE_PRECO_PARA_ESCALAR` + gatilho de insistência + `motivo` no resultado |
+| `packages/ai/src/flows/handoff-preco-insistencia.test.ts` | novo — 12 casos, com os textos reais da produção |
+| `packages/ai/src/chat/pipeline.ts` | contagem no banco; dedupe antes do INSERT; emite `PRECO_INSISTENCIA_ESCALADA`; `motivo` na activity |
+| `packages/web/src/lib/broker/notify-price-escalation.ts` | novo — push ao dono do lead, best-effort |
+| `packages/web/src/app/api/webhook/whatsapp/route.ts` | `onEvent` dispara o push |
+
+**Validações:** `vitest run` 2847 passando (+12) · `turbo type-check` 8/8 · `turbo lint` 0 erros ·
+sem migration, sem env nova.
+
+**Como conferir depois do deploy**
+
+```sql
+select a.created_at at time zone 'America/Sao_Paulo' as quando, l.name, a.description
+from activities a join leads l on l.id = a.lead_id
+where a.type = 'handoff' and a.metadata->>'motivo' = 'preco_insistencia'
+order by a.created_at desc;
+```
+
+Esperado ~0,8/dia, **no máximo uma linha por lead**. Mais de uma para o mesmo lead = a dedupe furou.
+E `logs` com `event_type='PRECO_INSISTENCIA_ESCALADA'` deve casar 1:1 com essas linhas.
+
+**A remedir em ~4 semanas:** a taxa de perda do grupo "muro 2×+" (hoje **59,5%**) contra os 39,2% de
+quem nunca bate no muro. Se a escalação funcionar, esse número tem de cair.
 
 ## Como refazer a medição
 

@@ -10,11 +10,26 @@ interface HandoffCheckParams {
   qualificationScore: number
   message: string
   conversationState: Record<string, unknown>
+  /**
+   * Story 75-361 — quantas vezes ESTE lead já pediu preço na conversa, incluindo
+   * a mensagem atual. Contado pelo pipeline sobre `messages` (`role='user'`), não
+   * sobre o histórico de 20 mensagens: o caso que motivou a story se arrasta por
+   * semanas e a janela curta esconderia a insistência.
+   *
+   * Opcional de propósito — ausente = comportamento anterior, byte a byte.
+   */
+  pedidosDePrecoDoLead?: number
 }
 
 interface HandoffResult {
   trigger: boolean
   reason?: string
+  /**
+   * Story 75-361 — qual gatilho acendeu. O pipeline precisa distinguir
+   * `preco_insistencia` dos outros para avisar o corretor UMA vez (os outros
+   * gatilhos seguem só registrando o sinal, como sempre).
+   */
+  motivo?: "preco_qualificado" | "preco_insistencia" | "fora_de_escopo"
 }
 
 /**
@@ -71,6 +86,30 @@ const PRICE_SIMULATION_PATTERNS = [
 ]
 
 /**
+ * Story 75-361 — o lead está pedindo preço/simulação?
+ *
+ * Exportada para o pipeline CONTAR os pedidos com a mesma régua que decide o
+ * handoff. Reproduzir esses padrões em SQL (`ilike` por termo) seria manter a
+ * mesma regra em dois idiomas — a armadilha de
+ * `feedback-consultar-fonte-nao-duplicar-constante`. O pipeline traz os textos e
+ * conta aqui.
+ */
+export function ehPedidoDePrecoDoLead(texto: string | null | undefined): boolean {
+  if (!texto) return false
+  const t = texto.toLowerCase()
+  return PRICE_SIMULATION_PATTERNS.some((p) => p.test(t))
+}
+
+/**
+ * Story 75-361 — a partir de quantos pedidos de preço o lead vira caso de humano.
+ *
+ * DOIS, por decisão do Marcos (20/08): "escalar na 2ª insistência". Medido em 90
+ * dias: 73 conversas chegariam aqui (~0,8/dia), e as 73 têm corretor atribuído —
+ * ninguém escala para o vazio.
+ */
+export const PEDIDOS_DE_PRECO_PARA_ESCALAR = 2
+
+/**
  * Determines whether the conversation should be handed off to a human broker.
  *
  * Triggers:
@@ -79,7 +118,7 @@ const PRICE_SIMULATION_PATTERNS = [
  * - Lead asks out-of-scope questions (wants human, contract details, complaints)
  */
 export function shouldHandoff(params: HandoffCheckParams): HandoffResult {
-  const { qualificationScore, message, conversationState } = params
+  const { qualificationScore, message, conversationState, pedidosDePrecoDoLead } = params
   const lowerMessage = message.toLowerCase()
 
   // Non-lead contacts (job seekers, partners, vendors) — never hand off to broker
@@ -98,8 +137,36 @@ export function shouldHandoff(params: HandoffCheckParams): HandoffResult {
         return {
           trigger: true,
           reason: `Lead qualificado (score: ${qualificationScore}) solicitando informacoes de preco/simulacao.`,
+          motivo: "preco_qualificado",
         }
       }
+    }
+  }
+
+  // Story 75-361 — INSISTÊNCIA em preço, independente do score.
+  //
+  // O gatilho de cima exige `score >= 70`, e é por isso que quase ninguém escalava:
+  // medido em 90 dias, **134 conversas** pediram valor e **2** receberam um número.
+  // A Nicole respondia "os valores variam conforme o andar…" e REPETIA a mesma
+  // frase — até 7 vezes na mesma conversa, inclusive respondendo a "Sim.", "?" e
+  // "0k". Nessas 8 piores, 6 leads terminaram em Perdido/Represamento e 4 nunca
+  // tiveram uma única fala de corretor. A perda sobe com a repetição: 39,2% sem o
+  // muro, 51,7% com um, 59,5% com dois ou mais.
+  //
+  // Decisão do Marcos (20/08), caminho A: **não muda a política de preço** — a
+  // Nicole continua não cotando, porque ela é SDR e o corretor é closer. O que
+  // muda é que na segunda insistência entra gente, em vez de disco riscado.
+  if (
+    typeof pedidosDePrecoDoLead === "number" &&
+    pedidosDePrecoDoLead >= PEDIDOS_DE_PRECO_PARA_ESCALAR &&
+    ehPedidoDePrecoDoLead(lowerMessage)
+  ) {
+    return {
+      trigger: true,
+      reason:
+        `Lead pediu preco/simulacao ${pedidosDePrecoDoLead}x nesta conversa e nao recebeu numero. ` +
+        `Precisa de corretor: a Nicole nao cota valor.`,
+      motivo: "preco_insistencia",
     }
   }
 
@@ -109,6 +176,7 @@ export function shouldHandoff(params: HandoffCheckParams): HandoffResult {
       return {
         trigger: true,
         reason: "Lead solicitou atendimento fora do escopo da Nicole (corretor humano, contrato, reclamacao, etc.).",
+        motivo: "fora_de_escopo",
       }
     }
   }
