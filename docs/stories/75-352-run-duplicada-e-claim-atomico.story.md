@@ -1,11 +1,11 @@
 # Story 75-352 — O cron roda duas vezes por agendamento, e as duas passam pelo cooldown
 
-**Status:** InReview — gate PASS · **migration 234 NÃO aplicada** (ver "Ordem de deploy")
+**Status:** InReview — gate PASS · **migration 234 APLICADA em prod 20/08 10:49 UTC** (decisão do Marcos)
 **Tipo:** Corrida de concorrência + desperdício de envio e de chamada de modelo
 **Epic:** 75 — CRM Trifold
 **Complexidade:** M (~5 pts — 1 migration com 3 funções, 2 helpers novos, 4 pontos de chamada)
 **Fluxo:** @sm → @po → @dev → @qa → @devops
-**Migrations:** **234** (`cron_locks` + `claim_cron_run` / `finish_cron_run` / `claim_follow_up`) — additiva.
+**Migrations:** **234** (`cron_locks` + `claim_cron_run` / `finish_cron_run` / `claim_follow_up`) — additiva, **aplicada em 20/08 10:49 UTC**.
 **Depende de:** PR #462 (Story 75-351). Esta branch nasce dele e mexe nas mesmas linhas.
 
 ## Como apareceu
@@ -177,7 +177,7 @@ verdade:
 
 ## File List
 
-- `supabase/migrations/234_cron_lock_e_claim_atomico.sql` *(novo — **não aplicada**)* — AC1/AC2
+- `supabase/migrations/234_cron_lock_e_claim_atomico.sql` *(novo — **APLICADA em prod**)* — AC1/AC2
 - `packages/web/src/lib/cron/claim-run.ts` *(novo)* — AC1/AC5
 - `packages/web/src/lib/cron/claim-run.test.ts` *(novo)* — 8 testes
 - `packages/web/src/lib/followup/claim.ts` *(novo)* — AC2/AC4
@@ -193,7 +193,17 @@ o RPC, o follow-up para de enviar (gritando `FOLLOWUP_CLAIM_FALHOU` em cada lead
 additiva e idempotente — aplicá-la antes não muda o comportamento do código que está em produção hoje,
 porque nada ainda a chama.
 
-Sequência: **aplicar 234 → mergear #462 (75-351) → mergear este PR**.
+Sequência: **~~aplicar 234~~ ✅ → mergear #462 (75-351) → mergear este PR**.
+
+✅ **234 aplicada em 20/08 10:49 UTC** por Management API, um POST, e reaplicada em seguida para provar
+idempotência (`[]` nas duas vezes). Conferido depois de aplicar: tabela `cron_locks` com RLS ligada, as
+três funções com a assinatura esperada, o índice criado, `cron_locks` vazia e nenhuma linha `claimed`
+— ou seja, nada em produção chamou as funções ainda, como esperado antes do deploy.
+
+**Tracking:** não registrei linha em `supabase_migrations.schema_migrations`. Ela está parada em
+10/07/2026 (última: `supervisor_notificacoes_financeiras`) e a 233 também não foi registrada — neste
+projeto `db push` é proibido, então o tracking não é usado para aplicar nada. Inventar uma linha só
+para a 234 criaria a ilusão de um tracking que não existe.
 
 ## Verificar depois do deploy
 

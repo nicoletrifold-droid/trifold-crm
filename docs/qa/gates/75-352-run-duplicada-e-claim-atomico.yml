@@ -10,7 +10,7 @@ reviewed_by: "@qa (Quinn)"
 reviewed_at: "2026-08-20"
 branch: "75-352-run-duplicada-e-claim-atomico"
 depends_on: "PR #462 (Story 75-351) — esta branch nasce dele e toca as mesmas linhas"
-migrations: ["234_cron_lock_e_claim_atomico.sql — NÃO aplicada; additiva; validada em prod em transação REVERTIDA"]
+migrations: ["234_cron_lock_e_claim_atomico.sql — APLICADA em prod 20/08 10:49 UTC; additiva e idempotente (reaplicada, [] nas duas vezes); validada antes em transação REVERTIDA"]
 
 escopo: >
   O cron de follow-up está sendo invocado duas vezes por agendamento, e as duas execuções passam pelo
@@ -33,16 +33,20 @@ resumo: >
   vai justamente abrir esse envio, o que torna esta trava pré-requisito.
 
 status_reason: >
-  Liberado para merge, com ordem de deploy obrigatória: aplicar a migration 234 ANTES do código subir
-  (o claim por lead é fail-closed) e mergear depois do #462.
+  Liberado para merge. A migration 234 já está em produção (20/08 10:49 UTC), então a ordem de deploy
+  obrigatória está cumprida; falta apenas mergear depois do #462.
 
-acoes_obrigatorias:
+acoes_obrigatorias: []
+
+acoes_concluidas:
   - id: A1
     titulo: "Aplicar a migration 234 antes do merge"
-    detalhe: >
-      Additiva e idempotente, e nada em produção a chama hoje — aplicar antes não muda comportamento.
-      Se o código subir primeiro, `claim_follow_up` não existe, o fail-closed entra e o follow-up para
-      de enviar (com `FOLLOWUP_CLAIM_FALHOU` por lead).
+    resultado: >
+      ✅ FEITO em 20/08 10:49 UTC (Management API, um POST; reaplicada em seguida — `[]` nas duas
+      vezes). Conferido: `cron_locks` com RLS ligada, as três funções com a assinatura esperada, índice
+      criado, tabela vazia e zero linhas `claimed` (nada chamou as funções ainda, como esperado antes
+      do deploy). Era obrigatório porque o claim por lead é fail-closed: código sem o RPC pararia o
+      follow-up com `FOLLOWUP_CLAIM_FALHOU` por lead.
 
 concerns:
   - id: C1
