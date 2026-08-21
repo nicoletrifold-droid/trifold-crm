@@ -6,6 +6,7 @@ import { CSS } from "@dnd-kit/utilities"
 import { MANDATORY_FIELDS } from "@trifold/shared"
 import { getDaysSinceContact, getTimeAgo } from "@web/lib/time"
 import { SourceBadge } from "@web/components/ui/source-badge"
+import { ehIdMeta } from "@web/lib/leads/meta-utm"
 import { QualificacaoComercialBadge } from "@web/components/ui/qualificacao-comercial-badge"
 import { WaitingBadge } from "@web/components/leads/waiting-badge"
 import { CreativeChip } from "@web/components/pipeline/creative-chip"
@@ -197,14 +198,17 @@ export function LeadCard({ lead, propertyName, brokerName, onSelect }: LeadCardP
             />
           ) : (
             <>
+              {/* Story 75-365 — utm_content/utm_campaign podem carregar o ID
+                  numérico do Meta ({{ad.id}}/{{campaign.id}}); ID cru nunca
+                  vira label — o badge fica só com o rótulo da origem. */}
               {lead.source && (
                 <SourceBadge
                   source={lead.source}
-                  label={lead.utm_content ?? undefined}
+                  label={!ehIdMeta(lead.utm_content) ? (lead.utm_content ?? undefined) : undefined}
                   size="xs"
                 />
               )}
-              {lead.source === "whatsapp_click_to_ad" && lead.utm_campaign && (
+              {lead.source === "whatsapp_click_to_ad" && lead.utm_campaign && !ehIdMeta(lead.utm_campaign) && (
                 <span className="inline-flex items-center rounded-md bg-green-50 px-1.5 py-0.5 text-[9px] font-medium text-green-600 dark:bg-green-500/15 dark:text-green-300">
                   {lead.utm_campaign.length > 16 ? lead.utm_campaign.slice(0, 16) + "…" : lead.utm_campaign}
                 </span>

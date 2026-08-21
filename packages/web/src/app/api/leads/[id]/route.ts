@@ -9,6 +9,7 @@ import { canAccess } from "@web/lib/permissions"
 import { STAGE_IDS } from "@trifold/shared"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { syncFutureVisitsWithLeadOwner } from "@web/lib/appointments/sync-visit-owner"
+import { resolverNomesUtm } from "@web/lib/leads/meta-utm"
 
 export async function GET(
   _req: NextRequest,
@@ -39,7 +40,15 @@ export async function GET(
     return NextResponse.json({ error: "Lead not found" }, { status: 404 })
   }
 
-  return NextResponse.json({ data: lead })
+  // Story 75-365 — tráfego pago grava os MACROS do Meta nos UTMs
+  // (utm_campaign={{campaign.id}}), então "Origem" mostrava "120246224161970741".
+  // Resolve para o nome via sync do Agente Meta Ads; best-effort (nulls em falha).
+  const nomesUtm = await resolverNomesUtm(supabase, appUser.org_id, {
+    utm_campaign: (lead as { utm_campaign?: string | null }).utm_campaign ?? null,
+    utm_content: (lead as { utm_content?: string | null }).utm_content ?? null,
+  })
+
+  return NextResponse.json({ data: { ...lead, ...nomesUtm } })
 }
 
 export async function PATCH(
