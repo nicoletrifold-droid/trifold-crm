@@ -7,6 +7,8 @@ const CRM_WEBHOOK_URL =
 // promover para o domínio final, adicione a nova origem aqui.
 const ALLOWED_ORIGINS = [
   "https://vind-residence-teste.vercel.app",
+  "https://trifold.eng.br",
+  "https://www.trifold.eng.br",
 ]
 
 const MAX_FIELD_LENGTH = 300
