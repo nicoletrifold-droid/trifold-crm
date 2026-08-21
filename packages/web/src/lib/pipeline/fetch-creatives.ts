@@ -37,6 +37,23 @@ function isMetaUrlValid(url: string | null | undefined): boolean {
 
 type LeadWithMetadata = {
   metadata?: Record<string, unknown> | null
+  utm_content?: string | null
+}
+
+/**
+ * Story 75-365 — de onde sai o ad_id de um lead:
+ *   1. `metadata.ad_id` (Meta Lead Forms / CTWA — o caminho original do 50-2);
+ *   2. `utm_content` quando é um ID numérico do Meta (formulário de qualificação
+ *      do Épico 89, cuja URL de anúncio usa o macro `{{ad.id}}`).
+ * Sem isso, lead de formulário caía no fallback SourceBadge exibindo o ID cru.
+ */
+function adIdDoLead(lead: LeadWithMetadata): string | null {
+  const meta = lead.metadata as Record<string, unknown> | null | undefined
+  const adId = meta?.ad_id
+  if (typeof adId === "string" && adId.length > 0) return adId
+  const utmContent = lead.utm_content
+  if (typeof utmContent === "string" && /^\d{10,}$/.test(utmContent)) return utmContent
+  return null
 }
 
 type MetaAdRow = {
@@ -81,17 +98,9 @@ export async function fetchCreativesForLeads(
   leads: LeadWithMetadata[],
   orgId: string,
 ): Promise<Map<string, CreativeData>> {
-  // Extrai ad_ids distintos de leads que têm metadata.ad_id
+  // Extrai ad_ids distintos (metadata.ad_id OU utm_content numérico — 75-365)
   const adIds = Array.from(
-    new Set(
-      leads
-        .map((l) => {
-          const meta = l.metadata as Record<string, unknown> | null | undefined
-          const adId = meta?.ad_id
-          return typeof adId === "string" && adId.length > 0 ? adId : null
-        })
-        .filter((v): v is string => v !== null),
-    ),
+    new Set(leads.map(adIdDoLead).filter((v): v is string => v !== null)),
   )
 
   if (adIds.length === 0) return new Map()
@@ -140,8 +149,7 @@ export function resolveCreativeForLead(
   lead: LeadWithMetadata,
   map: Map<string, CreativeData>,
 ): CreativeData | null {
-  const meta = lead.metadata as Record<string, unknown> | null | undefined
-  const adId = meta?.ad_id
-  if (typeof adId !== "string" || adId.length === 0) return null
+  const adId = adIdDoLead(lead)
+  if (!adId) return null
   return map.get(adId) ?? null
 }

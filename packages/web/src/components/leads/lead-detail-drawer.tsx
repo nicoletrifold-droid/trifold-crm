@@ -7,7 +7,8 @@ import { createClient } from "@web/lib/supabase/client"
 import Link from "next/link"
 import { X, Phone, MessageCircle, Mail, Calendar, Check, Plus, Trash2, Clock, XCircle, AlertTriangle, ChevronDown, Pencil, History, UserCheck } from "lucide-react"
 import { QuickHistoryModal } from "@web/app/broker/_components/quick-history-modal"
-import { INTEREST_LEVEL_LABELS as interestLevelLabels, INTEREST_LEVEL_COLORS as interestLevelColors, LOST_REASON_GROUP_LABELS } from "@web/lib/constants"
+import { INTEREST_LEVEL_LABELS as interestLevelLabels, INTEREST_LEVEL_COLORS as interestLevelColors, LOST_REASON_GROUP_LABELS, SOURCE_LABELS } from "@web/lib/constants"
+import { ehIdMeta } from "@web/lib/leads/meta-utm"
 import { MarkLostModal } from "@web/components/leads/mark-lost-modal"
 import { SourceBadge } from "@web/components/ui/source-badge"
 import { QualificacaoComercialBadge } from "@web/components/ui/qualificacao-comercial-badge"
@@ -22,6 +23,12 @@ import { getBubbleStyle } from "@web/app/broker/leads/[id]/_components/bubble-st
 import { VisitFeedbackButton } from "@web/components/appointments/visit-feedback-form"
 import { VisitFeedbackEntryButton } from "@web/components/appointments/visit-feedback-entry-button"
 import { STAGE_IDS } from "@trifold/shared"
+
+// Story 75-365 — rótulo humano da origem, do mapa CANÔNICO (o drawer tinha um
+// mapa inline próprio que nem conhecia form_qualificacao — por isso caía no slug).
+function rotuloDoSource(source: string | null): string {
+  return source ? (SOURCE_LABELS[source] ?? source) : "-"
+}
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -40,6 +47,10 @@ interface LeadQuickData {
   utm_source: string | null
   utm_campaign: string | null
   utm_content: string | null
+  // Story 75-365 — nomes resolvidos pelo GET /api/leads/[id] quando os UTMs
+  // carregam IDs do Meta ({{campaign.id}}/{{ad.id}}); null se o sync não conhece.
+  utm_campaign_nome: string | null
+  utm_content_nome: string | null
   ai_summary: string | null
   lost_reason: string | null
   lost_reason_grupo: string | null
@@ -346,6 +357,8 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
             utm_source: (raw.utm_source as string | null) ?? null,
             utm_campaign: (raw.utm_campaign as string | null) ?? null,
             utm_content: (raw.utm_content as string | null) ?? null,
+            utm_campaign_nome: (raw.utm_campaign_nome as string | null) ?? null,
+            utm_content_nome: (raw.utm_content_nome as string | null) ?? null,
             ai_summary: (raw.ai_summary as string | null) ?? null,
             lost_reason: (raw.lost_reason as string | null) ?? null,
             lost_reason_grupo: (raw.lost_reason_grupo as string | null) ?? null,
@@ -756,19 +769,14 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
               <div className="flex justify-between gap-3">
                 <dt className="shrink-0 text-stone-500 dark:text-stone-400">Origem</dt>
                 <dd className="break-words text-right font-medium text-stone-900 dark:text-stone-100">
-                  {lead.utm_campaign ?? lead.utm_source ?? (lead.source ? (
-                    {
-                      meta_ads: "Meta Ads",
-                      whatsapp_organic: "WhatsApp Orgânico",
-                      whatsapp_click_to_ad: "WhatsApp Patrocinado (Click-to-Ad)",
-                      website: "Website",
-                      referral: "Indicação",
-                      walk_in: "Walk-in",
-                      telegram: "Telegram",
-                      google_forms: "Google Forms",
-                      other: "Outro",
-                    }[lead.source] ?? lead.source
-                  ) : "-")}
+                  {/* Story 75-365 — a URL de anúncio pago grava {{campaign.id}} no
+                      utm_campaign; ID cru NUNCA renderiza. Nome resolvido pelo sync
+                      do Meta → utm legível → rótulo do source. utm_source fica fora
+                      da corrente quando o utm_campaign é ID ("fb" não é origem). */}
+                  {lead.utm_campaign_nome ??
+                    (ehIdMeta(lead.utm_campaign)
+                      ? rotuloDoSource(lead.source)
+                      : lead.utm_campaign ?? lead.utm_source ?? rotuloDoSource(lead.source))}
                 </dd>
               </div>
               <div className="flex justify-between gap-3">
