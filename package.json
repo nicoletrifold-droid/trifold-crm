@@ -6,6 +6,8 @@
     "dev": "turbo dev",
     "build": "turbo build",
     "lint": "turbo lint",
+    "deploy:check": "./scripts/check-deploy-drift.sh",
+    "deploy:fix": "./scripts/check-deploy-drift.sh --fix",
     "type-check": "turbo type-check",
     "seed": "tsx scripts/run-seed.ts && tsx scripts/seed-properties.ts",
     "prompts:check": "tsx scripts/dump-agent-prompts.ts --check",
