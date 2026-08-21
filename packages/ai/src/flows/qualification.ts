@@ -191,9 +191,9 @@ function semAcento(valor: string): string {
  * de activity registrando a troca.
  *
  * Regra: lead SEM nome aceita qualquer extração; lead COM nome só aceita nome
- * que a pessoa DECLAROU ("meu nome é", "me chamo", "prazer, X"). Resposta curta a
- * uma pergunta é boa para preencher vazio, não para apagar o que o Meta ou o
- * corretor já sabiam.
+ * que a pessoa DECLAROU ("meu nome é", "me chamo", "sou o/a X"). Cortesia
+ * ("prazer, X" — Story 75-364) e resposta curta a uma pergunta são boas para
+ * preencher vazio, não para apagar o que o Meta ou o corretor já sabiam.
  */
 export function podeGravarNomeDoLead(
   nomeAtual: string | null | undefined,
@@ -257,23 +257,40 @@ export function extractCollectedData(
 
   // Extract name mentions (AC6 — expanded PT-BR patterns)
   if (!updated.name) {
-    const namePatterns = [
-      /(?:prazer|olá|ola|obrigad[ao]),?\s+([A-Za-zÀ-ÿ][a-zà-ÿ]+(?:\s+[A-Za-zÀ-ÿ][a-zà-ÿ]+)*)/i,
-      /(?:certo|entendi),?\s+([A-Za-zÀ-ÿ][a-zà-ÿ]+(?:\s+[A-Za-zÀ-ÿ][a-zà-ÿ]+)*)/i,
-      /(?:meu nome [eé]|me chamo|sou (?:o |a )?)\s*([A-Za-zÀ-ÿ][a-zà-ÿ]+(?:\s+[A-Za-zÀ-ÿ][a-zà-ÿ]+)*)/i,
-      /(?:pode me chamar de|me chamam de)\s*([A-Za-zÀ-ÿ][a-zà-ÿ]+(?:\s+[A-Za-zÀ-ÿ][a-zà-ÿ]+)*)/i,
-      /(?:aqui [eé]\s*(?:o |a )?)\s*([A-Za-zÀ-ÿ][a-zà-ÿ]+(?:\s+[A-Za-zÀ-ÿ][a-zà-ÿ]+)*)/i,
+    // Story 75-364 — DECLARAÇÃO primeiro, cortesia depois, e cada grupo com a
+    // autoridade que merece. Em 20/08 a mensagem real *"Olá. Meu nome é Diana.
+    // É um prazer receber sua carta."* virou nome **"Receber Sua Carta"** com
+    // origem 'declarado': a cortesia vinha antes na lista, a vírgula era
+    // opcional ("prazer receber…" casava) e ela carimbava 'declarado' — poder
+    // de SUBSTITUIR o nome que a própria mensagem declarava duas frases antes.
+    //
+    // "Prazer, X" / "Certo, X" é a Nicole CONFIRMANDO um nome, não a pessoa
+    // declarando o dela — preenche vazio (inferido), nunca troca. E `sou`
+    // passou a exigir artigo: "Sou o João" declara; "Sou de Hong Kong" /
+    // "sou corretor" não são candidatos a nome. Perda assumida: "Sou Ana" sem
+    // artigo não é capturado — lead sem nome recebe a pergunta e o fallback
+    // de resposta curta cobre.
+    const namePatterns: Array<{ re: RegExp; origem: "declarado" | "inferido" }> = [
+      { re: /(?:meu nome [eé]|me chamo)\s+([A-Za-zÀ-ÿ][a-zà-ÿ]+(?:\s+[A-Za-zÀ-ÿ][a-zà-ÿ]+)*)/i, origem: "declarado" },
+      { re: /(?:pode me chamar de|me chamam de)\s+([A-Za-zÀ-ÿ][a-zà-ÿ]+(?:\s+[A-Za-zÀ-ÿ][a-zà-ÿ]+)*)/i, origem: "declarado" },
+      { re: /\bsou\s+(?:o|a)\s+([A-Za-zÀ-ÿ][a-zà-ÿ]+(?:\s+[A-Za-zÀ-ÿ][a-zà-ÿ]+)*)/i, origem: "declarado" },
+      { re: /aqui [eé]\s+(?:o\s+|a\s+)?([A-Za-zÀ-ÿ][a-zà-ÿ]+(?:\s+[A-Za-zÀ-ÿ][a-zà-ÿ]+)*)/i, origem: "declarado" },
+      { re: /(?:prazer|olá|ola|obrigad[ao]),\s+([A-Za-zÀ-ÿ][a-zà-ÿ]+(?:\s+[A-Za-zÀ-ÿ][a-zà-ÿ]+)*)/i, origem: "inferido" },
+      { re: /(?:certo|entendi),\s+([A-Za-zÀ-ÿ][a-zà-ÿ]+(?:\s+[A-Za-zÀ-ÿ][a-zà-ÿ]+)*)/i, origem: "inferido" },
     ]
-    for (const pattern of namePatterns) {
-      const match = aiResponse.match(pattern)
+    for (const { re, origem } of namePatterns) {
+      const match = aiResponse.match(re)
       if (match?.[1]) {
         const extractedName = match[1].trim()
-        if (extractedName.toLowerCase() !== "nicole") {
+        // Story 75-364 — a guarda de stopword que já protegia o fallback vale
+        // para os padrões também: "Olá, tudo bem" não é a pessoa Tudo Bem.
+        const temStopword = extractedName.split(/\s+/).some((w) => ehStopword(w))
+        if (extractedName.toLowerCase() !== "nicole" && !temStopword) {
           updated.name = capitalizeName(extractedName)
-          // Story 75-360 — a ORIGEM viaja junto: só nome DECLARADO ("meu nome é",
-          // "me chamo", "prazer, X") tem autoridade para trocar um nome que já
-          // existe. Chute de mensagem curta não tem.
-          updated.name_origin = "declarado"
+          // Story 75-360 — a ORIGEM viaja junto: só nome DECLARADO ("meu nome
+          // é", "me chamo", "sou o/a X") tem autoridade para trocar um nome
+          // que já existe. Cortesia e chute de mensagem curta não têm.
+          updated.name_origin = origem
           break
         }
       }
