@@ -4,7 +4,7 @@
 - **Epic:** 900 — Trifold CRM → SaaS Multi-Tenant com Cobrança Modular
 - **Onda:** 0 — Esteira e observabilidade (sem mudança funcional)
 - **Story:** 900-1
-- **Status:** InReview — implementada em 2026-08-22. **AC9 dispensada por obsolescência** (o baseline que ela tolerava não existe mais). AC5 cumprido na parte fria; falta só o comparativo com cache quente.
+- **Status:** InReview — implementada em 2026-08-22. **AC9 dispensada por obsolescência** (o baseline que ela tolerava não existe mais). AC5 cumprido integralmente (frio 2m31s → quente 49s).
 - **Priority:** P0 — único item do épico inteiro que não depende de nada (nem de PRE-0, nem de PRE-1). Bloqueia a Onda 0 restante: `900-2*` precisa da esteira para ligar o job `gate:tenancy`; `900-3` precisa dela para gravar os secrets do projeto Supabase descartável como secrets de CI.
 - **Complexity:** M — não é "configurar um job", é criar `.github/workflows/` do zero num monorepo Turborepo sem CI, husky ou precedente algum (CON-2).
 - **Created:** 2026-08-02
@@ -82,7 +82,7 @@ A pergunta óbvia diante de AC3 ("falha propaga") e AC6 ("zero mudança em `pack
 
 - [x] **AC4 — Cache configurado:** cache de dependências pnpm (chaveado por hash de `pnpm-lock.yaml`) e cache do Turborepo (`.turbo`, chaveado por lockfile + `turbo.json`) configurados via `actions/cache` (ou `actions/setup-node` com `cache: pnpm` + cache adicional para `.turbo`). Execução com cache quente deve ser mensuravelmente mais rápida que a primeira execução (fria) — comparação registrada no Dev Agent Record. [Source: epic-900 §10, story 900-1, AC3]
 
-- [ ] **AC5 — Tempo documentado:** tempo total de execução do workflow (primeira run fria + uma run subsequente com cache) documentado no Dev Agent Record desta story, com o link/hash do run do GitHub Actions. [Source: epic-900 §10, story 900-1, AC3]
+- [x] **AC5 — Tempo documentado:** tempo total de execução do workflow (primeira run fria + uma run subsequente com cache) documentado no Dev Agent Record desta story, com o link/hash do run do GitHub Actions. [Source: epic-900 §10, story 900-1, AC3]
 
 - [x] **AC6 — Zero mudança em código de aplicação:** o diff desta story contém apenas `.github/workflows/ci.yml` (e, se necessário, `package.json`/`.nvmrc` para pin de versão — ver AC7). Nenhum arquivo em `packages/**` é tocado. [Source: epic-900 §10, story 900-1, AC4]
 
@@ -278,7 +278,14 @@ Rodado no worktree, após `pnpm install --frozen-lockfile`:
 
 **Run real no GitHub Actions (AC5):** run [`32593358720`](https://github.com/nicoletrifold-droid/trifold-crm/actions/runs/32593358720), disparado pelo PR #484 — **`success` em 2m31s**, execução **fria** (nenhum cache de pnpm ou turbo existia ainda, já que este é o primeiro workflow do repositório). O workflow validou a si mesmo no PR que o introduz.
 
-O comparativo com **cache quente** só pode ser medido no segundo push a este branch — por definição não existe antes. Fica registrado como a única parte pendente do AC5, e é de medição, não de implementação.
+**Comparativo frio × quente (AC4 e AC5):**
+
+| Run | Cache | Duração |
+|---|---|---|
+| [`32593358720`](https://github.com/nicoletrifold-droid/trifold-crm/actions/runs/32593358720) | **frio** — nenhum cache existia, este é o 1º workflow do repo | **2m31s** |
+| [`32593530629`](https://github.com/nicoletrifold-droid/trifold-crm/actions/runs/32593530629) | **quente** | **49s** |
+
+**Redução de ~67%**, o que satisfaz a exigência do AC4 de que a execução com cache quente seja *mensuravelmente* mais rápida — medida, não estimada.
 
 **Nota metodológica:** ele pede o tempo do run real no GitHub Actions (frio vs. cache
 quente) com o hash do run, e isso só existe depois que o workflow rodar pela primeira vez no PR
