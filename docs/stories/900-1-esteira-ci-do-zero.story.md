@@ -4,7 +4,7 @@
 - **Epic:** 900 — Trifold CRM → SaaS Multi-Tenant com Cobrança Modular
 - **Onda:** 0 — Esteira e observabilidade (sem mudança funcional)
 - **Story:** 900-1
-- **Status:** InReview — implementada em 2026-08-22. **AC9 dispensada por obsolescência** (o baseline que ela tolerava não existe mais); AC5 parcial (falta o run real no GitHub Actions).
+- **Status:** InReview — implementada em 2026-08-22. **AC9 dispensada por obsolescência** (o baseline que ela tolerava não existe mais). AC5 cumprido na parte fria; falta só o comparativo com cache quente.
 - **Priority:** P0 — único item do épico inteiro que não depende de nada (nem de PRE-0, nem de PRE-1). Bloqueia a Onda 0 restante: `900-2*` precisa da esteira para ligar o job `gate:tenancy`; `900-3` precisa dela para gravar os secrets do projeto Supabase descartável como secrets de CI.
 - **Complexity:** M — não é "configurar um job", é criar `.github/workflows/` do zero num monorepo Turborepo sem CI, husky ou precedente algum (CON-2).
 - **Created:** 2026-08-02
@@ -276,7 +276,11 @@ Rodado no worktree, após `pnpm install --frozen-lockfile`:
 | `pnpm lint` | 0 | ~15,9s | 8 tasks, 3 cached; 29 warnings / 0 errors |
 | `pnpm test` | 0 | ~6,8s | **241 arquivos, 2904 testes**, +6 expected fail |
 
-**AC5 fica parcial de propósito:** ele pede o tempo do run real no GitHub Actions (frio vs. cache
+**Run real no GitHub Actions (AC5):** run [`32593358720`](https://github.com/nicoletrifold-droid/trifold-crm/actions/runs/32593358720), disparado pelo PR #484 — **`success` em 2m31s**, execução **fria** (nenhum cache de pnpm ou turbo existia ainda, já que este é o primeiro workflow do repositório). O workflow validou a si mesmo no PR que o introduz.
+
+O comparativo com **cache quente** só pode ser medido no segundo push a este branch — por definição não existe antes. Fica registrado como a única parte pendente do AC5, e é de medição, não de implementação.
+
+**Nota metodológica:** ele pede o tempo do run real no GitHub Actions (frio vs. cache
 quente) com o hash do run, e isso só existe depois que o workflow rodar pela primeira vez no PR
 desta story. Marcá-lo como cumprido com número medido em máquina local seria reportar uma coisa por
 outra — os tempos acima são de referência, não são o run do CI.
