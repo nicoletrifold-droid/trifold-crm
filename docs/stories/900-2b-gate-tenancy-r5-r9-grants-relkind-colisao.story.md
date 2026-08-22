@@ -1,12 +1,12 @@
-# Story 87-2b — Gate de Tenancy: Regras R5-R9 (grants, relkind, colisão de migration)
+# Story 900-2b — Gate de Tenancy: Regras R5-R9 (grants, relkind, colisão de migration)
 
 ## Metadata
-- **Epic:** 87 — Trifold CRM → SaaS Multi-Tenant com Cobrança Modular
+- **Epic:** 900 — Trifold CRM → SaaS Multi-Tenant com Cobrança Modular
 - **Onda:** 0 — Esteira e observabilidade (sem mudança funcional)
-- **Story:** 87-2b (parte 2 de 3 da quebra de `87-2` — ver Change Log)
+- **Story:** 900-2b (parte 2 de 3 da quebra de `900-2` — ver Change Log)
 - **Status:** Ready
 - **Priority:** P0 — estas 5 regras nasceram de erros reais deste ciclo (auditoria + hotfix); sem elas o gate mediria só a metade mais óbvia do problema.
-- **Complexity:** G→M (dentro do G original de `87-2`, esta é a fatia mais densa: 5 regras, duas delas — R5 e R9 — com mecanismo distinto de introspecção pura de RLS)
+- **Complexity:** G→M (dentro do G original de `900-2`, esta é a fatia mais densa: 5 regras, duas delas — R5 e R9 — com mecanismo distinto de introspecção pura de RLS)
 - **Created:** 2026-08-02
 - **Author:** @sm (River)
 
@@ -27,7 +27,7 @@
 
 ## Context
 
-Esta é a fatia 2/3 da quebra de `87-2` (ver `87-2a` para o motor e R1-R4). Estende o motor de `87-2a` com R5 a R9, seguindo o corte sugerido pela validação do @po: **"R5-R9 (grants, relkind, colisão)"**.
+Esta é a fatia 2/3 da quebra de `900-2` (ver `900-2a` para o motor e R1-R4). Estende o motor de `900-2a` com R5 a R9, seguindo o corte sugerido pela validação do @po: **"R5-R9 (grants, relkind, colisão)"**.
 
 Diferente de R1-R4 (que reproduzem, quase literalmente, a proposta original de gate da auditoria), estas 5 regras existem porque **alguém errou primeiro e documentou o erro**:
 
@@ -47,42 +47,42 @@ Estas 5 regras são, em conjunto, a razão pela qual o prompt desta tarefa as ch
 - Regra **R5**: checa `pg_class.relkind` antes de prescrever `security_invoker`. `relkind = 'v'` → exige `security_invoker = on`. `relkind = 'm'` → `security_invoker` é inaplicável; a regra verifica **ausência de grant** de `SELECT` a `anon` **e** a `authenticated` (via `has_table_privilege`/`relacl`).
 - Regra **R6**: para funções (`pg_proc.proacl`) e tabelas/views (`pg_class.relacl`), busca entrada explícita do pseudo-role `PUBLIC` (padrão `=X/postgres` para funções, `=r/postgres` ou similar para tabelas) — não apenas `anon`/`authenticated` nomeados.
 - Regra **R7**: `pg_proc.prosecdef = true` **e** `proconfig` (ou ausência dele) sem entrada `search_path=...`.
-- Regra **R8**: função `SECURITY DEFINER` cuja assinatura (`pg_get_function_identity_arguments`) contém `p_org_id`, cujo corpo (`pg_get_functiondef`) **não** contém a string `user_org_id` nem `assert_org_scope` — **e** que não está na allowlist de service-role-only. Severidade **WARN** nesta story (Onda 0); a promoção a FAIL na Onda 2 é uma flag de configuração que `87-2c` ativa via wiring — o mecanismo de severidade condicional nasce aqui, mas a mudança de estado é responsabilidade de story futura da Onda 2.
+- Regra **R8**: função `SECURITY DEFINER` cuja assinatura (`pg_get_function_identity_arguments`) contém `p_org_id`, cujo corpo (`pg_get_functiondef`) **não** contém a string `user_org_id` nem `assert_org_scope` — **e** que não está na allowlist de service-role-only. Severidade **WARN** nesta story (Onda 0); a promoção a FAIL na Onda 2 é uma flag de configuração que `900-2c` ativa via wiring — o mecanismo de severidade condicional nasce aqui, mas a mudança de estado é responsabilidade de story futura da Onda 2.
 - Regra **R9**: compara migrations **ainda não aplicadas em produção** (via `supabase_migrations.schema_migrations`, tabela real de tracking do Supabase CLI já usada no projeto — ver Dev Notes) contra migrations presentes no PR, procurando `CREATE OR REPLACE FUNCTION <nome>` duplicado entre arquivos distintos não aplicados. Requer leitura de arquivos (`supabase/migrations/*.sql`), não só introspecção de banco — mecanismo estruturalmente diferente das outras 8 regras, documentado explicitamente nesta story.
-- Extensão da lista `rules: Rule[]` do motor de `87-2a`, sem alterar sua assinatura.
+- Extensão da lista `rules: Rule[]` do motor de `900-2a`, sem alterar sua assinatura.
 - Testes unitários com fixtures que reproduzem exatamente os 4 padrões documentados acima (matview, grant PUBLIC, search_path ausente, colisão de migration).
 
 ### OUT (não entra nesta story)
-- R10, R11, R12 — `87-2c` (dependem de artefatos de ondas futuras; nascem com flag desligada).
-- Baseline, allowlist populada, wiring no CI, ressalva de cobertura no relatório, teste contra os 13 achados da auditoria — todos `87-2c`.
+- R10, R11, R12 — `900-2c` (dependem de artefatos de ondas futuras; nascem com flag desligada).
+- Baseline, allowlist populada, wiring no CI, ressalva de cobertura no relatório, teste contra os 13 achados da auditoria — todos `900-2c`.
 - A promoção efetiva de R8 de WARN para FAIL na Onda 2 — é uma mudança de configuração futura, não desta story (esta story só constrói o mecanismo de severidade parametrizável).
-- Correção real do código de produção (aplicar `SET search_path`, revogar de `PUBLIC`, etc.) em qualquer objeto que a R5-R9 encontrar violando — isso é trabalho da Onda 1 (`87-4` em diante). Esta story **mede**, não corrige.
+- Correção real do código de produção (aplicar `SET search_path`, revogar de `PUBLIC`, etc.) em qualquer objeto que a R5-R9 encontrar violando — isso é trabalho da Onda 1 (`900-4` em diante). Esta story **mede**, não corrige.
 
 ---
 
 ## Acceptance Criteria
 
-- [ ] **AC1 — R5 checa `relkind` antes de agir:** para todo objeto em `pg_class` com `relkind IN ('v', 'm')` legível por `anon` ou `authenticated`: se `relkind = 'v'` e `security_invoker` não estiver `on`/`true`, violação `{ rule: "R5", table, detail: "view sem security_invoker" }`; se `relkind = 'm'` e houver `SELECT` grant a `anon` ou `authenticated`, violação `{ rule: "R5", table, detail: "matview com grant a {role} — security_invoker não se aplica (ERRCODE 42809); controle correto é revoke" }`. **Nunca** gerar recomendação de `security_invoker` para `relkind = 'm'`. [Source: epic-87 §9, R5; auditoria P2]
+- [ ] **AC1 — R5 checa `relkind` antes de agir:** para todo objeto em `pg_class` com `relkind IN ('v', 'm')` legível por `anon` ou `authenticated`: se `relkind = 'v'` e `security_invoker` não estiver `on`/`true`, violação `{ rule: "R5", table, detail: "view sem security_invoker" }`; se `relkind = 'm'` e houver `SELECT` grant a `anon` ou `authenticated`, violação `{ rule: "R5", table, detail: "matview com grant a {role} — security_invoker não se aplica (ERRCODE 42809); controle correto é revoke" }`. **Nunca** gerar recomendação de `security_invoker` para `relkind = 'm'`. [Source: epic-900 §9, R5; auditoria P2]
 
-- [ ] **AC2 — R6 lê `PUBLIC`, não só `anon`/`authenticated`:** para funções (via `proacl`) e tabelas/views com `org_id` (via `relacl`), a regra detecta entrada do pseudo-role `PUBLIC` (padrão ACL `=X/postgres` para EXECUTE em função, `=r/postgres` ou equivalente para SELECT em tabela) e gera violação `{ rule: "R6", object, detail: "grant concedido a PUBLIC — revoke só de anon/authenticated não fecha o furo" }` mesmo quando `anon`/`authenticated` não aparecem nomeadamente no ACL. [Source: epic-87 §9, R6; auditoria P1, correção pós-implementação]
+- [ ] **AC2 — R6 lê `PUBLIC`, não só `anon`/`authenticated`:** para funções (via `proacl`) e tabelas/views com `org_id` (via `relacl`), a regra detecta entrada do pseudo-role `PUBLIC` (padrão ACL `=X/postgres` para EXECUTE em função, `=r/postgres` ou equivalente para SELECT em tabela) e gera violação `{ rule: "R6", object, detail: "grant concedido a PUBLIC — revoke só de anon/authenticated não fecha o furo" }` mesmo quando `anon`/`authenticated` não aparecem nomeadamente no ACL. [Source: epic-900 §9, R6; auditoria P1, correção pós-implementação]
 
-- [ ] **AC3 — R7 detecta `SECURITY DEFINER` sem `search_path`:** toda função com `pg_proc.prosecdef = true` cujo `proconfig` seja `NULL` ou não contenha um item `search_path=...` gera violação `{ rule: "R7", function, detail: "SECURITY DEFINER sem SET search_path — vetor de hijack" }`. [Source: epic-87 §9, R7; auditoria P13]
+- [ ] **AC3 — R7 detecta `SECURITY DEFINER` sem `search_path`:** toda função com `pg_proc.prosecdef = true` cujo `proconfig` seja `NULL` ou não contenha um item `search_path=...` gera violação `{ rule: "R7", function, detail: "SECURITY DEFINER sem SET search_path — vetor de hijack" }`. [Source: epic-900 §9, R7; auditoria P13]
 
-- [ ] **AC4 — R8 valida `p_org_id`, severidade WARN nesta onda:** toda função `SECURITY DEFINER` cuja assinatura contenha um parâmetro `p_org_id` e cujo corpo não referencie `user_org_id` nem `assert_org_scope`, e que não esteja na allowlist de service-role (allowlist vazia nesta story, populada em `87-2c` — mesma ressalva de `87-2a`/AC5), gera violação `{ rule: "R8", function, detail: "SECURITY DEFINER recebe p_org_id sem validar contra user_org_id()", severity: "WARN" }`. O motor suporta severidade por regra (não apenas FAIL binário) — mecanismo novo desta story, usado só por R8 por enquanto. [Source: epic-87 §9, R8: "WARN → FAIL na Onda 2"]
+- [ ] **AC4 — R8 valida `p_org_id`, severidade WARN nesta onda:** toda função `SECURITY DEFINER` cuja assinatura contenha um parâmetro `p_org_id` e cujo corpo não referencie `user_org_id` nem `assert_org_scope`, e que não esteja na allowlist de service-role (allowlist vazia nesta story, populada em `900-2c` — mesma ressalva de `900-2a`/AC5), gera violação `{ rule: "R8", function, detail: "SECURITY DEFINER recebe p_org_id sem validar contra user_org_id()", severity: "WARN" }`. O motor suporta severidade por regra (não apenas FAIL binário) — mecanismo novo desta story, usado só por R8 por enquanto. [Source: epic-900 §9, R8: "WARN → FAIL na Onda 2"]
 
-- [ ] **AC5 — R9 detecta colisão entre migrations não aplicadas:** o motor (a) consulta `supabase_migrations.schema_migrations` (via Management API) para determinar a última versão de migration aplicada em produção; (b) lista arquivos `supabase/migrations/*.sql` com número de versão maior que a última aplicada (isto é, migrations do PR ainda não em produção); (c) para cada arquivo desse conjunto, extrai por regex os nomes de função em statements `CREATE OR REPLACE FUNCTION <nome>`; (d) se dois ou mais arquivos distintos desse conjunto redefinem o mesmo nome de função, gera violação `{ rule: "R9", function, detail: "migrations {file1} e {file2} ambas redefinem {nome} — o último aplicado ganha em silêncio" }`. [Source: epic-87 §9, R9; CON-7, evidência real `195_sdr_na_roleta.sql` × `199_hotfix_rls_org_scope.sql`]
+- [ ] **AC5 — R9 detecta colisão entre migrations não aplicadas:** o motor (a) consulta `supabase_migrations.schema_migrations` (via Management API) para determinar a última versão de migration aplicada em produção; (b) lista arquivos `supabase/migrations/*.sql` com número de versão maior que a última aplicada (isto é, migrations do PR ainda não em produção); (c) para cada arquivo desse conjunto, extrai por regex os nomes de função em statements `CREATE OR REPLACE FUNCTION <nome>`; (d) se dois ou mais arquivos distintos desse conjunto redefinem o mesmo nome de função, gera violação `{ rule: "R9", function, detail: "migrations {file1} e {file2} ambas redefinem {nome} — o último aplicado ganha em silêncio" }`. [Source: epic-900 §9, R9; CON-7, evidência real `195_sdr_na_roleta.sql` × `199_hotfix_rls_org_scope.sql`]
 
 - [ ] **AC6 — R9 é validado contra o caso real documentado:** um teste unitário reproduz literalmente o cenário `195_sdr_na_roleta.sql`/`199_hotfix_rls_org_scope.sql` (fixtures com os nomes reais de arquivo e a função `roleta_pick_and_advance` redefinida nos dois) e confirma que R9 teria detectado a colisão **se ambos estivessem pendentes de aplicação simultaneamente**. Nota: no cenário real, `199` foi aplicado depois de `195` já estar em produção — o teste cobre o caso hipotético de ambos chegarem juntos num mesmo PR, que é o caso que R9 previne daqui pra frente. [Source: prompt desta tarefa — "quase reverteu a Story 75-226"]
 
-- [ ] **AC7 — Motor estendido sem quebrar `87-2a`:** as 4 regras de R1-R4 continuam passando nos mesmos testes de `87-2a` após a extensão (nenhuma regressão). `rules: Rule[]` agora contém 9 entradas (R1-R9). [Source: epic-87 §10, regra de decomposição — a interface estável de `87-2a` é o que permite este corte]
+- [ ] **AC7 — Motor estendido sem quebrar `900-2a`:** as 4 regras de R1-R4 continuam passando nos mesmos testes de `900-2a` após a extensão (nenhuma regressão). `rules: Rule[]` agora contém 9 entradas (R1-R9). [Source: epic-900 §10, regra de decomposição — a interface estável de `900-2a` é o que permite este corte]
 
-- [ ] **AC8 — Mecanismo de severidade por regra, não binário:** o tipo `Violation` ganha um campo `severity: "FAIL" | "WARN"`; a saída (stdout + JSON) distingue os dois; o exit code continua `1` se houver qualquer `FAIL` (R1-R7, R9), mas uma execução com **apenas** violações `WARN` (R8) retorna exit code `0` — a promoção de R8 para FAIL é trabalho de configuração de story futura da Onda 2, não desta. [Source: epic-87 §9, R8]
+- [ ] **AC8 — Mecanismo de severidade por regra, não binário:** o tipo `Violation` ganha um campo `severity: "FAIL" | "WARN"`; a saída (stdout + JSON) distingue os dois; o exit code continua `1` se houver qualquer `FAIL` (R1-R7, R9), mas uma execução com **apenas** violações `WARN` (R8) retorna exit code `0` — a promoção de R8 para FAIL é trabalho de configuração de story futura da Onda 2, não desta. [Source: epic-900 §9, R8]
 
 ---
 
 ## Tasks / Subtasks
 
-- [ ] **T1** — Estender o motor de `87-2a` com suporte a severidade (AC8)
+- [ ] **T1** — Estender o motor de `900-2a` com suporte a severidade (AC8)
   - [ ] T1.1 — Adicionar `severity` ao tipo `Violation`
   - [ ] T1.2 — Ajustar lógica de exit code para considerar só `FAIL`
 
@@ -113,7 +113,7 @@ Estas 5 regras são, em conjunto, a razão pela qual o prompt desta tarefa as ch
   - [ ] T6.5 — Teste unitário com o caso real `195`/`199`/`roleta_pick_and_advance` (AC6)
 
 - [ ] **T7** — Regressão e validação final (AC7)
-  - [ ] T7.1 — Rodar suíte completa de `87-2a` + novos testes de `87-2b` — 0 regressão
+  - [ ] T7.1 — Rodar suíte completa de `900-2a` + novos testes de `900-2b` — 0 regressão
   - [ ] T7.2 — Rodar `pnpm gate:tenancy` contra produção (read-only, pós PR #308) e documentar violações R5-R9 encontradas
 
 ---
@@ -121,13 +121,13 @@ Estas 5 regras são, em conjunto, a razão pela qual o prompt desta tarefa as ch
 ## Dev Notes
 
 ### Arquivo estendido (não criado do zero)
-- `scripts/gate-tenancy.ts` — adiciona `ruleR5`...`ruleR9` à lista `rules` definida em `87-2a`.
+- `scripts/gate-tenancy.ts` — adiciona `ruleR5`...`ruleR9` à lista `rules` definida em `900-2a`.
 
 ### `supabase_migrations.schema_migrations` — confirmado real e em uso no projeto
 Esta tabela de tracking do Supabase CLI **já é usada** em outras stories deste projeto para operações de rollback/registro manual de migration (ex.: `docs/qa/po-validation-31-2.md`, `docs/qa/gates/30-8-architect-gate.md` — ambos citam consultas e updates diretos nela via Management API). R9 apenas **lê** (`SELECT version FROM supabase_migrations.schema_migrations ORDER BY version DESC LIMIT 1`), nunca escreve.
 
 ### R9 — mecanismo é filesystem + banco, não só banco
-Diferente de R1-R8 (introspecção pura de schema via Management API), R9 precisa **ler arquivos** do repositório (`supabase/migrations/*.sql`) — porque a colisão que importa é entre migrations que **ainda não foram aplicadas**, e o conteúdo delas só existe no filesystem até serem aplicadas. Isso significa que R9, ao contrário das outras 8 regras, só funciona corretamente quando `gate-tenancy.ts` roda **dentro do checkout do PR** (CI ou local), nunca isoladamente contra produção sem o código do PR presente. Documentar essa distinção no próprio código (comentário) para que quem ler `87-2c` (wiring) saiba que R9 não pode rodar como um cron independente do PR.
+Diferente de R1-R8 (introspecção pura de schema via Management API), R9 precisa **ler arquivos** do repositório (`supabase/migrations/*.sql`) — porque a colisão que importa é entre migrations que **ainda não foram aplicadas**, e o conteúdo delas só existe no filesystem até serem aplicadas. Isso significa que R9, ao contrário das outras 8 regras, só funciona corretamente quando `gate-tenancy.ts` roda **dentro do checkout do PR** (CI ou local), nunca isoladamente contra produção sem o código do PR presente. Documentar essa distinção no próprio código (comentário) para que quem ler `900-2c` (wiring) saiba que R9 não pode rodar como um cron independente do PR.
 
 ### R9 — regex de extração, não parser SQL completo
 `CREATE OR REPLACE FUNCTION nome_da_funcao(` — regex razoável, mas frágil a variações de formatação (quebra de linha entre `FUNCTION` e o nome, schema-qualificado `public.nome_funcao`, etc.). [AUTO-DECISION] Escrever a regex tolerando espaço/quebra de linha e prefixo `public.` opcional, mas **não** tentar parsear SQL completo (fora de escopo — um parser SQL real seria semanas de trabalho para um ganho marginal). Se a regex falhar em capturar algum padrão exótico, isso é falso-negativo aceito nesta story — documentado como limitação conhecida, não como bug a resolver aqui.
@@ -136,7 +136,7 @@ Diferente de R1-R8 (introspecção pura de schema via Management API), R9 precis
 `proacl`/`relacl` são arrays de `aclitem`, formato textual `grantee=privileges/grantor`. `PUBLIC` aparece como grantee **vazio** antes do `=` (ex.: `=X/postgres` para EXECUTE, `=r/postgres` para SELECT). Um role nomeado aparece como `nome=X/postgres`. A regra precisa distinguir `=X/postgres` (PUBLIC) de `anon=X/postgres` (role nomeado `anon`) — não basta fazer `LIKE '%X%'`, que casaria com qualquer grant de EXECUTE independente do grantee.
 
 ### Testing Standards
-- Mesmo padrão de `87-2a`: testes unitários com fixtures sintéticas, sem chamada real à Management API na suíte de `pnpm test`.
+- Mesmo padrão de `900-2a`: testes unitários com fixtures sintéticas, sem chamada real à Management API na suíte de `pnpm test`.
 - R9 precisa de fixture de **filesystem simulado** (mock de leitura de diretório + conteúdo de arquivo), não só de resposta de API mockada — atenção especial na implementação do teste (AC6).
 
 ---
@@ -161,7 +161,7 @@ Testes unitários com fixtures sintéticas para cada regra nova, incluindo os 4 
 12. **R9 — função já aplicada não conta:** fixture onde só um dos dois arquivos está no conjunto "não aplicado" (o outro já tem versão <= última aplicada) → nenhuma violação (a colisão só importa entre pendentes).
 13. **Exit code com só WARN:** rodar com apenas violações R8 → exit code `0`.
 14. **Exit code com FAIL:** rodar com qualquer violação R1-R7/R9 → exit code `1`.
-15. **Regressão:** todos os testes de `87-2a` (R1-R4) continuam passando após a extensão.
+15. **Regressão:** todos os testes de `900-2a` (R1-R4) continuam passando após a extensão.
 
 ---
 
@@ -171,27 +171,27 @@ Testes unitários com fixtures sintéticas para cada regra nova, incluindo os 4 
 |----|-------|-----------|-----------|
 | R1 | Parser de ACL (R6) mal implementado gera falso-negativo (não detecta `PUBLIC`) — repetindo o próprio erro que motivou a regra | **Alta** | Cenário de teste #4 é literal reprodução do achado real; revisão explícita no quality gate |
 | R2 | Regex de R9 falha em capturar algum formato de `CREATE OR REPLACE FUNCTION` não previsto | Média | Documentado como limitação conhecida (Dev Notes); não é regressão de segurança (pior caso é não detectar uma colisão nova, mesmo estado de hoje) |
-| R3 | R9 rodando fora do contexto de PR (ex.: cron isolado) dá falso-negativo por não ter acesso aos arquivos do PR | Baixa (mitigado por documentação explícita de que R9 exige checkout do PR) | Comentário no código + nota em `87-2c` (wiring) |
+| R3 | R9 rodando fora do contexto de PR (ex.: cron isolado) dá falso-negativo por não ter acesso aos arquivos do PR | Baixa (mitigado por documentação explícita de que R9 exige checkout do PR) | Comentário no código + nota em `900-2c` (wiring) |
 | R4 | Confundir `WARN` com "sem problema" e nunca promover R8 para FAIL na Onda 2 | Média | AC8 deixa explícito que a promoção é responsabilidade de story futura — não fechar esta story como se R8 já fosse bloqueante |
 
 ---
 
 ## Dependencies
 
-- **Depende de:** `87-2a` (motor + interface `Rule` + R1-R4) — dependência dura, esta story só estende
-- **Depende de (para execução com dado real):** PRE-0 (mesma razão de `87-2a`)
-- **Bloqueia diretamente:** `87-2c` (baseline + allowlist + wiring, que consome as 9 regras completas)
+- **Depende de:** `900-2a` (motor + interface `Rule` + R1-R4) — dependência dura, esta story só estende
+- **Depende de (para execução com dado real):** PRE-0 (mesma razão de `900-2a`)
+- **Bloqueia diretamente:** `900-2c` (baseline + allowlist + wiring, que consome as 9 regras completas)
 - **Dependências técnicas:** `supabase_migrations.schema_migrations` (leitura), `supabase/migrations/*.sql` (leitura de filesystem)
 
 ---
 
 ## Definition of Done
 
-- [ ] R5-R9 implementadas e integradas à lista `rules` do motor de `87-2a`
+- [ ] R5-R9 implementadas e integradas à lista `rules` do motor de `900-2a`
 - [ ] Mecanismo de severidade (`FAIL`/`WARN`) implementado e usado corretamente por R8
 - [ ] R9 implementada com o mecanismo de leitura de filesystem + `schema_migrations`
 - [ ] 15 cenários de teste unitário passando, incluindo os 4 casos reais documentados
-- [ ] Zero regressão nos testes de `87-2a`
+- [ ] Zero regressão nos testes de `900-2a`
 - [ ] Validação manual contra produção (read-only, pós PR #308) documentada no Dev Agent Record
 - [ ] @architect executou quality gate com verdict PASS ou CONCERNS documentados e aceitos
 - [ ] @devops fez push do commit final
@@ -211,8 +211,8 @@ Testes unitários com fixtures sintéticas para cada regra nova, incluindo os 4 
 
 | Data | Versão | Descrição | Autor |
 |------|--------|-----------|-------|
-| 2026-08-02 | 0.1 | Story criada a partir da quebra de `87-2` (Epic 87 §10), fatia 2/3 (R5-R9). Todas as 5 regras rastreadas a achados reais documentados: R5→auditoria P2 (correção pós-@qa, matview), R6→auditoria P1 (correção pós-@dev, grant PUBLIC), R7→auditoria P13 (achado do @dev), R8→auditoria P1 original (severidade WARN→FAIL Onda 2), R9→CON-7/R15 do epic (colisão real `195`/`199`). [AUTO-DECISION] R9 implementado como leitura de filesystem + `schema_migrations`, mecanismo distinto das demais regras (introspecção pura) — documentado explicitamente para não ser confundido com um cron isolado. [AUTO-DECISION] Mecanismo de severidade por regra (`FAIL`/`WARN`) introduzido nesta story especificamente para suportar R8; promoção de R8 a FAIL na Onda 2 fica para story futura. | @sm (River) |
-| 2026-08-02 | 0.2 | **Validação @po — GO limpo (10/10), zero correção.** Confirmado que AC7 (9 entradas em `rules`, zero regressão nos testes de `87-2a`) fecha a costura do corte 2a/2b/2c pelo lado do destino, simetricamente ao AC10 de `87-2a` (interface `Rule` com JSDoc de contrato) pelo lado da origem. Status Draft → **Ready** (aplicado por @sm a pedido do coordenador, em nome do veredito GO do @po — @po não pôde editar a story diretamente por restrição da própria tarefa dele). | @po (Pax) via @sm |
+| 2026-08-02 | 0.1 | Story criada a partir da quebra de `900-2` (Epic 900 §10), fatia 2/3 (R5-R9). Todas as 5 regras rastreadas a achados reais documentados: R5→auditoria P2 (correção pós-@qa, matview), R6→auditoria P1 (correção pós-@dev, grant PUBLIC), R7→auditoria P13 (achado do @dev), R8→auditoria P1 original (severidade WARN→FAIL Onda 2), R9→CON-7/R15 do epic (colisão real `195`/`199`). [AUTO-DECISION] R9 implementado como leitura de filesystem + `schema_migrations`, mecanismo distinto das demais regras (introspecção pura) — documentado explicitamente para não ser confundido com um cron isolado. [AUTO-DECISION] Mecanismo de severidade por regra (`FAIL`/`WARN`) introduzido nesta story especificamente para suportar R8; promoção de R8 a FAIL na Onda 2 fica para story futura. | @sm (River) |
+| 2026-08-02 | 0.2 | **Validação @po — GO limpo (10/10), zero correção.** Confirmado que AC7 (9 entradas em `rules`, zero regressão nos testes de `900-2a`) fecha a costura do corte 2a/2b/2c pelo lado do destino, simetricamente ao AC10 de `900-2a` (interface `Rule` com JSDoc de contrato) pelo lado da origem. Status Draft → **Ready** (aplicado por @sm a pedido do coordenador, em nome do veredito GO do @po — @po não pôde editar a story diretamente por restrição da própria tarefa dele). | @po (Pax) via @sm |
 
 ---
 

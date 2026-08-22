@@ -1,11 +1,11 @@
-# Story 87-1 — Esteira de CI do zero
+# Story 900-1 — Esteira de CI do zero
 
 ## Metadata
-- **Epic:** 87 — Trifold CRM → SaaS Multi-Tenant com Cobrança Modular
+- **Epic:** 900 — Trifold CRM → SaaS Multi-Tenant com Cobrança Modular
 - **Onda:** 0 — Esteira e observabilidade (sem mudança funcional)
-- **Story:** 87-1
+- **Story:** 900-1
 - **Status:** Ready
-- **Priority:** P0 — único item do épico inteiro que não depende de nada (nem de PRE-0, nem de PRE-1). Bloqueia a Onda 0 restante: `87-2*` precisa da esteira para ligar o job `gate:tenancy`; `87-3` precisa dela para gravar os secrets do projeto Supabase descartável como secrets de CI.
+- **Priority:** P0 — único item do épico inteiro que não depende de nada (nem de PRE-0, nem de PRE-1). Bloqueia a Onda 0 restante: `900-2*` precisa da esteira para ligar o job `gate:tenancy`; `900-3` precisa dela para gravar os secrets do projeto Supabase descartável como secrets de CI.
 - **Complexity:** M — não é "configurar um job", é criar `.github/workflows/` do zero num monorepo Turborepo sem CI, husky ou precedente algum (CON-2).
 - **Created:** 2026-08-02
 - **Author:** @sm (River)
@@ -21,7 +21,7 @@
 
 **Como** equipe de engenharia do Trifold CRM,
 **Quero** uma esteira de CI que rode `type-check`, `lint` e `test` automaticamente em todo PR e todo push para `main`,
-**Para que** exista, pela primeira vez neste repositório, verificação automática de qualquer mudança — pré-condição para o gate de tenancy (`87-2a/b/c`) ter onde rodar, e para que o épico inteiro (51 stories, a maioria tocando isolamento multi-tenant) não dependa de revisão manual como única rede de proteção.
+**Para que** exista, pela primeira vez neste repositório, verificação automática de qualquer mudança — pré-condição para o gate de tenancy (`900-2a/b/c`) ter onde rodar, e para que o épico inteiro (51 stories, a maioria tocando isolamento multi-tenant) não dependa de revisão manual como única rede de proteção.
 
 ---
 
@@ -37,9 +37,9 @@ package.json:
 packageManager: "pnpm@10.8.1"
 ```
 
-Isso não é uma lacuna pequena — é o fato central que molda toda a Onda 0 (CON-2, FR-1, §8.1 da arquitetura): **"o gate de RLS exigido não é adicionar um job — é criar a esteira de CI"**. Esta story entrega exatamente essa fundação, e só ela: nenhum job de tenancy, nenhum job de isolamento cross-tenant. Esses entram em `87-2c` (wiring do `gate:tenancy`, não-bloqueante) e em `87-3`/Onda 1 (testes cross-tenant), respectivamente — ambos com `Dep: 87-1`.
+Isso não é uma lacuna pequena — é o fato central que molda toda a Onda 0 (CON-2, FR-1, §8.1 da arquitetura): **"o gate de RLS exigido não é adicionar um job — é criar a esteira de CI"**. Esta story entrega exatamente essa fundação, e só ela: nenhum job de tenancy, nenhum job de isolamento cross-tenant. Esses entram em `900-2c` (wiring do `gate:tenancy`, não-bloqueante) e em `900-3`/Onda 1 (testes cross-tenant), respectivamente — ambos com `Dep: 900-1`.
 
-**Por que esta story não depende de PRE-0 nem de PRE-1** (diferente de `87-2*` e `87-3`): ela não introspecciona banco nenhum e não cria projeto Supabase nenhum. É puramente CI de aplicação (install → type-check → lint → test) sobre o código que já existe hoje. O cabeçalho da Onda 0 no epic lista "Pré-requisito externo: PRE-0" para a onda como um todo, mas o `depends_on` do frontmatter e a validação do @po (rodada 3, `docs/qa/epic-87-po-validation.md`) confirmam textualmente: **"87-1 explicitamente livre"** — pode começar hoje, antes de qualquer decisão do Gabriel.
+**Por que esta story não depende de PRE-0 nem de PRE-1** (diferente de `900-2*` e `900-3`): ela não introspecciona banco nenhum e não cria projeto Supabase nenhum. É puramente CI de aplicação (install → type-check → lint → test) sobre o código que já existe hoje. O cabeçalho da Onda 0 no epic lista "Pré-requisito externo: PRE-0" para a onda como um todo, mas o `depends_on` do frontmatter e a validação do @po (rodada 3, `docs/qa/epic-900-po-validation.md`) confirmam textualmente: **"900-1 explicitamente livre"** — pode começar hoje, antes de qualquer decisão do Gabriel.
 
 ### Estado real do repo hoje — medido, não hipotético
 
@@ -49,7 +49,7 @@ A pergunta óbvia diante de AC3 ("falha propaga") e AC6 ("zero mudança em `pack
 - `npx vitest run` → **1215/1215 testes passam, 111 de 112 suítes**. A única suíte que falha é `packages/web/src/lib/pastas/termo/fill.test.ts`, e falha pela mesma causa raiz: `pdf-lib` ausente.
 - `npx eslint` (nos arquivos tocados pelo hotfix) → limpo.
 
-**Isto muda o desenho de AC3 e AC6, não o enfraquece.** Se a esteira exigisse zero-tolerância absoluta desde o primeiro commit, ela nasceria vermelha por causa de uma dependência não instalada — algo que corrigir estaria fora do escopo desta story (instalar/remover dependência de `packages/web` é mudança em código de aplicação, proibida por AC6) e, mais importante, **não é o problema que esta story existe para resolver**. A solução não é relaxar a esteira para sempre (isso mascararia regressão real futura) nem travar a story esperando outra story consertar a dependência primeiro (isso adiaria a fundação do épico inteiro por um problema não relacionado a tenancy). A solução é **tolerar exatamente o baseline medido, hoje, de forma explícita e nomeada** — mesmo princípio de "baseline com catraca" que `87-2c` aplica ao gate de tenancy, aplicado aqui numa escala muito menor (uma lista fixa de 4 erros de tipo conhecidos + 1 suíte conhecida, não um JSON versionado com centenas de violações). Ver AC9.
+**Isto muda o desenho de AC3 e AC6, não o enfraquece.** Se a esteira exigisse zero-tolerância absoluta desde o primeiro commit, ela nasceria vermelha por causa de uma dependência não instalada — algo que corrigir estaria fora do escopo desta story (instalar/remover dependência de `packages/web` é mudança em código de aplicação, proibida por AC6) e, mais importante, **não é o problema que esta story existe para resolver**. A solução não é relaxar a esteira para sempre (isso mascararia regressão real futura) nem travar a story esperando outra story consertar a dependência primeiro (isso adiaria a fundação do épico inteiro por um problema não relacionado a tenancy). A solução é **tolerar exatamente o baseline medido, hoje, de forma explícita e nomeada** — mesmo princípio de "baseline com catraca" que `900-2c` aplica ao gate de tenancy, aplicado aqui numa escala muito menor (uma lista fixa de 4 erros de tipo conhecidos + 1 suíte conhecida, não um JSON versionado com centenas de violações). Ver AC9.
 
 ---
 
@@ -63,9 +63,9 @@ A pergunta óbvia diante de AC3 ("falha propaga") e AC6 ("zero mudança em `pack
 - Pin explícito de versão de Node (ver Dev Notes — não há `.nvmrc`/`engines` no repo hoje; decisão registrada como AUTO-DECISION) e de pnpm (`10.8.1`, já declarado em `packageManager`).
 - Tempo de execução do workflow medido e documentado nesta story (Dev Agent Record) após a primeira execução real no PR.
 
-### OUT (não entra nesta story — cada um tem `Dep: 87-1` em story própria)
-- Job `gate:tenancy` (`pnpm gate:tenancy`) — nasce em `87-2c`, que faz o wiring no `ci.yml` criado aqui.
-- Job de isolamento cross-tenant (`tests/tenancy/cross-tenant.spec.ts`) — depende do Supabase descartável (`87-3`/PRE-1); enquanto não existir, fica fora do `ci.yml` (não `continue-on-error` dentro de um workflow que ainda não referencia esse teste — simplesmente não existe até `87-3`+Onda 1 estarem prontos).
+### OUT (não entra nesta story — cada um tem `Dep: 900-1` em story própria)
+- Job `gate:tenancy` (`pnpm gate:tenancy`) — nasce em `900-2c`, que faz o wiring no `ci.yml` criado aqui.
+- Job de isolamento cross-tenant (`tests/tenancy/cross-tenant.spec.ts`) — depende do Supabase descartável (`900-3`/PRE-1); enquanto não existir, fica fora do `ci.yml` (não `continue-on-error` dentro de um workflow que ainda não referencia esse teste — simplesmente não existe até `900-3`+Onda 1 estarem prontos).
 - Husky / hooks de pre-commit locais — **não pedido pelo epic** (FR-1 fala só de CI em PR/push; CON-2 menciona a ausência de husky como fato, não como requisito desta story). Não inventar escopo (Artigo IV).
 - Qualquer mudança em código de aplicação (`packages/**`) — AC explícita do epic.
 - CD/deploy automatizado — fora de escopo deste épico inteiro (Vercel já faz deploy próprio via integração Git; esta story não mexe nisso).
@@ -74,28 +74,28 @@ A pergunta óbvia diante de AC3 ("falha propaga") e AC6 ("zero mudança em `pack
 
 ## Acceptance Criteria
 
-- [ ] **AC1 — Workflow existe e dispara nos eventos certos:** `.github/workflows/ci.yml` criado, com `on: { pull_request: {}, push: { branches: [main] } }`. [Source: epic-87 §10, story 87-1, AC1; arquitetura §8.1]
+- [ ] **AC1 — Workflow existe e dispara nos eventos certos:** `.github/workflows/ci.yml` criado, com `on: { pull_request: {}, push: { branches: [main] } }`. [Source: epic-900 §10, story 900-1, AC1; arquitetura §8.1]
 
-- [ ] **AC2 — Job `static` executa a sequência completa:** um único job `static` roda, em ordem: `pnpm install --frozen-lockfile` → `pnpm type-check` → `pnpm lint` → `pnpm test`. Os três comandos usam exatamente os scripts já definidos em `package.json` raiz (`turbo type-check`, `turbo lint`, `vitest run`) — nenhum comando novo inventado. [Source: epic-87 §10, story 87-1, AC1; package.json raiz]
+- [ ] **AC2 — Job `static` executa a sequência completa:** um único job `static` roda, em ordem: `pnpm install --frozen-lockfile` → `pnpm type-check` → `pnpm lint` → `pnpm test`. Os três comandos usam exatamente os scripts já definidos em `package.json` raiz (`turbo type-check`, `turbo lint`, `vitest run`) — nenhum comando novo inventado. [Source: epic-900 §10, story 900-1, AC1; package.json raiz]
 
-- [ ] **AC3 — Falha propaga (com o baseline conhecido de AC9 tolerado):** se `type-check`, `lint` ou `test` retornar exit code != 0 com qualquer falha **fora** do baseline nomeado em AC9, o job `static` falha e o PR fica com check vermelho — sem `continue-on-error: true` em nenhum step. As falhas **dentro** do baseline de AC9 (4 erros de `tsc` já conhecidos + 1 suíte de teste já conhecida) não derrubam o job, mas qualquer falha nova, diferente, ou adicional às do baseline derruba. [Source: epic-87 §10, story 87-1, AC2; ajustado nesta story para o estado real medido do repo — ver Context]
+- [ ] **AC3 — Falha propaga (com o baseline conhecido de AC9 tolerado):** se `type-check`, `lint` ou `test` retornar exit code != 0 com qualquer falha **fora** do baseline nomeado em AC9, o job `static` falha e o PR fica com check vermelho — sem `continue-on-error: true` em nenhum step. As falhas **dentro** do baseline de AC9 (4 erros de `tsc` já conhecidos + 1 suíte de teste já conhecida) não derrubam o job, mas qualquer falha nova, diferente, ou adicional às do baseline derruba. [Source: epic-900 §10, story 900-1, AC2; ajustado nesta story para o estado real medido do repo — ver Context]
 
-- [ ] **AC4 — Cache configurado:** cache de dependências pnpm (chaveado por hash de `pnpm-lock.yaml`) e cache do Turborepo (`.turbo`, chaveado por lockfile + `turbo.json`) configurados via `actions/cache` (ou `actions/setup-node` com `cache: pnpm` + cache adicional para `.turbo`). Execução com cache quente deve ser mensuravelmente mais rápida que a primeira execução (fria) — comparação registrada no Dev Agent Record. [Source: epic-87 §10, story 87-1, AC3]
+- [ ] **AC4 — Cache configurado:** cache de dependências pnpm (chaveado por hash de `pnpm-lock.yaml`) e cache do Turborepo (`.turbo`, chaveado por lockfile + `turbo.json`) configurados via `actions/cache` (ou `actions/setup-node` com `cache: pnpm` + cache adicional para `.turbo`). Execução com cache quente deve ser mensuravelmente mais rápida que a primeira execução (fria) — comparação registrada no Dev Agent Record. [Source: epic-900 §10, story 900-1, AC3]
 
-- [ ] **AC5 — Tempo documentado:** tempo total de execução do workflow (primeira run fria + uma run subsequente com cache) documentado no Dev Agent Record desta story, com o link/hash do run do GitHub Actions. [Source: epic-87 §10, story 87-1, AC3]
+- [ ] **AC5 — Tempo documentado:** tempo total de execução do workflow (primeira run fria + uma run subsequente com cache) documentado no Dev Agent Record desta story, com o link/hash do run do GitHub Actions. [Source: epic-900 §10, story 900-1, AC3]
 
-- [ ] **AC6 — Zero mudança em código de aplicação:** o diff desta story contém apenas `.github/workflows/ci.yml` (e, se necessário, `package.json`/`.nvmrc` para pin de versão — ver AC7). Nenhum arquivo em `packages/**` é tocado. [Source: epic-87 §10, story 87-1, AC4]
+- [ ] **AC6 — Zero mudança em código de aplicação:** o diff desta story contém apenas `.github/workflows/ci.yml` (e, se necessário, `package.json`/`.nvmrc` para pin de versão — ver AC7). Nenhum arquivo em `packages/**` é tocado. [Source: epic-900 §10, story 900-1, AC4]
 
 - [ ] **AC7 — Versão de Node fixada:** como o repo não tem `.nvmrc` nem `engines.node` em `package.json` (verificado nesta story — ver Dev Notes), o workflow fixa a versão de Node explicitamente (`actions/setup-node` com `node-version` pinada). Se o @devops optar por também gravar essa versão em `.nvmrc`/`engines` para consistência local↔CI, documentar a decisão no Change Log. [AUTO-DECISION — ver Dev Notes]
 
-- [ ] **AC8 — Nenhum job de tenancy ou isolamento neste workflow:** `ci.yml` desta story não referencia `gate:tenancy` nem `tests/tenancy/**` — isso é explicitamente `87-2c` e Onda 1. Verificação: `grep -c "gate:tenancy\|tenancy" .github/workflows/ci.yml` retorna 0. [Source: epic-87 §10, regra de decomposição — evita a esteira nascer acoplada ao gate que ainda não existe]
+- [ ] **AC8 — Nenhum job de tenancy ou isolamento neste workflow:** `ci.yml` desta story não referencia `gate:tenancy` nem `tests/tenancy/**` — isso é explicitamente `900-2c` e Onda 1. Verificação: `grep -c "gate:tenancy\|tenancy" .github/workflows/ci.yml` retorna 0. [Source: epic-900 §10, regra de decomposição — evita a esteira nascer acoplada ao gate que ainda não existe]
 
 - [ ] **AC9 — Baseline conhecido de falhas pré-existentes, tolerado explicitamente, sem tocar `packages/**`:** o mecanismo de tolerância vive **inteiramente fora de `packages/**`** (no próprio `ci.yml` e/ou num script pequeno em `scripts/`, nunca em config de teste/tipo dentro de um pacote — preserva AC6) e cobre exatamente:
   - **`type-check`:** o step aceita até **4** erros de `tsc`, e somente se cada um contiver a substring `react-email-editor` (3 ocorrências esperadas) ou `pdf-lib` (1 ocorrência esperada). Qualquer erro de `tsc` com mensagem diferente dessas, ou mais de 4 erros no total, falha o job. Mecanismo sugerido: capturar a saída de `pnpm type-check`, contar linhas de erro, e comparar por substring — não um simples "aceitar até N erros" cego (isso mascararia um erro novo não relacionado, desde que o total ainda coubesse no teto).
   - **`test`:** a chamada de `vitest run` no workflow exclui explicitamente `packages/web/src/lib/pastas/termo/fill.test.ts` via flag de linha de comando (ex.: `vitest run --exclude '**/pastas/termo/fill.test.ts'`), com um comentário no `ci.yml` explicando a causa raiz (`pdf-lib` ausente) e apontando que a exclusão deve ser removida assim que a dependência for instalada (fora do escopo desta story — não é este @devops/@dev que decide instalar `pdf-lib`/`react-email-editor` aqui). A exclusão fica **só** no comando do workflow, nunca num `vitest.config` dentro de `packages/web`.
   - **`lint`:** **sem** tolerância — `eslint` já está limpo hoje (medido); qualquer violação de lint falha o job normalmente, sem exceção.
   - Fonte da medição: `docs/qa/gates/hotfix-rls-org-scope-lote0.yml` (não é suposição — é resultado real de 3 execuções nesta janela, pelo @dev e pelo @qa).
-  [Source: instrução do coordenador nesta tarefa, citando `docs/qa/gates/hotfix-rls-org-scope-lote0.yml`; princípio de baseline+catraca já estabelecido em `87-2c` para o gate de tenancy, aplicado aqui numa escala menor]
+  [Source: instrução do coordenador nesta tarefa, citando `docs/qa/gates/hotfix-rls-org-scope-lote0.yml`; princípio de baseline+catraca já estabelecido em `900-2c` para o gate de tenancy, aplicado aqui numa escala menor]
 
 ---
 
@@ -103,7 +103,7 @@ A pergunta óbvia diante de AC3 ("falha propaga") e AC6 ("zero mudança em `pack
 
 - [ ] **T1** — Levantamento local antes de escrever o workflow (AC2, AC7, AC9)
   - [ ] T1.1 — Rodar localmente `pnpm install --frozen-lockfile && pnpm type-check && pnpm lint && pnpm test` e confirmar que o resultado bate com o baseline já medido (4 erros de `tsc` — `react-email-editor` ×3, `pdf-lib` ×1; `vitest` 1215/1215 testes, 111/112 suítes, única falha `pastas/termo/fill.test.ts`; `eslint` limpo — fonte: `docs/qa/gates/hotfix-rls-org-scope-lote0.yml`). Se o estado local divergir do baseline documentado (mais erros, erros diferentes, ou outra suíte falhando), **parar e escalar** — o baseline de AC9 só pode tolerar exatamente o que foi medido, não uma versão desatualizada dele.
-  - [ ] T1.2 — Confirmar se algum teste em `vitest run` depende de variáveis de ambiente (ex.: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` — `turbo.json` declara essas em `globalEnv`) ou de rede/Supabase real. Se sim, decidir: (a) esses testes precisam de secrets de CI (não confundir com o Supabase descartável de `87-3`, que é só para os testes cross-tenant), ou (b) são testes que devem ser mockados/pulados em CI — documentar a decisão nesta story, não inventar mock novo fora do escopo.
+  - [ ] T1.2 — Confirmar se algum teste em `vitest run` depende de variáveis de ambiente (ex.: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` — `turbo.json` declara essas em `globalEnv`) ou de rede/Supabase real. Se sim, decidir: (a) esses testes precisam de secrets de CI (não confundir com o Supabase descartável de `900-3`, que é só para os testes cross-tenant), ou (b) são testes que devem ser mockados/pulados em CI — documentar a decisão nesta story, não inventar mock novo fora do escopo.
   - [ ] T1.3 — Confirmar ausência de `.nvmrc`/`engines.node` (já confirmado nesta story — ver Dev Notes) e decidir a versão de Node a fixar.
 
 - [ ] **T2** — Criar `.github/workflows/ci.yml` (AC1-AC4, AC8)
@@ -153,7 +153,7 @@ Segue literalmente a AC do epic ("install → type-check → lint → test"). N�
 CON-2 cita a ausência de husky como **fato do estado atual**, não como requisito. FR-1 (a fonte da AC desta story) pede explicitamente "CI executando type-check, lint, test em PR e push para main" — nada sobre hooks locais de pre-commit. Adicionar husky seria escopo não pedido (Artigo IV — No Invention). Se o Gabriel quiser hooks locais depois, é uma story nova, não uma extensão silenciosa desta.
 
 ### Baseline conhecido tolerado (AC9) — por que não é uma exceção frouxa
-A tentação óbvia seria "deixar `continue-on-error` no step de `type-check`/`test` até alguém instalar `pdf-lib`/`react-email-editor`". Isso foi rejeitado deliberadamente: um `continue-on-error` genérico tornaria o job cego a **qualquer** erro futuro de tipo ou **qualquer** teste novo quebrado, não só aos 4 já conhecidos — na prática, desligaria a esteira para as duas categorias mais importantes de regressão, exatamente no dia em que ela nasce. O mecanismo de AC9 é deliberadamente mais estreito: compara por **conteúdo** (substring `react-email-editor`/`pdf-lib`, arquivo exato `pastas/termo/fill.test.ts`), não por contagem solta — um novo erro de tipo, mesmo que o total ainda fosse ≤ 4, teria mensagem diferente das duas substrings esperadas e falharia o job. Isso é o mesmo espírito da lógica de catraca de `87-2c` (não tolerar qualquer coisa, só o que já foi medido e nomeado), aplicado a uma superfície muito menor e sem necessidade de arquivo JSON versionado — uma lista de 4 substrings e 1 caminho de arquivo, inline no workflow ou num script pequeno, já é suficiente e proporcional ao tamanho do problema.
+A tentação óbvia seria "deixar `continue-on-error` no step de `type-check`/`test` até alguém instalar `pdf-lib`/`react-email-editor`". Isso foi rejeitado deliberadamente: um `continue-on-error` genérico tornaria o job cego a **qualquer** erro futuro de tipo ou **qualquer** teste novo quebrado, não só aos 4 já conhecidos — na prática, desligaria a esteira para as duas categorias mais importantes de regressão, exatamente no dia em que ela nasce. O mecanismo de AC9 é deliberadamente mais estreito: compara por **conteúdo** (substring `react-email-editor`/`pdf-lib`, arquivo exato `pastas/termo/fill.test.ts`), não por contagem solta — um novo erro de tipo, mesmo que o total ainda fosse ≤ 4, teria mensagem diferente das duas substrings esperadas e falharia o job. Isso é o mesmo espírito da lógica de catraca de `900-2c` (não tolerar qualquer coisa, só o que já foi medido e nomeado), aplicado a uma superfície muito menor e sem necessidade de arquivo JSON versionado — uma lista de 4 substrings e 1 caminho de arquivo, inline no workflow ou num script pequeno, já é suficiente e proporcional ao tamanho do problema.
 
 ### Fonte da medição — não reproduzir cegamente, conferir no momento da implementação
 Os números de AC9 (4 erros, 1215/1215 testes, 111/112 suítes) foram medidos pelo @dev/@qa durante o trabalho do PR #308, registrados em `docs/qa/gates/hotfix-rls-org-scope-lote0.yml`. Esses números podem ter mudado entre a redação desta story e a implementação (código continua sendo desenvolvido em paralelo neste branch). T1.1 exige reconferir localmente antes de codificar o mecanismo de tolerância — não copiar os números desta story sem validar.
@@ -197,7 +197,7 @@ Validação é o próprio CI rodando: não há suíte automatizada que testa "o 
 ## Dependencies
 
 - **Depende de:** nada (única story do épico sem `Dep:`)
-- **Bloqueia diretamente:** `87-2c` (wiring do job `gate:tenancy` neste mesmo `ci.yml`), `87-3`/Onda 1 (job de isolamento cross-tenant, quando o Supabase descartável existir)
+- **Bloqueia diretamente:** `900-2c` (wiring do job `gate:tenancy` neste mesmo `ci.yml`), `900-3`/Onda 1 (job de isolamento cross-tenant, quando o Supabase descartável existir)
 - **Dependências técnicas:** `package.json` raiz (scripts existentes), `turbo.json` (pipeline de tasks), `pnpm-lock.yaml`
 
 ---
@@ -230,8 +230,8 @@ Validação é o próprio CI rodando: não há suíte automatizada que testa "o 
 
 | Data | Versão | Descrição | Autor |
 |------|--------|-----------|-------|
-| 2026-08-02 | 0.1 | Story criada a partir do Epic 87 (§10, Onda 0, story 87-1). Não quebrada — story atômica (CI puro, sem expand/migrate/contract, sem janela de observação; NFR-1/§10 não se aplica). Escopo estritamente limitado ao job `static` (install→type-check→lint→test); `gate:tenancy` explicitamente excluído (nasce em `87-2c`) para não acoplar a esteira a um gate que ainda não existe. [AUTO-DECISION] Node 20.x LTS fixado no workflow → reason: ausência de `.nvmrc`/`engines` no repo; compatível com Next.js 16+; @devops deve cross-checar com a config Node da Vercel antes de fechar. [AUTO-DECISION] Sem husky nesta story → reason: FR-1 só pede CI em PR/push, CON-2 cita ausência de husky como fato e não como requisito; adicionar seria invenção de escopo (Artigo IV). | @sm (River) |
-| 2026-08-02 | 0.2 | **Validação @po — GO limpo (10/10), zero correção de conteúdo.** Pergunta levantada pelo @po sobre R1 (o repo assumir estado verde hoje, quando AC6 proíbe corrigir `packages/**`) respondida com medição real registrada em `docs/qa/gates/hotfix-rls-org-scope-lote0.yml`: 4 erros de `tsc` pré-existentes (`react-email-editor` ×3, `pdf-lib` ×1, dependência não instalada — não é código quebrado), `vitest` 1215/1215 testes em 111/112 suítes (única falha: `pastas/termo/fill.test.ts`, mesma causa raiz), `eslint` limpo. **AC9 nova** formaliza um baseline conhecido e tolerado explicitamente (comparação por substring/arquivo exato, não por contagem solta — para não mascarar erro novo), nos mesmos moldes do princípio de catraca já usado em `87-2c`, mas numa escala proporcional (sem JSON versionado). Context ganhou a seção "Estado real do repo hoje"; AC3 e Scope/IN referenciam AC9; T1.1 e T2.5 (nova) implementam; 3 cenários de teste e 1 risco (R5) adicionados. Status Draft → **Ready** (aplicado por @sm a pedido do coordenador, em nome do veredito GO do @po — @po não pôde editar a story diretamente por restrição da própria tarefa dele). | @po (Pax) via @sm |
+| 2026-08-02 | 0.1 | Story criada a partir do Epic 900 (§10, Onda 0, story 900-1). Não quebrada — story atômica (CI puro, sem expand/migrate/contract, sem janela de observação; NFR-1/§10 não se aplica). Escopo estritamente limitado ao job `static` (install→type-check→lint→test); `gate:tenancy` explicitamente excluído (nasce em `900-2c`) para não acoplar a esteira a um gate que ainda não existe. [AUTO-DECISION] Node 20.x LTS fixado no workflow → reason: ausência de `.nvmrc`/`engines` no repo; compatível com Next.js 16+; @devops deve cross-checar com a config Node da Vercel antes de fechar. [AUTO-DECISION] Sem husky nesta story → reason: FR-1 só pede CI em PR/push, CON-2 cita ausência de husky como fato e não como requisito; adicionar seria invenção de escopo (Artigo IV). | @sm (River) |
+| 2026-08-02 | 0.2 | **Validação @po — GO limpo (10/10), zero correção de conteúdo.** Pergunta levantada pelo @po sobre R1 (o repo assumir estado verde hoje, quando AC6 proíbe corrigir `packages/**`) respondida com medição real registrada em `docs/qa/gates/hotfix-rls-org-scope-lote0.yml`: 4 erros de `tsc` pré-existentes (`react-email-editor` ×3, `pdf-lib` ×1, dependência não instalada — não é código quebrado), `vitest` 1215/1215 testes em 111/112 suítes (única falha: `pastas/termo/fill.test.ts`, mesma causa raiz), `eslint` limpo. **AC9 nova** formaliza um baseline conhecido e tolerado explicitamente (comparação por substring/arquivo exato, não por contagem solta — para não mascarar erro novo), nos mesmos moldes do princípio de catraca já usado em `900-2c`, mas numa escala proporcional (sem JSON versionado). Context ganhou a seção "Estado real do repo hoje"; AC3 e Scope/IN referenciam AC9; T1.1 e T2.5 (nova) implementam; 3 cenários de teste e 1 risco (R5) adicionados. Status Draft → **Ready** (aplicado por @sm a pedido do coordenador, em nome do veredito GO do @po — @po não pôde editar a story diretamente por restrição da própria tarefa dele). | @po (Pax) via @sm |
 
 ---
 
