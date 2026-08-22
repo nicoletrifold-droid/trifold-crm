@@ -4,7 +4,7 @@
 - **Epic:** 900 — Trifold CRM → SaaS Multi-Tenant com Cobrança Modular
 - **Onda:** 0 — Esteira e observabilidade (sem mudança funcional)
 - **Story:** 900-3
-- **Status:** InProgress — **PRE-1 foi satisfeito em 2026-08-05.** AC1 e AC2 executados e verificados (ver Dev Agent Record); AC3–AC6 pendentes. A decisão de ambiente mudou em relação ao draft: ver "Estado real do PRE-1" abaixo.
+- **Status:** InReview — **AC1, AC2, AC4, AC5 e AC6 cumpridos.** Falta só o **AC3** (gravar os 4 secrets no CI), bloqueado por permissão — ver Dev Agent Record. A decisão de ambiente mudou em relação ao draft: ver "Estado real do PRE-1" abaixo.
 - **Priority:** P0 — sem esta story, os testes cross-tenant da Onda 1 (que criam e apagam orgs) não têm onde rodar, e **o epic inteiro para no fim da Onda 1** (nas palavras da validação do @po). Não é um risco distante — é o próximo bloqueador depois de PRE-0.
 - **Complexity:** M
 - **Created:** 2026-08-02
@@ -74,17 +74,17 @@ O `trifold-crm-dev` **nunca apontou para produção** — ele é um banco separa
 
 ## Acceptance Criteria
 
-- [ ] **AC1 — Projeto separado provisionado:** existe um projeto Supabase distinto de produção (`dsopqkqjkmhytudaaolv`) e do Supabase de dev existente, criado sob a conta/organização autorizada pelo Gabriel (D6). Nome do projeto documentado no Dev Agent Record desta story (ex.: `trifold-crm-tenancy-test` ou equivalente — decisão do @devops no momento da criação). [Source: epic-900 §10, story 900-3, AC1; D6]
+- [x] **AC1 — Projeto separado provisionado:** existe um projeto Supabase distinto de produção (`dsopqkqjkmhytudaaolv`) e do Supabase de dev existente, criado sob a conta/organização autorizada pelo Gabriel (D6). Nome do projeto documentado no Dev Agent Record desta story (ex.: `trifold-crm-tenancy-test` ou equivalente — decisão do @devops no momento da criação). [Source: epic-900 §10, story 900-3, AC1; D6]
 
-- [ ] **AC2 — 222 arquivos de migration aplicados do zero, sem erro:** `supabase db push` (ou Management API equivalente) contra o projeto novo aplica os 222 arquivos de `supabase/migrations/*.sql` (numeração `001` a `199`, com os 20 prefixos duplicados) na ordem em que a ferramenta de fato os aplica, sem falha. Qualquer erro de aplicação encontrado é documentado no Dev Agent Record — se algum erro for encontrado, ele é um achado real do projeto (prova que a sequência de migrations não é 100% reproduzível do zero) e deve ser reportado ao @architect/@data-engineer, não silenciosamente contornado dentro desta story. **Atenção especial ao risco R2** (ordem lexicográfica × numérica) — se a aplicação falhar, a primeira hipótese a checar é essa divergência de ordenação, não a integridade do conteúdo das migrations. [Source: epic-900 §10, story 900-3, AC1: "o que também prova que a sequência de migrations é reproduzível"]
+- [x] **AC2 — 222 arquivos de migration aplicados do zero, sem erro:** `supabase db push` (ou Management API equivalente) contra o projeto novo aplica os 222 arquivos de `supabase/migrations/*.sql` (numeração `001` a `199`, com os 20 prefixos duplicados) na ordem em que a ferramenta de fato os aplica, sem falha. Qualquer erro de aplicação encontrado é documentado no Dev Agent Record — se algum erro for encontrado, ele é um achado real do projeto (prova que a sequência de migrations não é 100% reproduzível do zero) e deve ser reportado ao @architect/@data-engineer, não silenciosamente contornado dentro desta story. **Atenção especial ao risco R2** (ordem lexicográfica × numérica) — se a aplicação falhar, a primeira hipótese a checar é essa divergência de ordenação, não a integridade do conteúdo das migrations. [Source: epic-900 §10, story 900-3, AC1: "o que também prova que a sequência de migrations é reproduzível"]
 
 - [ ] **AC3 — Credenciais como secrets de CI, gravadas corretamente:** URL, anon key e service-role key do projeto descartável gravados como secrets do repositório GitHub via `gh secret set` (nomes sugeridos: `TENANCY_TEST_SUPABASE_URL`, `TENANCY_TEST_SUPABASE_ANON_KEY`, `TENANCY_TEST_SUPABASE_SERVICE_ROLE_KEY` — confirmar convenção com @devops se já existir padrão de nomenclatura de secret no projeto). Verificação pós-gravação: `gh secret list` confirma a presença dos 3 secrets (o comando não revela o valor, mas confirma que não estão vazios/ausentes — o mesmo cuidado do gotcha de `vercel env add`/stdin, adaptado: `gh secret set` via `--body` ou arquivo, nunca via pipe que possa truncar). [Source: epic-900 §10, story 900-3, AC2; NFR-10]
 
-- [ ] **AC4 — Script de reset determinístico:** `scripts/reset-tenancy-testdb.ts` (ou equivalente) existe e, ao rodar, deixa o projeto descartável num estado limpo e conhecido — verificável rodando o script duas vezes seguidas e confirmando que o schema/dado resultante é idêntico nas duas execuções (idempotência do reset, não da migration em si). [Source: epic-900 §10, story 900-3, AC3]
+- [x] **AC4 — Script de reset determinístico:** `scripts/reset-tenancy-testdb.ts` (ou equivalente) existe e, ao rodar, deixa o projeto descartável num estado limpo e conhecido — verificável rodando o script duas vezes seguidas e confirmando que o schema/dado resultante é idêntico nas duas execuções (idempotência do reset, não da migration em si). [Source: epic-900 §10, story 900-3, AC3]
 
-- [ ] **AC5 — Documentação de "nunca recebe dado de produção":** um comentário/README explícito, no próprio `scripts/reset-tenancy-testdb.ts` (topo do arquivo) ou em `scripts/README.md` (criar se não existir), declara em português claro que este projeto é exclusivo para testes cross-tenant automatizados, nunca recebe dump/cópia de produção, e não deve ser usado para debug manual de dados reais. [Source: epic-900 §10, story 900-3, AC4]
+- [x] **AC5 — Documentação de "nunca recebe dado de produção":** um comentário/README explícito, no próprio `scripts/reset-tenancy-testdb.ts` (topo do arquivo) ou em `scripts/README.md` (criar se não existir), declara em português claro que este projeto é exclusivo para testes cross-tenant automatizados, nunca recebe dump/cópia de produção, e não deve ser usado para debug manual de dados reais. [Source: epic-900 §10, story 900-3, AC4]
 
-- [ ] **AC6 — Nenhuma credencial commitada em texto claro:** revisão do diff desta story confirma que nenhum valor de URL/key aparece hardcoded em nenhum arquivo versionado — só nomes de env var/secret. [Source: NFR-10; gotcha geral do projeto sobre segredos]
+- [x] **AC6 — Nenhuma credencial commitada em texto claro:** revisão do diff desta story confirma que nenhum valor de URL/key aparece hardcoded em nenhum arquivo versionado — só nomes de env var/secret. [Source: NFR-10; gotcha geral do projeto sobre segredos]
 
 ---
 
@@ -240,5 +240,50 @@ As 4 falhas, em duas classes — **nenhuma causada por ordem lexicográfica**, q
 
 **Estado atual do ambiente (2026-08-22):** o banco está reconstruído com as migrations até a `215`. Entre 05/08 e 22/08 chegaram as `216`–`237`, então **ele está ~22 migrations defasado de novo** — o que é a própria demonstração de por que o AC4 (reset determinístico e barato) é a parte que dá durabilidade a esta story. Sem ele, o ambiente decai sozinho.
 
+### Execução dos AC4/AC5/AC6 — 2026-08-22
+
+**AC4 — cumprido e a idempotência foi PROVADA, não presumida.** `scripts/reset-tenancy-testdb.ts`
+reconstrói o banco do zero. Duas execuções consecutivas produziram schema **idêntico**, comparado
+por SHA-256 sobre colunas + policies + índices + funções:
+
+```
+run B: 26adccc39bed888b9693045f3b9653c63e7b1208f025e1ec914749355a72eaad
+run C: 26adccc39bed888b9693045f3b9653c63e7b1208f025e1ec914749355a72eaad
+```
+
+Resultado de cada execução: **249 arquivos aplicados inteiros + 6 por autocommit, 4 falhas
+conhecidas, 0 regressões** (exit 0). O ambiente saiu da defasagem: estava nas migrations até a
+`215`, agora está na `237`.
+
+**Duas falhas NOVAS apuradas nesta rodada, ausentes na de 05/08** — `223_properties_nicole_enabled`
+e `224_properties_restaura_is_active` abortam com `P0001` porque o backfill exige afetar
+*exatamente 2 linhas* de `properties`, e essas 2 linhas são empreendimentos **reais de produção**.
+Classificadas como CONHECIDAS. **O padrão importa mais que o caso:** toda migration com backfill de
+dado real protegido por guard de contagem é, por construção, não-reproduzível do zero — e isso é
+aviso de desenho para `900-21`, porque `provision_org()` não pode depender de backfill histórico,
+sob pena de quebrar ao provisionar cliente novo pelo mesmo motivo.
+
+**Erro cometido e corrigido nesta rodada:** a primeira execução do script acusou 5 regressões,
+das quais 2 (`011`, `063`) eram culpa do próprio seed — o `INSERT` da org não passava `slug`, que é
+`NOT NULL UNIQUE`, e falhava em silêncio porque o aviso ia para uma linha que eu não estava lendo.
+Corrigido o seed, as duas passaram a aplicar. O script agora distingue `CONHECIDA` de `REGRESSÃO` e
+só sai com exit 1 na segunda — sem essa separação, um reset "sempre vermelho" vira ruído ignorado.
+
+**AC5 — cumprido em dois lugares.** Cabeçalho do próprio script e `scripts/README.md` (criado nesta
+story), ambos declarando que o projeto nunca recebe dado de produção, com o porquê e as três
+proibições concretas.
+
+**AC6 — verificado.** Nenhuma credencial literal em arquivo versionado (`grep` por `eyJ…`,
+`sb_secret_`, `sb_publishable_`, `sbp_…` volta vazio). O único ref de projeto no código é o de
+**produção**, e está numa *denylist* — é proteção, não credencial. O ref do ambiente de teste vem
+de `TENANCY_TEST_SUPABASE_URL`.
+
+**AC3 — NÃO cumprido, bloqueado por permissão.** A gravação dos secrets via `gh secret set` foi
+recusada pelo controle de permissões do ambiente. Os quatro valores existem e foram verificados;
+falta apenas gravá-los. Comandos exatos no relatório ao dono do produto. Como o `gh secret set` por
+pipe grava valor vazio em silêncio (mesma classe do incidente de `vercel env add` das Stories 75-40
+e 75-66), a gravação **precisa** usar `--body`, e `gh secret list` depois confirma presença.
+
 ### File List
-_Nenhum arquivo de código alterado até aqui — AC1/AC2 são operações sobre o ambiente. Os artefatos de AC3–AC6 entram quando executados._
+- `scripts/reset-tenancy-testdb.ts` (novo) — reset determinístico, guard contra produção, fallback autocommit
+- `scripts/README.md` (novo) — AC5, mapa dos 3 ambientes e as armadilhas de método
