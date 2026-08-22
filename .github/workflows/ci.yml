@@ -1,0 +1,90 @@
+# Story 900-1 — a primeira verificação automática deste repositório.
+#
+# Até hoje o repo não tinha CI nenhum (.github/ só continha agents/). Nada impedia que um
+# PR com type error, lint quebrado ou teste vermelho chegasse à main. Este workflow fecha
+# isso, e nada mais — ele NÃO altera código de aplicação.
+#
+# Ele é incremental por desenho: as ondas seguintes do Epic 900 PENDURAM JOBS aqui
+# (900-2c, 900-17 e 900-18 acrescentam os seus). Nunca reescreva este arquivo — acrescente
+# job. Esta esteira não referencia nenhum gate de onda futura, de propósito: a AC8 da
+# 900-1 verifica isso por grep, para a esteira não nascer acoplada ao que ainda não existe.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Um PR que recebe vários pushes seguidos não precisa manter as execuções antigas vivas.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  static:
+    name: type-check · lint · test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instala pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.8.1
+
+      - name: Instala Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          # cache do store do pnpm — a chave sai do pnpm-lock.yaml automaticamente
+          cache: pnpm
+
+      - name: Instala dependências
+        run: pnpm install --frozen-lockfile
+
+      # Cache do turbo: sem ele, cada job reexecuta tudo do zero mesmo sem mudança.
+      - name: Cache do turbo
+        uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: ${{ runner.os }}-turbo-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-
+
+      # Os três passos rodam com `if: always()` (menos o primeiro) para que um PR com
+      # problemas em mais de uma frente mostre TODOS de uma vez. Um relatório por push
+      # vale mais que três rodadas de correção em série.
+      - name: type-check
+        id: typecheck
+        run: pnpm type-check
+
+      - name: lint
+        id: lint
+        if: always() && steps.typecheck.conclusion != 'cancelled'
+        run: pnpm lint
+
+      - name: test
+        id: test
+        if: always() && steps.typecheck.conclusion != 'cancelled'
+        run: pnpm test
+
+      # Falha o job se QUALQUER um dos três falhou. Necessário porque o `if: always()`
+      # acima permite que os passos seguintes rodem depois de uma falha — sem esta
+      # barreira, o job terminaria verde com passo vermelho.
+      - name: Resultado
+        if: always()
+        run: |
+          echo "type-check: ${{ steps.typecheck.outcome }}"
+          echo "lint:       ${{ steps.lint.outcome }}"
+          echo "test:       ${{ steps.test.outcome }}"
+          if [ "${{ steps.typecheck.outcome }}" != "success" ] \
+          || [ "${{ steps.lint.outcome }}"      != "success" ] \
+          || [ "${{ steps.test.outcome }}"      != "success" ]; then
+            echo "::error::Um ou mais checks falharam."
+            exit 1
+          fi
