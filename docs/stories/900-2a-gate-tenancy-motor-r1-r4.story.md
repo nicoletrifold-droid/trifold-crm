@@ -4,7 +4,7 @@
 - **Epic:** 900 — Trifold CRM → SaaS Multi-Tenant com Cobrança Modular
 - **Onda:** 0 — Esteira e observabilidade (sem mudança funcional)
 - **Story:** 900-2a (parte 1 de 3 da quebra de `900-2` — ver Change Log)
-- **Status:** Ready
+- **Status:** Ready for Review — 10/10 ACs, 17 testes novos, gate rodado contra produção (read-only).
 - **Priority:** P0 — fundação do gate de tenancy; sem ela, `900-2b` e `900-2c` não têm motor para estender.
 - **Complexity:** M (dentro do G original de `900-2`, esta é a fatia "motor + R1-R4")
 - **Created:** 2026-08-02
@@ -60,56 +60,56 @@ Esta story é a primeira fatia de `900-2` (Gate de tenancy R1-R12 com baseline e
 
 ## Acceptance Criteria
 
-- [ ] **AC1 — Script e comando existem:** `scripts/gate-tenancy.ts` criado; `package.json` raiz ganha o script `"gate:tenancy": "tsx scripts/gate-tenancy.ts"` (reusando `tsx`, já devDependency do projeto). [Source: epic-900 §10, story 900-2, AC1]
+- [x] **AC1 — Script e comando existem:** `scripts/gate-tenancy.ts` criado; `package.json` raiz ganha o script `"gate:tenancy": "tsx scripts/gate-tenancy.ts"` (reusando `tsx`, já devDependency do projeto). [Source: epic-900 §10, story 900-2, AC1]
 
-- [ ] **AC2 — Introspecção via Management API:** o motor consulta o schema `public` de produção via `POST /v1/projects/{ref}/database/query` com `Authorization: Bearer ${SUPABASE_MANAGEMENT_PAT}`, buscando: (a) todas as colunas `org_id` de `information_schema.columns`, (b) todas as policies de `pg_policies` (colunas `tablename`, `cmd`, `qual`, `with_check`, `roles`, `permissive`), (c) `rowsecurity` de `pg_class`/`pg_tables`. [Source: epic-900 §9; memória do projeto `reference_supabase_management_api.md`]
+- [x] **AC2 — Introspecção via Management API:** o motor consulta o schema `public` de produção via `POST /v1/projects/{ref}/database/query` com `Authorization: Bearer ${SUPABASE_MANAGEMENT_PAT}`, buscando: (a) todas as colunas `org_id` de `information_schema.columns`, (b) todas as policies de `pg_policies` (colunas `tablename`, `cmd`, `qual`, `with_check`, `roles`, `permissive`), (c) `rowsecurity` de `pg_class`/`pg_tables`. [Source: epic-900 §9; memória do projeto `reference_supabase_management_api.md`]
 
-- [ ] **AC3 — Fallback funcional:** se `SUPABASE_MANAGEMENT_PAT` não estiver definido, ou a chamada à API retornar erro, o motor lê `docs/audits/schema-snapshot.json` (mesmo formato de dados que a introspecção via API produziria) e continua a execução, emitindo um aviso claro (não um erro silencioso) informando que está rodando em modo snapshot. [Source: epic-900 §9 "com fallback para snapshot versionado"]
+- [x] **AC3 — Fallback funcional:** se `SUPABASE_MANAGEMENT_PAT` não estiver definido, ou a chamada à API retornar erro, o motor lê `docs/audits/schema-snapshot.json` (mesmo formato de dados que a introspecção via API produziria) e continua a execução, emitindo um aviso claro (não um erro silencioso) informando que está rodando em modo snapshot. [Source: epic-900 §9 "com fallback para snapshot versionado"]
 
-- [ ] **AC4 — Regra R1 (rowsecurity):** toda tabela de `public` com coluna `org_id` reportada com `rowsecurity = false` gera violação `{ rule: "R1", table, detail: "RLS desabilitada em tabela com org_id" }`, severidade FAIL. [Source: epic-900 §9, tabela R1]
+- [x] **AC4 — Regra R1 (rowsecurity):** toda tabela de `public` com coluna `org_id` reportada com `rowsecurity = false` gera violação `{ rule: "R1", table, detail: "RLS desabilitada em tabela com org_id" }`, severidade FAIL. [Source: epic-900 §9, tabela R1]
 
-- [ ] **AC5 — Regra R2 (policy por comando):** para cada tabela com `org_id` (e fora da allowlist, se o arquivo existir), o motor verifica que existe pelo menos uma policy cujo `qual` (SELECT/UPDATE/DELETE) ou `with_check` (INSERT/UPDATE) referencia `org_id` — separadamente para os comandos SELECT, INSERT, UPDATE, DELETE (uma policy `FOR ALL` conta para os quatro se seu `qual`/`with_check` cobrir org). Ausência de cobertura para qualquer um dos quatro comandos gera violação `{ rule: "R2", table, detail: "sem policy org-scoped para {comando}" }`. [Source: epic-900 §9, tabela R2; auditoria P8]
+- [x] **AC5 — Regra R2 (policy por comando):** para cada tabela com `org_id` (e fora da allowlist, se o arquivo existir), o motor verifica que existe pelo menos uma policy cujo `qual` (SELECT/UPDATE/DELETE) ou `with_check` (INSERT/UPDATE) referencia `org_id` — separadamente para os comandos SELECT, INSERT, UPDATE, DELETE (uma policy `FOR ALL` conta para os quatro se seu `qual`/`with_check` cobrir org). Ausência de cobertura para qualquer um dos quatro comandos gera violação `{ rule: "R2", table, detail: "sem policy org-scoped para {comando}" }`. [Source: epic-900 §9, tabela R2; auditoria P8]
 
-- [ ] **AC6 — Regra R3 (tabela nova):** o motor compara a lista atual de tabelas de `public` contra um snapshot de tabelas conhecidas gravado nesta story (`docs/audits/tenancy-known-tables.json`, gerado a partir do estado atual de produção — ver Dev Notes/AUTO-DECISION). Toda tabela que aparecer no schema mas não estiver nesse snapshot ("tabela nova") e não tiver `org_id NOT NULL`, gera violação `{ rule: "R3", table, detail: "tabela nova sem org_id NOT NULL" }` — **sem exceção de baseline**, mesmo que listada na allowlist ainda não populada (a allowlist com `reason:` de `900-2c` é a única forma de isentar, e mesmo assim R3 nunca entra no baseline — é FAIL absoluto desde o dia 1, conforme o epic). [Source: epic-900 §9, tabela R3: "FAIL absoluto desde o dia 1, sem baseline"]
+- [x] **AC6 — Regra R3 (tabela nova):** o motor compara a lista atual de tabelas de `public` contra um snapshot de tabelas conhecidas gravado nesta story (`docs/audits/tenancy-known-tables.json`, gerado a partir do estado atual de produção — ver Dev Notes/AUTO-DECISION). Toda tabela que aparecer no schema mas não estiver nesse snapshot ("tabela nova") e não tiver `org_id NOT NULL`, gera violação `{ rule: "R3", table, detail: "tabela nova sem org_id NOT NULL" }` — **sem exceção de baseline**, mesmo que listada na allowlist ainda não populada (a allowlist com `reason:` de `900-2c` é a única forma de isentar, e mesmo assim R3 nunca entra no baseline — é FAIL absoluto desde o dia 1, conforme o epic). [Source: epic-900 §9, tabela R3: "FAIL absoluto desde o dia 1, sem baseline"]
 
   **Invariante obrigatório de `tenancy-known-tables.json` — este arquivo NUNCA cresce.** É funcionalmente uma grandfather list: existe só para dar a R3 um ponto de referência do que já era schema legado no dia em que o gate nasceu. R3 é a única regra que o epic marca como "FAIL absoluto desde o dia 1, sem baseline" — ou seja, é a regra desenhada para não ter válvula de escape. Se `tenancy-known-tables.json` puder ganhar entradas depois da geração inicial (T3.3), qualquer `@dev` que veja R3 vermelho por uma tabela nova legítima tem um caminho de um commit para calar a regra para sempre, sem `reason:`, sem revisão — o oposto exato do que R3 existe para impedir. **O caminho correto para uma tabela nova legítima sem `org_id` (ex.: tabela de plataforma, como as de custo interno do Epic 78) é a allowlist de `900-2c` (`docs/audits/tenancy-allowlist.yml`), com `reason:` obrigatório e revisável em diff — nunca uma edição em `tenancy-known-tables.json`.** Esta story deve deixar isso explícito em pelo menos dois lugares com força de contrato: (a) um comentário no próprio arquivo gerado (`tenancy-known-tables.json` ou um `README` ao lado) dizendo "NÃO EDITAR — grandfather list congelada em {data}; tabela nova sem org_id vai para tenancy-allowlist.yml com reason:"; (b) idealmente, o motor recusa a rodar (ou emite erro forte) se detectar que o arquivo foi editado fora do processo de geração automatizada (ex.: checksum ou contagem de linhas gravada junto — decisão de implementação do @dev, desde que o efeito líquido seja "editar este arquivo à mão é visivelmente anômalo", não silencioso).
 
-- [ ] **AC7 — Regra R4 (policy permissiva `USING(true)`):** toda tabela com `org_id` que tiver uma policy `PERMISSIVE` com `qual` igual a `true` (após `btrim`) e `roles` contendo `public` ou `authenticated` gera violação `{ rule: "R4", table, detail: "policy permissiva USING(true) anula as demais" }` — reproduzindo o padrão exato do achado P3 da auditoria (`system_events`). [Source: epic-900 §9, tabela R4; auditoria P3]
+- [x] **AC7 — Regra R4 (policy permissiva `USING(true)`):** toda tabela com `org_id` que tiver uma policy `PERMISSIVE` com `qual` igual a `true` (após `btrim`) e `roles` contendo `public` ou `authenticated` gera violação `{ rule: "R4", table, detail: "policy permissiva USING(true) anula as demais" }` — reproduzindo o padrão exato do achado P3 da auditoria (`system_events`). [Source: epic-900 §9, tabela R4; auditoria P3]
 
-- [ ] **AC8 — Saída dupla:** rodar `pnpm gate:tenancy` imprime (a) uma tabela legível no stdout com uma linha por violação (regra, tabela, detalhe) e (b) grava um JSON (`docs/audits/gate-tenancy-report.json` ou caminho equivalente documentado no Dev Notes) com a mesma informação estruturada, pronto para ser lido por `900-2c` (comentário de PR) sem reprocessamento. [Source: epic-900 §9, "Saída dupla: tabela legível + JSON"]
+- [x] **AC8 — Saída dupla:** rodar `pnpm gate:tenancy` imprime (a) uma tabela legível no stdout com uma linha por violação (regra, tabela, detalhe) e (b) grava um JSON (`docs/audits/gate-tenancy-report.json` ou caminho equivalente documentado no Dev Notes) com a mesma informação estruturada, pronto para ser lido por `900-2c` (comentário de PR) sem reprocessamento. [Source: epic-900 §9, "Saída dupla: tabela legível + JSON"]
 
-- [ ] **AC9 — Exit code:** `pnpm gate:tenancy` retorna exit code `1` se qualquer regra R1-R4 encontrar violação, `0` caso contrário. (A camada de baseline/catraca que transforma isso em "não-bloqueante nesta onda" é `900-2c` — este script, isolado, é cru.) [Source: epic-900 §9, "Exit code 1 em FAIL"]
+- [x] **AC9 — Exit code:** `pnpm gate:tenancy` retorna exit code `1` se qualquer regra R1-R4 encontrar violação, `0` caso contrário. (A camada de baseline/catraca que transforma isso em "não-bloqueante nesta onda" é `900-2c` — este script, isolado, é cru.) [Source: epic-900 §9, "Exit code 1 em FAIL"]
 
-- [ ] **AC10 — Interface extensível:** as regras são implementadas como funções independentes registradas numa lista (`const rules: Rule[] = [ruleR1, ruleR2, ruleR3, ruleR4]`), de forma que `900-2b` adicione R5-R9 sem alterar a assinatura do motor nem a lógica de introspecção. Documentar a interface `Rule` no próprio arquivo (JSDoc) para uso direto por quem implementar `900-2b`. [Source: epic-900 §10, regra de decomposição — corte "motor + R1-R4 / R5-R9" só funciona se a interface for estável entre as duas stories]
+- [x] **AC10 — Interface extensível:** as regras são implementadas como funções independentes registradas numa lista (`const rules: Rule[] = [ruleR1, ruleR2, ruleR3, ruleR4]`), de forma que `900-2b` adicione R5-R9 sem alterar a assinatura do motor nem a lógica de introspecção. Documentar a interface `Rule` no próprio arquivo (JSDoc) para uso direto por quem implementar `900-2b`. [Source: epic-900 §10, regra de decomposição — corte "motor + R1-R4 / R5-R9" só funciona se a interface for estável entre as duas stories]
 
 ---
 
 ## Tasks / Subtasks
 
-- [ ] **T1** — Confirmar padrão de acesso à Management API (AC2, AC3)
-  - [ ] T1.1 — Ler memória do projeto (`reference_supabase_management_api.md`) e confirmar o endpoint `POST /v1/projects/{ref}/database/query` com `Authorization: Bearer {PAT}`
-  - [ ] T1.2 — Confirmar variável de ambiente `SUPABASE_MANAGEMENT_PAT` (nome exato usado na arquitetura e no epic — não inventar nome alternativo) e `project_ref` de produção (`dsopqkqjkmhytudaaolv`, já usado em outras stories/QA gates do projeto)
+- [x] **T1** — Confirmar padrão de acesso à Management API (AC2, AC3)
+  - [x] T1.1 — Ler memória do projeto (`reference_supabase_management_api.md`) e confirmar o endpoint `POST /v1/projects/{ref}/database/query` com `Authorization: Bearer {PAT}`
+  - [x] T1.2 — Confirmar variável de ambiente `SUPABASE_MANAGEMENT_PAT` (nome exato usado na arquitetura e no epic — não inventar nome alternativo) e `project_ref` de produção (`dsopqkqjkmhytudaaolv`, já usado em outras stories/QA gates do projeto)
 
-- [ ] **T2** — Implementar o motor de introspecção (AC2, AC3, AC8)
-  - [ ] T2.1 — Função de query via Management API (colunas `org_id`, `pg_policies`, `rowsecurity`)
-  - [ ] T2.2 — Script novo `scripts/generate-schema-snapshot.ts` que roda a mesma introspecção e grava `docs/audits/schema-snapshot.json` (**correção da arquitetura** — ver Dev Notes; NÃO reusar `scripts/sync-schema.sh`, que faz `supabase db push` e não gera snapshot nenhum)
-  - [ ] T2.3 — Lógica de fallback: `SUPABASE_MANAGEMENT_PAT` ausente/erro de API → ler `schema-snapshot.json` com aviso explícito no stdout
-  - [ ] T2.4 — Formato de saída dupla (stdout tabela + JSON em arquivo)
+- [x] **T2** — Implementar o motor de introspecção (AC2, AC3, AC8)
+  - [x] T2.1 — Função de query via Management API (colunas `org_id`, `pg_policies`, `rowsecurity`)
+  - [x] T2.2 — Script novo `scripts/generate-schema-snapshot.ts` que roda a mesma introspecção e grava `docs/audits/schema-snapshot.json` (**correção da arquitetura** — ver Dev Notes; NÃO reusar `scripts/sync-schema.sh`, que faz `supabase db push` e não gera snapshot nenhum)
+  - [x] T2.3 — Lógica de fallback: `SUPABASE_MANAGEMENT_PAT` ausente/erro de API → ler `schema-snapshot.json` com aviso explícito no stdout
+  - [x] T2.4 — Formato de saída dupla (stdout tabela + JSON em arquivo)
 
-- [ ] **T3** — Implementar R1-R4 (AC4-AC7)
-  - [ ] T3.1 — R1: `rowsecurity = false` em tabela com `org_id`
-  - [ ] T3.2 — R2: cobertura de policy por comando (SELECT/INSERT/UPDATE/DELETE)
-  - [ ] T3.3 — Gerar `docs/audits/tenancy-known-tables.json` (snapshot da lista atual de tabelas, ver AC6/AUTO-DECISION) e implementar R3 contra ele
-  - [ ] T3.4 — R4: policy `PERMISSIVE`, `qual = 'true'`, `roles` contendo `public`/`authenticated`
+- [x] **T3** — Implementar R1-R4 (AC4-AC7)
+  - [x] T3.1 — R1: `rowsecurity = false` em tabela com `org_id`
+  - [x] T3.2 — R2: cobertura de policy por comando (SELECT/INSERT/UPDATE/DELETE)
+  - [x] T3.3 — Gerar `docs/audits/tenancy-known-tables.json` (snapshot da lista atual de tabelas, ver AC6/AUTO-DECISION) e implementar R3 contra ele
+  - [x] T3.4 — R4: policy `PERMISSIVE`, `qual = 'true'`, `roles` contendo `public`/`authenticated`
 
-- [ ] **T4** — Interface extensível para `900-2b` (AC10)
-  - [ ] T4.1 — Definir tipo `Rule` (`(schema: IntrospectedSchema) => Violation[]`) e lista `rules: Rule[]`
-  - [ ] T4.2 — JSDoc de contrato para quem implementar R5-R9
+- [x] **T4** — Interface extensível para `900-2b` (AC10)
+  - [x] T4.1 — Definir tipo `Rule` (`(schema: IntrospectedSchema) => Violation[]`) e lista `rules: Rule[]`
+  - [x] T4.2 — JSDoc de contrato para quem implementar R5-R9
 
-- [ ] **T5** — Rodar contra produção (read-only) e validar (AC9)
-  - [ ] T5.1 — Rodar `pnpm gate:tenancy` contra o schema real (via Management API, read-only — `SELECT`, nunca `INSERT`/`UPDATE`/`DELETE`)
-  - [ ] T5.2 — Conferir que as violações batem, na direção esperada, com os achados ainda abertos da auditoria (P5, P8 — sem exigir 100% de cobertura, já que R5-R9 e a allowlist ainda não existem; documentar o que aparece)
-  - [ ] T5.3 — Confirmar exit code correto nos dois cenários (com e sem violação simulada)
+- [x] **T5** — Rodar contra produção (read-only) e validar (AC9)
+  - [x] T5.1 — Rodar `pnpm gate:tenancy` contra o schema real (via Management API, read-only — `SELECT`, nunca `INSERT`/`UPDATE`/`DELETE`)
+  - [x] T5.2 — Conferir que as violações batem, na direção esperada, com os achados ainda abertos da auditoria (P5, P8 — sem exigir 100% de cobertura, já que R5-R9 e a allowlist ainda não existem; documentar o que aparece)
+  - [x] T5.3 — Confirmar exit code correto nos dois cenários (com e sem violação simulada)
 
 ---
 
@@ -231,19 +231,109 @@ Para SELECT/DELETE, `qual` (a cláusula `USING`) é o que importa. Para INSERT, 
 ## Dev Agent Record
 
 ### Agent Model Used
-_A preencher pelo @dev/@data-engineer na implementação._
+@dev (Dex) — 2026-08-23.
 
 ### Debug Log References
-_A preencher._
+Gate executado contra produção (`dsopqkqjkmhytudaaolv`) em modo **read-only** — a introspecção
+só faz `SELECT` em catálogo (`pg_tables`, `pg_policies`, `pg_class`, `information_schema.columns`).
+Nenhuma escrita.
 
-### Completion Notes List
-_A preencher._
+### O achado que definiu a implementação: 164 falsos positivos na primeira R2
+
+A primeira versão da R2 checava `with_check` isoladamente para INSERT. Contra o schema real,
+acusou **164 violações** — e a inspeção de um caso (`properties`) mostrou que a tabela **estava
+protegida**:
+
+```
+properties_manage | ALL | USING ((org_id = user_org_id()) AND has_capability(...)) | WITH CHECK <null>
+```
+
+**Quando `WITH CHECK` é omitido, o Postgres aplica a expressão do `USING` também às linhas novas.**
+E `FOR ALL USING (org_id = …)` sem `WITH CHECK` é o padrão dominante deste projeto, de modo que a
+regra ingênua reportava como desprotegida quase toda tabela que estava correta.
+
+Corrigido com `expressaoAplicada(policy, cmd)`, que modela a semântica real: `SELECT`/`DELETE` leem
+`qual`; `INSERT` lê `with_check` e **cai no `qual`** quando aquele está vazio; `UPDATE` aceita
+qualquer um dos dois. As violações caíram de **164 → 118**, e as 118 restantes foram verificadas
+uma a uma por amostragem contra `pg_policies`.
+
+**Por que isso não é detalhe:** um gate que grita em 164 tabelas corretas não é um gate rigoroso, é
+ruído — e ruído treina o time a ignorar o vermelho. O risco de errar aqui é maior que o de não ter
+gate nenhum, porque o gate ruidoso dá a sensação de cobertura sem entregá-la. O caso virou teste
+dedicado (`WITH CHECK omitido: o USING vale para INSERT`).
+
+### Resultado contra produção — 118 violações reais, todas de R2
+
+| Regra | Violações | Leitura |
+|---|---|---|
+| R1 (RLS off com `org_id`) | **0** | RLS está ligada em todas as 92 tabelas com `org_id` |
+| R2 (cobertura por comando) | **118** em 34 tabelas | a dívida real |
+| R3 (tabela nova sem `org_id`) | **0** | esperado: a grandfather list foi congelada agora |
+| R4 (`USING(true)` permissiva) | **0** | o P3 da auditoria (`system_events`) foi corrigido pelo PR #308 |
+
+Das 34 tabelas: **24 com os quatro comandos descobertos** (verificado: `marketing_brands` e
+`supremo_sync_log` têm **zero** policies) e **10 com cobertura parcial** — `system_events` só tem
+SELECT, `leads` e `users` só faltam DELETE.
+
+**Nem toda violação é bug.** Várias tabelas parciais são logs append-only escritos só por
+service-role (`audit_logs`, `agent_pii_access_log`, `financial_notification_log`) — para elas, a
+ausência de policy de DELETE/UPDATE pode ser desenho correto. **É exatamente para isso que existe a
+allowlist com `reason:` obrigatório, e ela é da `900-2c`.** Esta story mede; classificar o que é
+dívida e o que é desenho é o passo seguinte, e fazê-lo aqui seria inventar veredito sem o mecanismo
+que o registra.
+
+### Decisões de implementação
+
+- **R3 e a grandfather list congelada.** `tenancy-known-tables.json` guarda `contagem` + `checksum`
+  (FNV-1a) das 120 tabelas de produção. O gate **recusa rodar** se o arquivo divergir — testado:
+  acrescentar uma linha à mão produz erro explícito com instrução de reverter. Sem essa guarda, o
+  primeiro dev que visse R3 vermelho teria um caminho de um commit para calar a regra para sempre.
+  O gerador (`generate-known-tables.ts`) também exige `REGENERAR_GRANDFATHER_LIST=1`, porque
+  regerá-lo tem o mesmo efeito de desarmar a R3 — e é mais fácil de fazer por engano.
+- **`generate-schema-snapshot.ts` aborta se a introspecção cair para snapshot.** Sem isso, uma falha
+  de API regravaria o snapshot a partir dele mesmo: a data "atualizaria" e o schema velho ficaria
+  congelado para sempre, sem ninguém perceber.
+- **R2 não reporta tabela que R1 já pegou** — RLS desligada geraria 4 violações redundantes por
+  tabela, inflando o número que a `900-2c` vai usar como baseline.
+- **A ressalva de cobertura é impressa em toda execução**, mesmo verde. O gate mede o BANCO; 129 dos
+  318 handlers usam service-role e bypassam RLS. Verde aqui **não** é ausência de vazamento.
+
+### Lacuna que encontrei e não corrigi (fora do escopo, mas precisa ser dita)
+
+**`scripts/` não é type-checkado pelo CI.** O `pnpm type-check` roda `turbo type-check`, que executa
+`tsc --noEmit` **por pacote** — e os scripts da raiz não pertencem a pacote nenhum. Além disso,
+`@types/node` está em `packages/web/node_modules`, não na raiz, então nem um `tsc` avulso funciona
+sem apontar `--typeRoots`.
+
+Verifiquei os quatro scripts manualmente e estão limpos:
+```
+npx tsc --noEmit --strict --typeRoots ./packages/web/node_modules/@types --types node \
+  scripts/gate-tenancy.ts scripts/generate-schema-snapshot.ts \
+  scripts/generate-known-tables.ts scripts/reset-tenancy-testdb.ts   # sem erros
+```
+Mas isso é verificação manual, e verificação manual apodrece. **Recomendação para a `900-2c`**, que
+já vai mexer no wiring do CI: acrescentar um `tsconfig.scripts.json` e um job/step que type-checke a
+raiz. Registrado aqui porque descobri implementando, não como pedido de escopo novo.
+
+### Testes
+
+`scripts/gate-tenancy.test.ts` — **17 casos**, todos passando. Cobrem: R1 (RLS off, tabela sem
+`org_id`, caso verde), R2 (o falso positivo do `WITH CHECK` omitido, policy só de SELECT, tabela sem
+policy, allowlist, não-duplicação com R1, `WITH CHECK` não cobrindo SELECT), R4 (permissiva vs
+restritiva, caixa/espaço em `TRUE`, tabela sem `org_id`) e o checksum da grandfather list.
+
+`vitest.config.ts` ganhou `scripts/**/*.test.ts` no `include` — sem isso os testes existiriam no
+repo e **nunca rodariam**, que é pior que não existir, porque passa impressão de cobertura.
+
+Suíte completa: **242 arquivos, 2921 testes** (era 241/2904). `type-check` e `lint` limpos.
 
 ### File List
-_A preencher._
-
----
-
-## QA Results
-
-_A preencher pelo @architect (quality gate desta story)._
+- `scripts/gate-tenancy.ts` (novo) — motor de introspecção, interface `Rule`, R1-R4, saída dupla
+- `scripts/gate-tenancy.test.ts` (novo) — 17 testes das regras
+- `scripts/generate-schema-snapshot.ts` (novo) — gerador do fallback versionado
+- `scripts/generate-known-tables.ts` (novo) — congela a grandfather list, uma vez só
+- `docs/audits/schema-snapshot.json` (novo) — 120 tabelas, 163 policies
+- `docs/audits/tenancy-known-tables.json` (novo) — grandfather list com checksum
+- `docs/audits/gate-tenancy-report.json` (novo) — saída estruturada para a `900-2c`
+- `package.json` — scripts `gate:tenancy` e `gate:tenancy:snapshot`
+- `vitest.config.ts` — inclui `scripts/**/*.test.ts`
