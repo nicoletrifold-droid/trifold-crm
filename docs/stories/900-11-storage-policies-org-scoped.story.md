@@ -2,7 +2,7 @@
 
 ## Metadata
 - **Epic:** 900 · **Onda:** 1 — Isolamento · **Story:** 900-11
-- **Status:** Ready
+- **Status:** InReview — migration escrita e VALIDADA no banco de teste. Falta só T3/AC6 (aplicar em produção + smoke), que exige sua autorização.
 - **Priority:** P0 — furo de leitura cross-tenant ativo em produção
 - **Complexity:** M
 - **Created:** 2026-08-23 · **Author:** @sm (River)
@@ -72,22 +72,22 @@ só migrando o que já existe.
 
 ## Acceptance Criteria
 
-- [ ] **AC1 — Buckets com `org_id` no path ganham policy ancorada:** `chamados-attachments`,
+- [x] **AC1 — Buckets com `org_id` no path ganham policy ancorada:** `chamados-attachments`,
   `marketing-artes` e `marketing-brands` passam a exigir
   `(storage.foldername(name))[1] = user_org_id()::text` em SELECT, INSERT, UPDATE e DELETE.
 
-- [ ] **AC2 — Buckets de obra ancorados por JOIN:** `obra-docs`, `obra-fotos` e `obra-mensagens`
+- [x] **AC2 — Buckets de obra ancorados por JOIN:** `obra-docs`, `obra-fotos` e `obra-mensagens`
   exigem que a obra referenciada em `path[2]` pertença à org do chamador:
   `EXISTS (select 1 from obras b where b.id::text = (storage.foldername(name))[2] and b.org_id = user_org_id())`.
 
-- [ ] **AC3 — As capacidades existentes são preservadas:** onde já havia `has_capability(...)`, ela
+- [x] **AC3 — As capacidades existentes são preservadas:** onde já havia `has_capability(...)`, ela
   permanece **e** ganha o escopo de org. Escopo de org substitui `bucket_id` como âncora, nunca a
   verificação de permissão.
 
-- [ ] **AC4 — `nicole-media`, `campaign-assets` e `lancamentos` NÃO são alterados nesta story**, e o
+- [x] **AC4 — `nicole-media`, `campaign-assets` e `lancamentos` NÃO são alterados nesta story**, e o
   motivo fica escrito na própria migration. Mexer neles sem migrar os objetos quebra acesso.
 
-- [ ] **AC5 — Rollback documentado no arquivo**, conforme NFR-8: bloco `-- ROLLBACK` com o
+- [x] **AC5 — Rollback documentado no arquivo**, conforme NFR-8: bloco `-- ROLLBACK` com o
   `DROP/CREATE` reverso de cada policy.
 
 - [ ] **AC6 — Verificação pós-aplicação:** o gate passa a contar policies de storage com escopo de
@@ -96,8 +96,8 @@ só migrando o que já existe.
 ---
 
 ## Tasks
-- [ ] **T1** — Migration com as policies dos 6 buckets ancoráveis (AC1-AC3, AC5)
-- [ ] **T2** — Comentário na migration explicando os 3 buckets fora de escopo (AC4)
+- [x] **T1** — Migration com as policies dos 6 buckets ancoráveis (AC1-AC3, AC5)
+- [x] **T2** — Comentário na migration explicando os 3 buckets fora de escopo (AC4)
 - [ ] **T3** — Aplicar em produção pela Management API e rodar o smoke (AC6)
 
 ---
@@ -114,4 +114,41 @@ não de exposição — mas ainda assim a migration deve rodar num único `POST`
 como manda o runbook do projeto.
 
 ## Dev Agent Record
-_A preencher._
+
+### Agent Model Used
+@dev (Dex) — 2026-08-23.
+
+### Validada no banco de teste, não só escrita
+
+A migration `238` foi aplicada no Supabase de teste (`xnxvygyfyyyzwhiuoehz`), num único POST
+(transação implícita), e passou sem erro:
+
+| | antes | depois |
+|---|---|---|
+| policies em `storage` | 21 | 21 |
+| **com escopo de org** | **0** | **13** |
+
+Este é o primeiro uso real do harness da `900-3` para o fim que ele existe: validar uma mudança de
+segurança **antes** de tocar produção. Sem ele, a alternativa era aplicar direto e descobrir na
+prática — que é exatamente o que o Epic 900 existe para eliminar.
+
+### O que NÃO foi feito, e por quê
+
+**A migration não foi aplicada em produção.** Ela altera controle de acesso a arquivos: se o
+predicado estiver errado, o portal do cliente para de exibir fotos e documentos de obra. A aplicação
+exige autorização explícita e um smoke logo em seguida (AC6/T3).
+
+**`nicole-media` não foi tocado**, e a decisão é de dado: 103 dos 115 objetos não têm `org_id` no
+path. Ancorá-lo agora tornaria o histórico de mídia das conversas inacessível — seria trocar um furo
+de isolamento por uma quebra funcional.
+
+### Um limite desta story que precisa ser dito
+
+`obra-fotos` continua sendo um **bucket público**. A policy de SELECT que esta migration cria
+melhora o controle via API, mas **em bucket público a URL basta** — quem tiver o link lê o arquivo,
+policy nenhuma impede. O furo real desse bucket só fecha na `900-12`, e esta story não deve ser lida
+como tendo resolvido a exposição de fotos de obra.
+
+### File List
+- `supabase/migrations/238_storage_policies_org_scoped.sql` (novo) — 6 buckets, com bloco ROLLBACK
+- `docs/stories/900-11-storage-policies-org-scoped.story.md` (novo)
