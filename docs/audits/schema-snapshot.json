@@ -1,0 +1,2359 @@
+{
+  "tables": [
+    {
+      "name": "activities",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "agent_chat_messages",
+      "rowsecurity": true,
+      "hasOrgId": false,
+      "orgIdNotNull": false
+    },
+    {
+      "name": "agent_chat_sessions",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "agent_config",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "agent_media_assets",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "agent_pii_access_log",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "agent_prompt_versions",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": false
+    },
+    {
+      "name": "agent_prompts",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "appointments",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "audit_logs",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "billing_cost_alerts_sent",
+      "rowsecurity": true,
+      "hasOrgId": false,
+      "orgIdNotNull": false
+    },
+    {
+      "name": "billing_monthly_summary_log",
+      "rowsecurity": true,
+      "hasOrgId": false,
+      "orgIdNotNull": false
+    },
+    {
+      "name": "brindes_destinatarios",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "brindes_entregas",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "brindes_tipos",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "broker_assignments",
+      "rowsecurity": true,
+      "hasOrgId": false,
+      "orgIdNotNull": false
+    },
+    {
+      "name": "brokers",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "campaign_email_images",
+      "rowsecurity": true,
+      "hasOrgId": false,
+      "orgIdNotNull": false
+    },
+    {
+      "name": "campaign_entries",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "campaign_events",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "campaigns",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "chamados",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "clicksign_webhook_debug",
+      "rowsecurity": true,
+      "hasOrgId": false,
+      "orgIdNotNull": false
+    },
+    {
+      "name": "cliente_obras",
+      "rowsecurity": true,
+      "hasOrgId": false,
+      "orgIdNotNull": false
+    },
+    {
+      "name": "clientes",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "clientes_obras_vinculos",
+      "rowsecurity": true,
+      "hasOrgId": false,
+      "orgIdNotNull": false
+    },
+    {
+      "name": "conversation_state",
+      "rowsecurity": true,
+      "hasOrgId": false,
+      "orgIdNotNull": false
+    },
+    {
+      "name": "conversations",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "cron_locks",
+      "rowsecurity": true,
+      "hasOrgId": false,
+      "orgIdNotNull": false
+    },
+    {
+      "name": "datas_comemorativas",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "email_automations",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "email_blasts",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "email_logs",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "email_sends_queue",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "email_settings",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "email_templates",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "financial_notification_log",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "follow_up_log",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "follow_up_rules",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "fornecedores",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "fvs_equipes",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "fvs_ficha_modelo_itens",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "fvs_fichas_modelo",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "fvs_locais",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "fvs_servicos",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "imob_card_comments",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "imob_cards",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "imob_columns",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "imobiliarias",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "kanban_stages",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "knowledge_base",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "lancamento_card_attachments",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "lancamento_card_checklist",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "lancamento_card_comments",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "lancamento_card_fornecedores",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "lancamento_cards",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "lancamento_columns",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "lancamentos",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "lead_distribution_log",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "lead_form_responses",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "lead_forms",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "lead_property_interest",
+      "rowsecurity": true,
+      "hasOrgId": false,
+      "orgIdNotNull": false
+    },
+    {
+      "name": "lead_tasks",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "leads",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "marketing_brand_assets",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "marketing_brands",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "marketing_posts",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "messages",
+      "rowsecurity": true,
+      "hasOrgId": false,
+      "orgIdNotNull": false
+    },
+    {
+      "name": "meta_ad_accounts",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "meta_ads",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "meta_adsets",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "meta_alerts",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "meta_campaigns",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "meta_capi_outbox",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "meta_insights_daily",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "meta_insights_placement_daily",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "meta_sync_log",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "obra_conversas",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "obra_conversas_participants",
+      "rowsecurity": true,
+      "hasOrgId": false,
+      "orgIdNotNull": false
+    },
+    {
+      "name": "obra_documentos",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "obra_fase_templates",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "obra_fases",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "obra_fotos",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "obra_mensagens",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "obra_notif_dedup",
+      "rowsecurity": true,
+      "hasOrgId": false,
+      "orgIdNotNull": false
+    },
+    {
+      "name": "obra_notificacao_prefs",
+      "rowsecurity": true,
+      "hasOrgId": false,
+      "orgIdNotNull": false
+    },
+    {
+      "name": "obra_upload_aprovacoes",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "obras",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "organizations",
+      "rowsecurity": true,
+      "hasOrgId": false,
+      "orgIdNotNull": false
+    },
+    {
+      "name": "password_reset_throttle",
+      "rowsecurity": true,
+      "hasOrgId": false,
+      "orgIdNotNull": false
+    },
+    {
+      "name": "pasta_documentos",
+      "rowsecurity": true,
+      "hasOrgId": false,
+      "orgIdNotNull": false
+    },
+    {
+      "name": "pasta_links",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "pastas",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "platform_services",
+      "rowsecurity": true,
+      "hasOrgId": false,
+      "orgIdNotNull": false
+    },
+    {
+      "name": "privacy_consents",
+      "rowsecurity": true,
+      "hasOrgId": false,
+      "orgIdNotNull": false
+    },
+    {
+      "name": "properties",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "property_media",
+      "rowsecurity": true,
+      "hasOrgId": false,
+      "orgIdNotNull": false
+    },
+    {
+      "name": "push_subscriptions",
+      "rowsecurity": true,
+      "hasOrgId": false,
+      "orgIdNotNull": false
+    },
+    {
+      "name": "qualificacao_comercial_config",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "role_permissions",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "roles",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "roleta_config",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "roleta_fila",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "roleta_schedule",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "service_billing_reminders",
+      "rowsecurity": true,
+      "hasOrgId": false,
+      "orgIdNotNull": false
+    },
+    {
+      "name": "service_cost_snapshots",
+      "rowsecurity": true,
+      "hasOrgId": false,
+      "orgIdNotNull": false
+    },
+    {
+      "name": "sienge_webhook_dedup",
+      "rowsecurity": true,
+      "hasOrgId": false,
+      "orgIdNotNull": false
+    },
+    {
+      "name": "signature_envelopes",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "supremo_sync_log",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": false
+    },
+    {
+      "name": "system_events",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": false
+    },
+    {
+      "name": "typologies",
+      "rowsecurity": true,
+      "hasOrgId": false,
+      "orgIdNotNull": false
+    },
+    {
+      "name": "unit_sales",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "units",
+      "rowsecurity": true,
+      "hasOrgId": false,
+      "orgIdNotNull": false
+    },
+    {
+      "name": "user_permission_exceptions",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "users",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "visit_feedback",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": false
+    },
+    {
+      "name": "webhook_logs",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": false
+    },
+    {
+      "name": "whatsapp_config",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    },
+    {
+      "name": "whatsapp_pricing",
+      "rowsecurity": true,
+      "hasOrgId": false,
+      "orgIdNotNull": false
+    },
+    {
+      "name": "whatsapp_send_log",
+      "rowsecurity": true,
+      "hasOrgId": true,
+      "orgIdNotNull": true
+    }
+  ],
+  "policies": [
+    {
+      "table": "activities",
+      "cmd": "INSERT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "",
+      "withCheck": "(org_id = user_org_id())"
+    },
+    {
+      "table": "activities",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "agent_chat_messages",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(EXISTS ( SELECT 1\n   FROM agent_chat_sessions s\n  WHERE ((s.id = agent_chat_messages.session_id) AND (s.org_id = user_org_id()))))",
+      "withCheck": ""
+    },
+    {
+      "table": "agent_chat_sessions",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "agent_config",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((org_id = user_org_id()) AND has_capability('nicole.personalidade_editar'::text))",
+      "withCheck": ""
+    },
+    {
+      "table": "agent_config",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "agent_media_assets",
+      "cmd": "DELETE",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((org_id = user_org_id()) AND has_capability('nicole.midia_gerenciar'::text))",
+      "withCheck": ""
+    },
+    {
+      "table": "agent_media_assets",
+      "cmd": "INSERT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "",
+      "withCheck": "((org_id = user_org_id()) AND has_capability('nicole.midia_gerenciar'::text))"
+    },
+    {
+      "table": "agent_media_assets",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "agent_media_assets",
+      "cmd": "UPDATE",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((org_id = user_org_id()) AND has_capability('nicole.midia_gerenciar'::text))",
+      "withCheck": ""
+    },
+    {
+      "table": "agent_pii_access_log",
+      "cmd": "INSERT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "",
+      "withCheck": "(has_capability('agente.contexto_crm'::text) AND (org_id = user_org_id()))"
+    },
+    {
+      "table": "agent_pii_access_log",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(has_capability('agente.contexto_crm'::text) AND (org_id = user_org_id()))",
+      "withCheck": ""
+    },
+    {
+      "table": "agent_prompt_versions",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((org_id = user_org_id()) AND has_capability('nicole.personalidade_editar'::text))",
+      "withCheck": ""
+    },
+    {
+      "table": "agent_prompts",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((org_id = user_org_id()) AND has_capability('nicole.personalidade_editar'::text))",
+      "withCheck": ""
+    },
+    {
+      "table": "agent_prompts",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "appointments",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "appointments",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "audit_logs",
+      "cmd": "DELETE",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "false",
+      "withCheck": ""
+    },
+    {
+      "table": "audit_logs",
+      "cmd": "INSERT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "",
+      "withCheck": "false"
+    },
+    {
+      "table": "audit_logs",
+      "cmd": "UPDATE",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "false",
+      "withCheck": "false"
+    },
+    {
+      "table": "audit_logs",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((org_id = ( SELECT users.org_id\n   FROM users\n  WHERE (users.auth_id = auth.uid()))) AND (( SELECT users.role\n   FROM users\n  WHERE (users.auth_id = auth.uid())) = 'admin'::text))",
+      "withCheck": ""
+    },
+    {
+      "table": "billing_cost_alerts_sent",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "is_platform_admin()",
+      "withCheck": ""
+    },
+    {
+      "table": "billing_monthly_summary_log",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "is_platform_admin()",
+      "withCheck": ""
+    },
+    {
+      "table": "brindes_destinatarios",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "brindes_destinatarios",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((org_id = user_org_id()) AND has_capability('brindes'::text))",
+      "withCheck": ""
+    },
+    {
+      "table": "brindes_entregas",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "brindes_entregas",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((org_id = user_org_id()) AND has_capability('brindes'::text))",
+      "withCheck": ""
+    },
+    {
+      "table": "brindes_tipos",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "brindes_tipos",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((org_id = user_org_id()) AND has_capability('brindes'::text))",
+      "withCheck": ""
+    },
+    {
+      "table": "broker_assignments",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((EXISTS ( SELECT 1\n   FROM brokers b\n  WHERE ((b.id = broker_assignments.broker_id) AND (b.org_id = user_org_id())))) AND has_capability('corretores'::text))",
+      "withCheck": ""
+    },
+    {
+      "table": "broker_assignments",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(EXISTS ( SELECT 1\n   FROM brokers b\n  WHERE ((b.id = broker_assignments.broker_id) AND (b.org_id = user_org_id()))))",
+      "withCheck": ""
+    },
+    {
+      "table": "brokers",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((org_id = user_org_id()) AND has_capability('corretores.gerenciar'::text))",
+      "withCheck": ""
+    },
+    {
+      "table": "brokers",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "campaign_email_images",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(campaign_id IN ( SELECT campaigns.id\n   FROM campaigns\n  WHERE (campaigns.org_id = ( SELECT users.org_id\n           FROM users\n          WHERE (users.id = auth.uid())))))",
+      "withCheck": "(campaign_id IN ( SELECT campaigns.id\n   FROM campaigns\n  WHERE (campaigns.org_id = ( SELECT users.org_id\n           FROM users\n          WHERE (users.id = auth.uid())))))"
+    },
+    {
+      "table": "campaign_entries",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = ( SELECT users.org_id\n   FROM users\n  WHERE (users.auth_id = auth.uid())))",
+      "withCheck": ""
+    },
+    {
+      "table": "campaign_events",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = ( SELECT users.org_id\n   FROM users\n  WHERE (users.auth_id = auth.uid())))",
+      "withCheck": ""
+    },
+    {
+      "table": "campaigns",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = ( SELECT users.org_id\n   FROM users\n  WHERE (users.auth_id = auth.uid())))",
+      "withCheck": ""
+    },
+    {
+      "table": "chamados",
+      "cmd": "DELETE",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((org_id = user_org_id()) AND has_capability('chamados.apagar'::text))",
+      "withCheck": ""
+    },
+    {
+      "table": "chamados",
+      "cmd": "INSERT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "",
+      "withCheck": "((org_id = user_org_id()) AND (reporter_id = ( SELECT users.id\n   FROM users\n  WHERE (users.auth_id = auth.uid()))))"
+    },
+    {
+      "table": "chamados",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((org_id = user_org_id()) AND ((reporter_id = ( SELECT users.id\n   FROM users\n  WHERE (users.auth_id = auth.uid()))) OR has_capability('chamados.ver_todos'::text)))",
+      "withCheck": ""
+    },
+    {
+      "table": "chamados",
+      "cmd": "UPDATE",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((org_id = user_org_id()) AND has_capability('chamados.responder'::text))",
+      "withCheck": "((org_id = user_org_id()) AND has_capability('chamados.responder'::text))"
+    },
+    {
+      "table": "cliente_obras",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((EXISTS ( SELECT 1\n   FROM obras o\n  WHERE ((o.id = cliente_obras.obra_id) AND (o.org_id = user_org_id())))) AND has_capability('clientes.gerenciar'::text))",
+      "withCheck": ""
+    },
+    {
+      "table": "cliente_obras",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(user_id = public_user_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "clientes",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((org_id = user_org_id()) AND has_capability('clientes.gerenciar'::text))",
+      "withCheck": ""
+    },
+    {
+      "table": "clientes",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "clientes_obras_vinculos",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(has_capability('clientes.gerenciar'::text) AND (EXISTS ( SELECT 1\n   FROM clientes c\n  WHERE ((c.id = clientes_obras_vinculos.cliente_id) AND (c.org_id = user_org_id())))))",
+      "withCheck": ""
+    },
+    {
+      "table": "clientes_obras_vinculos",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(EXISTS ( SELECT 1\n   FROM clientes c\n  WHERE ((c.id = clientes_obras_vinculos.cliente_id) AND (c.org_id = user_org_id()))))",
+      "withCheck": ""
+    },
+    {
+      "table": "conversation_state",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(EXISTS ( SELECT 1\n   FROM conversations c\n  WHERE ((c.id = conversation_state.conversation_id) AND (c.org_id = user_org_id()))))",
+      "withCheck": ""
+    },
+    {
+      "table": "conversation_state",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(EXISTS ( SELECT 1\n   FROM conversations c\n  WHERE ((c.id = conversation_state.conversation_id) AND (c.org_id = user_org_id()))))",
+      "withCheck": ""
+    },
+    {
+      "table": "conversations",
+      "cmd": "INSERT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "",
+      "withCheck": "(org_id = user_org_id())"
+    },
+    {
+      "table": "conversations",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((org_id = user_org_id()) AND (has_capability('conversas.ver_qualquer'::text) OR (EXISTS ( SELECT 1\n   FROM leads l\n  WHERE ((l.id = conversations.lead_id) AND (l.assigned_broker_id = ( SELECT brokers.user_id\n           FROM brokers\n          WHERE (brokers.id = user_broker_id()))))))))",
+      "withCheck": ""
+    },
+    {
+      "table": "conversations",
+      "cmd": "UPDATE",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "datas_comemorativas",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "datas_comemorativas",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((org_id = user_org_id()) AND has_capability('brindes'::text))",
+      "withCheck": ""
+    },
+    {
+      "table": "email_automations",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "email_automations",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(auth.role() = 'service_role'::text)",
+      "withCheck": ""
+    },
+    {
+      "table": "email_blasts",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "email_blasts",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(auth.role() = 'service_role'::text)",
+      "withCheck": ""
+    },
+    {
+      "table": "email_logs",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "email_logs",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(auth.role() = 'service_role'::text)",
+      "withCheck": ""
+    },
+    {
+      "table": "email_sends_queue",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "email_sends_queue",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(auth.role() = 'service_role'::text)",
+      "withCheck": ""
+    },
+    {
+      "table": "email_settings",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "email_settings",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((org_id = user_org_id()) AND has_capability('sistema.emails_gerenciar'::text))",
+      "withCheck": ""
+    },
+    {
+      "table": "email_templates",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "email_templates",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(auth.role() = 'service_role'::text)",
+      "withCheck": ""
+    },
+    {
+      "table": "financial_notification_log",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "authenticated"
+      ],
+      "qual": "((org_id = user_org_id()) AND has_capability('sistema.notificacoes-financeiras'::text))",
+      "withCheck": ""
+    },
+    {
+      "table": "follow_up_log",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "follow_up_log",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "follow_up_rules",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((org_id = user_org_id()) AND has_capability('configuracoes.pipeline_followup'::text))",
+      "withCheck": ""
+    },
+    {
+      "table": "follow_up_rules",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "kanban_stages",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((org_id = user_org_id()) AND has_capability('configuracoes.pipeline_editar'::text))",
+      "withCheck": ""
+    },
+    {
+      "table": "kanban_stages",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "knowledge_base",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((org_id = user_org_id()) AND has_capability('nicole.treinamento_gerenciar'::text))",
+      "withCheck": ""
+    },
+    {
+      "table": "knowledge_base",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "lead_distribution_log",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": "(org_id = user_org_id())"
+    },
+    {
+      "table": "lead_property_interest",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(EXISTS ( SELECT 1\n   FROM leads l\n  WHERE ((l.id = lead_property_interest.lead_id) AND (l.org_id = user_org_id()))))",
+      "withCheck": ""
+    },
+    {
+      "table": "lead_property_interest",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(EXISTS ( SELECT 1\n   FROM leads l\n  WHERE ((l.id = lead_property_interest.lead_id) AND (l.org_id = user_org_id()))))",
+      "withCheck": ""
+    },
+    {
+      "table": "lead_tasks",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "lead_tasks",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "leads",
+      "cmd": "INSERT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "",
+      "withCheck": "(org_id = user_org_id())"
+    },
+    {
+      "table": "leads",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((org_id = user_org_id()) AND (has_capability('leads.ver_equipe'::text) OR (assigned_broker_id = public_user_id())))",
+      "withCheck": ""
+    },
+    {
+      "table": "leads",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((org_id = user_org_id()) AND (bolsao_em IS NOT NULL) AND (has_capability('bolsao'::text) OR (EXISTS ( SELECT 1\n   FROM (brokers b\n     JOIN users u ON ((u.id = b.user_id)))\n  WHERE ((u.auth_id = auth.uid()) AND (b.is_available IS NOT NULL))))))",
+      "withCheck": ""
+    },
+    {
+      "table": "leads",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((org_id = user_org_id()) AND (EXISTS ( SELECT 1\n   FROM users u\n  WHERE ((u.auth_id = auth.uid()) AND (u.role = 'consultoria'::text)))))",
+      "withCheck": ""
+    },
+    {
+      "table": "leads",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((org_id = user_org_id()) AND (segmento = 'imob'::text) AND is_imob_profile())",
+      "withCheck": ""
+    },
+    {
+      "table": "leads",
+      "cmd": "UPDATE",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((org_id = user_org_id()) AND (has_capability('leads.editar_qualquer'::text) OR (assigned_broker_id = public_user_id())))",
+      "withCheck": ""
+    },
+    {
+      "table": "leads",
+      "cmd": "UPDATE",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((org_id = user_org_id()) AND (segmento = 'imob'::text) AND is_imob_profile())",
+      "withCheck": ""
+    },
+    {
+      "table": "messages",
+      "cmd": "INSERT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "",
+      "withCheck": "(EXISTS ( SELECT 1\n   FROM conversations c\n  WHERE ((c.id = messages.conversation_id) AND (c.org_id = user_org_id()))))"
+    },
+    {
+      "table": "messages",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(EXISTS ( SELECT 1\n   FROM conversations c\n  WHERE ((c.id = messages.conversation_id) AND (c.org_id = user_org_id()) AND (has_capability('conversas.ver_qualquer'::text) OR (EXISTS ( SELECT 1\n           FROM leads l\n          WHERE ((l.id = c.lead_id) AND (l.assigned_broker_id = ( SELECT brokers.user_id\n                   FROM brokers\n                  WHERE (brokers.id = user_broker_id()))))))))))",
+      "withCheck": ""
+    },
+    {
+      "table": "meta_ad_accounts",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "meta_ads",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "meta_adsets",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "meta_alerts",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "meta_campaigns",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "meta_insights_daily",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "meta_insights_placement_daily",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "meta_sync_log",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "obra_conversas",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((org_id = user_org_id()) AND (has_capability('obras.mensagens_enviar'::text) OR (id IN ( SELECT obra_conversas_participants.conversa_id\n   FROM obra_conversas_participants\n  WHERE (obra_conversas_participants.user_id = public_user_id())))))",
+      "withCheck": ""
+    },
+    {
+      "table": "obra_conversas_participants",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(EXISTS ( SELECT 1\n   FROM obra_conversas c\n  WHERE ((c.id = obra_conversas_participants.conversa_id) AND (c.org_id = user_org_id()) AND (has_capability('obras.mensagens_enviar'::text) OR (obra_conversas_participants.user_id = public_user_id())))))",
+      "withCheck": ""
+    },
+    {
+      "table": "obra_documentos",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((org_id = user_org_id()) AND has_capability('obras.documentos_gerenciar'::text))",
+      "withCheck": ""
+    },
+    {
+      "table": "obra_documentos",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((obra_id IN ( SELECT cliente_obra_ids() AS cliente_obra_ids)) AND ((cliente_obra_id IS NULL) OR (cliente_obra_id IN ( SELECT cliente_obra_link_ids() AS cliente_obra_link_ids))))",
+      "withCheck": ""
+    },
+    {
+      "table": "obra_fase_templates",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "obra_fases",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((org_id = user_org_id()) AND has_capability('obras.fases_gerenciar'::text))",
+      "withCheck": ""
+    },
+    {
+      "table": "obra_fases",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(obra_id IN ( SELECT cliente_obra_ids() AS cliente_obra_ids))",
+      "withCheck": ""
+    },
+    {
+      "table": "obra_fotos",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((org_id = user_org_id()) AND has_capability('obras.fotos_enviar'::text))",
+      "withCheck": ""
+    },
+    {
+      "table": "obra_fotos",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(obra_id IN ( SELECT cliente_obra_ids() AS cliente_obra_ids))",
+      "withCheck": ""
+    },
+    {
+      "table": "obra_mensagens",
+      "cmd": "INSERT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "",
+      "withCheck": "((obra_id IN ( SELECT cliente_obra_ids() AS cliente_obra_ids)) AND (sender_id = public_user_id()) AND ((sender_type)::text = 'cliente'::text))"
+    },
+    {
+      "table": "obra_mensagens",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((org_id = user_org_id()) AND has_capability('obras.mensagens_enviar'::text))",
+      "withCheck": ""
+    },
+    {
+      "table": "obra_mensagens",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "authenticated"
+      ],
+      "qual": "((obra_id IN ( SELECT cliente_obras.obra_id\n   FROM cliente_obras\n  WHERE (cliente_obras.user_id = public_user_id()))) AND ((cliente_id = public_user_id()) OR (sender_id = public_user_id())))",
+      "withCheck": ""
+    },
+    {
+      "table": "obra_notificacao_prefs",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(user_id = public_user_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "obra_upload_aprovacoes",
+      "cmd": "DELETE",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((org_id = user_org_id()) AND has_capability('obras.aprovar_uploads'::text))",
+      "withCheck": ""
+    },
+    {
+      "table": "obra_upload_aprovacoes",
+      "cmd": "INSERT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "",
+      "withCheck": "((org_id = user_org_id()) AND (enviado_por = public_user_id()))"
+    },
+    {
+      "table": "obra_upload_aprovacoes",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "obra_upload_aprovacoes",
+      "cmd": "UPDATE",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((org_id = user_org_id()) AND has_capability('obras.aprovar_uploads'::text))",
+      "withCheck": ""
+    },
+    {
+      "table": "obras",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((org_id = user_org_id()) AND has_capability('obras.editar'::text))",
+      "withCheck": ""
+    },
+    {
+      "table": "obras",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(id IN ( SELECT cliente_obra_ids() AS cliente_obra_ids))",
+      "withCheck": ""
+    },
+    {
+      "table": "organizations",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(id = user_org_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "organizations",
+      "cmd": "UPDATE",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((id = user_org_id()) AND has_capability('configuracoes.empresa_editar'::text))",
+      "withCheck": ""
+    },
+    {
+      "table": "pasta_documentos",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "authenticated"
+      ],
+      "qual": "(EXISTS ( SELECT 1\n   FROM (pastas p\n     JOIN users u ON ((u.org_id = p.org_id)))\n  WHERE ((p.id = pasta_documentos.pasta_id) AND (u.auth_id = auth.uid()))))",
+      "withCheck": "(EXISTS ( SELECT 1\n   FROM (pastas p\n     JOIN users u ON ((u.org_id = p.org_id)))\n  WHERE ((p.id = pasta_documentos.pasta_id) AND (u.auth_id = auth.uid()))))"
+    },
+    {
+      "table": "pasta_links",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "authenticated"
+      ],
+      "qual": "(org_id IN ( SELECT u.org_id\n   FROM users u\n  WHERE (u.auth_id = auth.uid())))",
+      "withCheck": "(org_id IN ( SELECT u.org_id\n   FROM users u\n  WHERE (u.auth_id = auth.uid())))"
+    },
+    {
+      "table": "pastas",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "authenticated"
+      ],
+      "qual": "(org_id IN ( SELECT u.org_id\n   FROM users u\n  WHERE (u.auth_id = auth.uid())))",
+      "withCheck": "(org_id IN ( SELECT u.org_id\n   FROM users u\n  WHERE (u.auth_id = auth.uid())))"
+    },
+    {
+      "table": "platform_services",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "is_platform_admin()",
+      "withCheck": ""
+    },
+    {
+      "table": "privacy_consents",
+      "cmd": "INSERT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "",
+      "withCheck": "(user_id = ( SELECT users.id\n   FROM users\n  WHERE (users.auth_id = auth.uid())))"
+    },
+    {
+      "table": "privacy_consents",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(has_capability('sistema.auditoria_ver'::text) AND (EXISTS ( SELECT 1\n   FROM users titular\n  WHERE ((titular.id = privacy_consents.user_id) AND (titular.org_id = user_org_id())))))",
+      "withCheck": ""
+    },
+    {
+      "table": "properties",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((org_id = user_org_id()) AND has_capability('imoveis.editar'::text))",
+      "withCheck": ""
+    },
+    {
+      "table": "properties",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "property_media",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((EXISTS ( SELECT 1\n   FROM properties p\n  WHERE ((p.id = property_media.property_id) AND (p.org_id = user_org_id())))) AND has_capability('imoveis.editar'::text))",
+      "withCheck": ""
+    },
+    {
+      "table": "property_media",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(EXISTS ( SELECT 1\n   FROM properties p\n  WHERE ((p.id = property_media.property_id) AND (p.org_id = user_org_id()))))",
+      "withCheck": ""
+    },
+    {
+      "table": "push_subscriptions",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(user_id = public_user_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "qualificacao_comercial_config",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "role_permissions",
+      "cmd": "DELETE",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((org_id = user_org_id()) AND has_capability('perfis.gerenciar'::text))",
+      "withCheck": ""
+    },
+    {
+      "table": "role_permissions",
+      "cmd": "INSERT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "",
+      "withCheck": "((org_id = user_org_id()) AND has_capability('perfis.gerenciar'::text))"
+    },
+    {
+      "table": "role_permissions",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "role_permissions",
+      "cmd": "UPDATE",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((org_id = user_org_id()) AND has_capability('perfis.gerenciar'::text))",
+      "withCheck": ""
+    },
+    {
+      "table": "roles",
+      "cmd": "DELETE",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((org_id = user_org_id()) AND has_capability('perfis.gerenciar'::text) AND (is_system = false))",
+      "withCheck": ""
+    },
+    {
+      "table": "roles",
+      "cmd": "INSERT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "",
+      "withCheck": "((org_id = user_org_id()) AND has_capability('perfis.gerenciar'::text))"
+    },
+    {
+      "table": "roles",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "roles",
+      "cmd": "UPDATE",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((org_id = user_org_id()) AND has_capability('perfis.gerenciar'::text))",
+      "withCheck": ""
+    },
+    {
+      "table": "roleta_config",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": "(org_id = user_org_id())"
+    },
+    {
+      "table": "roleta_fila",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": "(org_id = user_org_id())"
+    },
+    {
+      "table": "roleta_schedule",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "service_billing_reminders",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "is_platform_admin()",
+      "withCheck": ""
+    },
+    {
+      "table": "service_cost_snapshots",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "is_platform_admin()",
+      "withCheck": ""
+    },
+    {
+      "table": "signature_envelopes",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "authenticated"
+      ],
+      "qual": "(org_id IN ( SELECT u.org_id\n   FROM users u\n  WHERE (u.auth_id = auth.uid())))",
+      "withCheck": "(org_id IN ( SELECT u.org_id\n   FROM users u\n  WHERE (u.auth_id = auth.uid())))"
+    },
+    {
+      "table": "system_events",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((org_id = user_org_id()) AND has_capability('sistema.auditoria_ver'::text))",
+      "withCheck": ""
+    },
+    {
+      "table": "typologies",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((EXISTS ( SELECT 1\n   FROM properties p\n  WHERE ((p.id = typologies.property_id) AND (p.org_id = user_org_id())))) AND has_capability('imoveis.editar'::text))",
+      "withCheck": ""
+    },
+    {
+      "table": "typologies",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(EXISTS ( SELECT 1\n   FROM properties p\n  WHERE ((p.id = typologies.property_id) AND (p.org_id = user_org_id()))))",
+      "withCheck": ""
+    },
+    {
+      "table": "unit_sales",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((org_id = user_org_id()) AND has_capability('imoveis.vender_unidade'::text))",
+      "withCheck": ""
+    },
+    {
+      "table": "unit_sales",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "units",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((EXISTS ( SELECT 1\n   FROM properties p\n  WHERE ((p.id = units.property_id) AND (p.org_id = user_org_id())))) AND has_capability('imoveis.editar'::text))",
+      "withCheck": ""
+    },
+    {
+      "table": "units",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(EXISTS ( SELECT 1\n   FROM properties p\n  WHERE ((p.id = units.property_id) AND (p.org_id = user_org_id()))))",
+      "withCheck": ""
+    },
+    {
+      "table": "user_permission_exceptions",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "authenticated"
+      ],
+      "qual": "(has_capability('perfis.gerenciar'::text) AND (org_id = user_org_id()))",
+      "withCheck": "(has_capability('perfis.gerenciar'::text) AND (org_id = user_org_id()))"
+    },
+    {
+      "table": "user_permission_exceptions",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "authenticated"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "users",
+      "cmd": "INSERT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "",
+      "withCheck": "((org_id = user_org_id()) AND has_capability('usuarios.criar'::text))"
+    },
+    {
+      "table": "users",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "users",
+      "cmd": "UPDATE",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((org_id = user_org_id()) AND has_capability('usuarios.editar'::text) AND (has_capability('usuarios.trocar_perfil'::text) OR (EXISTS ( SELECT 1\n   FROM brokers b\n  WHERE (b.user_id = users.id)))))",
+      "withCheck": ""
+    },
+    {
+      "table": "visit_feedback",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(EXISTS ( SELECT 1\n   FROM leads l\n  WHERE ((l.id = visit_feedback.lead_id) AND (l.org_id = user_org_id()))))",
+      "withCheck": ""
+    },
+    {
+      "table": "visit_feedback",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(EXISTS ( SELECT 1\n   FROM leads l\n  WHERE ((l.id = visit_feedback.lead_id) AND (l.org_id = user_org_id()))))",
+      "withCheck": ""
+    },
+    {
+      "table": "webhook_logs",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((org_id IS NULL) OR (org_id = user_org_id()))",
+      "withCheck": ""
+    },
+    {
+      "table": "whatsapp_config",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "((org_id = user_org_id()) AND has_capability('configuracoes.integracoes_gerenciar'::text))",
+      "withCheck": ""
+    },
+    {
+      "table": "whatsapp_config",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": ""
+    },
+    {
+      "table": "whatsapp_pricing",
+      "cmd": "SELECT",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "true",
+      "withCheck": ""
+    },
+    {
+      "table": "whatsapp_send_log",
+      "cmd": "ALL",
+      "permissive": true,
+      "roles": [
+        "public"
+      ],
+      "qual": "(org_id = user_org_id())",
+      "withCheck": ""
+    }
+  ],
+  "source": "management-api",
+  "capturedAt": "2026-08-23T11:53:48.779Z",
+  "projectRef": "dsopqkqjkmhytudaaolv"
+}
