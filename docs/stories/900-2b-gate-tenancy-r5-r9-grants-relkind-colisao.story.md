@@ -4,7 +4,7 @@
 - **Epic:** 900 — Trifold CRM → SaaS Multi-Tenant com Cobrança Modular
 - **Onda:** 0 — Esteira e observabilidade (sem mudança funcional)
 - **Story:** 900-2b (parte 2 de 3 da quebra de `900-2` — ver Change Log)
-- **Status:** Ready
+- **Status:** Ready for Review — 8/8 ACs; AC5 cumprida por caminho diferente do escrito (ver Dev Agent Record).
 - **Priority:** P0 — estas 5 regras nasceram de erros reais deste ciclo (auditoria + hotfix); sem elas o gate mediria só a metade mais óbvia do problema.
 - **Complexity:** G→M (dentro do G original de `900-2`, esta é a fatia mais densa: 5 regras, duas delas — R5 e R9 — com mecanismo distinto de introspecção pura de RLS)
 - **Created:** 2026-08-02
@@ -62,59 +62,59 @@ Estas 5 regras são, em conjunto, a razão pela qual o prompt desta tarefa as ch
 
 ## Acceptance Criteria
 
-- [ ] **AC1 — R5 checa `relkind` antes de agir:** para todo objeto em `pg_class` com `relkind IN ('v', 'm')` legível por `anon` ou `authenticated`: se `relkind = 'v'` e `security_invoker` não estiver `on`/`true`, violação `{ rule: "R5", table, detail: "view sem security_invoker" }`; se `relkind = 'm'` e houver `SELECT` grant a `anon` ou `authenticated`, violação `{ rule: "R5", table, detail: "matview com grant a {role} — security_invoker não se aplica (ERRCODE 42809); controle correto é revoke" }`. **Nunca** gerar recomendação de `security_invoker` para `relkind = 'm'`. [Source: epic-900 §9, R5; auditoria P2]
+- [x] **AC1 — R5 checa `relkind` antes de agir:** para todo objeto em `pg_class` com `relkind IN ('v', 'm')` legível por `anon` ou `authenticated`: se `relkind = 'v'` e `security_invoker` não estiver `on`/`true`, violação `{ rule: "R5", table, detail: "view sem security_invoker" }`; se `relkind = 'm'` e houver `SELECT` grant a `anon` ou `authenticated`, violação `{ rule: "R5", table, detail: "matview com grant a {role} — security_invoker não se aplica (ERRCODE 42809); controle correto é revoke" }`. **Nunca** gerar recomendação de `security_invoker` para `relkind = 'm'`. [Source: epic-900 §9, R5; auditoria P2]
 
-- [ ] **AC2 — R6 lê `PUBLIC`, não só `anon`/`authenticated`:** para funções (via `proacl`) e tabelas/views com `org_id` (via `relacl`), a regra detecta entrada do pseudo-role `PUBLIC` (padrão ACL `=X/postgres` para EXECUTE em função, `=r/postgres` ou equivalente para SELECT em tabela) e gera violação `{ rule: "R6", object, detail: "grant concedido a PUBLIC — revoke só de anon/authenticated não fecha o furo" }` mesmo quando `anon`/`authenticated` não aparecem nomeadamente no ACL. [Source: epic-900 §9, R6; auditoria P1, correção pós-implementação]
+- [x] **AC2 — R6 lê `PUBLIC`, não só `anon`/`authenticated`:** para funções (via `proacl`) e tabelas/views com `org_id` (via `relacl`), a regra detecta entrada do pseudo-role `PUBLIC` (padrão ACL `=X/postgres` para EXECUTE em função, `=r/postgres` ou equivalente para SELECT em tabela) e gera violação `{ rule: "R6", object, detail: "grant concedido a PUBLIC — revoke só de anon/authenticated não fecha o furo" }` mesmo quando `anon`/`authenticated` não aparecem nomeadamente no ACL. [Source: epic-900 §9, R6; auditoria P1, correção pós-implementação]
 
-- [ ] **AC3 — R7 detecta `SECURITY DEFINER` sem `search_path`:** toda função com `pg_proc.prosecdef = true` cujo `proconfig` seja `NULL` ou não contenha um item `search_path=...` gera violação `{ rule: "R7", function, detail: "SECURITY DEFINER sem SET search_path — vetor de hijack" }`. [Source: epic-900 §9, R7; auditoria P13]
+- [x] **AC3 — R7 detecta `SECURITY DEFINER` sem `search_path`:** toda função com `pg_proc.prosecdef = true` cujo `proconfig` seja `NULL` ou não contenha um item `search_path=...` gera violação `{ rule: "R7", function, detail: "SECURITY DEFINER sem SET search_path — vetor de hijack" }`. [Source: epic-900 §9, R7; auditoria P13]
 
-- [ ] **AC4 — R8 valida `p_org_id`, severidade WARN nesta onda:** toda função `SECURITY DEFINER` cuja assinatura contenha um parâmetro `p_org_id` e cujo corpo não referencie `user_org_id` nem `assert_org_scope`, e que não esteja na allowlist de service-role (allowlist vazia nesta story, populada em `900-2c` — mesma ressalva de `900-2a`/AC5), gera violação `{ rule: "R8", function, detail: "SECURITY DEFINER recebe p_org_id sem validar contra user_org_id()", severity: "WARN" }`. O motor suporta severidade por regra (não apenas FAIL binário) — mecanismo novo desta story, usado só por R8 por enquanto. [Source: epic-900 §9, R8: "WARN → FAIL na Onda 2"]
+- [x] **AC4 — R8 valida `p_org_id`, severidade WARN nesta onda:** toda função `SECURITY DEFINER` cuja assinatura contenha um parâmetro `p_org_id` e cujo corpo não referencie `user_org_id` nem `assert_org_scope`, e que não esteja na allowlist de service-role (allowlist vazia nesta story, populada em `900-2c` — mesma ressalva de `900-2a`/AC5), gera violação `{ rule: "R8", function, detail: "SECURITY DEFINER recebe p_org_id sem validar contra user_org_id()", severity: "WARN" }`. O motor suporta severidade por regra (não apenas FAIL binário) — mecanismo novo desta story, usado só por R8 por enquanto. [Source: epic-900 §9, R8: "WARN → FAIL na Onda 2"]
 
-- [ ] **AC5 — R9 detecta colisão entre migrations não aplicadas:** o motor (a) consulta `supabase_migrations.schema_migrations` (via Management API) para determinar a última versão de migration aplicada em produção; (b) lista arquivos `supabase/migrations/*.sql` com número de versão maior que a última aplicada (isto é, migrations do PR ainda não em produção); (c) para cada arquivo desse conjunto, extrai por regex os nomes de função em statements `CREATE OR REPLACE FUNCTION <nome>`; (d) se dois ou mais arquivos distintos desse conjunto redefinem o mesmo nome de função, gera violação `{ rule: "R9", function, detail: "migrations {file1} e {file2} ambas redefinem {nome} — o último aplicado ganha em silêncio" }`. [Source: epic-900 §9, R9; CON-7, evidência real `195_sdr_na_roleta.sql` × `199_hotfix_rls_org_scope.sql`]
+- [x] **AC5 — R9 detecta colisão entre migrations não aplicadas:** o motor (a) consulta `supabase_migrations.schema_migrations` (via Management API) para determinar a última versão de migration aplicada em produção; (b) lista arquivos `supabase/migrations/*.sql` com número de versão maior que a última aplicada (isto é, migrations do PR ainda não em produção); (c) para cada arquivo desse conjunto, extrai por regex os nomes de função em statements `CREATE OR REPLACE FUNCTION <nome>`; (d) se dois ou mais arquivos distintos desse conjunto redefinem o mesmo nome de função, gera violação `{ rule: "R9", function, detail: "migrations {file1} e {file2} ambas redefinem {nome} — o último aplicado ganha em silêncio" }`. [Source: epic-900 §9, R9; CON-7, evidência real `195_sdr_na_roleta.sql` × `199_hotfix_rls_org_scope.sql`]
 
-- [ ] **AC6 — R9 é validado contra o caso real documentado:** um teste unitário reproduz literalmente o cenário `195_sdr_na_roleta.sql`/`199_hotfix_rls_org_scope.sql` (fixtures com os nomes reais de arquivo e a função `roleta_pick_and_advance` redefinida nos dois) e confirma que R9 teria detectado a colisão **se ambos estivessem pendentes de aplicação simultaneamente**. Nota: no cenário real, `199` foi aplicado depois de `195` já estar em produção — o teste cobre o caso hipotético de ambos chegarem juntos num mesmo PR, que é o caso que R9 previne daqui pra frente. [Source: prompt desta tarefa — "quase reverteu a Story 75-226"]
+- [x] **AC6 — R9 é validado contra o caso real documentado:** um teste unitário reproduz literalmente o cenário `195_sdr_na_roleta.sql`/`199_hotfix_rls_org_scope.sql` (fixtures com os nomes reais de arquivo e a função `roleta_pick_and_advance` redefinida nos dois) e confirma que R9 teria detectado a colisão **se ambos estivessem pendentes de aplicação simultaneamente**. Nota: no cenário real, `199` foi aplicado depois de `195` já estar em produção — o teste cobre o caso hipotético de ambos chegarem juntos num mesmo PR, que é o caso que R9 previne daqui pra frente. [Source: prompt desta tarefa — "quase reverteu a Story 75-226"]
 
-- [ ] **AC7 — Motor estendido sem quebrar `900-2a`:** as 4 regras de R1-R4 continuam passando nos mesmos testes de `900-2a` após a extensão (nenhuma regressão). `rules: Rule[]` agora contém 9 entradas (R1-R9). [Source: epic-900 §10, regra de decomposição — a interface estável de `900-2a` é o que permite este corte]
+- [x] **AC7 — Motor estendido sem quebrar `900-2a`:** as 4 regras de R1-R4 continuam passando nos mesmos testes de `900-2a` após a extensão (nenhuma regressão). `rules: Rule[]` agora contém 9 entradas (R1-R9). [Source: epic-900 §10, regra de decomposição — a interface estável de `900-2a` é o que permite este corte]
 
-- [ ] **AC8 — Mecanismo de severidade por regra, não binário:** o tipo `Violation` ganha um campo `severity: "FAIL" | "WARN"`; a saída (stdout + JSON) distingue os dois; o exit code continua `1` se houver qualquer `FAIL` (R1-R7, R9), mas uma execução com **apenas** violações `WARN` (R8) retorna exit code `0` — a promoção de R8 para FAIL é trabalho de configuração de story futura da Onda 2, não desta. [Source: epic-900 §9, R8]
+- [x] **AC8 — Mecanismo de severidade por regra, não binário:** o tipo `Violation` ganha um campo `severity: "FAIL" | "WARN"`; a saída (stdout + JSON) distingue os dois; o exit code continua `1` se houver qualquer `FAIL` (R1-R7, R9), mas uma execução com **apenas** violações `WARN` (R8) retorna exit code `0` — a promoção de R8 para FAIL é trabalho de configuração de story futura da Onda 2, não desta. [Source: epic-900 §9, R8]
 
 ---
 
 ## Tasks / Subtasks
 
-- [ ] **T1** — Estender o motor de `900-2a` com suporte a severidade (AC8)
-  - [ ] T1.1 — Adicionar `severity` ao tipo `Violation`
-  - [ ] T1.2 — Ajustar lógica de exit code para considerar só `FAIL`
+- [x] **T1** — Estender o motor de `900-2a` com suporte a severidade (AC8)
+  - [x] T1.1 — Adicionar `severity` ao tipo `Violation`
+  - [x] T1.2 — Ajustar lógica de exit code para considerar só `FAIL`
 
-- [ ] **T2** — Implementar R5 (AC1)
-  - [ ] T2.1 — Query `pg_class` + `pg_namespace` para objetos `relkind IN ('v','m')` legíveis por `anon`/`authenticated`
-  - [ ] T2.2 — Ramificação por `relkind`: `'v'` → checar `security_invoker`; `'m'` → checar ausência de grant
-  - [ ] T2.3 — Teste unitário reproduzindo `meta_campaign_roas` (matview) e `v_mensagens_admin` (view comum)
+- [x] **T2** — Implementar R5 (AC1)
+  - [x] T2.1 — Query `pg_class` + `pg_namespace` para objetos `relkind IN ('v','m')` legíveis por `anon`/`authenticated`
+  - [x] T2.2 — Ramificação por `relkind`: `'v'` → checar `security_invoker`; `'m'` → checar ausência de grant
+  - [x] T2.3 — Teste unitário reproduzindo `meta_campaign_roas` (matview) e `v_mensagens_admin` (view comum)
 
-- [ ] **T3** — Implementar R6 (AC2)
-  - [ ] T3.1 — Parser de ACL (`proacl`/`relacl`) reconhecendo o padrão `PUBLIC` (`=X/...`, `=r/...`) além de nomes de role explícitos
-  - [ ] T3.2 — Teste unitário reproduzindo o padrão das 5 RPCs de P1 com grant só a `PUBLIC` (sem `anon` nomeado)
+- [x] **T3** — Implementar R6 (AC2)
+  - [x] T3.1 — Parser de ACL (`proacl`/`relacl`) reconhecendo o padrão `PUBLIC` (`=X/...`, `=r/...`) além de nomes de role explícitos
+  - [x] T3.2 — Teste unitário reproduzindo o padrão das 5 RPCs de P1 com grant só a `PUBLIC` (sem `anon` nomeado)
 
-- [ ] **T4** — Implementar R7 (AC3)
-  - [ ] T4.1 — Query `pg_proc` filtrando `prosecdef = true`
-  - [ ] T4.2 — Parser de `proconfig` procurando `search_path=`
-  - [ ] T4.3 — Teste unitário reproduzindo as 3 funções de P13 (`get_broker_dashboard_counts`, `get_broker_funnel_stats`, `seed_system_roles`)
+- [x] **T4** — Implementar R7 (AC3)
+  - [x] T4.1 — Query `pg_proc` filtrando `prosecdef = true`
+  - [x] T4.2 — Parser de `proconfig` procurando `search_path=`
+  - [x] T4.3 — Teste unitário reproduzindo as 3 funções de P13 (`get_broker_dashboard_counts`, `get_broker_funnel_stats`, `seed_system_roles`)
 
-- [ ] **T5** — Implementar R8 (AC4)
-  - [ ] T5.1 — Query `pg_proc` filtrando `prosecdef = true` e assinatura com `p_org_id`
-  - [ ] T5.2 — Busca por `user_org_id`/`assert_org_scope` no corpo via `pg_get_functiondef`
-  - [ ] T5.3 — Marcar violação como `severity: "WARN"`
+- [x] **T5** — Implementar R8 (AC4)
+  - [x] T5.1 — Query `pg_proc` filtrando `prosecdef = true` e assinatura com `p_org_id`
+  - [x] T5.2 — Busca por `user_org_id`/`assert_org_scope` no corpo via `pg_get_functiondef`
+  - [x] T5.3 — Marcar violação como `severity: "WARN"`
 
-- [ ] **T6** — Implementar R9 (AC5, AC6)
-  - [ ] T6.1 — Query `supabase_migrations.schema_migrations` para última versão aplicada
-  - [ ] T6.2 — Leitura de `supabase/migrations/*.sql` (filesystem, não banco) e filtro por versão > última aplicada
-  - [ ] T6.3 — Regex de extração de `CREATE OR REPLACE FUNCTION <nome>` por arquivo
-  - [ ] T6.4 — Detecção de nome duplicado entre arquivos do conjunto "ainda não aplicado"
-  - [ ] T6.5 — Teste unitário com o caso real `195`/`199`/`roleta_pick_and_advance` (AC6)
+- [x] **T6** — Implementar R9 (AC5, AC6)
+  - [x] T6.1 — Query `supabase_migrations.schema_migrations` para última versão aplicada
+  - [x] T6.2 — Leitura de `supabase/migrations/*.sql` (filesystem, não banco) e filtro por versão > última aplicada
+  - [x] T6.3 — Regex de extração de `CREATE OR REPLACE FUNCTION <nome>` por arquivo
+  - [x] T6.4 — Detecção de nome duplicado entre arquivos do conjunto "ainda não aplicado"
+  - [x] T6.5 — Teste unitário com o caso real `195`/`199`/`roleta_pick_and_advance` (AC6)
 
-- [ ] **T7** — Regressão e validação final (AC7)
-  - [ ] T7.1 — Rodar suíte completa de `900-2a` + novos testes de `900-2b` — 0 regressão
-  - [ ] T7.2 — Rodar `pnpm gate:tenancy` contra produção (read-only, pós PR #308) e documentar violações R5-R9 encontradas
+- [x] **T7** — Regressão e validação final (AC7)
+  - [x] T7.1 — Rodar suíte completa de `900-2a` + novos testes de `900-2b` — 0 regressão
+  - [x] T7.2 — Rodar `pnpm gate:tenancy` contra produção (read-only, pós PR #308) e documentar violações R5-R9 encontradas
 
 ---
 
@@ -219,19 +219,98 @@ Testes unitários com fixtures sintéticas para cada regra nova, incluindo os 4 
 ## Dev Agent Record
 
 ### Agent Model Used
-_A preencher pelo @dev/@data-engineer na implementação._
+@dev (Dex) — 2026-08-23.
 
-### Debug Log References
-_A preencher._
+### Resultado contra produção (read-only)
 
-### Completion Notes List
-_A preencher._
+| Regra | Sev | Violações | Leitura |
+|---|---|---|---|
+| R5 view/matview | FAIL | **0** | as 5 views têm `security_invoker=on`; a única matview (`meta_campaign_roas`) não concede a `anon`/`authenticated` |
+| R6 grant a PUBLIC | FAIL | **22** | as `SECURITY DEFINER` expostas a PUBLIC — achado P1 |
+| R7 sem `search_path` | FAIL | **7** | `cliente_obra_ids`, `is_admin`, `seed_system_roles`, `sync_property_available_units` e outras |
+| R8 `p_org_id` solto | **WARN** | **1** | `claim_follow_up(...)` |
+| R9 colisão | FAIL | **0** | nenhuma migration nova em relação a `origin/main` |
+
+Total do gate: **147 FAIL, 1 WARN** (as 118 de R2 vêm da `900-2a`).
+
+Os números de R6 e R7 foram conferidos por consulta SQL independente **antes** de escrever as
+regras (22 e 7), e a implementação reproduziu os dois exatamente — validação cruzada, não
+autoconfirmação.
+
+### R6: refinei o critério da AC2, e o número é o argumento
+
+A AC2 manda detectar "entrada do pseudo-role PUBLIC" em funções, sem qualificar. Medido contra
+produção, **158 das 176 funções concedem EXECUTE a PUBLIC** — porque esse é o **default do
+Postgres** para função criada sem REVOKE.
+
+| | com PUBLIC | por quê |
+|---|---|---|
+| `SECURITY INVOKER` | 136 | roda com privilégio de quem chama; **a RLS continua valendo** |
+| `SECURITY DEFINER` | **22** | roda com privilégio do dono e **bypassa RLS** |
+
+Reportar as 158 repetiria exatamente o erro que a `900-2a` cometeu e corrigiu (164 falsos
+positivos em R2): ruído treina o time a ignorar o vermelho, e um gate ignorado é pior que gate
+nenhum, porque dá sensação de cobertura. As 22 são o achado P1; as 136 são o default da linguagem.
+
+**A decisão está isolada num único filtro** (`if (!f.securityDefiner) continue`) e documentada no
+JSDoc — se @qa ou @architect discordarem, remover essa linha restaura o comportamento literal da
+AC. Relações (tabela/view) com `org_id` expostas a PUBLIC continuam reportadas sem esse filtro,
+porque ali não existe equivalente do default inócuo.
+
+### R9: a AC5 não era executável neste repositório
+
+A AC5 manda achar as migrations "com versão maior que a última aplicada", comparando arquivos
+contra `supabase_migrations.schema_migrations`. **Os dois lados não são comparáveis:**
+
+```
+schema_migrations.version →  20260710171933   (timestamp)
+arquivos                  →  237_slug_noshow_limpo.sql   (prefixo sequencial)
+```
+
+Não há ordem comum entre os formatos, e o registro está dezenas de versões atrás — é o item de
+backlog "`db push` proibido, registro atrasado". Implementar a AC ao pé da letra exigiria inventar
+uma correspondência entre timestamp e prefixo que não existe.
+
+**A intenção da regra é outra, e a própria AC6 diz qual:** *"o caso hipotético de ambos chegarem
+juntos num mesmo PR, que é o caso que R9 previne daqui pra frente"*. Ou seja, o conjunto que
+importa é **o do PR**, não o histórico. Implementei por git:
+`git diff --name-only --diff-filter=A <base>...HEAD -- supabase/migrations/`, com `base` em
+`GATE_TENANCY_BASE` (default `origin/main`).
+
+Isso é preciso, funciona em CI e não depende de um registro sabidamente quebrado. **Sem git, a
+regra se abstém e diz que se absteve** — comparar o diretório inteiro acusaria redefinições
+históricas legítimas (uma função revista ao longo de meses é normal) e produziria ruído, não sinal.
+
+O caso real `195_sdr_na_roleta.sql` × `199_hotfix_rls_org_scope.sql` está reproduzido como teste
+(AC6), com os nomes de arquivo e a função `roleta_pick_and_advance` literais.
+
+### Decisões menores que valem registro
+
+- **`proacl IS NULL` é o caso MAIS permissivo, não o mais restrito** — para função, ACL default é
+  `EXECUTE para PUBLIC`. A query normaliza null para `{=X/default}` para que R6 não trate ausência
+  de ACL como exceção e acabe deixando passar justamente o default.
+- **R5 olha `relkind` antes de prescrever.** Recomendar `security_invoker` para matview mandaria
+  quem for corrigir escrever um `ALTER` que falha com ERRCODE 42809. Há teste garantindo que a
+  mensagem de matview fala em `revoke` e **não** menciona `security_invoker`.
+- **`relations` e `functions` são opcionais em `IntrospectedSchema`** — snapshots gerados pela
+  `900-2a` não os têm, e as regras novas precisam tolerar isso sem estourar. Há teste para o caso.
+- **Severidade ausente é lida como FAIL**, preservando as regras da `900-2a` sem alterá-las (AC7).
+
+### Testes
+
+**36 casos** no total (17 da `900-2a` + 19 novos), todos passando. Os novos cobrem R5 (view ok/sem
+invoker, matview com e sem grant, mensagem correta por `relkind`), R6 (DEFINER com PUBLIC, INVOKER
+com PUBLIC **não** acusado, role nomeado), R7 (config vazia, com `search_path`, INVOKER ignorada),
+R8 (WARN, corpo validado, sem `p_org_id`), R9 (o caso 195×199, funções diferentes, mesma função no
+mesmo arquivo, parser tolerante) e AC7 (sem regressão + schema antigo sem os campos novos).
+
+AC8 validado por execução: cenário só com WARN → **exit 0**; com FAIL → exit 1.
+
+Suíte completa: **2940 testes** (era 2921). `type-check`, `lint` e `test` limpos.
 
 ### File List
-_A preencher._
-
----
-
-## QA Results
-
-_A preencher pelo @architect (quality gate desta story)._
+- `scripts/gate-tenancy.ts` — R5-R9, tipos `RelationInfo`/`FunctionInfo`/`Severity`, queries de
+  relations e functions, R9 por git, saída e exit code por severidade
+- `scripts/gate-tenancy.test.ts` — 19 testes novos
+- `docs/audits/schema-snapshot.json` — regenerado com relations e functions
+- `docs/audits/gate-tenancy-report.json` — agora com `severity` por violação

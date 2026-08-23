@@ -1,5 +1,6 @@
 /**
- * Story 900-2a — Gate de Tenancy: motor de introspecção + regras R1-R4.
+ * Gate de Tenancy — motor de introspecção + regras R1-R9.
+ *   · Stories 900-2a (motor + R1-R4) e 900-2b (R5-R9, severidade).
  *
  * O QUE ISTO É
  * ------------
@@ -16,21 +17,32 @@
  * qual a auditoria alerta. A superfície service-role é assunto das stories 900-14/900-15
  * (`createOrgScopedAdminClient` + regra de ESLint), não deste script.
  *
- * ESCOPO DESTA FATIA (900-2a)
- * ---------------------------
- * Motor + R1, R2, R3, R4. As regras R5-R9 (matview/relkind, grant PUBLIC, search_path,
- * p_org_id, colisão de migration) são da `900-2b` e entram SEM alterar este motor — ver o
- * contrato da interface `Rule` abaixo. Baseline, catraca, allowlist populada e wiring de
- * CI são da `900-2c`.
+ * REGRAS IMPLEMENTADAS
+ * --------------------
+ *   R1  RLS desabilitada em tabela com `org_id`                            FAIL
+ *   R2  cobertura de policy org-scoped por comando                         FAIL
+ *   R3  tabela nova sem `org_id NOT NULL` (grandfather list congelada)     FAIL
+ *   R4  policy PERMISSIVE `USING(true)` anulando as demais                 FAIL
+ *   R5  view sem `security_invoker` · matview com grant                    FAIL
+ *   R6  grant a `PUBLIC` em SECURITY DEFINER / relação com `org_id`        FAIL
+ *   R7  SECURITY DEFINER sem `SET search_path`                             FAIL
+ *   R8  SECURITY DEFINER com `p_org_id` não validado                       WARN
+ *   R9  duas migrations do mesmo PR redefinindo a mesma função             FAIL
+ *
+ * R10/R11/R12 (drift de `sellable_modules`, `AiUsageContext`,
+ * `PLATFORM_READABLE_TABLES`) dependem de artefatos de ondas futuras e são da `900-2c`,
+ * junto com baseline, catraca, allowlist populada e wiring de CI.
  *
  * COMO RODAR
  *   pnpm gate:tenancy                  # introspecção ao vivo (precisa de SUPABASE_MANAGEMENT_PAT)
  *   pnpm gate:tenancy --snapshot       # força modo snapshot, sem rede
  *   TENANCY_TARGET_REF=<ref> pnpm gate:tenancy   # aponta para outro projeto
+ *   GATE_TENANCY_BASE=<ref> pnpm gate:tenancy    # base do diff de migrations (R9), default origin/main
  *
  * A introspecção é **estritamente read-only** (só SELECT em catálogo). O gate nunca escreve.
  */
 
+import { execSync } from "node:child_process"
 import { readFileSync, writeFileSync, existsSync } from "node:fs"
 import { join } from "node:path"
 
@@ -56,19 +68,59 @@ export interface PolicyInfo {
   withCheck: string
 }
 
+/** View ou matview. Story 900-2b: a distinção por `relkind` é o ponto da regra R5. */
+export interface RelationInfo {
+  name: string
+  /** 'v' = view · 'm' = materialized view */
+  relkind: "v" | "m"
+  /** ACL cru do Postgres (`relacl`), já como array de strings. */
+  acl: string[]
+  /** `on` | `off` | null (não aplicável a matview — ver R5). */
+  securityInvoker: string | null
+}
+
+/** Função do schema public. Story 900-2b: base de R6, R7 e R8. */
+export interface FunctionInfo {
+  name: string
+  /** Assinatura dos argumentos, para distinguir sobrecargas. */
+  args: string
+  securityDefiner: boolean
+  /** Itens de `proconfig` (ex.: `search_path=public, pg_temp`). */
+  config: string[]
+  /** ACL cru (`proacl`). */
+  acl: string[]
+  /** Corpo da função — R8 procura `user_org_id`/`assert_org_scope` aqui. */
+  body: string
+}
+
 export interface IntrospectedSchema {
   tables: TableInfo[]
   policies: PolicyInfo[]
+  /** Story 900-2b — views e matviews. Opcional: snapshots gerados pela 900-2a não têm. */
+  relations?: RelationInfo[]
+  /** Story 900-2b — funções. Opcional pelo mesmo motivo. */
+  functions?: FunctionInfo[]
   /** De onde os dados vieram — aparece no relatório para não confundir ao vivo com snapshot. */
   source: "management-api" | "snapshot"
   capturedAt: string
   projectRef: string
 }
 
+/**
+ * Severidade da violação (Story 900-2b, AC8).
+ *
+ * `FAIL` derruba o gate (exit 1). `WARN` aparece no relatório e **não** derruba — usado hoje
+ * só por R8, cuja promoção a FAIL é decisão de configuração da Onda 2, não desta story.
+ */
+export type Severity = "FAIL" | "WARN"
+
 export interface Violation {
   rule: string
+  /** Nome do objeto: tabela, view, matview ou função, conforme a regra. */
   table: string
   detail: string
+  /** Ausente é lido como "FAIL" — mantém compatibilidade com as regras da 900-2a. */
+  severity?: Severity
 }
 
 /**
@@ -122,6 +174,44 @@ from pg_policies
 where schemaname = 'public'
 order by tablename, policyname`
 
+/**
+ * Views e matviews (Story 900-2b · R5).
+ *
+ * `security_invoker` vem de `reloptions` e **só existe para views**. Pedi-lo para matview
+ * não é só inútil: `ALTER MATERIALIZED VIEW ... SET (security_invoker)` falha com ERRCODE
+ * 42809. Por isso a regra precisa olhar `relkind` ANTES de prescrever qualquer coisa.
+ */
+const Q_RELATIONS = `
+select c.relname as name,
+       c.relkind::text as relkind,
+       coalesce(c.relacl::text, '') as acl,
+       (select option_value from pg_options_to_table(c.reloptions)
+         where option_name = 'security_invoker') as security_invoker
+from pg_class c
+join pg_namespace n on n.oid = c.relnamespace
+where n.nspname = 'public' and c.relkind in ('v','m')
+order by c.relname`
+
+/**
+ * Funções do schema public (Story 900-2b · R6, R7, R8).
+ *
+ * `proacl IS NULL` significa ACL DEFAULT, que para função é `EXECUTE para PUBLIC` — ou seja,
+ * ausência de ACL é o caso MAIS permissivo, não o mais restrito. Normalizamos para a string
+ * `=X/` (a forma explícita do mesmo grant) para que R6 não precise tratar null como exceção
+ * e acabe deixando passar justamente o caso default.
+ */
+const Q_FUNCTIONS = `
+select p.proname as name,
+       pg_get_function_identity_arguments(p.oid) as args,
+       p.prosecdef as security_definer,
+       coalesce(array_to_string(p.proconfig, '|'), '') as config,
+       coalesce(p.proacl::text, '{=X/default}') as acl,
+       coalesce(p.prosrc, '') as body
+from pg_proc p
+join pg_namespace n on n.oid = p.pronamespace
+where n.nspname = 'public'
+order by p.proname`
+
 async function runSql<T>(sql: string, pat: string): Promise<T[]> {
   const r = await fetch(`https://api.supabase.com/v1/projects/${TARGET_REF}/database/query`, {
     method: "POST",
@@ -147,9 +237,11 @@ export async function introspect(forceSnapshot = false): Promise<IntrospectedSch
 
   if (!forceSnapshot && pat) {
     try {
-      const [rawTables, rawPolicies] = await Promise.all([
+      const [rawTables, rawPolicies, rawRelations, rawFunctions] = await Promise.all([
         runSql<Record<string, unknown>>(Q_TABLES, pat),
         runSql<Record<string, unknown>>(Q_POLICIES, pat),
+        runSql<Record<string, unknown>>(Q_RELATIONS, pat),
+        runSql<Record<string, unknown>>(Q_FUNCTIONS, pat),
       ])
       return {
         tables: rawTables.map((t) => ({
@@ -165,6 +257,20 @@ export async function introspect(forceSnapshot = false): Promise<IntrospectedSch
           roles: parseRoles(String(p.roles ?? "")),
           qual: String(p.qual ?? ""),
           withCheck: String(p.with_check ?? ""),
+        })),
+        relations: rawRelations.map((r) => ({
+          name: String(r.name),
+          relkind: String(r.relkind) === "m" ? ("m" as const) : ("v" as const),
+          acl: parseRoles(String(r.acl ?? "")),
+          securityInvoker: r.security_invoker == null ? null : String(r.security_invoker),
+        })),
+        functions: rawFunctions.map((f) => ({
+          name: String(f.name),
+          args: String(f.args ?? ""),
+          securityDefiner: Boolean(f.security_definer),
+          config: String(f.config ?? "").split("|").filter(Boolean),
+          acl: parseRoles(String(f.acl ?? "")),
+          body: String(f.body ?? ""),
         })),
         source: "management-api",
         capturedAt: new Date().toISOString(),
@@ -341,7 +447,209 @@ export const ruleR4: Rule = (schema) => {
     }))
 }
 
-export const RULES: Rule[] = [ruleR1, ruleR2, ruleR3, ruleR4]
+// ---------------------------------------------------------------------------
+// Regras R5-R9 (Story 900-2b)
+// ---------------------------------------------------------------------------
+
+/** Uma entrada de ACL concede ao pseudo-role PUBLIC quando começa com `=`. */
+function concedeAPublic(acl: string[]): boolean {
+  return acl.some((e) => e.trim().startsWith("="))
+}
+
+function concedeA(acl: string[], role: string): boolean {
+  return acl.some((e) => e.trim().startsWith(`${role}=`))
+}
+
+/**
+ * R5 — view sem `security_invoker`, matview com grant.
+ *
+ * A distinção por `relkind` é o motivo de a regra existir separada: `security_invoker` é
+ * opção de VIEW. Aplicá-la a matview falha com **ERRCODE 42809** — prescrever isso mandaria
+ * quem for corrigir escrever um ALTER que não roda. Para matview, o controle correto é
+ * REVOKE do grant.
+ */
+export const ruleR5: Rule = (schema) => {
+  const out: Violation[] = []
+  for (const r of schema.relations ?? []) {
+    const exposta =
+      concedeA(r.acl, "anon") || concedeA(r.acl, "authenticated") || concedeAPublic(r.acl)
+    if (!exposta) continue
+
+    if (r.relkind === "v") {
+      const ligado = r.securityInvoker === "on" || r.securityInvoker === "true"
+      if (!ligado) {
+        out.push({ rule: "R5", table: r.name, detail: "view sem security_invoker", severity: "FAIL" })
+      }
+    } else {
+      const quem = concedeA(r.acl, "anon")
+        ? "anon"
+        : concedeA(r.acl, "authenticated")
+          ? "authenticated"
+          : "PUBLIC"
+      out.push({
+        rule: "R5",
+        table: r.name,
+        detail: `matview com grant a ${quem} — security_invoker não se aplica (ERRCODE 42809); controle correto é revoke`,
+        severity: "FAIL",
+      })
+    }
+  }
+  return out
+}
+
+/**
+ * R6 — grant a `PUBLIC`, que um revoke de `anon`/`authenticated` NÃO fecha.
+ *
+ * ### Por que a regra olha só as SECURITY DEFINER, e não todas as funções
+ *
+ * Medido contra produção: **158 das 176 funções concedem EXECUTE a PUBLIC** — porque esse é
+ * o **default do Postgres** para qualquer função criada sem REVOKE explícito. Reportar as 158
+ * transformaria a regra em ruído, e ruído treina o time a ignorar o vermelho (a mesma
+ * armadilha dos 164 falsos positivos da R2 em `900-2a`).
+ *
+ * O que separa o perigoso do inócuo não é o grant, é o `SECURITY DEFINER`:
+ *
+ * | | com PUBLIC | por quê |
+ * |---|---|---|
+ * | `SECURITY INVOKER` | 136 | roda com privilégio de quem chama; **RLS continua valendo** |
+ * | `SECURITY DEFINER` | **22** | roda com privilégio do dono e **bypassa RLS** |
+ *
+ * As 22 são o achado P1 da auditoria. As 136 são o default da linguagem.
+ *
+ * **Isto é um refinamento deliberado da AC2**, que pede "detecta entrada de PUBLIC" sem
+ * qualificar. Está registrado aqui, no Dev Agent Record e no PR para que @qa/@architect
+ * possam discordar com número na mão — e, se discordarem, basta remover o filtro de
+ * `securityDefiner` desta função.
+ *
+ * Tabelas e views com `org_id` expostas a PUBLIC são reportadas sem esse filtro: ali não há
+ * equivalente do default inócuo.
+ */
+export const ruleR6: Rule = (schema, allowlist) => {
+  const out: Violation[] = []
+
+  for (const f of schema.functions ?? []) {
+    if (!f.securityDefiner) continue // ver tabela no JSDoc
+    if (!concedeAPublic(f.acl)) continue
+    out.push({
+      rule: "R6",
+      table: `${f.name}(${f.args})`,
+      detail: "SECURITY DEFINER com EXECUTE para PUBLIC — revoke só de anon/authenticated não fecha o furo",
+      severity: "FAIL",
+    })
+  }
+
+  const comOrgId = new Set(schema.tables.filter((t) => t.hasOrgId).map((t) => t.name))
+  for (const r of schema.relations ?? []) {
+    if (!concedeAPublic(r.acl)) continue
+    if (!comOrgId.has(r.name) && r.relkind !== "m") continue
+    if (allowlist.has(r.name)) continue
+    out.push({
+      rule: "R6",
+      table: r.name,
+      detail: "grant concedido a PUBLIC — revoke só de anon/authenticated não fecha o furo",
+      severity: "FAIL",
+    })
+  }
+  return out
+}
+
+/**
+ * R7 — `SECURITY DEFINER` sem `SET search_path`.
+ *
+ * Sem `search_path` fixo, quem chama pode plantar um schema no caminho de resolução e fazer
+ * a função executar objeto dele **com o privilégio do dono**. É o achado P13 da auditoria.
+ */
+export const ruleR7: Rule = (schema) =>
+  (schema.functions ?? [])
+    .filter((f) => f.securityDefiner)
+    .filter((f) => !f.config.some((c) => c.trim().toLowerCase().startsWith("search_path=")))
+    .map((f) => ({
+      rule: "R7",
+      table: `${f.name}(${f.args})`,
+      detail: "SECURITY DEFINER sem SET search_path — vetor de hijack",
+      severity: "FAIL" as const,
+    }))
+
+/**
+ * R8 — `SECURITY DEFINER` que recebe `p_org_id` sem validar contra a org do chamador.
+ *
+ * Uma função assim aceita QUALQUER `org_id` que lhe passem e, por ser DEFINER, executa
+ * ignorando RLS: é IDOR direto. A validação esperada é referência a `user_org_id()` ou
+ * `assert_org_scope()` no corpo.
+ *
+ * **Severidade WARN nesta onda**, por decisão do epic: a promoção para FAIL é da Onda 2,
+ * quando a allowlist de service-role existir para separar o legítimo do vazamento. Marcar
+ * FAIL agora derrubaria o gate por casos que ainda não têm como ser isentados.
+ */
+export const ruleR8: Rule = (schema, allowlist) =>
+  (schema.functions ?? [])
+    .filter((f) => f.securityDefiner)
+    .filter((f) => /\bp_org_id\b/.test(f.args))
+    .filter((f) => !/\b(user_org_id|assert_org_scope)\b/.test(f.body))
+    .filter((f) => !allowlist.has(f.name))
+    .map((f) => ({
+      rule: "R8",
+      table: `${f.name}(${f.args})`,
+      detail: "SECURITY DEFINER recebe p_org_id sem validar contra user_org_id()",
+      severity: "WARN" as const,
+    }))
+
+/**
+ * R9 — duas migrations do mesmo PR redefinindo a mesma função.
+ *
+ * O caso real que originou a regra: `195_sdr_na_roleta.sql` e `199_hotfix_rls_org_scope.sql`
+ * ambas com `CREATE OR REPLACE FUNCTION roleta_pick_and_advance`. Quando as duas chegam
+ * juntas, **o último arquivo aplicado ganha em silêncio** e a mudança da outra desaparece sem
+ * erro nenhum — foi o que quase reverteu a Story 75-226.
+ *
+ * ### Divergência deliberada da AC5 — e o motivo é factual
+ *
+ * A AC5 manda comparar os arquivos contra `supabase_migrations.schema_migrations` para achar
+ * "migrations com versão maior que a última aplicada". **Isso não é executável neste
+ * repositório:** o registro usa timestamps (`20260710171933`) e os arquivos usam prefixos
+ * sequenciais (`237_...`). Não existe ordem comum entre os dois formatos, e o registro está
+ * dezenas de versões atrás (item conhecido do backlog).
+ *
+ * A intenção da regra — confirmada pela própria AC6, que fala em "ambos chegarem juntos num
+ * mesmo PR" — é comparar **o conjunto do PR**, não o histórico. Então o corte é por git:
+ * as migrations adicionadas neste branch em relação à base. Isso é preciso, funciona em CI e
+ * não depende de um registro que está sabidamente quebrado.
+ *
+ * Sem git disponível, a regra se abstém (e diz que se absteve) em vez de comparar o
+ * diretório inteiro — comparar tudo acusaria redefinições históricas legítimas, que são
+ * normais ao longo de meses e não são o que a regra procura.
+ */
+export function extrairFuncoesRedefinidas(sql: string): string[] {
+  const re = /create\s+or\s+replace\s+function\s+(?:public\.)?"?([a-z0-9_]+)"?/gi
+  const nomes = new Set<string>()
+  let m: RegExpExecArray | null
+  while ((m = re.exec(sql)) !== null) nomes.add(m[1].toLowerCase())
+  return [...nomes]
+}
+
+/** Detecta colisão dado um conjunto `arquivo → conteúdo`. Puro, para poder testar. */
+export function detectarColisoes(arquivos: Record<string, string>): Violation[] {
+  const porFuncao = new Map<string, string[]>()
+  for (const [arquivo, sql] of Object.entries(arquivos)) {
+    for (const fn of extrairFuncoesRedefinidas(sql)) {
+      porFuncao.set(fn, [...(porFuncao.get(fn) ?? []), arquivo])
+    }
+  }
+  const out: Violation[] = []
+  for (const [fn, files] of porFuncao) {
+    if (files.length < 2) continue
+    const ordenados = [...files].sort()
+    out.push({
+      rule: "R9",
+      table: fn,
+      detail: `migrations ${ordenados.join(" e ")} ambas redefinem ${fn} — o último aplicado ganha em silêncio`,
+      severity: "FAIL",
+    })
+  }
+  return out
+}
+
+export const RULES: Rule[] = [ruleR1, ruleR2, ruleR3, ruleR4, ruleR5, ruleR6, ruleR7, ruleR8]
 
 // ---------------------------------------------------------------------------
 // Grandfather list — o arquivo que nunca cresce
@@ -403,17 +711,64 @@ function loadKnownTables(): Set<string> {
 // Saída
 // ---------------------------------------------------------------------------
 
+/**
+ * Colisões de migration no conjunto do PR (R9). Não depende do schema, e sim do git — ver
+ * o JSDoc de `detectarColisoes` para a divergência deliberada da AC5.
+ */
+function rodarR9(): { violacoes: Violation[]; nota: string } {
+  const base = process.env.GATE_TENANCY_BASE?.trim() || "origin/main"
+  let lista: string[]
+  try {
+    lista = execSync(`git diff --name-only --diff-filter=A ${base}...HEAD -- supabase/migrations/`, {
+      encoding: "utf-8",
+      stdio: ["ignore", "pipe", "ignore"],
+    })
+      .split("\n")
+      .map((s) => s.trim())
+      .filter((s) => s.endsWith(".sql"))
+  } catch {
+    return {
+      violacoes: [],
+      nota: `R9 absteve-se: não foi possível comparar com '${base}' (git indisponível ou base ausente).`,
+    }
+  }
+
+  if (lista.length === 0) {
+    return { violacoes: [], nota: `R9: nenhuma migration nova em relação a ${base}.` }
+  }
+
+  const arquivos: Record<string, string> = {}
+  for (const caminho of lista) {
+    try {
+      arquivos[caminho.split("/").pop() ?? caminho] = readFileSync(join(REPO_ROOT, caminho), "utf-8")
+    } catch {
+      /* arquivo removido depois do diff — ignorar */
+    }
+  }
+  return {
+    violacoes: detectarColisoes(arquivos),
+    nota: `R9: ${Object.keys(arquivos).length} migration(s) nova(s) em relação a ${base}.`,
+  }
+}
+
+function severidade(v: Violation): Severity {
+  return v.severity ?? "FAIL"
+}
+
 function imprimirTabela(violacoes: Violation[]): void {
   if (violacoes.length === 0) {
-    console.log("Nenhuma violação de R1-R4.\n")
+    console.log("Nenhuma violação de R1-R9.\n")
     return
   }
+  const wSev = 4
   const wRule = Math.max(5, ...violacoes.map((v) => v.rule.length))
   const wTab = Math.max(7, ...violacoes.map((v) => v.table.length))
-  console.log(`${"REGRA".padEnd(wRule)}  ${"TABELA".padEnd(wTab)}  DETALHE`)
-  console.log(`${"-".repeat(wRule)}  ${"-".repeat(wTab)}  ${"-".repeat(50)}`)
+  console.log(`${"SEV".padEnd(wSev)}  ${"REGRA".padEnd(wRule)}  ${"OBJETO".padEnd(wTab)}  DETALHE`)
+  console.log(`${"-".repeat(wSev)}  ${"-".repeat(wRule)}  ${"-".repeat(wTab)}  ${"-".repeat(50)}`)
   for (const v of violacoes) {
-    console.log(`${v.rule.padEnd(wRule)}  ${v.table.padEnd(wTab)}  ${v.detail}`)
+    console.log(
+      `${severidade(v).padEnd(wSev)}  ${v.rule.padEnd(wRule)}  ${v.table.padEnd(wTab)}  ${v.detail}`,
+    )
   }
   console.log()
 }
@@ -432,14 +787,22 @@ export async function main(): Promise<number> {
   if (allowlist.size) console.log(`allowlist: ${allowlist.size} tabela(s) isenta(s)`)
   console.log()
 
-  const violacoes = RULES.flatMap((r) => r(schema, allowlist))
+  const doSchema = RULES.flatMap((r) => r(schema, allowlist))
+  const r9 = rodarR9()
+  const violacoes = [...doSchema, ...r9.violacoes]
+
   imprimirTabela(violacoes)
+  console.log(r9.nota)
 
   const porRegra = violacoes.reduce<Record<string, number>>((acc, v) => {
     acc[v.rule] = (acc[v.rule] ?? 0) + 1
     return acc
   }, {})
-  console.log("Violações por regra:", Object.keys(porRegra).length ? porRegra : "nenhuma")
+  const fails = violacoes.filter((v) => severidade(v) === "FAIL").length
+  const warns = violacoes.length - fails
+
+  console.log("\nViolações por regra:", Object.keys(porRegra).length ? porRegra : "nenhuma")
+  console.log(`FAIL: ${fails}   WARN: ${warns}`)
 
   writeFileSync(
     REPORT_PATH,
@@ -448,8 +811,8 @@ export async function main(): Promise<number> {
         geradoEm: new Date().toISOString(),
         fonte: schema.source,
         projectRef: schema.projectRef,
-        totais: { violacoes: violacoes.length, porRegra },
-        violacoes,
+        totais: { violacoes: violacoes.length, fails, warns, porRegra },
+        violacoes: violacoes.map((v) => ({ ...v, severity: severidade(v) })),
       },
       null,
       2,
@@ -463,7 +826,8 @@ export async function main(): Promise<number> {
     "   bypassam RLS — gate verde NÃO significa ausência de vazamento cross-tenant.",
   )
 
-  return violacoes.length > 0 ? 1 : 0
+  // Só FAIL derruba (AC8). Execução só com WARN sai 0 — a promoção de R8 a FAIL é da Onda 2.
+  return fails > 0 ? 1 : 0
 }
 
 if (process.argv[1]?.includes("gate-tenancy")) {
