@@ -4,7 +4,7 @@
 - **Epic:** 900 — Trifold CRM → SaaS Multi-Tenant com Cobrança Modular
 - **Onda:** 0 — Esteira e observabilidade (sem mudança funcional)
 - **Story:** 900-3
-- **Status:** InReview — **AC1, AC2, AC4, AC5 e AC6 cumpridos.** Falta só o **AC3** (gravar os 4 secrets no CI), bloqueado por permissão — ver Dev Agent Record. A decisão de ambiente mudou em relação ao draft: ver "Estado real do PRE-1" abaixo.
+- **Status:** InReview — **os 6 ACs cumpridos** (AC3 fechado em 2026-08-23). Pronta para QA gate. A decisão de ambiente mudou em relação ao draft: ver "Estado real do PRE-1" abaixo.
 - **Priority:** P0 — sem esta story, os testes cross-tenant da Onda 1 (que criam e apagam orgs) não têm onde rodar, e **o epic inteiro para no fim da Onda 1** (nas palavras da validação do @po). Não é um risco distante — é o próximo bloqueador depois de PRE-0.
 - **Complexity:** M
 - **Created:** 2026-08-02
@@ -78,7 +78,7 @@ O `trifold-crm-dev` **nunca apontou para produção** — ele é um banco separa
 
 - [x] **AC2 — 222 arquivos de migration aplicados do zero, sem erro:** `supabase db push` (ou Management API equivalente) contra o projeto novo aplica os 222 arquivos de `supabase/migrations/*.sql` (numeração `001` a `199`, com os 20 prefixos duplicados) na ordem em que a ferramenta de fato os aplica, sem falha. Qualquer erro de aplicação encontrado é documentado no Dev Agent Record — se algum erro for encontrado, ele é um achado real do projeto (prova que a sequência de migrations não é 100% reproduzível do zero) e deve ser reportado ao @architect/@data-engineer, não silenciosamente contornado dentro desta story. **Atenção especial ao risco R2** (ordem lexicográfica × numérica) — se a aplicação falhar, a primeira hipótese a checar é essa divergência de ordenação, não a integridade do conteúdo das migrations. [Source: epic-900 §10, story 900-3, AC1: "o que também prova que a sequência de migrations é reproduzível"]
 
-- [ ] **AC3 — Credenciais como secrets de CI, gravadas corretamente:** URL, anon key e service-role key do projeto descartável gravados como secrets do repositório GitHub via `gh secret set` (nomes sugeridos: `TENANCY_TEST_SUPABASE_URL`, `TENANCY_TEST_SUPABASE_ANON_KEY`, `TENANCY_TEST_SUPABASE_SERVICE_ROLE_KEY` — confirmar convenção com @devops se já existir padrão de nomenclatura de secret no projeto). Verificação pós-gravação: `gh secret list` confirma a presença dos 3 secrets (o comando não revela o valor, mas confirma que não estão vazios/ausentes — o mesmo cuidado do gotcha de `vercel env add`/stdin, adaptado: `gh secret set` via `--body` ou arquivo, nunca via pipe que possa truncar). [Source: epic-900 §10, story 900-3, AC2; NFR-10]
+- [x] **AC3 — Credenciais como secrets de CI, gravadas corretamente:** URL, anon key e service-role key do projeto descartável gravados como secrets do repositório GitHub via `gh secret set` (nomes sugeridos: `TENANCY_TEST_SUPABASE_URL`, `TENANCY_TEST_SUPABASE_ANON_KEY`, `TENANCY_TEST_SUPABASE_SERVICE_ROLE_KEY` — confirmar convenção com @devops se já existir padrão de nomenclatura de secret no projeto). Verificação pós-gravação: `gh secret list` confirma a presença dos 3 secrets (o comando não revela o valor, mas confirma que não estão vazios/ausentes — o mesmo cuidado do gotcha de `vercel env add`/stdin, adaptado: `gh secret set` via `--body` ou arquivo, nunca via pipe que possa truncar). [Source: epic-900 §10, story 900-3, AC2; NFR-10]
 
 - [x] **AC4 — Script de reset determinístico:** `scripts/reset-tenancy-testdb.ts` (ou equivalente) existe e, ao rodar, deixa o projeto descartável num estado limpo e conhecido — verificável rodando o script duas vezes seguidas e confirmando que o schema/dado resultante é idêntico nas duas execuções (idempotência do reset, não da migration em si). [Source: epic-900 §10, story 900-3, AC3]
 
@@ -278,11 +278,30 @@ proibições concretas.
 **produção**, e está numa *denylist* — é proteção, não credencial. O ref do ambiente de teste vem
 de `TENANCY_TEST_SUPABASE_URL`.
 
-**AC3 — NÃO cumprido, bloqueado por permissão.** A gravação dos secrets via `gh secret set` foi
-recusada pelo controle de permissões do ambiente. Os quatro valores existem e foram verificados;
-falta apenas gravá-los. Comandos exatos no relatório ao dono do produto. Como o `gh secret set` por
-pipe grava valor vazio em silêncio (mesma classe do incidente de `vercel env add` das Stories 75-40
-e 75-66), a gravação **precisa** usar `--body`, e `gh secret list` depois confirma presença.
+**AC3 — cumprido em 2026-08-23.** Os quatro secrets gravados no repositório
+`nicoletrifold-droid/trifold-crm`, todos via `--body` (nunca pipe/stdin — ver abaixo):
+
+| Secret | Gravado em |
+|---|---|
+| `TENANCY_TEST_SUPABASE_URL` | 2026-08-23T11:35:54Z |
+| `TENANCY_TEST_SUPABASE_ANON_KEY` | 2026-08-23T11:35:54Z |
+| `TENANCY_TEST_SUPABASE_SERVICE_ROLE_KEY` | 2026-08-23T11:35:55Z |
+| `SUPABASE_MANAGEMENT_PAT` | 2026-08-23T11:35:56Z |
+
+**O que a verificação prova, e o que ela NÃO prova — a distinção importa aqui.** `gh secret list`
+confirma **presença, não conteúdo**: um secret gravado vazio apareceria nessa lista exatamente igual
+a um preenchido. É precisamente a falha que derrubou as Stories 75-40 (chave VAPID corrompida) e
+75-66 (`PORTAL_NOTIF_PAUSED=""`), onde `vercel env ls` confirmava existência e o valor era vazio.
+
+Portanto, as evidências que de fato sustentam este AC são outras duas:
+1. **Comprimento medido na origem antes de gravar** — anon 208, service_role 219, PAT 44 caracteres.
+   Nenhum vazio.
+2. **Esses mesmos valores executaram o reset completo com sucesso** (runs B e C, exit 0), então são
+   credenciais válidas e suficientes, não só não-vazias.
+
+A prova de ponta a ponta — o CI lendo os secrets e conectando — só existe quando a Onda 1 tiver o
+job que os consome (`900-17`). Até lá, este AC está cumprido no que era verificável agora, e o
+resíduo está nomeado em vez de presumido resolvido.
 
 ### File List
 - `scripts/reset-tenancy-testdb.ts` (novo) — reset determinístico, guard contra produção, fallback autocommit
