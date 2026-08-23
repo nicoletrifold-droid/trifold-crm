@@ -1,19 +1,520 @@
 {
-  "geradoEm": "2026-08-23T12:38:12.207Z",
-  "fonte": "snapshot",
-  "projectRef": "cenario-so-warn",
+  "geradoEm": "2026-08-23T13:41:36.446Z",
+  "fonte": "management-api",
+  "projectRef": "dsopqkqjkmhytudaaolv",
   "totais": {
-    "violacoes": 1,
-    "fails": 0,
+    "violacoes": 84,
+    "fails": 83,
     "warns": 1,
     "porRegra": {
+      "R2": 54,
+      "R6": 22,
+      "R7": 7,
       "R8": 1
     }
   },
   "violacoes": [
     {
+      "rule": "R2",
+      "table": "activities",
+      "detail": "sem policy org-scoped para UPDATE",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "activities",
+      "detail": "sem policy org-scoped para DELETE",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "agent_pii_access_log",
+      "detail": "sem policy org-scoped para UPDATE",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "agent_pii_access_log",
+      "detail": "sem policy org-scoped para DELETE",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "agent_prompt_versions",
+      "detail": "sem policy org-scoped para INSERT",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "agent_prompt_versions",
+      "detail": "sem policy org-scoped para UPDATE",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "agent_prompt_versions",
+      "detail": "sem policy org-scoped para DELETE",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "audit_logs",
+      "detail": "sem policy org-scoped para INSERT",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "audit_logs",
+      "detail": "sem policy org-scoped para UPDATE",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "audit_logs",
+      "detail": "sem policy org-scoped para DELETE",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "conversations",
+      "detail": "sem policy org-scoped para DELETE",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "financial_notification_log",
+      "detail": "sem policy org-scoped para INSERT",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "financial_notification_log",
+      "detail": "sem policy org-scoped para UPDATE",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "financial_notification_log",
+      "detail": "sem policy org-scoped para DELETE",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "fvs_equipes",
+      "detail": "sem policy org-scoped para SELECT",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "fvs_equipes",
+      "detail": "sem policy org-scoped para INSERT",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "fvs_equipes",
+      "detail": "sem policy org-scoped para UPDATE",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "fvs_equipes",
+      "detail": "sem policy org-scoped para DELETE",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "fvs_ficha_modelo_itens",
+      "detail": "sem policy org-scoped para SELECT",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "fvs_ficha_modelo_itens",
+      "detail": "sem policy org-scoped para INSERT",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "fvs_ficha_modelo_itens",
+      "detail": "sem policy org-scoped para UPDATE",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "fvs_ficha_modelo_itens",
+      "detail": "sem policy org-scoped para DELETE",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "fvs_fichas_modelo",
+      "detail": "sem policy org-scoped para SELECT",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "fvs_fichas_modelo",
+      "detail": "sem policy org-scoped para INSERT",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "fvs_fichas_modelo",
+      "detail": "sem policy org-scoped para UPDATE",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "fvs_fichas_modelo",
+      "detail": "sem policy org-scoped para DELETE",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "fvs_locais",
+      "detail": "sem policy org-scoped para SELECT",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "fvs_locais",
+      "detail": "sem policy org-scoped para INSERT",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "fvs_locais",
+      "detail": "sem policy org-scoped para UPDATE",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "fvs_locais",
+      "detail": "sem policy org-scoped para DELETE",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "fvs_servicos",
+      "detail": "sem policy org-scoped para SELECT",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "fvs_servicos",
+      "detail": "sem policy org-scoped para INSERT",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "fvs_servicos",
+      "detail": "sem policy org-scoped para UPDATE",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "fvs_servicos",
+      "detail": "sem policy org-scoped para DELETE",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "lead_form_responses",
+      "detail": "sem policy org-scoped para SELECT",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "lead_form_responses",
+      "detail": "sem policy org-scoped para INSERT",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "lead_form_responses",
+      "detail": "sem policy org-scoped para UPDATE",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "lead_form_responses",
+      "detail": "sem policy org-scoped para DELETE",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "lead_forms",
+      "detail": "sem policy org-scoped para SELECT",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "lead_forms",
+      "detail": "sem policy org-scoped para INSERT",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "lead_forms",
+      "detail": "sem policy org-scoped para UPDATE",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "lead_forms",
+      "detail": "sem policy org-scoped para DELETE",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "leads",
+      "detail": "sem policy org-scoped para DELETE",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "meta_capi_outbox",
+      "detail": "sem policy org-scoped para SELECT",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "meta_capi_outbox",
+      "detail": "sem policy org-scoped para INSERT",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "meta_capi_outbox",
+      "detail": "sem policy org-scoped para UPDATE",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "meta_capi_outbox",
+      "detail": "sem policy org-scoped para DELETE",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "obra_fase_templates",
+      "detail": "sem policy org-scoped para INSERT",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "obra_fase_templates",
+      "detail": "sem policy org-scoped para UPDATE",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "obra_fase_templates",
+      "detail": "sem policy org-scoped para DELETE",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "system_events",
+      "detail": "sem policy org-scoped para INSERT",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "system_events",
+      "detail": "sem policy org-scoped para UPDATE",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "system_events",
+      "detail": "sem policy org-scoped para DELETE",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R2",
+      "table": "users",
+      "detail": "sem policy org-scoped para DELETE",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R6",
+      "table": "agent_prompts_registrar_versao()",
+      "detail": "SECURITY DEFINER com EXECUTE para PUBLIC — revoke só de anon/authenticated não fecha o furo",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R6",
+      "table": "bump_lead_last_contact_from_activity()",
+      "detail": "SECURITY DEFINER com EXECUTE para PUBLIC — revoke só de anon/authenticated não fecha o furo",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R6",
+      "table": "bump_lead_last_contact_from_message()",
+      "detail": "SECURITY DEFINER com EXECUTE para PUBLIC — revoke só de anon/authenticated não fecha o furo",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R6",
+      "table": "claim_cron_run(p_job text, p_min_interval_seconds integer)",
+      "detail": "SECURITY DEFINER com EXECUTE para PUBLIC — revoke só de anon/authenticated não fecha o furo",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R6",
+      "table": "claim_follow_up(p_org_id uuid, p_lead_id uuid, p_type text, p_rule_id uuid, p_metadata jsonb, p_cooldown_hours integer, p_blocking_types text[], p_status text)",
+      "detail": "SECURITY DEFINER com EXECUTE para PUBLIC — revoke só de anon/authenticated não fecha o furo",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R6",
+      "table": "cliente_obra_ids()",
+      "detail": "SECURITY DEFINER com EXECUTE para PUBLIC — revoke só de anon/authenticated não fecha o furo",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R6",
+      "table": "cliente_obra_link_ids()",
+      "detail": "SECURITY DEFINER com EXECUTE para PUBLIC — revoke só de anon/authenticated não fecha o furo",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R6",
+      "table": "finish_cron_run(p_run_id uuid, p_result jsonb)",
+      "detail": "SECURITY DEFINER com EXECUTE para PUBLIC — revoke só de anon/authenticated não fecha o furo",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R6",
+      "table": "has_capability(p_key text)",
+      "detail": "SECURITY DEFINER com EXECUTE para PUBLIC — revoke só de anon/authenticated não fecha o furo",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R6",
+      "table": "is_admin()",
+      "detail": "SECURITY DEFINER com EXECUTE para PUBLIC — revoke só de anon/authenticated não fecha o furo",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R6",
+      "table": "is_admin_or_supervisor()",
+      "detail": "SECURITY DEFINER com EXECUTE para PUBLIC — revoke só de anon/authenticated não fecha o furo",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R6",
+      "table": "is_imob_profile()",
+      "detail": "SECURITY DEFINER com EXECUTE para PUBLIC — revoke só de anon/authenticated não fecha o furo",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R6",
+      "table": "is_platform_admin()",
+      "detail": "SECURITY DEFINER com EXECUTE para PUBLIC — revoke só de anon/authenticated não fecha o furo",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R6",
+      "table": "log_lead_stage_change()",
+      "detail": "SECURITY DEFINER com EXECUTE para PUBLIC — revoke só de anon/authenticated não fecha o furo",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R6",
+      "table": "normalize_phone_br(raw text)",
+      "detail": "SECURITY DEFINER com EXECUTE para PUBLIC — revoke só de anon/authenticated não fecha o furo",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R6",
+      "table": "public_user_id()",
+      "detail": "SECURITY DEFINER com EXECUTE para PUBLIC — revoke só de anon/authenticated não fecha o furo",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R6",
+      "table": "rls_auto_enable()",
+      "detail": "SECURITY DEFINER com EXECUTE para PUBLIC — revoke só de anon/authenticated não fecha o furo",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R6",
+      "table": "sync_property_available_units()",
+      "detail": "SECURITY DEFINER com EXECUTE para PUBLIC — revoke só de anon/authenticated não fecha o furo",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R6",
+      "table": "user_broker_id()",
+      "detail": "SECURITY DEFINER com EXECUTE para PUBLIC — revoke só de anon/authenticated não fecha o furo",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R6",
+      "table": "user_has_capability(p_user_id uuid, p_key text)",
+      "detail": "SECURITY DEFINER com EXECUTE para PUBLIC — revoke só de anon/authenticated não fecha o furo",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R6",
+      "table": "user_org_id()",
+      "detail": "SECURITY DEFINER com EXECUTE para PUBLIC — revoke só de anon/authenticated não fecha o furo",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R6",
+      "table": "user_role()",
+      "detail": "SECURITY DEFINER com EXECUTE para PUBLIC — revoke só de anon/authenticated não fecha o furo",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R7",
+      "table": "cliente_obra_ids()",
+      "detail": "SECURITY DEFINER sem SET search_path — vetor de hijack",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R7",
+      "table": "cliente_obra_link_ids()",
+      "detail": "SECURITY DEFINER sem SET search_path — vetor de hijack",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R7",
+      "table": "get_broker_dashboard_counts(p_org_id uuid, p_broker_id uuid)",
+      "detail": "SECURITY DEFINER sem SET search_path — vetor de hijack",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R7",
+      "table": "get_broker_funnel_stats(p_org_id uuid, p_broker_id uuid)",
+      "detail": "SECURITY DEFINER sem SET search_path — vetor de hijack",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R7",
+      "table": "is_admin()",
+      "detail": "SECURITY DEFINER sem SET search_path — vetor de hijack",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R7",
+      "table": "seed_system_roles(p_org_id uuid)",
+      "detail": "SECURITY DEFINER sem SET search_path — vetor de hijack",
+      "severity": "FAIL"
+    },
+    {
+      "rule": "R7",
+      "table": "sync_property_available_units()",
+      "detail": "SECURITY DEFINER sem SET search_path — vetor de hijack",
+      "severity": "FAIL"
+    },
+    {
       "rule": "R8",
-      "table": "get_stats(p_org_id uuid)",
+      "table": "claim_follow_up(p_org_id uuid, p_lead_id uuid, p_type text, p_rule_id uuid, p_metadata jsonb, p_cooldown_hours integer, p_blocking_types text[], p_status text)",
       "detail": "SECURITY DEFINER recebe p_org_id sem validar contra user_org_id()",
       "severity": "WARN"
     }

@@ -4,7 +4,7 @@
 - **Epic:** 900 — Trifold CRM → SaaS Multi-Tenant com Cobrança Modular
 - **Onda:** 0 — Esteira e observabilidade (sem mudança funcional)
 - **Story:** 900-2c (parte 3 de 3 da quebra de `900-2` — ver Change Log)
-- **Status:** Ready
+- **Status:** Ready for Review — 8/8 ACs. Fecha a Onda 0.
 - **Priority:** P0 — sem esta story, o gate existe como script mas não roda em lugar nenhum, e a dívida de isolamento continua invisível em todo PR (o objetivo central da Onda 0).
 - **Complexity:** M (dentro do G original de `900-2`, fatia final: baseline, allowlist, wiring, ressalva de cobertura, teste contra a auditoria)
 - **Created:** 2026-08-02
@@ -84,56 +84,56 @@ A AC original de `900-2` (epic §10) diz: *"Teste do gate contra os 13 achados d
 
 ## Acceptance Criteria
 
-- [ ] **AC1 — Baseline gerado a partir de dado real:** `docs/audits/rls-gate-baseline.json` criado rodando `pnpm gate:tenancy` contra produção **pós** aplicação do PR #308 (PRE-0), registrando contagem de violações por regra e por tabela/objeto no formato que a lógica de catraca (AC3) consome. [Source: epic-900 §9, "baseline com catraca"]
+- [x] **AC1 — Baseline gerado a partir de dado real:** `docs/audits/rls-gate-baseline.json` criado rodando `pnpm gate:tenancy` contra produção **pós** aplicação do PR #308 (PRE-0), registrando contagem de violações por regra e por tabela/objeto no formato que a lógica de catraca (AC3) consome. [Source: epic-900 §9, "baseline com catraca"]
 
-- [ ] **AC2 — Allowlist com `reason:` obrigatório:** `docs/audits/tenancy-allowlist.yml` criado com as 16 tabelas de P8, cada entrada com `table:` e `reason:` preenchidos (não vazio) — o motor de `900-2a` (AC5) já sabe ler este arquivo; esta story o popula pela primeira vez. [Source: epic-900 §9; auditoria P8]
+- [x] **AC2 — Allowlist com `reason:` obrigatório:** `docs/audits/tenancy-allowlist.yml` criado com as 16 tabelas de P8, cada entrada com `table:` e `reason:` preenchidos (não vazio) — o motor de `900-2a` (AC5) já sabe ler este arquivo; esta story o popula pela primeira vez. [Source: epic-900 §9; auditoria P8]
 
-- [ ] **AC3 — Catraca implementada:** o gate falha (mesmo dentro do job não-bloqueante — isto é, o **exit code** do script continua refletindo a regra, é o **wiring do CI** que decide não travar o PR) se: (a) contagem total de violações subir em relação a `rls-gate-baseline.json`, (b) violação nova aparece fora do baseline e fora da allowlist, ou (c) qualquer violação de R3 existir — R3 nunca entra em baseline, é sempre bloqueante na lógica do script (a não-bloqueância do job no CI é a única coisa que impede isso de travar o PR nesta onda; documentar essa tensão explicitamente no código). [Source: epic-900 §9, "o gate falha se (a) ... (b) ... (c) qualquer violação de R3"]
+- [x] **AC3 — Catraca implementada:** o gate falha (mesmo dentro do job não-bloqueante — isto é, o **exit code** do script continua refletindo a regra, é o **wiring do CI** que decide não travar o PR) se: (a) contagem total de violações subir em relação a `rls-gate-baseline.json`, (b) violação nova aparece fora do baseline e fora da allowlist, ou (c) qualquer violação de R3 existir — R3 nunca entra em baseline, é sempre bloqueante na lógica do script (a não-bloqueância do job no CI é a única coisa que impede isso de travar o PR nesta onda; documentar essa tensão explicitamente no código). [Source: epic-900 §9, "o gate falha se (a) ... (b) ... (c) qualquer violação de R3"]
 
-- [ ] **AC4 — Job wired no CI, não-bloqueante:** `.github/workflows/ci.yml` (de `900-1`) ganha um job `tenancy-gate` que roda `pnpm gate:tenancy` com `continue-on-error: true` no nível do job. `SUPABASE_MANAGEMENT_PAT` gravado como secret do repositório GitHub (via `gh secret set`, não via `vercel env add`/stdin — mecanismo diferente do gotcha da Vercel documentado no `CLAUDE.md`, mas mesma disciplina de nunca gravar valor vazio silenciosamente). [Source: epic-900 §10, story 900-2, AC "job entra não-bloqueante nesta onda"]
+- [x] **AC4 — Job wired no CI, não-bloqueante:** `.github/workflows/ci.yml` (de `900-1`) ganha um job `tenancy-gate` que roda `pnpm gate:tenancy` com `continue-on-error: true` no nível do job. `SUPABASE_MANAGEMENT_PAT` gravado como secret do repositório GitHub (via `gh secret set`, não via `vercel env add`/stdin — mecanismo diferente do gotcha da Vercel documentado no `CLAUDE.md`, mas mesma disciplina de nunca gravar valor vazio silenciosamente). [Source: epic-900 §10, story 900-2, AC "job entra não-bloqueante nesta onda"]
 
-- [ ] **AC5 — Relatório publicado no PR:** o job `tenancy-gate` publica um comentário no PR (ou atualiza um existente) com a tabela de violações (regra, objeto, detalhe, severidade) e a comparação contra o baseline (subiu/desceu/igual). [Source: epic-900 §9, "Saída dupla: tabela legível + JSON para comentário no PR"]
+- [x] **AC5 — Relatório publicado no PR:** o job `tenancy-gate` publica um comentário no PR (ou atualiza um existente) com a tabela de violações (regra, objeto, detalhe, severidade) e a comparação contra o baseline (subiu/desceu/igual). [Source: epic-900 §9, "Saída dupla: tabela legível + JSON para comentário no PR"]
 
-- [ ] **AC6 — Ressalva de cobertura impressa:** todo output do gate (stdout local e comentário de PR) inclui, de forma destacada, o texto: *"Este gate valida o banco, não o código. Não vê rota em service-role sem `.eq('org_id')` — a maior superfície de risco (166 de 285 route handlers). O par indispensável é a regra de ESLint da story 900-14."* (paráfrase fiel do §9 do epic, adaptada para output de terminal/Markdown). [Source: epic-900 §9, último parágrafo, "Ressalva obrigatória, escrita no próprio relatório do gate"]
+- [x] **AC6 — Ressalva de cobertura impressa:** todo output do gate (stdout local e comentário de PR) inclui, de forma destacada, o texto: *"Este gate valida o banco, não o código. Não vê rota em service-role sem `.eq('org_id')` — a maior superfície de risco (166 de 285 route handlers). O par indispensável é a regra de ESLint da story 900-14."* (paráfrase fiel do §9 do epic, adaptada para output de terminal/Markdown). [Source: epic-900 §9, último parágrafo, "Ressalva obrigatória, escrita no próprio relatório do gate"]
 
-- [ ] **AC7 — Teste contra os achados da auditoria, com escopo corrigido:** um teste automatizado (ou checklist de verificação manual documentada, se automatizar não for viável nesta story — decisão do executor, documentada) confirma, para os **6 achados mecanicamente cobertos por R1-R9** (P1, P2, P3, P6, P8, P13 — ver tabela em "Aresta encontrada"): os que foram fixados pelo PR #308 (P1, P2, P3, P6) **não aparecem** como violação ativa; P8 aparece como **allowlisted**, não como violação; P13 aparece como violação **ativa** (R7, ainda não corrigido). Para os **7 achados fora do desenho do gate** (P4-plataforma, P5, P7, P9, P10, P11, P12), o teste **não** afirma detecção — a ressalva de cobertura (AC6) e a Dev Note desta story documentam explicitamente por que cada um está fora, para que ninguém leia "gate verde" como "auditoria fechada". [Source: epic-900 §10, story 900-2, AC "teste do gate contra os 13 achados" — **escopo corrigido nesta story, ver "Aresta encontrada"**]
+- [x] **AC7 — Teste contra os achados da auditoria, com escopo corrigido:** um teste automatizado (ou checklist de verificação manual documentada, se automatizar não for viável nesta story — decisão do executor, documentada) confirma, para os **6 achados mecanicamente cobertos por R1-R9** (P1, P2, P3, P6, P8, P13 — ver tabela em "Aresta encontrada"): os que foram fixados pelo PR #308 (P1, P2, P3, P6) **não aparecem** como violação ativa; P8 aparece como **allowlisted**, não como violação; P13 aparece como violação **ativa** (R7, ainda não corrigido). Para os **7 achados fora do desenho do gate** (P4-plataforma, P5, P7, P9, P10, P11, P12), o teste **não** afirma detecção — a ressalva de cobertura (AC6) e a Dev Note desta story documentam explicitamente por que cada um está fora, para que ninguém leia "gate verde" como "auditoria fechada". [Source: epic-900 §10, story 900-2, AC "teste do gate contra os 13 achados" — **escopo corrigido nesta story, ver "Aresta encontrada"**]
 
-- [ ] **AC8 — R10/R11/R12 registradas com flag desligada:** `rules` do motor ganha 3 entradas adicionais (stubs), cada uma checando uma flag de configuração (ex.: `GATE_ONDA >= 3` para R10, `>= 4` para R11, `>= 6` para R12) antes de executar qualquer lógica — retornando lista vazia de violações quando a flag não estiver satisfeita. Nenhuma lógica de negócio real (leitura de `sellable_modules`, `AiUsageContext`, `PLATFORM_READABLE_TABLES`) é implementada nesta story, porque os artefatos que essas regras checariam ainda não existem no schema. [Source: epic-900 §10, story 900-2, AC "R10/R11/R12 implementadas com flag de ativação por onda"]
+- [x] **AC8 — R10/R11/R12 registradas com flag desligada:** `rules` do motor ganha 3 entradas adicionais (stubs), cada uma checando uma flag de configuração (ex.: `GATE_ONDA >= 3` para R10, `>= 4` para R11, `>= 6` para R12) antes de executar qualquer lógica — retornando lista vazia de violações quando a flag não estiver satisfeita. Nenhuma lógica de negócio real (leitura de `sellable_modules`, `AiUsageContext`, `PLATFORM_READABLE_TABLES`) é implementada nesta story, porque os artefatos que essas regras checariam ainda não existem no schema. [Source: epic-900 §10, story 900-2, AC "R10/R11/R12 implementadas com flag de ativação por onda"]
 
 ---
 
 ## Tasks / Subtasks
 
-- [ ] **T1** — Gerar baseline e allowlist a partir de dado real (AC1, AC2)
-  - [ ] T1.1 — Confirmar que PRE-0 (PR #308) já foi aplicado em produção antes de rodar — se não, **bloquear** a execução desta task e escalar (esta story não pode ser fechada com baseline gerado pré-hotfix, isso mediria um estado que está prestes a mudar)
-  - [ ] T1.2 — Rodar `pnpm gate:tenancy` contra produção, capturar JSON completo
-  - [ ] T1.3 — Transformar a saída em `rls-gate-baseline.json` (contagem por regra/tabela)
-  - [ ] T1.4 — Escrever `tenancy-allowlist.yml` com as 16 tabelas de P8 + `reason:` citando `131_imobiliarias.sql`
+- [x] **T1** — Gerar baseline e allowlist a partir de dado real (AC1, AC2)
+  - [x] T1.1 — Confirmar que PRE-0 (PR #308) já foi aplicado em produção antes de rodar — se não, **bloquear** a execução desta task e escalar (esta story não pode ser fechada com baseline gerado pré-hotfix, isso mediria um estado que está prestes a mudar)
+  - [x] T1.2 — Rodar `pnpm gate:tenancy` contra produção, capturar JSON completo
+  - [x] T1.3 — Transformar a saída em `rls-gate-baseline.json` (contagem por regra/tabela)
+  - [x] T1.4 — Escrever `tenancy-allowlist.yml` com as 16 tabelas de P8 + `reason:` citando `131_imobiliarias.sql`
 
-- [ ] **T2** — Implementar lógica de catraca (AC3)
-  - [ ] T2.1 — Comparação de contagem total (atual vs. baseline)
-  - [ ] T2.2 — Detecção de violação nova fora de baseline+allowlist
-  - [ ] T2.3 — R3 sempre bloqueante, nunca entra em baseline
+- [x] **T2** — Implementar lógica de catraca (AC3)
+  - [x] T2.1 — Comparação de contagem total (atual vs. baseline)
+  - [x] T2.2 — Detecção de violação nova fora de baseline+allowlist
+  - [x] T2.3 — R3 sempre bloqueante, nunca entra em baseline
 
-- [ ] **T3** — Wiring no CI (AC4, AC5)
-  - [ ] T3.1 — Adicionar job `tenancy-gate` a `.github/workflows/ci.yml` (estender o arquivo de `900-1`, não recriar)
-  - [ ] T3.2 — `continue-on-error: true` no job
-  - [ ] T3.3 — `gh secret set SUPABASE_MANAGEMENT_PAT` no repositório (ou documentar o passo para quem tiver permissão, se o executor não tiver acesso de admin do repo)
-  - [ ] T3.4 — Step de comentário de PR (ação simples: `actions/github-script` ou similar, publicando o markdown gerado pelo JSON)
+- [x] **T3** — Wiring no CI (AC4, AC5)
+  - [x] T3.1 — Adicionar job `tenancy-gate` a `.github/workflows/ci.yml` (estender o arquivo de `900-1`, não recriar)
+  - [x] T3.2 — `continue-on-error: true` no job
+  - [x] T3.3 — `gh secret set SUPABASE_MANAGEMENT_PAT` no repositório (ou documentar o passo para quem tiver permissão, se o executor não tiver acesso de admin do repo)
+  - [x] T3.4 — Step de comentário de PR (ação simples: `actions/github-script` ou similar, publicando o markdown gerado pelo JSON)
 
-- [ ] **T4** — Ressalva de cobertura (AC6)
-  - [ ] T4.1 — Adicionar o texto fixo ao final de toda execução do script (stdout) e ao comentário de PR
+- [x] **T4** — Ressalva de cobertura (AC6)
+  - [x] T4.1 — Adicionar o texto fixo ao final de toda execução do script (stdout) e ao comentário de PR
 
-- [ ] **T5** — Teste contra a auditoria, com escopo corrigido (AC7)
-  - [ ] T5.1 — Escrever a tabela de mapeamento achado→regra→coberto (a mesma desta story, formalizada em teste ou checklist)
-  - [ ] T5.2 — Validar P1/P2/P3/P6 ausentes como violação ativa (fixados por PR #308)
-  - [ ] T5.3 — Validar P8 presente como "allowlisted"
-  - [ ] T5.4 — Validar P13 presente como violação ativa (R7)
-  - [ ] T5.5 — Documentar os 7 achados fora de escopo, com a razão de cada um, no próprio arquivo de teste/checklist (não deixar implícito)
+- [x] **T5** — Teste contra a auditoria, com escopo corrigido (AC7)
+  - [x] T5.1 — Escrever a tabela de mapeamento achado→regra→coberto (a mesma desta story, formalizada em teste ou checklist)
+  - [x] T5.2 — Validar P1/P2/P3/P6 ausentes como violação ativa (fixados por PR #308)
+  - [x] T5.3 — Validar P8 presente como "allowlisted"
+  - [x] T5.4 — Validar P13 presente como violação ativa (R7)
+  - [x] T5.5 — Documentar os 7 achados fora de escopo, com a razão de cada um, no próprio arquivo de teste/checklist (não deixar implícito)
 
-- [ ] **T6** — R10/R11/R12 como stubs com flag (AC8)
-  - [ ] T6.1 — Mecanismo de flag de onda (env var ou config, ex.: `GATE_ONDA` — nome a confirmar com @architect se já existir convenção)
-  - [ ] T6.2 — 3 regras stub, cada uma checando sua flag antes de rodar
+- [x] **T6** — R10/R11/R12 como stubs com flag (AC8)
+  - [x] T6.1 — Mecanismo de flag de onda (env var ou config, ex.: `GATE_ONDA` — nome a confirmar com @architect se já existir convenção)
+  - [x] T6.2 — 3 regras stub, cada uma checando sua flag antes de rodar
 
 ---
 
@@ -240,19 +240,102 @@ Copiado quase literalmente de `docs/architecture/saas-multi-tenant.md` §8.4 e d
 ## Dev Agent Record
 
 ### Agent Model Used
-_A preencher pelo @dev/@data-engineer na implementação._
+@dev (Dex) — 2026-08-23.
 
-### Debug Log References
-_A preencher._
+### O efeito da allowlist: 118 → 54 violações de R2
 
-### Completion Notes List
-_A preencher._
+As 16 tabelas de P8 saíram da contagem (16 × 4 comandos = 64). O baseline congelou em
+**83 FAIL** — 54 de R2, 22 de R6, 7 de R7 — mais 1 WARN (R8).
+
+Isentar essas 16 é honesto: elas não têm policy **por decisão** (`131_imobiliarias.sql`, RLS
+habilitada com zero policies = deny-all para `anon`/`authenticated`). Mas isentar **não as torna
+seguras** — o isolamento delas depende de alguém ter escrito `.eq("org_id", …)` à mão em cada
+query, e é a `900-14` que fecha esse flanco. O `reason:` de cada entrada diz isso explicitamente,
+para que a allowlist não vire um lugar onde dívida some de vista.
+
+### Mudei a semântica do exit code — e essa é a decisão principal da story
+
+A `900-2a` definiu "exit 1 se houver qualquer violação" e a própria AC9 dela registrou que **"a
+camada de baseline/catraca que transforma isso é a `900-2c`"**. Esta é a transformação, e ela
+importa mais do que parece:
+
+Se o exit continuasse preso à contagem bruta, o gate ficaria **permanentemente vermelho** pelas 83
+violações herdadas — e um PR que ACRESCENTASSE dívida daria exatamente o mesmo sinal de um PR que
+não mexeu em nada. Um alarme que toca sempre não informa nada, e a catraca seria decorativa.
+
+Com baseline presente, quem manda é a catraca:
+
+| Situação | Exit | Verificado |
+|---|---|---|
+| dívida conhecida e estável | **0** | ✅ |
+| total sobe / violação nova / R3 | **1** | ✅ (removi `fornecedores` da allowlist: +4, exit 1) |
+| baseline restaurado | **0** | ✅ |
+
+Sem baseline (primeira execução ou arquivo apagado), volta a regra crua da `900-2a` — não há com o
+que comparar, e silenciar seria pior. O número absoluto continua impresso sempre: reduzi-lo é o
+objetivo das Ondas 1-2, e ele não deixa de ser visível por não derrubar o build.
+
+### A tensão que o epic mandou documentar (AC3-c)
+
+R3 é "FAIL absoluto, sem baseline" — nunca entra na linha de base, nem mesmo se já estiver lá
+(há teste para isso). Mas o job roda com `continue-on-error: true`, então **o script retorna 1 e o
+PR passa assim mesmo**.
+
+Isso é deliberado e temporário: travar PRs por 83 violações pré-existentes pararia o
+desenvolvimento sem corrigir nada. O exit code diz a verdade desde já; quem escolhe não travar é o
+wiring, e a `900-18` remove o `continue-on-error` quando o baseline chegar a zero.
+
+**A consequência precisa ser dita em voz alta:** quem olhar só o ✅ do CI não vê uma regressão de
+isolamento. É por isso que o job publica comentário no PR — enquanto ele não trava, **o comentário
+é o sinal**, não o check.
+
+### AC6: atualizei os números da ressalva, e o texto exige justificativa
+
+A AC pedia o texto literal *"166 de 285 route handlers"*. Medido em 2026-08-23: são **129 de 318**.
+Publiquei o número atual. Uma ressalva existe para ser levada a sério; se quem a lê descobre que o
+dado está errado, ela perde a força — e o ponto que ela faz (a maior superfície de risco está fora
+do alcance do gate) continua idêntico com o número certo.
+
+### AC7: 6 dos 13 achados, e a diferença é o conteúdo do teste
+
+O epic pedia "teste contra os 13 achados". **Sete não são alcançáveis por um gate de schema** — P4
+e P9 exigem juízo semântico, P5 exige decidir o que *deveria* ter `org_id`, P7 vive em
+`storage.objects`, P10 é decisão de produto, P11 é performance e **P12 é código**. Testá-los daria
+verde por vacuidade e treinaria o time a ler "gate verde" como "auditoria fechada".
+
+O teste (`gate-tenancy-auditoria.test.ts`, 10 casos) verifica o que é verificável e **afirma
+explicitamente o que não cobre**: P1/P2/P3/P6 não aparecem mais (corrigidos pelo #308), P8 aparece
+como allowlisted, P13 aparece como violação **ativa** em R7 (`is_admin()` entre elas). Um caso
+final trava a lista de regras conhecidas, para que acrescentar regra nova obrigue a atualizar a
+tabela de cobertura junto.
+
+Ele lê o **relatório congelado**, não a rede: teste de CI não pode depender de PAT nem de latência.
+
+### AC8: os stubs R10-R12 não têm lógica, de propósito
+
+Cada um checa `GATE_ONDA` e retorna vazio. Escrever a lógica agora seria inventar verificação sobre
+artefatos que não existem (`sellable_modules` nasce em `900-26`, medição de IA em `900-34`,
+`PLATFORM_READABLE_TABLES` em `900-22`) — o teste passaria por vacuidade e daria impressão de
+cobertura inexistente. Se alguém ligar a flag antes da hora, a regra **estoura com mensagem
+dizendo qual story falta**, em vez de retornar verde silencioso.
+
+### Detalhe do wiring que evita uma falha silenciosa
+
+O job usa `fetch-depth: 0`. Sem histórico completo, o `git diff` da R9 falha e **a regra se abstém
+sem que ninguém note** — exatamente o tipo de furo que um gate não pode ter.
+
+### Testes
+
+- `gate-tenancy.test.ts`: **44 casos** (36 + 8 novos de catraca e stubs)
+- `gate-tenancy-auditoria.test.ts`: **10 casos** (AC7)
+
+Suíte completa: **2958 testes** (era 2940). `type-check`, `lint` e `test` limpos.
 
 ### File List
-_A preencher._
-
----
-
-## QA Results
-
-_A preencher pelo @architect (quality gate desta story)._
+- `scripts/gate-tenancy.ts` — catraca, baseline, `--write-baseline`, stubs R10-R12, `RESSALVA_COBERTURA`, exit por catraca
+- `scripts/gate-tenancy.test.ts` — 8 testes novos
+- `scripts/gate-tenancy-auditoria.test.ts` (novo) — AC7, 10 testes
+- `docs/audits/tenancy-allowlist.yml` (novo) — as 16 tabelas de P8 com `reason:`
+- `docs/audits/rls-gate-baseline.json` (novo) — 83 FAIL congelados
+- `docs/audits/gate-tenancy-report.json` — regenerado com a allowlist ativa
+- `.github/workflows/ci.yml` — job `tenancy-gate` não-bloqueante + comentário no PR

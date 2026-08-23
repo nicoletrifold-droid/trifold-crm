@@ -342,3 +342,85 @@ describe("AC7 — sem regressão: R1-R4 seguem com o motor estendido", () => {
     }).not.toThrow()
   })
 })
+
+// ===========================================================================
+// Story 900-2c — catraca, allowlist e stubs R10-R12
+// ===========================================================================
+
+import { aplicarCatraca, chaveDe, ruleR10, ruleR11, ruleR12, type Baseline } from "./gate-tenancy"
+
+function baselineCom(chaves: string[]): Baseline {
+  return {
+    _aviso: "",
+    geradoEm: "2026-08-23T00:00:00.000Z",
+    projectRef: "test",
+    total: chaves.length,
+    porRegra: {},
+    chaves,
+  }
+}
+
+const vio = (rule: string, table: string, detail = "d"): Violation => ({ rule, table, detail })
+
+describe("catraca", () => {
+  it("passa quando nada mudou", () => {
+    const v = [vio("R2", "leads"), vio("R7", "is_admin()")]
+    const r = aplicarCatraca(v, baselineCom(v.map(chaveDe)))
+    expect(r.ok).toBe(true)
+    expect(r.delta).toBe(0)
+  })
+
+  it("falha quando o total sobe (a)", () => {
+    const base = baselineCom([chaveDe(vio("R2", "leads"))])
+    const r = aplicarCatraca([vio("R2", "leads"), vio("R2", "users")], base)
+    expect(r.ok).toBe(false)
+    expect(r.motivos.join(" ")).toContain("(a)")
+    expect(r.delta).toBe(1)
+  })
+
+  it("falha com violação nova mesmo se o total não subir (b)", () => {
+    // Uma sai, outra entra: total igual, mas houve regressão real.
+    const base = baselineCom([chaveDe(vio("R2", "leads"))])
+    const r = aplicarCatraca([vio("R2", "users")], base)
+    expect(r.ok).toBe(false)
+    expect(r.motivos.join(" ")).toContain("(b)")
+    expect(r.novas).toHaveLength(1)
+    expect(r.resolvidas).toHaveLength(1)
+  })
+
+  it("R3 derruba sempre, mesmo se estiver no baseline (c)", () => {
+    // R3 é declarada 'FAIL absoluto sem baseline' — não pode ser silenciada por congelamento.
+    const r3 = vio("R3", "tabela_nova")
+    const r = aplicarCatraca([r3], baselineCom([chaveDe(r3)]))
+    expect(r.ok).toBe(false)
+    expect(r.motivos.join(" ")).toContain("(c)")
+  })
+
+  it("celebra violação resolvida sem falhar", () => {
+    const base = baselineCom([chaveDe(vio("R2", "leads")), chaveDe(vio("R2", "users"))])
+    const r = aplicarCatraca([vio("R2", "leads")], base)
+    expect(r.ok).toBe(true)
+    expect(r.resolvidas).toHaveLength(1)
+    expect(r.delta).toBe(-1)
+  })
+
+  it("WARN não conta para a catraca", () => {
+    const base = baselineCom([])
+    const r = aplicarCatraca([{ ...vio("R8", "f()"), severity: "WARN" }], base)
+    expect(r.ok).toBe(true)
+  })
+
+  it("sem baseline, não inventa veredito", () => {
+    const r = aplicarCatraca([vio("R2", "leads")], null)
+    expect(r.motivos.join(" ")).toContain("baseline ausente")
+  })
+})
+
+describe("R10-R12 — stubs desligados por flag", () => {
+  it("retornam vazio sem GATE_ONDA e não estouram", () => {
+    const s = schema([], [])
+    expect(ruleR10(s, SEM_ALLOWLIST)).toEqual([])
+    expect(ruleR11(s, SEM_ALLOWLIST)).toEqual([])
+    expect(ruleR12(s, SEM_ALLOWLIST)).toEqual([])
+  })
+})
