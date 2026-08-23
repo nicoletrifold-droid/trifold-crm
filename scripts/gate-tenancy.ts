@@ -649,7 +649,148 @@ export function detectarColisoes(arquivos: Record<string, string>): Violation[] 
   return out
 }
 
-export const RULES: Rule[] = [ruleR1, ruleR2, ruleR3, ruleR4, ruleR5, ruleR6, ruleR7, ruleR8]
+// ---------------------------------------------------------------------------
+// R10-R12 (Story 900-2c) — registradas com flag desligada
+// ---------------------------------------------------------------------------
+
+/**
+ * Onda corrente do Epic 900. Cada regra abaixo só liga quando a onda que cria o artefato
+ * que ela verifica tiver acontecido. Default 0 = nenhuma delas roda.
+ *
+ * **Elas são stubs de propósito e não têm lógica.** Escrever a lógica agora seria inventar
+ * verificação sobre tabelas que ainda não existem (`sellable_modules` nasce em `900-26`,
+ * `ai_usage_events` em `900-33`, `PLATFORM_READABLE_TABLES` em `900-22`) — o teste passaria
+ * por vacuidade e daria a impressão de cobertura que não existe. Ficam registradas para que
+ * a numeração R1-R12 do epic seja real, e para que quem implementar tenha o ponto de entrada.
+ */
+const GATE_ONDA = Number.parseInt(process.env.GATE_ONDA ?? "0", 10) || 0
+
+/** R10 — drift entre `sellable_modules` e os módulos do código. Liga na Onda 3 (`900-26`). */
+export const ruleR10: Rule = () => {
+  if (GATE_ONDA < 3) return []
+  throw new Error("R10 ainda não implementada — story 900-26 cria `sellable_modules`.")
+}
+
+/** R11 — uso de `AiUsageContext` na fábrica dos clients de IA. Liga na Onda 4 (`900-34`). */
+export const ruleR11: Rule = () => {
+  if (GATE_ONDA < 4) return []
+  throw new Error("R11 ainda não implementada — story 900-34 cria a medição de IA.")
+}
+
+/** R12 — `/platform` só lê `PLATFORM_READABLE_TABLES`. Liga na Onda 6 (`900-42a`). */
+export const ruleR12: Rule = () => {
+  if (GATE_ONDA < 6) return []
+  throw new Error("R12 ainda não implementada — story 900-42a consolida a lista.")
+}
+
+export const RULES: Rule[] = [
+  ruleR1, ruleR2, ruleR3, ruleR4, ruleR5,
+  ruleR6, ruleR7, ruleR8, ruleR10, ruleR11, ruleR12,
+]
+
+// ---------------------------------------------------------------------------
+// Baseline e catraca (Story 900-2c)
+// ---------------------------------------------------------------------------
+
+export interface Baseline {
+  _aviso: string
+  geradoEm: string
+  projectRef: string
+  /** Contagem total de violações FAIL no momento do congelamento. */
+  total: number
+  porRegra: Record<string, number>
+  /** Chaves `regra|objeto|detalhe` das violações conhecidas. */
+  chaves: string[]
+}
+
+const BASELINE_PATH = join(REPO_ROOT, "docs", "audits", "rls-gate-baseline.json")
+
+export function chaveDe(v: Violation): string {
+  return `${v.rule}|${v.table}|${v.detail}`
+}
+
+export interface ResultadoCatraca {
+  ok: boolean
+  motivos: string[]
+  novas: Violation[]
+  resolvidas: string[]
+  delta: number
+}
+
+/**
+ * A catraca: o número nunca sobe, e violação nova nunca passa.
+ *
+ * Falha se **(a)** o total de FAIL subir, **(b)** aparecer violação fora do baseline e fora
+ * da allowlist, ou **(c)** existir QUALQUER violação de R3.
+ *
+ * ### A tensão do item (c), que o epic manda documentar
+ *
+ * R3 é declarada "FAIL absoluto desde o dia 1, sem baseline" — ela nunca entra na linha de
+ * base, porque é a regra que impede dívida NOVA. Só que, nesta onda, o job do CI roda com
+ * `continue-on-error: true`. Ou seja: **o script retorna 1, e o PR passa mesmo assim.**
+ *
+ * Isso é deliberado e é temporário. O exit code diz a verdade desde já; quem decide não
+ * travar o PR é o wiring, não a lógica — e é a `900-18` que remove o `continue-on-error` na
+ * saída da Onda 1. Registrar essa diferença importa porque, olhando só o CI verde, alguém
+ * poderia concluir que R3 não está valendo. Está valendo; ainda não está travando.
+ */
+export function aplicarCatraca(
+  violacoes: Violation[],
+  baseline: Baseline | null,
+): ResultadoCatraca {
+  const fails = violacoes.filter((v) => severidade(v) === "FAIL")
+  const motivos: string[] = []
+
+  const r3 = fails.filter((v) => v.rule === "R3")
+  if (r3.length > 0) {
+    motivos.push(
+      `(c) ${r3.length} violação(ões) de R3 — R3 nunca entra em baseline: ${r3.map((v) => v.table).join(", ")}`,
+    )
+  }
+
+  if (!baseline) {
+    return {
+      ok: motivos.length === 0,
+      motivos: motivos.length ? motivos : ["baseline ausente — nada a comparar (primeira execução)"],
+      novas: [],
+      resolvidas: [],
+      delta: 0,
+    }
+  }
+
+  const conhecidas = new Set(baseline.chaves)
+  const atuais = new Set(fails.map(chaveDe))
+
+  const novas = fails.filter((v) => !conhecidas.has(chaveDe(v)) && v.rule !== "R3")
+  const resolvidas = baseline.chaves.filter((k) => !atuais.has(k))
+  const delta = fails.length - baseline.total
+
+  if (delta > 0) motivos.push(`(a) total de FAIL subiu: ${baseline.total} → ${fails.length} (+${delta})`)
+  if (novas.length > 0) {
+    motivos.push(`(b) ${novas.length} violação(ões) nova(s) fora do baseline e da allowlist`)
+  }
+
+  return { ok: motivos.length === 0, motivos, novas, resolvidas, delta }
+}
+
+export function lerBaseline(): Baseline | null {
+  if (!existsSync(BASELINE_PATH)) return null
+  return JSON.parse(readFileSync(BASELINE_PATH, "utf-8")) as Baseline
+}
+
+/**
+ * Texto exigido pela AC6, impresso em TODA execução — inclusive quando o gate está verde.
+ *
+ * **Os números foram atualizados em relação ao texto original da AC**, que dizia "166 de 285
+ * route handlers". Medido em 2026-08-23: são **129 de 318**. Publicar o número velho num
+ * relatório que existe para ser confiável seria contraproducente — a ressalva perde força se
+ * quem a lê descobre que o dado está errado. A proporção continua fazendo o mesmo ponto.
+ */
+export const RESSALVA_COBERTURA =
+  "Este gate valida o BANCO, não o código. Ele não vê rota em service-role sem\n" +
+  ".eq('org_id') — a maior superfície de risco (129 de 318 route handlers usam\n" +
+  "createAdminClient e bypassam RLS). O par indispensável é a regra de ESLint da\n" +
+  "story 900-14. Gate verde NÃO significa isolamento garantido."
 
 // ---------------------------------------------------------------------------
 // Grandfather list — o arquivo que nunca cresce
@@ -820,13 +961,74 @@ export async function main(): Promise<number> {
   )
   console.log(`\nRelatório JSON: ${REPORT_PATH}`)
 
-  // ESTA RESSALVA NÃO É DECORATIVA — ver cabeçalho do arquivo.
-  console.log(
-    "\n⚠️  Este gate mede o BANCO. 129 dos 318 route handlers usam service-role e\n" +
-    "   bypassam RLS — gate verde NÃO significa ausência de vazamento cross-tenant.",
-  )
+  // ---- catraca (Story 900-2c) ------------------------------------------------
+  const baseline = lerBaseline()
+  const catraca = aplicarCatraca(violacoes, baseline)
 
-  // Só FAIL derruba (AC8). Execução só com WARN sai 0 — a promoção de R8 a FAIL é da Onda 2.
+  if (process.argv.includes("--write-baseline")) {
+    const chaves = violacoes.filter((v) => severidade(v) === "FAIL").map(chaveDe).sort()
+    writeFileSync(
+      BASELINE_PATH,
+      JSON.stringify(
+        {
+          _aviso:
+            "Linha de base da dívida de isolamento. A catraca impede que o total suba e que " +
+            "violação nova entre. Este arquivo só DESCE — abaixá-lo é o objetivo das Ondas 1-2. " +
+            "Aumentá-lo à mão para acomodar dívida nova anula o mecanismo.",
+          geradoEm: new Date().toISOString(),
+          projectRef: schema.projectRef,
+          total: chaves.length,
+          porRegra,
+          chaves,
+        },
+        null,
+        2,
+      ) + "\n",
+    )
+    console.log(`\nBaseline gravado: ${BASELINE_PATH} (${chaves.length} violações FAIL)`)
+    console.log(RESSALVA_COBERTURA.split("\n").map((l) => `⚠️  ${l}`).join("\n"))
+    return 0
+  }
+
+  console.log("\n── Catraca ──")
+  if (baseline) {
+    console.log(`baseline: ${baseline.total} FAIL (${baseline.geradoEm.slice(0, 10)})`)
+    console.log(`agora:    ${fails} FAIL  (delta ${catraca.delta >= 0 ? "+" : ""}${catraca.delta})`)
+    if (catraca.resolvidas.length) console.log(`resolvidas desde o baseline: ${catraca.resolvidas.length} ✅`)
+  }
+  if (catraca.ok) {
+    console.log("catraca OK — nada subiu, nada novo entrou.")
+  } else {
+    for (const m of catraca.motivos) console.log(`CATRACA FALHOU — ${m}`)
+    for (const v of catraca.novas.slice(0, 10)) console.log(`   nova: ${v.rule} ${v.table} — ${v.detail}`)
+  }
+
+  // ESTA RESSALVA NÃO É DECORATIVA — é exigência da AC6 e vale mesmo com o gate verde.
+  console.log("\n" + RESSALVA_COBERTURA.split("\n").map((l) => `⚠️  ${l}`).join("\n"))
+
+  /**
+   * Exit code — e aqui a `900-2c` MUDA o comportamento cru da `900-2a`, de propósito.
+   *
+   * A AC9 da `900-2a` definiu "exit 1 se houver qualquer violação", e disse explicitamente
+   * que "a camada de baseline/catraca que transforma isso é a `900-2c`". É esta a
+   * transformação.
+   *
+   * Manter o exit atrelado à contagem bruta tornaria a catraca decorativa: o gate ficaria
+   * permanentemente vermelho pelas 83 violações herdadas, e um PR que ACRESCENTASSE dívida
+   * produziria exatamente o mesmo sinal de um PR que não mexeu em nada. Um alarme que toca
+   * sempre não informa nada.
+   *
+   * Com baseline presente, portanto, quem manda é a catraca:
+   *   • dívida conhecida e estável        → 0  (o PR não piorou nada)
+   *   • total subiu / violação nova / R3   → 1  (regressão de verdade)
+   *
+   * Sem baseline (primeira execução, ou arquivo apagado), volta a valer a regra crua da
+   * `900-2a` — nesse caso não há com o que comparar, e silenciar seria pior.
+   *
+   * O número absoluto continua impresso em toda execução: reduzi-lo é o objetivo das
+   * Ondas 1-2, e ele não deixa de ser visível por não derrubar o build.
+   */
+  if (baseline) return catraca.ok ? 0 : 1
   return fails > 0 ? 1 : 0
 }
 

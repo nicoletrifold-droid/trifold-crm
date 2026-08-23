@@ -88,3 +88,107 @@ jobs:
             echo "::error::Um ou mais checks falharam."
             exit 1
           fi
+
+  # ---------------------------------------------------------------------------
+  # Story 900-2c — gate de isolamento multi-tenant.
+  #
+  # NÃO-BLOQUEANTE NESTA ONDA (`continue-on-error: true`), e a razão é de sequência,
+  # não de confiança: o gate acusa 83 violações herdadas, e travar PRs por dívida
+  # pré-existente pararia o desenvolvimento sem corrigir nada. A `900-18` remove o
+  # `continue-on-error` na saída da Onda 1, quando o baseline chegar a zero.
+  #
+  # ⚠️ A consequência precisa ser dita: o script retorna 1 numa regressão real (violação
+  # nova, total em alta ou qualquer R3) e **o PR passa assim mesmo**. Quem lê só o
+  # ✅ do CI não vê. Por isso o job publica um comentário no PR — é ele que carrega o
+  # sinal enquanto o job não trava.
+  # ---------------------------------------------------------------------------
+  tenancy-gate:
+    name: gate de tenancy (não-bloqueante)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # R9 compara as migrations deste PR com a base — precisa do histórico, não de um
+          # checkout raso, senão a regra se abstém em silêncio e ninguém nota.
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.8.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Instala dependências
+        run: pnpm install --frozen-lockfile
+
+      - name: Roda o gate
+        id: gate
+        env:
+          SUPABASE_MANAGEMENT_PAT: ${{ secrets.SUPABASE_MANAGEMENT_PAT }}
+          GATE_TENANCY_BASE: origin/${{ github.base_ref || 'main' }}
+        run: |
+          set +e
+          pnpm gate:tenancy 2>&1 | tee /tmp/gate.log
+          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Publica o relatório no PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const log = fs.readFileSync('/tmp/gate.log', 'utf8');
+            const code = '${{ steps.gate.outputs.exit_code }}';
+            const veredito = code === '0'
+              ? '✅ **Catraca OK** — a dívida de isolamento não aumentou neste PR.'
+              : '🔴 **Catraca falhou** — este PR acrescenta dívida de isolamento, ou há violação de R3.';
+
+            let report = null;
+            try { report = JSON.parse(fs.readFileSync('docs/audits/gate-tenancy-report.json', 'utf8')); } catch {}
+
+            const linhas = (report?.violacoes ?? []).slice(0, 30)
+              .map(v => `| ${v.severity} | ${v.rule} | \`${v.table}\` | ${v.detail} |`).join('\n');
+            const extra = (report?.violacoes?.length ?? 0) > 30
+              ? `\n\n_…e mais ${report.violacoes.length - 30} violações. Veja o log do job._` : '';
+
+            const corpo = [
+              '## Gate de tenancy',
+              '',
+              veredito,
+              '',
+              report ? `**${report.totais.fails} FAIL · ${report.totais.warns} WARN** — por regra: \`${JSON.stringify(report.totais.porRegra)}\`` : '',
+              '',
+              linhas ? '| Sev | Regra | Objeto | Detalhe |\n|---|---|---|---|\n' + linhas + extra : '_Sem violações._',
+              '',
+              '<details><summary>Saída completa do gate</summary>',
+              '',
+              '```',
+              log.slice(-8000),
+              '```',
+              '',
+              '</details>',
+              '',
+              '> ⚠️ **Este gate valida o banco, não o código.** Ele não vê rota em service-role sem `.eq(\'org_id\')` — a maior superfície de risco (129 de 318 route handlers usam `createAdminClient` e bypassam RLS). O par indispensável é a regra de ESLint da story `900-14`. **Gate verde não significa isolamento garantido.**',
+              '',
+              '> O job é **não-bloqueante** nesta onda: mesmo com a catraca vermelha o PR pode ser mergeado. A `900-18` torna o gate bloqueante ao fim da Onda 1.',
+            ].join('\n');
+
+            const marca = '## Gate de tenancy';
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const existentes = await github.rest.issues.listComments({ owner, repo, issue_number });
+            const meu = existentes.data.find(c => c.body.startsWith(marca) && c.user.type === 'Bot');
+            if (meu) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: meu.id, body: corpo });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body: corpo });
+            }
