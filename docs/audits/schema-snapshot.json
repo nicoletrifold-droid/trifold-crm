@@ -2353,7 +2353,2670 @@
       "withCheck": ""
     }
   ],
+  "relations": [
+    {
+      "name": "meta_campaign_roas",
+      "relkind": "m",
+      "acl": [
+        "postgres=arwdDxtm/postgres",
+        "service_role=arwdDxtm/postgres"
+      ],
+      "securityInvoker": null
+    },
+    {
+      "name": "v_lead_conversations",
+      "relkind": "v",
+      "acl": [
+        "postgres=arwdDxtm/postgres",
+        "authenticated=rm/postgres",
+        "service_role=arwdDxtm/postgres"
+      ],
+      "securityInvoker": "on"
+    },
+    {
+      "name": "v_lead_drill",
+      "relkind": "v",
+      "acl": [
+        "postgres=arwdDxtm/postgres",
+        "authenticated=rm/postgres",
+        "service_role=arwdDxtm/postgres"
+      ],
+      "securityInvoker": "on"
+    },
+    {
+      "name": "v_lead_lost_reason_grupo",
+      "relkind": "v",
+      "acl": [
+        "postgres=arwdDxtm/postgres",
+        "anon=arwdDxtm/postgres",
+        "authenticated=arwdDxtm/postgres",
+        "service_role=arwdDxtm/postgres"
+      ],
+      "securityInvoker": "on"
+    },
+    {
+      "name": "v_mensagens_admin",
+      "relkind": "v",
+      "acl": [
+        "postgres=arwdDxtm/postgres",
+        "authenticated=arwdDxtm/postgres",
+        "service_role=arwdDxtm/postgres"
+      ],
+      "securityInvoker": "on"
+    },
+    {
+      "name": "v_pipeline_stage_distribution",
+      "relkind": "v",
+      "acl": [
+        "postgres=arwdDxtm/postgres",
+        "authenticated=rm/postgres",
+        "service_role=arwdDxtm/postgres"
+      ],
+      "securityInvoker": "on"
+    }
+  ],
+  "functions": [
+    {
+      "name": "agent_prompts_registrar_versao",
+      "args": "",
+      "securityDefiner": true,
+      "config": [
+        "search_path=public, pg_temp"
+      ],
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\nDECLARE\n  v_reason    text;\n  v_auth_id   uuid;\n  v_user_id   uuid;\n  v_label     text;\nBEGIN\n  BEGIN\n    -- Motivo só conta se veio NESTE update (senão o histórico herdaria o motivo antigo\n    -- e passaria a atribuir uma justificativa a quem não a deu).\n    v_reason := CASE\n                  WHEN NEW.last_change_reason IS DISTINCT FROM OLD.last_change_reason\n                    THEN NULLIF(btrim(NEW.last_change_reason), '')\n                  ELSE NULL\n                END;\n\n    -- Cada lookup em seu próprio bloco: nenhum deles pode custar a linha de histórico.\n    BEGIN\n      v_auth_id := auth.uid();\n    EXCEPTION WHEN OTHERS THEN\n      v_auth_id := NULL;\n    END;\n\n    BEGIN\n      v_user_id := public.public_user_id();\n    EXCEPTION WHEN OTHERS THEN\n      v_user_id := NULL;\n    END;\n\n    BEGIN\n      SELECT COALESCE(NULLIF(btrim(u.name), ''), u.email)\n        INTO v_label\n        FROM public.users u\n       WHERE u.id = v_user_id;\n    EXCEPTION WHEN OTHERS THEN\n      v_label := NULL;\n    END;\n\n    INSERT INTO public.agent_prompt_versions (\n      prompt_id, org_id, slug, name,\n      previous_content, new_content, change_reason,\n      author_auth_id, author_user_id, author_label,\n      previous_is_active, new_is_active\n    )\n    VALUES (\n      OLD.id, OLD.org_id, OLD.slug, OLD.name,\n      OLD.content, NEW.content, v_reason,\n      v_auth_id, v_user_id,\n      -- 'system' é informação, não fallback cosmético: é assim que uma escrita por\n      -- service-role / Management API (o caminho do incidente de 04/08) fica VISÍVEL.\n      COALESCE(v_label, 'system'),\n      OLD.is_active, NEW.is_active\n    );\n  EXCEPTION WHEN OTHERS THEN\n    RAISE WARNING 'agent_prompt_versions: falha ao registrar versao do slug % (org %): %',\n      OLD.slug, OLD.org_id, SQLERRM;\n  END;\n\n  RETURN NEW;\nEND;\n"
+    },
+    {
+      "name": "array_to_halfvec",
+      "args": "integer[], integer, boolean",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "array_to_halfvec"
+    },
+    {
+      "name": "array_to_halfvec",
+      "args": "numeric[], integer, boolean",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "array_to_halfvec"
+    },
+    {
+      "name": "array_to_halfvec",
+      "args": "double precision[], integer, boolean",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "array_to_halfvec"
+    },
+    {
+      "name": "array_to_halfvec",
+      "args": "real[], integer, boolean",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "array_to_halfvec"
+    },
+    {
+      "name": "array_to_sparsevec",
+      "args": "double precision[], integer, boolean",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "array_to_sparsevec"
+    },
+    {
+      "name": "array_to_sparsevec",
+      "args": "integer[], integer, boolean",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "array_to_sparsevec"
+    },
+    {
+      "name": "array_to_sparsevec",
+      "args": "real[], integer, boolean",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "array_to_sparsevec"
+    },
+    {
+      "name": "array_to_sparsevec",
+      "args": "numeric[], integer, boolean",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "array_to_sparsevec"
+    },
+    {
+      "name": "array_to_vector",
+      "args": "real[], integer, boolean",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "array_to_vector"
+    },
+    {
+      "name": "array_to_vector",
+      "args": "numeric[], integer, boolean",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "array_to_vector"
+    },
+    {
+      "name": "array_to_vector",
+      "args": "double precision[], integer, boolean",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "array_to_vector"
+    },
+    {
+      "name": "array_to_vector",
+      "args": "integer[], integer, boolean",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "array_to_vector"
+    },
+    {
+      "name": "assert_org_scope",
+      "args": "p_org_id uuid",
+      "securityDefiner": false,
+      "config": [
+        "search_path=public, pg_temp"
+      ],
+      "acl": [
+        "postgres=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\nDECLARE\n  v_role text;\nBEGIN\n  IF auth.uid() IS NULL THEN\n    -- CUIDADO: auth.uid() NULL NÃO implica service-role. A anon key deste\n    -- projeto é `sb_publishable_…` (46 chars, ZERO pontos — não é JWT, não tem\n    -- claim `sub`), então requisição anônima por PostgREST cai aqui também.\n    --\n    -- ⚠️ FAIL-OPEN DELIBERADO. A service role key também é do formato novo\n    -- (`sb_secret_…`, 41 chars, não-JWT) e NÃO foi possível verificar, sem criar\n    -- função de sonda em produção (DDL), o que o PostgREST põe em\n    -- `request.jwt.claims` nesse formato. Se a guarda negasse por padrão e o\n    -- formato não trouxesse role='service_role', `roleta_pick_and_advance`\n    -- passaria a levantar exceção em TODA rodada do cron → leads param de ser\n    -- distribuídos. Por isso negamos SOMENTE quando o request é positivamente\n    -- identificável como anônimo; qualquer formato de claims desconhecido libera.\n    --\n    -- Consequência aceita: se o formato novo não popular role='anon', esta\n    -- guarda é no-op para o vetor anônimo. Isso é aceitável porque **quem fecha\n    -- o furo explorado é o REVOKE da seção 2**, que é o controle primário e foi\n    -- verificado; esta guarda é defesa em profundidade contra cross-tenant de\n    -- usuário LOGADO (esse caminho, sim, é garantido: tem auth.uid()).\n    -- Bloco aninhado: o cast ::jsonb levantaria erro se o GUC não fosse JSON\n    -- válido, e isso mataria a chamada de cron. Qualquer falha aqui é tratada\n    -- como \"formato desconhecido\" → libera (coerente com o fail-open acima).\n    BEGIN\n      v_role := nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role';\n    EXCEPTION WHEN others THEN\n      v_role := NULL;\n    END;\n\n    IF v_role = 'anon' THEN\n      RAISE EXCEPTION 'org scope required' USING ERRCODE = '42501';\n    END IF;\n\n    -- service_role, pg_cron/psql/migration (sem GUC de request), ou formato de\n    -- claims não reconhecido → libera.\n    RETURN;\n  END IF;\n\n  IF p_org_id IS DISTINCT FROM public.user_org_id() THEN\n    RAISE EXCEPTION 'org mismatch' USING ERRCODE = '42501';\n  END IF;\nEND;\n"
+    },
+    {
+      "name": "avg",
+      "args": "vector",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "aggregate_dummy"
+    },
+    {
+      "name": "avg",
+      "args": "halfvec",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "aggregate_dummy"
+    },
+    {
+      "name": "binary_quantize",
+      "args": "halfvec",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "halfvec_binary_quantize"
+    },
+    {
+      "name": "binary_quantize",
+      "args": "vector",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "binary_quantize"
+    },
+    {
+      "name": "broker_active_leads_count",
+      "args": "p_org_id uuid, p_broker_user_id uuid",
+      "securityDefiner": true,
+      "config": [
+        "search_path=public"
+      ],
+      "acl": [
+        "postgres=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\nBEGIN\n  PERFORM public.assert_org_scope(p_org_id);\n\n  RETURN (\n      SELECT COUNT(*)::integer\n        FROM leads l\n       WHERE l.org_id = p_org_id\n         AND l.assigned_broker_id = p_broker_user_id\n         AND l.is_active = true\n         AND l.lost_reason IS NULL\n         AND l.segmento = 'principal'\n         AND l.stage_id NOT IN ('00000000-0000-0000-0001-000000000008',  -- Perdido\n                                '95327bd7-3e88-4038-aa16-250a74ab085c') -- Não Qualificado\n  );\nEND;\n"
+    },
+    {
+      "name": "bump_lead_last_contact_from_activity",
+      "args": "",
+      "securityDefiner": true,
+      "config": [
+        "search_path=public"
+      ],
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\nBEGIN\n  IF NEW.lead_id IS NOT NULL THEN\n    UPDATE leads l SET last_contact_at = NEW.created_at\n     WHERE l.id = NEW.lead_id\n       AND (l.last_contact_at IS NULL OR l.last_contact_at < NEW.created_at);\n  END IF;\n  RETURN NEW;\nEND; "
+    },
+    {
+      "name": "bump_lead_last_contact_from_message",
+      "args": "",
+      "securityDefiner": true,
+      "config": [
+        "search_path=public"
+      ],
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\nBEGIN\n  UPDATE leads l SET last_contact_at = NEW.created_at\n    FROM conversations c\n   WHERE c.id = NEW.conversation_id AND l.id = c.lead_id\n     AND (l.last_contact_at IS NULL OR l.last_contact_at < NEW.created_at);\n  RETURN NEW;\nEND; "
+    },
+    {
+      "name": "claim_cron_run",
+      "args": "p_job text, p_min_interval_seconds integer",
+      "securityDefiner": true,
+      "config": [
+        "search_path=public, pg_temp"
+      ],
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\ndeclare\n  v_run_id uuid := gen_random_uuid();\nbegin\n  insert into public.cron_locks as l (job_name, run_id, started_at, finished_at, last_result, updated_at)\n  values (p_job, v_run_id, now(), null, '{}'::jsonb, now())\n  on conflict (job_name) do update\n     set run_id      = v_run_id,\n         started_at  = now(),\n         finished_at = null,\n         last_result = '{}'::jsonb,\n         updated_at  = now()\n   where l.started_at < now() - make_interval(secs => p_min_interval_seconds);\n\n  if not found then\n    return null;  -- outra invocação já reivindicou esta janela\n  end if;\n\n  return v_run_id;\nend;\n"
+    },
+    {
+      "name": "claim_follow_up",
+      "args": "p_org_id uuid, p_lead_id uuid, p_type text, p_rule_id uuid, p_metadata jsonb, p_cooldown_hours integer, p_blocking_types text[], p_status text",
+      "securityDefiner": true,
+      "config": [
+        "search_path=public, pg_temp"
+      ],
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\ndeclare\n  v_id uuid;\nbegin\n  -- Serializa por lead. Advisory lock de TRANSAÇÃO: liberado no commit desta\n  -- chamada, então não vaza na conexão do pooler. Duas runs no mesmo lead entram\n  -- em fila; a segunda enxerga a linha da primeira e desiste.\n  perform pg_advisory_xact_lock(hashtext('follow_up_log:' || p_lead_id::text));\n\n  if exists (\n    select 1\n      from public.follow_up_log\n     where lead_id = p_lead_id\n       and (p_blocking_types is null or type = any(p_blocking_types))\n       and created_at > now() - make_interval(hours => p_cooldown_hours)\n  ) then\n    return null;  -- cooldown de pé (ou outra run acabou de reivindicar)\n  end if;\n\n  insert into public.follow_up_log (org_id, lead_id, rule_id, type, status, scheduled_at, metadata)\n  values (p_org_id, p_lead_id, p_rule_id, p_type, p_status, now(), coalesce(p_metadata, '{}'::jsonb))\n  returning id into v_id;\n\n  return v_id;\nend;\n"
+    },
+    {
+      "name": "claim_obra_notif",
+      "args": "p_obra_id uuid, p_evento text, p_window_seconds integer",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\n  insert into obra_notif_dedup (obra_id, evento, last_sent_at)\n  values (p_obra_id, p_evento, now())\n  on conflict (obra_id, evento) do update\n    set last_sent_at = now()\n    where obra_notif_dedup.last_sent_at < now() - make_interval(secs => p_window_seconds)\n  returning true;\n"
+    },
+    {
+      "name": "claim_sienge_webhook",
+      "args": "p_event_key text, p_event_type text",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\n  insert into sienge_webhook_dedup (event_key, event_type)\n  values (p_event_key, p_event_type)\n  on conflict (event_key) do nothing\n  returning true;\n"
+    },
+    {
+      "name": "cliente_obra_ids",
+      "args": "",
+      "securityDefiner": true,
+      "config": [],
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\n  SELECT co.obra_id\n  FROM public.cliente_obras co\n  JOIN public.users u ON u.id = co.user_id\n  WHERE u.auth_id = auth.uid()\n"
+    },
+    {
+      "name": "cliente_obra_link_ids",
+      "args": "",
+      "securityDefiner": true,
+      "config": [],
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\n    SELECT co.id FROM public.cliente_obras co\n    JOIN public.users u ON u.id = co.user_id\n    WHERE u.auth_id = auth.uid()\n  "
+    },
+    {
+      "name": "cosine_distance",
+      "args": "sparsevec, sparsevec",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "sparsevec_cosine_distance"
+    },
+    {
+      "name": "cosine_distance",
+      "args": "vector, vector",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "cosine_distance"
+    },
+    {
+      "name": "cosine_distance",
+      "args": "halfvec, halfvec",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "halfvec_cosine_distance"
+    },
+    {
+      "name": "creative_performance",
+      "args": "p_start_date date, p_end_date date",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "postgres=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\n  SELECT\n    a.meta_ad_id,\n    a.name                              AS ad_name,\n    a.adset_id,\n    a.status,\n    a.creative,\n    SUM(i.spend)                        AS total_spend,\n    SUM(i.impressions)                  AS total_impressions,\n    SUM(i.clicks)                       AS total_clicks,\n    AVG(i.ctr)                          AS avg_ctr,\n    AVG(i.cpc)                          AS avg_cpc,\n    AVG(i.cpm)                          AS avg_cpm,\n    SUM(i.leads)                        AS total_leads,\n    AVG(i.cost_per_lead)                AS avg_cost_per_lead,\n    (\n      SELECT i2.quality_ranking\n      FROM public.meta_insights_daily i2\n      WHERE i2.entity_id = a.meta_ad_id AND i2.org_id = a.org_id AND i2.level = 'ad'\n        AND i2.date >= p_start_date AND i2.date <= p_end_date\n      ORDER BY i2.date DESC LIMIT 1\n    )                                   AS quality_ranking,\n    (\n      SELECT i2.engagement_rate_ranking\n      FROM public.meta_insights_daily i2\n      WHERE i2.entity_id = a.meta_ad_id AND i2.org_id = a.org_id AND i2.level = 'ad'\n        AND i2.date >= p_start_date AND i2.date <= p_end_date\n      ORDER BY i2.date DESC LIMIT 1\n    )                                   AS engagement_rate_ranking,\n    (\n      SELECT i2.conversion_rate_ranking\n      FROM public.meta_insights_daily i2\n      WHERE i2.entity_id = a.meta_ad_id AND i2.org_id = a.org_id AND i2.level = 'ad'\n        AND i2.date >= p_start_date AND i2.date <= p_end_date\n      ORDER BY i2.date DESC LIMIT 1\n    )                                   AS conversion_rate_ranking,\n    COUNT(DISTINCT l.id)::BIGINT                                          AS crm_leads_total,\n    COUNT(DISTINCT CASE WHEN ks.type = 'agendado' THEN l.id END)::BIGINT  AS crm_leads_agendado,\n    COUNT(DISTINCT CASE WHEN ks.type = 'visitou'  THEN l.id END)::BIGINT  AS crm_leads_visitou,\n    COUNT(DISTINCT CASE WHEN ks.type = 'proposta' THEN l.id END)::BIGINT  AS crm_leads_proposta,\n    COUNT(DISTINCT CASE WHEN ks.type = 'fechado'  THEN l.id END)::BIGINT  AS crm_leads_fechado\n  FROM   public.meta_ads a\n  JOIN   public.meta_insights_daily i\n         ON  i.entity_id = a.meta_ad_id\n         AND i.org_id    = a.org_id\n         AND i.level     = 'ad'\n         AND i.date      >= p_start_date\n         AND i.date      <= p_end_date\n  LEFT JOIN public.leads l\n         ON  (l.metadata->>'ad_id') = a.meta_ad_id AND l.org_id = a.org_id\n  LEFT JOIN public.kanban_stages ks ON ks.id = l.stage_id\n  WHERE  a.org_id = public.user_org_id()\n    AND  public.has_capability('agente.contexto_criativo')\n  GROUP BY a.meta_ad_id, a.name, a.adset_id, a.status, a.creative, a.org_id\n  ORDER BY crm_leads_visitou DESC NULLS LAST, total_leads DESC NULLS LAST\n"
+    },
+    {
+      "name": "creative_performance",
+      "args": "p_days integer",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "postgres=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\n  SELECT\n    a.meta_ad_id,\n    a.name                              AS ad_name,\n    a.adset_id,\n    a.status,\n    a.creative,\n    SUM(i.spend)                        AS total_spend,\n    SUM(i.impressions)                  AS total_impressions,\n    SUM(i.clicks)                       AS total_clicks,\n    AVG(i.ctr)                          AS avg_ctr,\n    AVG(i.cpc)                          AS avg_cpc,\n    AVG(i.cpm)                          AS avg_cpm,\n    SUM(i.leads)                        AS total_leads,\n    AVG(i.cost_per_lead)                AS avg_cost_per_lead,\n    -- Rankings: valor mais recente do criativo no período (última data = mais\n    -- relevante). Subqueries correlacionadas; aceitável para volumes típicos de\n    -- criativos por org (dezenas). Otimizar com DISTINCT ON/window se necessário.\n    (\n      SELECT i2.quality_ranking\n      FROM public.meta_insights_daily i2\n      WHERE i2.entity_id = a.meta_ad_id\n        AND i2.org_id    = a.org_id\n        AND i2.level     = 'ad'\n        AND i2.date      >= (CURRENT_DATE - p_days)\n      ORDER BY i2.date DESC\n      LIMIT 1\n    )                                   AS quality_ranking,\n    (\n      SELECT i2.engagement_rate_ranking\n      FROM public.meta_insights_daily i2\n      WHERE i2.entity_id = a.meta_ad_id\n        AND i2.org_id    = a.org_id\n        AND i2.level     = 'ad'\n        AND i2.date      >= (CURRENT_DATE - p_days)\n      ORDER BY i2.date DESC\n      LIMIT 1\n    )                                   AS engagement_rate_ranking,\n    (\n      SELECT i2.conversion_rate_ranking\n      FROM public.meta_insights_daily i2\n      WHERE i2.entity_id = a.meta_ad_id\n        AND i2.org_id    = a.org_id\n        AND i2.level     = 'ad'\n        AND i2.date      >= (CURRENT_DATE - p_days)\n      ORDER BY i2.date DESC\n      LIMIT 1\n    )                                   AS conversion_rate_ranking,\n    -- Funil CRM por criativo: leads vinculados via metadata->>'ad_id' e seu\n    -- stage atual. COUNT(DISTINCT l.id) evita dupla contagem por causa do fan-out\n    -- do JOIN com meta_insights_daily (uma linha por dia).\n    COUNT(DISTINCT l.id)::BIGINT                                         AS crm_leads_total,\n    COUNT(DISTINCT CASE WHEN ks.type = 'agendado' THEN l.id END)::BIGINT AS crm_leads_agendado,\n    COUNT(DISTINCT CASE WHEN ks.type = 'visitou'  THEN l.id END)::BIGINT AS crm_leads_visitou,\n    COUNT(DISTINCT CASE WHEN ks.type = 'proposta' THEN l.id END)::BIGINT AS crm_leads_proposta,\n    COUNT(DISTINCT CASE WHEN ks.type = 'fechado'  THEN l.id END)::BIGINT AS crm_leads_fechado\n  FROM   public.meta_ads a\n  JOIN   public.meta_insights_daily i\n         ON  i.entity_id = a.meta_ad_id\n         AND i.org_id    = a.org_id\n         AND i.level     = 'ad'\n         AND i.date      >= (CURRENT_DATE - p_days)\n  LEFT JOIN public.leads l\n         ON  (l.metadata->>'ad_id') = a.meta_ad_id\n         AND l.org_id = a.org_id\n  LEFT JOIN public.kanban_stages ks\n         ON  ks.id = l.stage_id\n  WHERE  a.org_id = public.user_org_id()\n    AND  public.has_capability('agente.contexto_criativo')\n  GROUP BY\n    a.meta_ad_id, a.name, a.adset_id, a.status, a.creative, a.org_id\n  ORDER BY crm_leads_visitou DESC NULLS LAST, total_leads DESC NULLS LAST\n"
+    },
+    {
+      "name": "f_lost_reason_grupo",
+      "args": "p_lost_reason text, p_lost_reason_grupo text",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "postgres=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\n  -- Dado novo (estruturado) SEMPRE vence a heurística (AC7 da 75-264).\n  SELECT COALESCE(\n    p_lost_reason_grupo,\n    CASE\n      WHEN p_lost_reason IS NULL OR trim(p_lost_reason) = '' THEN 'sem_motivo'\n      ELSE (\n        -- Heurística sobre texto legado. r = texto normalizado.\n        -- A ORDEM É PARTE DA DEFINIÇÃO — copiada VERBATIM da mig 212; ver header.\n        SELECT CASE\n          -- 1:1 com os 11 labels do antigo select do bulk (leads-bulk-table)\n          WHEN r = 'cliente nao atende/responde mais' THEN 'nao_conseguimos_falar'\n          WHEN r = 'comprou com concorrente' THEN 'foi_para_outro'\n          WHEN r IN ('condicao de pagamento','cpf com restricao','preco','renda insuficiente') THEN 'nao_qualifica_preco'\n          WHEN r = 'desistiu de comprar' THEN 'sem_interesse'\n          WHEN r = 'lead duplicado' THEN 'duplicado_teste_corretor'\n          WHEN r = 'nao interesse' THEN 'sem_interesse'\n          WHEN r = 'telefone inexistente' THEN 'nao_conseguimos_falar'\n          WHEN r = 'outros' THEN 'nao_classificado'\n          -- Frases explícitas de \"não conseguimos falar\" vencem os demais grupos\n          WHEN r ~ '(nao consegui falar|nao foi possivel falar|nao consegui contato|nao conseguimos falar|nao conseguimos contato)' THEN 'nao_conseguimos_falar'\n          WHEN r ~ '(duplicado|duplicidade|teste|corretor|colaborador|funcionario|portal|buscando clientes|prospec)' THEN 'duplicado_teste_corretor'\n          WHEN r ~ '(concorrente|comprou|compro outr|compradu|ja adquiriu|ja fechou|fechando (uma|um)|ja achou|fez aquisicao|fez proposta|investiu em outr)' THEN 'foi_para_outro'\n          WHEN r ~ '(curios|sem querer|clicou (por|sem|errado)|nao lembra|nao se lembra|nunca entrou|engano|enganou|enviou errado|acessou errado|nao preencheu|nao se inscreveu|nao se cadastrou|mexeu no celular|sorteio)' THEN 'clicou_sem_intencao'\n          WHEN r ~ '(perfil|regiao|cidade|mora (em|fora)|outro estado|distante|localizacao|longe|londrina|paranavai|arapongas|cianorte|praia|embora de|quer casa|preferiu casa|quer alugar|esta alugando|quer um imovel proximo)' THEN 'fora_perfil_regiao'\n          WHEN r ~ '(renda|restricao|cpf|score|serasa|spc|condicoes financeiras|condicao de pagamento|poder de compra|(sem|nao tem) condic|preco|caro|valor|orcamento|entrada|financiamento|nao qualifica|menor de idade|adolescente|desempregad|emprego|busca trabalho|nome sujo|credito|baixo padrao|sem dinheiro|nao tem dinheiro|vender o|venda do|nao vendeu)' THEN 'nao_qualifica_preco'\n          WHEN r ~ '(atende|respond|interacao|interag|retorn|contato|bloque|numero (errado|inexistente|invalido)|deu o numero|nao existe|inexistente|sem resposta|caixa postal|tentativas|so chama|desligou o celular|telefone)' THEN 'nao_conseguimos_falar'\n          WHEN r ~ '(interess|desis|nao quer|nao tem inten|apenas pesquisando|so pesquisando|nao pretende|nao esta procurando|especulando|momento|vai aguardar|deixar (para|pro)|proximo ano|fora dos planos|mudou os planos|outras obrigacoes|nao consegue (assumir|investir|fazer)|nao vai conseguir vir|nao consegue vir)' THEN 'sem_interesse'\n          ELSE 'nao_classificado'\n        END\n        FROM (SELECT lower(public.f_unaccent(trim(p_lost_reason))) AS r) t\n      )\n    END\n  );\n"
+    },
+    {
+      "name": "f_unaccent",
+      "args": "text",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": " select extensions.unaccent('extensions.unaccent'::regdictionary, $1) "
+    },
+    {
+      "name": "finish_cron_run",
+      "args": "p_run_id uuid, p_result jsonb",
+      "securityDefiner": true,
+      "config": [
+        "search_path=public, pg_temp"
+      ],
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\n  update public.cron_locks\n     set finished_at = now(),\n         last_result = coalesce(p_result, '{}'::jsonb),\n         updated_at  = now()\n   where run_id = p_run_id;\n"
+    },
+    {
+      "name": "fuzzy_lead_ids",
+      "args": "p_org uuid, p_term text, p_limit integer",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\n  select l.id\n  from public.leads l\n  where l.org_id = p_org\n    and l.name_search operator(extensions.%) p_term\n  order by extensions.similarity(l.name_search, p_term) desc\n  limit p_limit\n"
+    },
+    {
+      "name": "get_admin_mensagens_paginated",
+      "args": "p_org_id uuid, p_offset integer, p_limit integer, p_q text, p_unread_only boolean, p_from_date timestamp with time zone, p_to_date timestamp with time zone",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\n  WITH filtered_msgs AS (\n    SELECT m.obra_id, m.cliente_id, m.sender_type, m.content, m.message_type, m.read_at, m.created_at\n    FROM public.obra_mensagens m\n    WHERE m.org_id = p_org_id\n      AND m.cliente_id IS NOT NULL\n      AND (p_from_date IS NULL OR m.created_at >= p_from_date)\n      AND (p_to_date   IS NULL OR m.created_at <= p_to_date)\n  ),\n  aggregated AS (\n    SELECT fm.obra_id, fm.cliente_id,\n           MAX(fm.created_at) AS last_message_at,\n           COUNT(*) FILTER (WHERE fm.sender_type = 'cliente' AND fm.read_at IS NULL) AS unread_count\n    FROM filtered_msgs fm\n    GROUP BY fm.obra_id, fm.cliente_id\n  ),\n  last_msg AS (\n    SELECT DISTINCT ON (fm.obra_id, fm.cliente_id)\n      fm.obra_id, fm.cliente_id,\n      fm.content AS last_message_content,\n      fm.message_type AS last_message_type,\n      fm.sender_type AS last_message_sender_type\n    FROM filtered_msgs fm\n    ORDER BY fm.obra_id, fm.cliente_id, fm.created_at DESC\n  ),\n  joined AS (\n    SELECT a.obra_id, o.name::text AS obra_name, a.cliente_id,\n           COALESCE(u.name, '')::text AS cliente_name,\n           a.unread_count, a.last_message_at,\n           lm.last_message_content::text AS last_message_content,\n           lm.last_message_type::text AS last_message_type,\n           lm.last_message_sender_type::text AS last_message_sender_type\n    FROM aggregated a\n    INNER JOIN public.obras o ON o.id = a.obra_id\n    LEFT  JOIN public.users u ON u.id = a.cliente_id\n    LEFT  JOIN last_msg lm ON lm.obra_id = a.obra_id AND lm.cliente_id = a.cliente_id\n    WHERE (p_q IS NULL OR p_q = '' OR o.name ILIKE '%' || p_q || '%' OR u.name ILIKE '%' || p_q || '%')\n      AND (p_unread_only = false OR a.unread_count > 0)\n  )\n  SELECT j.obra_id, j.obra_name, j.cliente_id, j.cliente_name, j.unread_count, j.last_message_at,\n         j.last_message_content, j.last_message_type, j.last_message_sender_type,\n         (COUNT(*) OVER ())::bigint AS total_count\n  FROM joined j\n  ORDER BY j.last_message_at DESC\n  OFFSET p_offset\n  LIMIT  p_limit;\n"
+    },
+    {
+      "name": "get_analytics_summary",
+      "args": "p_org_id uuid, p_since timestamp with time zone",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\n  WITH\n  funnel AS (\n    SELECT\n      ks.id          AS stage_id,\n      ks.name,\n      ks.slug,\n      ks.color,\n      ks.position,\n      COUNT(l.id)::int AS count\n    FROM kanban_stages ks\n    LEFT JOIN leads l\n      ON l.stage_id = ks.id\n     AND l.org_id = p_org_id\n     AND l.is_active = true\n     AND l.lost_reason IS NULL\n    WHERE ks.org_id = p_org_id\n      AND ks.is_active = true\n    GROUP BY ks.id, ks.name, ks.slug, ks.color, ks.position\n    ORDER BY ks.position\n  ),\n  by_property AS (\n    SELECT\n      p.id   AS property_id,\n      p.name,\n      COUNT(l.id)::int AS count\n    FROM properties p\n    LEFT JOIN leads l\n      ON l.property_interest_id = p.id\n     AND l.org_id = p_org_id\n     AND l.is_active = true\n     AND l.lost_reason IS NULL\n    WHERE p.org_id = p_org_id\n      AND p.is_active = true\n    GROUP BY p.id, p.name\n  ),\n  by_broker AS (\n    SELECT\n      u.id   AS user_id,\n      u.name,\n      COUNT(l.id)::int                                      AS count,\n      COALESCE(ROUND(AVG(l.qualification_score))::int, 0)   AS avg_score\n    FROM users u\n    LEFT JOIN leads l\n      ON l.assigned_broker_id = u.id\n     AND l.org_id = p_org_id\n     AND l.is_active = true\n     AND l.lost_reason IS NULL\n    WHERE u.org_id = p_org_id\n      AND u.role::text = 'broker'\n      AND u.is_active = true\n    GROUP BY u.id, u.name\n  ),\n  source_agg AS (\n    SELECT source::text AS source, COUNT(*)::int AS cnt\n    FROM leads\n    WHERE org_id = p_org_id\n      AND is_active = true\n      AND lost_reason IS NULL\n      AND created_at >= p_since\n      AND source IS NOT NULL\n    GROUP BY source\n  ),\n  -- lost_agg: sem filtro lost_reason — é exatamente o que queremos contar aqui\n  lost_agg AS (\n    SELECT lost_reason, COUNT(*)::int AS cnt\n    FROM leads\n    WHERE org_id = p_org_id\n      AND is_active = true\n      AND lost_reason IS NOT NULL\n    GROUP BY lost_reason\n  ),\n  totals AS (\n    SELECT\n      COUNT(*) FILTER (WHERE is_active = true AND lost_reason IS NULL)::int AS total_leads,\n      COUNT(*) FILTER (WHERE is_active = true AND lost_reason IS NULL AND created_at >= p_since)::int AS new_leads\n    FROM leads\n    WHERE org_id = p_org_id\n  )\n  SELECT jsonb_build_object(\n    'funnel',        COALESCE((SELECT jsonb_agg(f)  FROM funnel f),         '[]'::jsonb),\n    'by_property',   COALESCE((SELECT jsonb_agg(bp) FROM by_property bp),   '[]'::jsonb),\n    'by_broker',     COALESCE((SELECT jsonb_agg(bb) FROM by_broker bb),     '[]'::jsonb),\n    'source_counts', COALESCE((SELECT jsonb_object_agg(source, cnt) FROM source_agg),        '{}'::jsonb),\n    'lost_reasons',  COALESCE((SELECT jsonb_object_agg(lost_reason, cnt) FROM lost_agg),     '{}'::jsonb),\n    'total_leads',   (SELECT total_leads FROM totals),\n    'new_leads',     (SELECT new_leads  FROM totals)\n  );\n"
+    },
+    {
+      "name": "get_analytics_summary_ranged",
+      "args": "p_org_id uuid, p_since timestamp with time zone, p_until timestamp with time zone",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "postgres=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\nBEGIN\n  PERFORM public.assert_org_scope(p_org_id);\n\n  RETURN (\n  WITH\n  funnel AS (\n    SELECT ks.id AS stage_id, ks.name, ks.slug, ks.color, ks.position, COUNT(l.id)::int AS count\n    FROM kanban_stages ks\n    LEFT JOIN leads l ON l.stage_id = ks.id AND l.org_id = p_org_id AND l.segmento = 'principal'\n      AND l.is_active = true AND l.lost_reason IS NULL AND l.created_at >= p_since AND l.created_at < p_until\n    WHERE ks.org_id = p_org_id AND ks.is_active = true\n    GROUP BY ks.id, ks.name, ks.slug, ks.color, ks.position ORDER BY ks.position\n  ),\n  by_property AS (\n    SELECT p.id AS property_id, p.name, COUNT(l.id)::int AS count\n    FROM properties p\n    LEFT JOIN leads l ON l.property_interest_id = p.id AND l.org_id = p_org_id AND l.segmento = 'principal'\n      AND l.is_active = true AND l.lost_reason IS NULL AND l.created_at >= p_since AND l.created_at < p_until\n    WHERE p.org_id = p_org_id AND p.is_active = true GROUP BY p.id, p.name\n  ),\n  by_broker AS (\n    SELECT u.id AS user_id, u.name, COUNT(l.id)::int AS count, COALESCE(ROUND(AVG(l.qualification_score))::int, 0) AS avg_score\n    FROM users u\n    LEFT JOIN leads l ON l.assigned_broker_id = u.id AND l.org_id = p_org_id AND l.segmento = 'principal'\n      AND l.is_active = true AND l.lost_reason IS NULL AND l.created_at >= p_since AND l.created_at < p_until\n    WHERE u.org_id = p_org_id AND u.role::text = 'broker' AND u.is_active = true GROUP BY u.id, u.name\n  ),\n  source_agg AS (\n    SELECT source::text AS source, COUNT(*)::int AS cnt FROM leads\n    WHERE org_id = p_org_id AND segmento = 'principal' AND is_active = true AND lost_reason IS NULL\n      AND created_at >= p_since AND created_at < p_until AND source IS NOT NULL GROUP BY source\n  ),\n  lost_agg AS (\n    -- Story 75-179: sem filtro is_active — perdidos = subconjunto real das entradas.\n    SELECT lost_reason, COUNT(*)::int AS cnt FROM leads\n    WHERE org_id = p_org_id AND segmento = 'principal' AND lost_reason IS NOT NULL\n      AND created_at >= p_since AND created_at < p_until GROUP BY lost_reason\n  ),\n  lost_groups AS (\n    -- Story 75-266: MESMO universo do lost_agg — soma dos grupos ≡ soma do cru (KPI Perdidos).\n    SELECT public.f_lost_reason_grupo(lost_reason, lost_reason_grupo) AS grupo,\n           COUNT(*)::int AS cnt,\n           COUNT(*) FILTER (WHERE lost_reason_grupo IS NOT NULL)::int AS estruturados\n    FROM leads\n    WHERE org_id = p_org_id AND segmento = 'principal' AND lost_reason IS NOT NULL\n      AND created_at >= p_since AND created_at < p_until\n    GROUP BY 1\n  ),\n  totals AS (\n    -- Story 75-179: total_leads = TODAS as entradas; new_leads = ativos não-perdidos.\n    SELECT COUNT(*) FILTER (WHERE created_at >= p_since AND created_at < p_until)::int AS total_leads,\n           COUNT(*) FILTER (WHERE is_active = true AND lost_reason IS NULL AND created_at >= p_since AND created_at < p_until)::int AS new_leads\n    FROM leads WHERE org_id = p_org_id AND segmento = 'principal'\n  )\n  SELECT jsonb_build_object(\n    'funnel', COALESCE((SELECT jsonb_agg(f) FROM funnel f),'[]'::jsonb),\n    'by_property', COALESCE((SELECT jsonb_agg(bp) FROM by_property bp),'[]'::jsonb),\n    'by_broker', COALESCE((SELECT jsonb_agg(bb) FROM by_broker bb),'[]'::jsonb),\n    'source_counts', COALESCE((SELECT jsonb_object_agg(source, cnt) FROM source_agg),'{}'::jsonb),\n    'lost_reasons', COALESCE((SELECT jsonb_object_agg(lost_reason, cnt) FROM lost_agg),'{}'::jsonb),\n    'lost_reason_groups', COALESCE((SELECT jsonb_object_agg(grupo, cnt) FROM lost_groups),'{}'::jsonb),\n    'lost_reason_estruturados', COALESCE((SELECT SUM(estruturados)::int FROM lost_groups), 0),\n    'total_leads', (SELECT total_leads FROM totals),\n    'new_leads', (SELECT new_leads FROM totals)\n  ));\nEND;\n"
+    },
+    {
+      "name": "get_broker_dashboard_counts",
+      "args": "p_org_id uuid, p_broker_id uuid",
+      "securityDefiner": true,
+      "config": [],
+      "acl": [
+        "postgres=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\nDECLARE\n  v_aguardando_stage_id uuid := '00000000-0000-0000-0001-000000000001';\n  v_today_start timestamptz; v_tomorrow_start timestamptz;\n  v_total integer; v_novos integer; v_sem_tarefas integer; v_atrasadas integer; v_para_hoje integer; v_futuras integer;\nBEGIN\n  PERFORM public.assert_org_scope(p_org_id);\n\n  v_today_start := date_trunc('day', NOW() AT TIME ZONE 'America/Sao_Paulo') AT TIME ZONE 'America/Sao_Paulo';\n  v_tomorrow_start := v_today_start + INTERVAL '1 day';\n  SELECT COUNT(*)::integer INTO v_total FROM leads l\n   WHERE l.org_id = p_org_id AND l.segmento = 'principal' AND l.is_active = true AND l.lost_reason IS NULL\n     AND l.stage_id NOT IN ('00000000-0000-0000-0001-000000000008','95327bd7-3e88-4038-aa16-250a74ab085c')\n     AND (p_broker_id IS NULL OR l.assigned_broker_id = p_broker_id);\n  SELECT COUNT(*)::integer INTO v_novos FROM leads l\n   WHERE l.org_id = p_org_id AND l.segmento = 'principal' AND l.is_active = true AND l.lost_reason IS NULL\n     AND l.stage_id NOT IN ('00000000-0000-0000-0001-000000000008','95327bd7-3e88-4038-aa16-250a74ab085c')\n     AND l.stage_id = v_aguardando_stage_id AND (p_broker_id IS NULL OR l.assigned_broker_id = p_broker_id);\n  SELECT COUNT(*)::integer INTO v_sem_tarefas FROM leads l\n   WHERE l.org_id = p_org_id AND l.segmento = 'principal' AND l.is_active = true AND l.lost_reason IS NULL\n     AND l.stage_id NOT IN ('00000000-0000-0000-0001-000000000008','95327bd7-3e88-4038-aa16-250a74ab085c')\n     AND (p_broker_id IS NULL OR l.assigned_broker_id = p_broker_id)\n     AND NOT EXISTS (SELECT 1 FROM lead_tasks lt WHERE lt.lead_id = l.id AND lt.completed_at IS NULL);\n  SELECT COUNT(DISTINCT l.id)::integer INTO v_atrasadas FROM leads l JOIN lead_tasks lt ON lt.lead_id = l.id\n   WHERE l.org_id = p_org_id AND l.segmento = 'principal' AND l.is_active = true AND l.lost_reason IS NULL\n     AND l.stage_id NOT IN ('00000000-0000-0000-0001-000000000008','95327bd7-3e88-4038-aa16-250a74ab085c')\n     AND (p_broker_id IS NULL OR l.assigned_broker_id = p_broker_id)\n     AND lt.completed_at IS NULL AND lt.due_at < v_today_start;\n  SELECT COUNT(DISTINCT l.id)::integer INTO v_para_hoje FROM leads l JOIN lead_tasks lt ON lt.lead_id = l.id\n   WHERE l.org_id = p_org_id AND l.segmento = 'principal' AND l.is_active = true AND l.lost_reason IS NULL\n     AND l.stage_id NOT IN ('00000000-0000-0000-0001-000000000008','95327bd7-3e88-4038-aa16-250a74ab085c')\n     AND (p_broker_id IS NULL OR l.assigned_broker_id = p_broker_id)\n     AND lt.completed_at IS NULL AND lt.due_at >= v_today_start AND lt.due_at < v_tomorrow_start;\n  SELECT COUNT(DISTINCT l.id)::integer INTO v_futuras FROM leads l JOIN lead_tasks lt ON lt.lead_id = l.id\n   WHERE l.org_id = p_org_id AND l.segmento = 'principal' AND l.is_active = true AND l.lost_reason IS NULL\n     AND l.stage_id NOT IN ('00000000-0000-0000-0001-000000000008','95327bd7-3e88-4038-aa16-250a74ab085c')\n     AND (p_broker_id IS NULL OR l.assigned_broker_id = p_broker_id)\n     AND lt.completed_at IS NULL AND lt.due_at >= v_tomorrow_start;\n  RETURN jsonb_build_object('total', v_total, 'novos', v_novos, 'trabalhados', v_total - v_novos,\n    'sem_tarefas', v_sem_tarefas, 'atrasadas', v_atrasadas, 'para_hoje', v_para_hoje, 'futuras', v_futuras);\nEND;\n"
+    },
+    {
+      "name": "get_broker_funnel_stats",
+      "args": "p_org_id uuid, p_broker_id uuid",
+      "securityDefiner": true,
+      "config": [],
+      "acl": [
+        "postgres=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\nDECLARE v_today_start timestamptz; v_tomorrow_start timestamptz;\nBEGIN\n  PERFORM public.assert_org_scope(p_org_id);\n\n  v_today_start := date_trunc('day', NOW() AT TIME ZONE 'America/Sao_Paulo') AT TIME ZONE 'America/Sao_Paulo';\n  v_tomorrow_start := v_today_start + INTERVAL '1 day';\n  RETURN QUERY\n  SELECT ks.id, ks.name::text, ks.slug::text, ks.color::text, ks.position,\n    COUNT(DISTINCT l.id)::integer,\n    COUNT(DISTINCT CASE WHEN lt.completed_at IS NULL AND lt.due_at < v_today_start THEN l.id END)::integer,\n    COUNT(DISTINCT CASE WHEN lt.completed_at IS NULL AND lt.due_at >= v_today_start AND lt.due_at < v_tomorrow_start THEN l.id END)::integer,\n    COUNT(DISTINCT CASE WHEN lt.completed_at IS NULL AND lt.due_at >= v_tomorrow_start THEN l.id END)::integer\n  FROM kanban_stages ks\n  LEFT JOIN leads l ON l.stage_id = ks.id AND l.org_id = p_org_id AND l.segmento = 'principal'\n    AND l.is_active = true AND l.lost_reason IS NULL AND (p_broker_id IS NULL OR l.assigned_broker_id = p_broker_id)\n  LEFT JOIN lead_tasks lt ON lt.lead_id = l.id\n  WHERE ks.is_active = true GROUP BY ks.id, ks.name, ks.slug, ks.color, ks.position ORDER BY ks.position;\nEND; "
+    },
+    {
+      "name": "get_broker_unread_total",
+      "args": "p_org_id uuid, p_broker_user_id uuid",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\n  SELECT COUNT(*)\n  FROM conversations c\n  JOIN leads l ON l.id = c.lead_id\n  WHERE l.org_id = p_org_id\n    AND l.assigned_broker_id = p_broker_user_id\n    AND EXISTS (\n      SELECT 1\n      FROM messages m\n      WHERE m.conversation_id = c.id\n        AND m.role = 'user'\n        AND (c.broker_last_read_at IS NULL\n             OR m.created_at > c.broker_last_read_at)\n      LIMIT 1\n    );\n"
+    },
+    {
+      "name": "get_brokers_active_lead_counts",
+      "args": "p_org_id uuid",
+      "securityDefiner": true,
+      "config": [
+        "search_path=public"
+      ],
+      "acl": [
+        "postgres=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\nBEGIN\n  PERFORM public.assert_org_scope(p_org_id);\n\n  RETURN QUERY\n  SELECT b.user_id,\n         public.broker_active_leads_count(p_org_id, b.user_id)\n    FROM brokers b\n   WHERE b.org_id = p_org_id\n     AND b.user_id IS NOT NULL\n     AND (public_user_id() IS NULL\n          OR EXISTS (SELECT 1 FROM users u\n                      WHERE u.id = public_user_id()\n                        AND u.org_id = p_org_id));\nEND;\n"
+    },
+    {
+      "name": "get_dashboard_stage_counts",
+      "args": "p_org_id uuid, p_segmento text",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\n  SELECT stage_id, COUNT(*)::bigint AS total\n  FROM leads\n  WHERE org_id = p_org_id\n    AND segmento = p_segmento\n    AND is_active = true\n    AND lost_reason IS NULL\n  GROUP BY stage_id;\n"
+    },
+    {
+      "name": "get_lost_reason_groups",
+      "args": "p_org_id uuid, p_since timestamp with time zone, p_until timestamp with time zone, p_property_id uuid",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "postgres=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\nBEGIN\n  PERFORM public.assert_org_scope(p_org_id);\n\n  RETURN (\n    WITH lost_groups AS (\n      -- Mesmo universo do lost_agg da RPC de resumo (+ filtro opcional de empreendimento).\n      SELECT public.f_lost_reason_grupo(lost_reason, lost_reason_grupo) AS grupo,\n             COUNT(*)::int AS cnt,\n             COUNT(*) FILTER (WHERE lost_reason_grupo IS NOT NULL)::int AS estruturados\n      FROM leads\n      WHERE org_id = p_org_id AND segmento = 'principal' AND lost_reason IS NOT NULL\n        AND created_at >= p_since AND created_at < p_until\n        AND (p_property_id IS NULL OR property_interest_id = p_property_id)\n      GROUP BY 1\n    )\n    SELECT jsonb_build_object(\n      'groups', COALESCE(jsonb_object_agg(grupo, cnt), '{}'::jsonb),\n      'estruturados', COALESCE(SUM(estruturados)::int, 0)\n    )\n    FROM lost_groups\n  );\nEND;\n"
+    },
+    {
+      "name": "get_system_events_summary",
+      "args": "p_org_id uuid, p_window_hours integer",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\n  SELECT jsonb_build_object(\n    'errors_24h',\n      COUNT(*) FILTER (WHERE level = 'error'\n                         AND created_at >= NOW() - (p_window_hours || ' hours')::interval),\n    'messages_24h',\n      COUNT(*) FILTER (WHERE category = 'bot'\n                         AND level = 'info'\n                         AND created_at >= NOW() - (p_window_hours || ' hours')::interval),\n    'avg_claude_response_ms',\n      (SELECT AVG((se2.metadata->>'response_time_ms')::numeric)\n         FROM (\n           SELECT metadata\n             FROM system_events\n            WHERE org_id = p_org_id\n              AND event_type = 'CLAUDE_RESPONSE'\n              AND created_at >= NOW() - (p_window_hours || ' hours')::interval\n              AND metadata->>'response_time_ms' IS NOT NULL\n            ORDER BY created_at DESC\n            LIMIT 100\n         ) se2),\n    'rag_total_24h',\n      COUNT(*) FILTER (WHERE event_type IN ('RAG_FALLBACK', 'RAG_SUCCESS')\n                         AND created_at >= NOW() - (p_window_hours || ' hours')::interval),\n    'rag_fallbacks_24h',\n      COUNT(*) FILTER (WHERE event_type = 'RAG_FALLBACK'\n                         AND created_at >= NOW() - (p_window_hours || ' hours')::interval),\n    'health_bot_errors_30m',\n      COUNT(*) FILTER (WHERE category = 'bot' AND level = 'error'\n                         AND created_at >= NOW() - INTERVAL '30 minutes'),\n    'health_bot_warns_30m',\n      COUNT(*) FILTER (WHERE category = 'bot' AND level = 'warn'\n                         AND created_at >= NOW() - INTERVAL '30 minutes'),\n    'health_ai_errors_30m',\n      COUNT(*) FILTER (WHERE category = 'ai' AND level = 'error'\n                         AND created_at >= NOW() - INTERVAL '30 minutes'),\n    'health_ai_warns_30m',\n      COUNT(*) FILTER (WHERE category = 'ai' AND level = 'warn'\n                         AND created_at >= NOW() - INTERVAL '30 minutes'),\n    'health_webhook_errors_30m',\n      COUNT(*) FILTER (WHERE category = 'webhook' AND level = 'error'\n                         AND created_at >= NOW() - INTERVAL '30 minutes'),\n    'health_webhook_warns_30m',\n      COUNT(*) FILTER (WHERE category = 'webhook' AND level = 'warn'\n                         AND created_at >= NOW() - INTERVAL '30 minutes'),\n    'health_cron_errors_30m',\n      COUNT(*) FILTER (WHERE category = 'cron' AND level = 'error'\n                         AND created_at >= NOW() - INTERVAL '30 minutes'),\n    'health_cron_warns_30m',\n      COUNT(*) FILTER (WHERE category = 'cron' AND level = 'warn'\n                         AND created_at >= NOW() - INTERVAL '30 minutes')\n  )\n  FROM system_events\n  WHERE org_id = p_org_id;\n"
+    },
+    {
+      "name": "get_whatsapp_cost_summary",
+      "args": "p_org_id uuid",
+      "securityDefiner": true,
+      "config": [
+        "search_path=public"
+      ],
+      "acl": [
+        "postgres=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\nDECLARE\n  v_result jsonb;\nBEGIN\n  PERFORM public.assert_org_scope(p_org_id);\n\n  WITH sends AS (\n    SELECT l.category, l.created_at, COALESCE(p.price_brl, 0) AS price\n    FROM public.whatsapp_send_log l\n    LEFT JOIN public.whatsapp_pricing p ON p.category = l.category\n    WHERE l.org_id = p_org_id\n      AND l.status = 'sent'\n      AND l.created_at >= now() - interval '30 days'\n  )\n  SELECT jsonb_build_object(\n    'h24', jsonb_build_object(\n      'disparos',  count(*) FILTER (WHERE created_at >= now() - interval '24 hours'),\n      'custo_brl', COALESCE(round(sum(price) FILTER (WHERE created_at >= now() - interval '24 hours'), 2), 0)\n    ),\n    'd7', jsonb_build_object(\n      'disparos',  count(*) FILTER (WHERE created_at >= now() - interval '7 days'),\n      'custo_brl', COALESCE(round(sum(price) FILTER (WHERE created_at >= now() - interval '7 days'), 2), 0)\n    ),\n    'd30', jsonb_build_object(\n      'disparos',  count(*),\n      'custo_brl', COALESCE(round(sum(price), 2), 0),\n      'por_categoria', (\n        SELECT COALESCE(jsonb_object_agg(category, cnt), '{}'::jsonb)\n        FROM (SELECT category, count(*) AS cnt FROM sends GROUP BY category) z\n      )\n    )\n  )\n  INTO v_result\n  FROM sends;\n\n  RETURN v_result;\nEND;\n"
+    },
+    {
+      "name": "get_whatsapp_volume_summary",
+      "args": "p_org_id uuid",
+      "securityDefiner": true,
+      "config": [
+        "search_path=public"
+      ],
+      "acl": [
+        "postgres=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\nDECLARE\n  v_result jsonb;\nBEGIN\n  PERFORM public.assert_org_scope(p_org_id);\n\n  WITH msgs AS (\n    SELECT m.role, m.created_at\n    FROM public.messages m\n    JOIN public.conversations c ON c.id = m.conversation_id\n    WHERE c.org_id = p_org_id\n      AND c.channel = 'whatsapp'\n      AND m.created_at >= now() - interval '30 days'\n  )\n  SELECT jsonb_build_object(\n    'h24', jsonb_build_object(\n      'recebidas', count(*) FILTER (WHERE role = 'user'                    AND created_at >= now() - interval '24 hours'),\n      'enviadas',  count(*) FILTER (WHERE role IN ('assistant','broker')   AND created_at >= now() - interval '24 hours'),\n      'total',     count(*) FILTER (WHERE created_at >= now() - interval '24 hours')\n    ),\n    'd7', jsonb_build_object(\n      'recebidas', count(*) FILTER (WHERE role = 'user'                    AND created_at >= now() - interval '7 days'),\n      'enviadas',  count(*) FILTER (WHERE role IN ('assistant','broker')   AND created_at >= now() - interval '7 days'),\n      'total',     count(*) FILTER (WHERE created_at >= now() - interval '7 days')\n    ),\n    'd30', jsonb_build_object(\n      'recebidas', count(*) FILTER (WHERE role = 'user'),\n      'enviadas',  count(*) FILTER (WHERE role IN ('assistant','broker')),\n      'total',     count(*)\n    )\n  )\n  INTO v_result\n  FROM msgs;\n\n  RETURN v_result;\nEND;\n"
+    },
+    {
+      "name": "halfvec",
+      "args": "halfvec, integer, boolean",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "halfvec"
+    },
+    {
+      "name": "halfvec_accum",
+      "args": "double precision[], halfvec",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "halfvec_accum"
+    },
+    {
+      "name": "halfvec_add",
+      "args": "halfvec, halfvec",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "halfvec_add"
+    },
+    {
+      "name": "halfvec_avg",
+      "args": "double precision[]",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "halfvec_avg"
+    },
+    {
+      "name": "halfvec_cmp",
+      "args": "halfvec, halfvec",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "halfvec_cmp"
+    },
+    {
+      "name": "halfvec_combine",
+      "args": "double precision[], double precision[]",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "vector_combine"
+    },
+    {
+      "name": "halfvec_concat",
+      "args": "halfvec, halfvec",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "halfvec_concat"
+    },
+    {
+      "name": "halfvec_eq",
+      "args": "halfvec, halfvec",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "halfvec_eq"
+    },
+    {
+      "name": "halfvec_ge",
+      "args": "halfvec, halfvec",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "halfvec_ge"
+    },
+    {
+      "name": "halfvec_gt",
+      "args": "halfvec, halfvec",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "halfvec_gt"
+    },
+    {
+      "name": "halfvec_in",
+      "args": "cstring, oid, integer",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "halfvec_in"
+    },
+    {
+      "name": "halfvec_l2_squared_distance",
+      "args": "halfvec, halfvec",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "halfvec_l2_squared_distance"
+    },
+    {
+      "name": "halfvec_le",
+      "args": "halfvec, halfvec",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "halfvec_le"
+    },
+    {
+      "name": "halfvec_lt",
+      "args": "halfvec, halfvec",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "halfvec_lt"
+    },
+    {
+      "name": "halfvec_mul",
+      "args": "halfvec, halfvec",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "halfvec_mul"
+    },
+    {
+      "name": "halfvec_ne",
+      "args": "halfvec, halfvec",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "halfvec_ne"
+    },
+    {
+      "name": "halfvec_negative_inner_product",
+      "args": "halfvec, halfvec",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "halfvec_negative_inner_product"
+    },
+    {
+      "name": "halfvec_out",
+      "args": "halfvec",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "halfvec_out"
+    },
+    {
+      "name": "halfvec_recv",
+      "args": "internal, oid, integer",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "halfvec_recv"
+    },
+    {
+      "name": "halfvec_send",
+      "args": "halfvec",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "halfvec_send"
+    },
+    {
+      "name": "halfvec_spherical_distance",
+      "args": "halfvec, halfvec",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "halfvec_spherical_distance"
+    },
+    {
+      "name": "halfvec_sub",
+      "args": "halfvec, halfvec",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "halfvec_sub"
+    },
+    {
+      "name": "halfvec_to_float4",
+      "args": "halfvec, integer, boolean",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "halfvec_to_float4"
+    },
+    {
+      "name": "halfvec_to_sparsevec",
+      "args": "halfvec, integer, boolean",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "halfvec_to_sparsevec"
+    },
+    {
+      "name": "halfvec_to_vector",
+      "args": "halfvec, integer, boolean",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "halfvec_to_vector"
+    },
+    {
+      "name": "halfvec_typmod_in",
+      "args": "cstring[]",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "halfvec_typmod_in"
+    },
+    {
+      "name": "hamming_distance",
+      "args": "bit, bit",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "hamming_distance"
+    },
+    {
+      "name": "has_capability",
+      "args": "p_key text",
+      "securityDefiner": true,
+      "config": [
+        "search_path=public, pg_temp"
+      ],
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\n  SELECT COALESCE((\n    SELECT CASE\n      WHEN exc.can_access IS NOT NULL THEN exc.can_access\n      WHEN u.role = 'admin' THEN COALESCE(excp.can_access, true)\n      WHEN rp.can_access IS NOT NULL THEN rp.can_access\n      WHEN excp.can_access IS NOT NULL THEN excp.can_access\n      ELSE COALESCE(rpp.can_access, false)\n    END\n    FROM public.users u\n    LEFT JOIN public.user_permission_exceptions exc\n      ON exc.user_id = u.id AND exc.module = p_key\n    LEFT JOIN public.roles r\n      ON r.name = u.role AND r.org_id = u.org_id\n    LEFT JOIN public.role_permissions rp\n      ON rp.role_id = r.id AND rp.module = p_key\n    LEFT JOIN public.user_permission_exceptions excp\n      ON excp.user_id = u.id AND excp.module = split_part(p_key, '.', 1)\n    LEFT JOIN public.role_permissions rpp\n      ON rpp.role_id = r.id AND rpp.module = split_part(p_key, '.', 1)\n    WHERE u.auth_id = auth.uid()\n    LIMIT 1\n  ), false)\n"
+    },
+    {
+      "name": "hnsw_bit_support",
+      "args": "internal",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "hnsw_bit_support"
+    },
+    {
+      "name": "hnsw_halfvec_support",
+      "args": "internal",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "hnsw_halfvec_support"
+    },
+    {
+      "name": "hnsw_sparsevec_support",
+      "args": "internal",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "hnsw_sparsevec_support"
+    },
+    {
+      "name": "hnswhandler",
+      "args": "internal",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "hnswhandler"
+    },
+    {
+      "name": "inner_product",
+      "args": "halfvec, halfvec",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "halfvec_inner_product"
+    },
+    {
+      "name": "inner_product",
+      "args": "sparsevec, sparsevec",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "sparsevec_inner_product"
+    },
+    {
+      "name": "inner_product",
+      "args": "vector, vector",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "inner_product"
+    },
+    {
+      "name": "is_admin",
+      "args": "",
+      "securityDefiner": true,
+      "config": [],
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\n  SELECT EXISTS (\n    SELECT 1 FROM public.users\n    WHERE auth_id = auth.uid()\n      AND role = 'admin'\n  )\n"
+    },
+    {
+      "name": "is_admin_or_supervisor",
+      "args": "",
+      "securityDefiner": true,
+      "config": [
+        "search_path=public, pg_temp"
+      ],
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\n  SELECT EXISTS (\n    SELECT 1 FROM public.users\n    WHERE auth_id = auth.uid()\n      AND role IN ('admin', 'supervisor', 'obras', 'gerente-comercial', 'gerente-relacionamento', 'sdr')\n  )\n"
+    },
+    {
+      "name": "is_imob_profile",
+      "args": "",
+      "securityDefiner": true,
+      "config": [
+        "search_path=public, pg_temp"
+      ],
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\n  SELECT EXISTS (\n    SELECT 1 FROM public.users\n    WHERE auth_id = auth.uid()\n      AND role IN ('imob', 'consultoria')\n  )\n"
+    },
+    {
+      "name": "is_platform_admin",
+      "args": "",
+      "securityDefiner": true,
+      "config": [
+        "search_path=public, pg_temp"
+      ],
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\n  SELECT COALESCE((\n    SELECT u.is_platform_admin FROM public.users u WHERE u.auth_id = auth.uid() LIMIT 1\n  ), false)\n"
+    },
+    {
+      "name": "ivfflat_bit_support",
+      "args": "internal",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "ivfflat_bit_support"
+    },
+    {
+      "name": "ivfflat_halfvec_support",
+      "args": "internal",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "ivfflat_halfvec_support"
+    },
+    {
+      "name": "ivfflathandler",
+      "args": "internal",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "ivfflathandler"
+    },
+    {
+      "name": "jaccard_distance",
+      "args": "bit, bit",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "jaccard_distance"
+    },
+    {
+      "name": "l1_distance",
+      "args": "vector, vector",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "l1_distance"
+    },
+    {
+      "name": "l1_distance",
+      "args": "sparsevec, sparsevec",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "sparsevec_l1_distance"
+    },
+    {
+      "name": "l1_distance",
+      "args": "halfvec, halfvec",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "halfvec_l1_distance"
+    },
+    {
+      "name": "l2_distance",
+      "args": "sparsevec, sparsevec",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "sparsevec_l2_distance"
+    },
+    {
+      "name": "l2_distance",
+      "args": "vector, vector",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "l2_distance"
+    },
+    {
+      "name": "l2_distance",
+      "args": "halfvec, halfvec",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "halfvec_l2_distance"
+    },
+    {
+      "name": "l2_norm",
+      "args": "sparsevec",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "sparsevec_l2_norm"
+    },
+    {
+      "name": "l2_norm",
+      "args": "halfvec",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "halfvec_l2_norm"
+    },
+    {
+      "name": "l2_normalize",
+      "args": "sparsevec",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "sparsevec_l2_normalize"
+    },
+    {
+      "name": "l2_normalize",
+      "args": "halfvec",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "halfvec_l2_normalize"
+    },
+    {
+      "name": "l2_normalize",
+      "args": "vector",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "l2_normalize"
+    },
+    {
+      "name": "log_lead_stage_change",
+      "args": "",
+      "securityDefiner": true,
+      "config": [
+        "search_path=public, pg_temp"
+      ],
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\nDECLARE\n  from_name text;\n  to_name   text;\nBEGIN\n  SELECT name INTO from_name FROM kanban_stages WHERE id = OLD.stage_id;\n  SELECT name INTO to_name   FROM kanban_stages WHERE id = NEW.stage_id;\n\n  INSERT INTO activities (org_id, lead_id, user_id, type, description, metadata)\n  VALUES (\n    NEW.org_id,\n    NEW.id,\n    -- 🔴 public_user_id(), NÃO auth.uid(). Esta linha foi corrigida antes de\n    -- aplicar em prod: o corpo original desta migration foi capturado da\n    -- migration 124, mas a 125 é um HOTFIX que trocou auth.uid() por\n    -- public_user_id() justamente aqui. `auth.uid()` devolve o id de\n    -- `auth.users`, e `activities.user_id` tem FK para `public.users(id)` —\n    -- com auth.uid() o INSERT viola a FK, a trigger AFTER UPDATE estoura e o\n    -- UPDATE de `leads.stage_id` é REVERTIDO INTEIRO. Efeito: arrastar card no\n    -- kanban desfaz sozinho, para TODO usuário logado (só passavam ações via\n    -- service-role, onde auth.uid() é null). Manter auth.uid() aqui reverteria\n    -- a 125 em silêncio — CREATE OR REPLACE não avisa nada.\n    public_user_id(),                 -- auth.uid() → public.users.id; NULL em service-role\n    'stage_change',\n    'Etapa alterada de \"' || COALESCE(from_name, 'Nenhuma') || '\" para \"' || COALESCE(to_name, '?') || '\"',\n    jsonb_build_object(\n      -- formato \"objeto\" (igual ao endpoint admin) …\n      'from_stage', CASE WHEN OLD.stage_id IS NULL THEN NULL\n                         ELSE jsonb_build_object('id', OLD.stage_id, 'name', from_name) END,\n      'to_stage',   jsonb_build_object('id', NEW.stage_id, 'name', to_name),\n      -- … e formato \"id\" (igual ao kanban): mantém ambos os leitores compatíveis.\n      'from_stage_id', OLD.stage_id,\n      'to_stage_id',   NEW.stage_id\n    )\n  );\n\n  -- [Story 86-2] Enfileirar evento CAPI \"Schedule\" quando o lead entra no\n  -- stage `visitou`. STAGE_IDS.visitou (packages/shared/src/constants/stages.ts)\n  -- = '00000000-0000-0000-0001-000000000005'. Isolado para não quebrar o fluxo\n  -- crítico acima em caso de qualquer erro na outbox (AC4).\n  IF NEW.stage_id = '00000000-0000-0000-0001-000000000005'::uuid THEN\n    BEGIN\n      INSERT INTO meta_capi_outbox (org_id, lead_id, event_name, event_id)\n      VALUES (\n        NEW.org_id,\n        NEW.id,\n        'Schedule',\n        'visit_' || NEW.id || '_' || gen_random_uuid()\n      )\n      ON CONFLICT (lead_id, event_name) DO NOTHING;\n    EXCEPTION WHEN OTHERS THEN\n      -- Nunca propagar: o tracking Meta não pode virar ponto de falha do kanban.\n      RAISE WARNING 'meta_capi_outbox enqueue falhou para lead % (org %): %',\n        NEW.id, NEW.org_id, SQLERRM;\n    END;\n  END IF;\n\n  RETURN NEW;\nEND;\n"
+    },
+    {
+      "name": "log_pii_access",
+      "args": "p_org_id uuid, p_session_id uuid, p_data_type text, p_scope jsonb, p_view_or_source text",
+      "securityDefiner": true,
+      "config": [
+        "search_path=public"
+      ],
+      "acl": [
+        "postgres=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": " DECLARE v_admin_user_id UUID; BEGIN IF NOT public.has_capability('agente.contexto_crm') THEN RETURN FALSE; END IF; IF p_org_id IS DISTINCT FROM public.user_org_id() THEN RETURN FALSE; END IF; v_admin_user_id := public.public_user_id(); IF v_admin_user_id IS NULL THEN RETURN FALSE; END IF; IF p_data_type NOT IN ('lead_drill', 'conversation_content', 'aggregated_metrics') THEN RETURN FALSE; END IF; INSERT INTO public.agent_pii_access_log (org_id, admin_user_id, session_id, accessed_at, data_type, scope, view_or_source) VALUES (p_org_id, v_admin_user_id, p_session_id, now(), p_data_type, p_scope, p_view_or_source); RETURN TRUE; EXCEPTION WHEN OTHERS THEN RETURN FALSE; END; "
+    },
+    {
+      "name": "match_knowledge",
+      "args": "query_embedding vector, match_org_id uuid, match_property_id uuid, match_threshold double precision, match_count integer",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\nBEGIN\n  RETURN QUERY\n  SELECT\n    kb.id,\n    kb.title::text,\n    kb.content::text,\n    (1 - (kb.embedding <=> query_embedding))::float AS similarity\n  FROM knowledge_base kb\n  WHERE kb.org_id = match_org_id\n    AND kb.is_active = true\n    AND kb.embedding IS NOT NULL\n    AND (1 - (kb.embedding <=> query_embedding)) > match_threshold\n    AND (\n      match_property_id IS NULL\n      OR kb.source_id = match_property_id\n      OR kb.source_id IS NULL\n      OR kb.source = 'general'\n    )\n  ORDER BY kb.embedding <=> query_embedding\n  LIMIT match_count;\nEND;\n"
+    },
+    {
+      "name": "normalize_clientes_cpf",
+      "args": "",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\nbegin\n  if new.cpf is not null then\n    new.cpf := nullif(regexp_replace(new.cpf, '[^0-9]', '', 'g'), '');\n  end if;\n  return new;\nend;\n"
+    },
+    {
+      "name": "normalize_phone_br",
+      "args": "raw text",
+      "securityDefiner": true,
+      "config": [
+        "search_path=public, pg_temp"
+      ],
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\nDECLARE\n  digits text;\n  trimmed text;\nBEGIN\n  -- STRICT handles NULL automatically. Defensive whitespace check:\n  trimmed := btrim(raw);\n  IF length(trimmed) = 0 THEN\n    RETURN NULL;\n  END IF;\n\n  -- Strip non-digit characters\n  digits := regexp_replace(raw, '[^0-9]', '', 'g');\n\n  -- Less than 10 digits → invalid\n  IF length(digits) < 10 THEN\n    RETURN NULL;\n  END IF;\n\n  -- Strip Brazilian trunk prefix (leading zero) from 11 or 12-digit numbers.\n  -- After stripping: if 10 digits remain (DDD + old 8-digit subscriber), insert\n  -- the mandatory 9th mobile digit after the DDD (Anatel res. 575/2011).\n  IF left(digits, 1) = '0' AND length(digits) IN (11, 12) THEN\n    digits := right(digits, length(digits) - 1);\n    IF length(digits) = 10 THEN\n      digits := left(digits, 2) || '9' || right(digits, 8);\n    END IF;\n  END IF;\n\n  -- 11 digits starting with '55' = Brazil DDI without DDD → not normalizable\n  IF length(digits) = 11 AND left(digits, 2) = '55' THEN\n    RETURN NULL;\n  END IF;\n\n  -- 11 digits without '55' prefix → prepend '55'\n  IF length(digits) = 11 AND left(digits, 2) <> '55' THEN\n    RETURN '55' || digits;\n  END IF;\n\n  -- 12 digits starting with '55' (legacy without 9th mobile digit) →\n  -- insert '9' after the first 4 chars ('55DD' + '9' + last 8)\n  IF length(digits) = 12 AND left(digits, 2) = '55' THEN\n    RETURN left(digits, 4) || '9' || right(digits, 8);\n  END IF;\n\n  -- 13+ digits, 10 digits (local) or non-BR international → return as-is\n  RETURN digits;\nEND;\n"
+    },
+    {
+      "name": "pegar_lead_bolsao",
+      "args": "p_lead_id uuid, p_broker_user_id uuid",
+      "securityDefiner": true,
+      "config": [
+        "search_path=public"
+      ],
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\nDECLARE\n  v_org_id       uuid;\n  v_property_id  uuid;\n  v_broker_id    uuid;\n  v_max_leads    integer;\n  v_lock_key     bigint;\n  v_ex_dono      uuid;\nBEGIN\n  -- Serializa puxadas concorrentes DO MESMO lead (dois corretores no mesmo card).\n  v_lock_key := ('x' || substr(md5(p_lead_id::text), 1, 16))::bit(64)::bigint;\n  PERFORM pg_advisory_xact_lock(v_lock_key);\n\n  -- Lead precisa estar no bolsão (sem dono, marcado) e ativo.\n  SELECT org_id, property_interest_id\n    INTO v_org_id, v_property_id\n    FROM leads\n   WHERE id = p_lead_id\n     AND is_active = true\n     AND bolsao_em IS NOT NULL\n     AND assigned_broker_id IS NULL;\n  IF NOT FOUND THEN\n    RETURN 'gone';\n  END IF;\n\n  -- Corretor disponível na org do lead.\n  SELECT b.id, COALESCE(b.max_leads, 50)\n    INTO v_broker_id, v_max_leads\n    FROM brokers b\n   WHERE b.user_id = p_broker_user_id\n     AND b.org_id = v_org_id\n     AND b.is_available = true;\n  IF NOT FOUND THEN\n    RETURN 'sem_corretor';\n  END IF;\n\n  -- Ex-dono (Story 75-149): quem deixou este lead cair no bolsão (último `bolsao_in`)\n  -- não pode puxá-lo de volta. Só o ÚLTIMO dono é bloqueado; se não há `bolsao_in`\n  -- (dado legado / outro caminho), v_ex_dono fica null e o guard não dispara.\n  SELECT (a.metadata->>'from_broker_id')::uuid\n    INTO v_ex_dono\n    FROM activities a\n   WHERE a.lead_id = p_lead_id\n     AND a.type = 'bolsao_in'\n   ORDER BY a.created_at DESC\n   LIMIT 1;\n  IF v_ex_dono IS NOT NULL AND v_ex_dono = p_broker_user_id THEN\n    RETURN 'ex_dono';\n  END IF;\n\n  -- Teto (Story 75-198): régua única, SEM etapas Perdido/Não Qualificado.\n  IF public.broker_active_leads_count(v_org_id, p_broker_user_id) >= v_max_leads THEN\n    RETURN 'teto';\n  END IF;\n\n  -- Empreendimento: se o lead tem property_interest_id, o corretor precisa estar habilitado.\n  IF v_property_id IS NOT NULL AND NOT EXISTS (\n    SELECT 1 FROM broker_assignments ba\n     WHERE ba.broker_id = v_broker_id\n       AND ba.property_id = v_property_id\n  ) THEN\n    RETURN 'empreendimento';\n  END IF;\n\n  -- Atribuição atômica (guard final contra corrida).\n  UPDATE leads\n     SET assigned_broker_id = p_broker_user_id,\n         bolsao_em = NULL\n   WHERE id = p_lead_id\n     AND bolsao_em IS NOT NULL\n     AND assigned_broker_id IS NULL;\n  IF NOT FOUND THEN\n    RETURN 'gone';\n  END IF;\n\n  -- Reinicia o ciclo de 15 min (o cron bolsao-rebalance lê a última distribuição).\n  INSERT INTO lead_distribution_log (org_id, lead_id, broker_id, status)\n  VALUES (v_org_id, p_lead_id, v_broker_id, 'distributed');\n\n  INSERT INTO activities (org_id, lead_id, user_id, type, description, metadata)\n  VALUES (v_org_id, p_lead_id, p_broker_user_id, 'bolsao_pull',\n          'Lead puxado do bolsão', jsonb_build_object('broker_user_id', p_broker_user_id));\n\n  RETURN 'ok';\nEND;\n"
+    },
+    {
+      "name": "pipeline_funnel_by_campaign",
+      "args": "p_start_date date, p_end_date date",
+      "securityDefiner": false,
+      "config": [
+        "search_path=public"
+      ],
+      "acl": [
+        "postgres=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\nWITH lead_stage AS (\n  SELECT\n    l.org_id,\n    l.utm_source,\n    l.utm_campaign,\n    l.utm_medium,\n    l.id          AS lead_id,\n    ks.position   AS stage_position,\n    ks.type       AS stage_type\n  FROM public.leads l\n  LEFT JOIN public.kanban_stages ks ON ks.id = l.stage_id\n  WHERE l.is_active = true\n),\ntype_thresholds AS (\n  SELECT org_id, type, MIN(position) AS min_position\n  FROM public.kanban_stages\n  GROUP BY org_id, type\n),\nfunnel AS (\n  SELECT\n    ls.org_id,\n    ls.utm_source,\n    ls.utm_campaign,\n    ls.utm_medium,\n    COUNT(*)::BIGINT AS total_leads,\n    COUNT(*) FILTER (WHERE ls.stage_position >= tq.min_position)::BIGINT AS leads_qualificado,\n    COUNT(*) FILTER (WHERE ls.stage_position >= ta.min_position)::BIGINT AS leads_agendado,\n    COUNT(*) FILTER (WHERE ls.stage_position >= tv.min_position)::BIGINT AS leads_visitou,\n    COUNT(*) FILTER (WHERE ls.stage_position >= tp.min_position)::BIGINT AS leads_proposta,\n    COUNT(*) FILTER (WHERE ls.stage_type = 'fechado')::BIGINT            AS leads_fechado\n  FROM lead_stage ls\n  LEFT JOIN type_thresholds tq ON tq.org_id = ls.org_id AND tq.type = 'qualificado'\n  LEFT JOIN type_thresholds ta ON ta.org_id = ls.org_id AND ta.type = 'agendado'\n  LEFT JOIN type_thresholds tv ON tv.org_id = ls.org_id AND tv.type = 'visitou'\n  LEFT JOIN type_thresholds tp ON tp.org_id = ls.org_id AND tp.type = 'proposta'\n  GROUP BY ls.org_id, ls.utm_source, ls.utm_campaign, ls.utm_medium\n),\ncampaign_spend AS (\n  SELECT\n    mc.org_id,\n    lower(trim(mc.name)) AS campaign_name_norm,\n    SUM(mid.spend)::NUMERIC AS total_spend\n  FROM public.meta_campaigns mc\n  JOIN public.meta_insights_daily mid\n    ON  mid.org_id    = mc.org_id\n    AND mid.level     = 'campaign'\n    AND mid.entity_id = mc.meta_campaign_id\n    AND mid.date      >= p_start_date\n    AND mid.date      <= p_end_date\n  WHERE mc.name IS NOT NULL\n  GROUP BY mc.org_id, lower(trim(mc.name))\n)\nSELECT\n  f.org_id,\n  f.utm_source,\n  f.utm_campaign,\n  f.utm_medium,\n  f.total_leads,\n  f.leads_qualificado,\n  f.leads_agendado,\n  f.leads_visitou,\n  f.leads_proposta,\n  f.leads_fechado,\n  cs.total_spend,\n  (cs.total_spend / NULLIF(f.leads_visitou, 0))::NUMERIC AS cpl_real_visitou,\n  (cs.total_spend / NULLIF(f.leads_fechado, 0))::NUMERIC AS cpl_real_fechado\nFROM funnel f\nLEFT JOIN campaign_spend cs\n  ON  cs.org_id = f.org_id\n  AND cs.campaign_name_norm = lower(trim(f.utm_campaign))\nWHERE public.has_capability('agente.contexto_crm')\n  AND f.org_id = public.user_org_id();\n"
+    },
+    {
+      "name": "pipeline_funnel_by_campaign",
+      "args": "p_days integer",
+      "securityDefiner": false,
+      "config": [
+        "search_path=public"
+      ],
+      "acl": [
+        "postgres=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\nWITH lead_stage AS (\n  SELECT\n    l.org_id,\n    l.utm_source,\n    l.utm_campaign,\n    l.utm_medium,\n    l.id          AS lead_id,\n    ks.position   AS stage_position,\n    ks.type       AS stage_type\n  FROM public.leads l\n  LEFT JOIN public.kanban_stages ks ON ks.id = l.stage_id\n  WHERE l.is_active = true\n),\n-- position mínima de cada stage type por org (define o \"alcançou X ou posterior\")\ntype_thresholds AS (\n  SELECT org_id, type, MIN(position) AS min_position\n  FROM public.kanban_stages\n  GROUP BY org_id, type\n),\nfunnel AS (\n  SELECT\n    ls.org_id,\n    ls.utm_source,\n    ls.utm_campaign,\n    ls.utm_medium,\n    COUNT(*)::BIGINT AS total_leads,\n    COUNT(*) FILTER (\n      WHERE ls.stage_position >= tq.min_position\n    )::BIGINT AS leads_qualificado,\n    COUNT(*) FILTER (\n      WHERE ls.stage_position >= ta.min_position\n    )::BIGINT AS leads_agendado,\n    COUNT(*) FILTER (\n      WHERE ls.stage_position >= tv.min_position\n    )::BIGINT AS leads_visitou,\n    COUNT(*) FILTER (\n      WHERE ls.stage_position >= tp.min_position\n    )::BIGINT AS leads_proposta,\n    COUNT(*) FILTER (\n      WHERE ls.stage_type = 'fechado'\n    )::BIGINT AS leads_fechado\n  FROM lead_stage ls\n  LEFT JOIN type_thresholds tq\n    ON tq.org_id = ls.org_id AND tq.type = 'qualificado'\n  LEFT JOIN type_thresholds ta\n    ON ta.org_id = ls.org_id AND ta.type = 'agendado'\n  LEFT JOIN type_thresholds tv\n    ON tv.org_id = ls.org_id AND tv.type = 'visitou'\n  LEFT JOIN type_thresholds tp\n    ON tp.org_id = ls.org_id AND tp.type = 'proposta'\n  GROUP BY ls.org_id, ls.utm_source, ls.utm_campaign, ls.utm_medium\n),\n-- spend agregado por campanha (nome) e org, somando insights diários no nível\n-- campaign DENTRO da janela de p_days (PERF-001). Nome normalizado (REL-001).\ncampaign_spend AS (\n  SELECT\n    mc.org_id,\n    lower(trim(mc.name)) AS campaign_name_norm,\n    SUM(mid.spend)::NUMERIC AS total_spend\n  FROM public.meta_campaigns mc\n  JOIN public.meta_insights_daily mid\n    ON mid.org_id = mc.org_id\n   AND mid.level = 'campaign'\n   AND mid.entity_id = mc.meta_campaign_id\n   AND mid.date >= (current_date - p_days)     -- janela configurável (PERF-001)\n  WHERE mc.name IS NOT NULL\n  GROUP BY mc.org_id, lower(trim(mc.name))\n)\nSELECT\n  f.org_id,\n  f.utm_source,\n  f.utm_campaign,\n  f.utm_medium,\n  f.total_leads,\n  f.leads_qualificado,\n  f.leads_agendado,\n  f.leads_visitou,\n  f.leads_proposta,\n  f.leads_fechado,\n  cs.total_spend,\n  (cs.total_spend / NULLIF(f.leads_visitou, 0))::NUMERIC AS cpl_real_visitou,\n  (cs.total_spend / NULLIF(f.leads_fechado, 0))::NUMERIC AS cpl_real_fechado\nFROM funnel f\n-- LEFT JOIN preserva leads mesmo sem spend correlacionado (REL-001):\n-- total_spend/CPL ficam NULL = \"sem dados de mídia\", não zero.\nLEFT JOIN campaign_spend cs\n  ON cs.org_id = f.org_id\n AND cs.campaign_name_norm = lower(trim(f.utm_campaign))    -- normalização (REL-001)\n-- FILTRO DE SEGURANÇA (admin-strict + isolamento org) — load-bearing AC6/AC7\nWHERE public.has_capability('agente.contexto_crm')\n  AND f.org_id = public.user_org_id();\n"
+    },
+    {
+      "name": "public_user_id",
+      "args": "",
+      "securityDefiner": true,
+      "config": [
+        "search_path=public, pg_temp"
+      ],
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\n  SELECT id FROM public.users WHERE auth_id = auth.uid()\n"
+    },
+    {
+      "name": "rls_auto_enable",
+      "args": "",
+      "securityDefiner": true,
+      "config": [
+        "search_path=pg_catalog"
+      ],
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\nDECLARE\n  cmd record;\nBEGIN\n  FOR cmd IN\n    SELECT *\n    FROM pg_event_trigger_ddl_commands()\n    WHERE command_tag IN ('CREATE TABLE', 'CREATE TABLE AS', 'SELECT INTO')\n      AND object_type IN ('table','partitioned table')\n  LOOP\n     IF cmd.schema_name IS NOT NULL AND cmd.schema_name IN ('public') AND cmd.schema_name NOT IN ('pg_catalog','information_schema') AND cmd.schema_name NOT LIKE 'pg_toast%' AND cmd.schema_name NOT LIKE 'pg_temp%' THEN\n      BEGIN\n        EXECUTE format('alter table if exists %s enable row level security', cmd.object_identity);\n        RAISE LOG 'rls_auto_enable: enabled RLS on %', cmd.object_identity;\n      EXCEPTION\n        WHEN OTHERS THEN\n          RAISE LOG 'rls_auto_enable: failed to enable RLS on %', cmd.object_identity;\n      END;\n     ELSE\n        RAISE LOG 'rls_auto_enable: skip % (either system schema or not in enforced list: %.)', cmd.object_identity, cmd.schema_name;\n     END IF;\n  END LOOP;\nEND;\n"
+    },
+    {
+      "name": "roleta_pick_and_advance",
+      "args": "p_org_id uuid, p_lead_id uuid, p_property_id uuid, p_max_leads_per_day integer",
+      "securityDefiner": true,
+      "config": [
+        "search_path=public"
+      ],
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\nDECLARE\n  v_lock_key  bigint;\n  v_queue_id  uuid;\n  v_broker_id uuid;\n  v_user_id   uuid;\n  v_max_pos   integer;\nBEGIN\n  PERFORM public.assert_org_scope(p_org_id);\n\n  -- Advisory lock por org para serializar distribuições concorrentes\n  v_lock_key := ('x' || substr(md5(p_org_id::text), 1, 16))::bit(64)::bigint;\n  PERFORM pg_advisory_xact_lock(v_lock_key);\n\n  -- Guard: se o lead já tem dono, está no bolsão OU está em Perdido, aborta sem erro.\n  -- Story 75-89: bolsao_em IS NOT NULL → bolsão é terminal p/ a roleta.\n  -- Story 75-118: stage_id = Perdido → também é terminal p/ a roleta.\n  IF EXISTS (\n    SELECT 1 FROM leads\n     WHERE id = p_lead_id\n       AND (assigned_broker_id IS NOT NULL\n            OR bolsao_em IS NOT NULL\n            OR stage_id = '00000000-0000-0000-0001-000000000008')\n  ) THEN\n    RETURN;\n  END IF;\n\n  -- Escolhe o próximo corretor elegível em ordem de posição\n  SELECT rf.id, b.id, b.user_id\n    INTO v_queue_id, v_broker_id, v_user_id\n    FROM roleta_fila rf\n    JOIN brokers b ON b.id = rf.broker_id\n                  AND b.is_available = true\n                  AND b.org_id = p_org_id\n   WHERE rf.org_id    = p_org_id\n     AND rf.is_active = true\n     -- Filtro de empreendimento — 75-316: capability do CANDIDATO decide o bypass\n     -- de broker_assignments (antes: role 'sdr' hardcoded — Story 75-226)\n     AND (p_property_id IS NULL\n          OR EXISTS (\n               SELECT 1 FROM broker_assignments ba\n                WHERE ba.broker_id   = b.id\n                  AND ba.property_id = p_property_id)\n          OR public.user_has_capability(b.user_id, 'roleta.atender_todo_empreendimento'))\n     -- Limite de leads ativos totais (Story 75-198: sem Perdido/Não Qualificado)\n     AND public.broker_active_leads_count(p_org_id, b.user_id) < COALESCE(b.max_leads, 50)\n     -- Limite de leads distribuídos hoje (configuração global da roleta)\n     AND (p_max_leads_per_day IS NULL OR\n          (SELECT COUNT(*)\n             FROM lead_distribution_log ldl\n            WHERE ldl.broker_id   = rf.broker_id\n              AND ldl.status      = 'distributed'\n              AND ldl.org_id      = p_org_id\n              AND ldl.created_at::date = CURRENT_DATE) < p_max_leads_per_day)\n   ORDER BY rf.position ASC\n   LIMIT 1;\n\n  IF v_broker_id IS NULL THEN RETURN; END IF;\n\n  -- Avança o corretor para o final da fila (round-robin)\n  SELECT COALESCE(MAX(position), 0) + 1\n    INTO v_max_pos\n    FROM roleta_fila\n   WHERE org_id = p_org_id;\n\n  UPDATE roleta_fila SET position = v_max_pos WHERE id = v_queue_id;\n\n  -- Recompacta posições se > 1000 para evitar overflow\n  IF v_max_pos > 1000 THEN\n    UPDATE roleta_fila rf\n       SET position = sub.new_pos\n      FROM (SELECT id,\n                   (row_number() OVER (ORDER BY position))::integer - 1 AS new_pos\n              FROM roleta_fila\n             WHERE org_id = p_org_id) sub\n     WHERE rf.id = sub.id\n       AND rf.org_id = p_org_id;\n  END IF;\n\n  -- Atribui o lead — só se ainda estiver sem corretor, fora do bolsão E fora de Perdido\n  -- (guard atômico final). Story 75-106 (restaurado na 75-226): carimba distribuido_em\n  -- NA MESMA transação/UPDATE que atribui o corretor.\n  UPDATE leads\n     SET assigned_broker_id = v_user_id,\n         distribuido_em     = now()\n   WHERE id = p_lead_id\n     AND assigned_broker_id IS NULL\n     AND bolsao_em IS NULL\n     AND stage_id <> '00000000-0000-0000-0001-000000000008';\n\n  -- Se outra transação atribuiu / mandou pro bolsão / marcou perdido entre o guard\n  -- acima e agora, aborta.\n  IF NOT FOUND THEN\n    RETURN;\n  END IF;\n\n  RETURN QUERY\n    SELECT v_broker_id, v_user_id, v_queue_id,\n           u.name::text, u.email::text, u.phone::text\n      FROM users u\n     WHERE u.id = v_user_id;\nEND;\n"
+    },
+    {
+      "name": "search_conversation_messages",
+      "args": "p_org uuid, p_term text, p_limit integer",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\n  with q as (\n    select websearch_to_tsquery('portuguese', public.f_unaccent(p_term)) as tsq\n  )\n  select\n    m.conversation_id,\n    -- trecho = a mensagem MAIS RECENTE que casou (o card trunca na exibição)\n    (array_agg(m.content order by m.created_at desc))[1] as snippet,\n    count(*) as match_count\n  from public.messages m\n  join public.conversations c on c.id = m.conversation_id\n  cross join q\n  where c.org_id = p_org\n    and q.tsq is not null\n    and to_tsvector('portuguese', public.f_unaccent(coalesce(m.content, ''))) @@ q.tsq\n  group by m.conversation_id\n  order by max(m.created_at) desc\n  limit p_limit\n"
+    },
+    {
+      "name": "seed_system_roles",
+      "args": "p_org_id uuid",
+      "securityDefiner": true,
+      "config": [],
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\nDECLARE\n  v_admin_id      uuid;\n  v_supervisor_id uuid;\n  v_broker_id     uuid;\n  v_obras_id      uuid;\nBEGIN\n  PERFORM public.assert_org_scope(p_org_id);\n\n  -- 1. Inserir os 4 system roles\n  INSERT INTO roles (org_id, name, label, color, is_system)\n  VALUES (p_org_id, 'admin', 'Administrador', 'purple', true)\n  ON CONFLICT (org_id, name) DO NOTHING;\n\n  INSERT INTO roles (org_id, name, label, color, is_system)\n  VALUES (p_org_id, 'supervisor', 'Supervisor', 'blue', true)\n  ON CONFLICT (org_id, name) DO NOTHING;\n\n  INSERT INTO roles (org_id, name, label, color, is_system)\n  VALUES (p_org_id, 'broker', 'Corretor', 'green', true)\n  ON CONFLICT (org_id, name) DO NOTHING;\n\n  INSERT INTO roles (org_id, name, label, color, is_system)\n  VALUES (p_org_id, 'obras', 'Obras', 'yellow', true)\n  ON CONFLICT (org_id, name) DO NOTHING;\n\n  -- 2. Buscar IDs dos roles\n  SELECT id INTO v_admin_id      FROM roles WHERE org_id = p_org_id AND name = 'admin';\n  SELECT id INTO v_supervisor_id FROM roles WHERE org_id = p_org_id AND name = 'supervisor';\n  SELECT id INTO v_broker_id     FROM roles WHERE org_id = p_org_id AND name = 'broker';\n  SELECT id INTO v_obras_id      FROM roles WHERE org_id = p_org_id AND name = 'obras';\n\n  -- 3. Matriz de permissões (18 módulos × 4 roles)\n  -- admin: acesso total\n  INSERT INTO role_permissions (org_id, role_id, module, can_access) VALUES\n    (p_org_id, v_admin_id, 'dashboard',     true),\n    (p_org_id, v_admin_id, 'pipeline',      true),\n    (p_org_id, v_admin_id, 'leads',         true),\n    (p_org_id, v_admin_id, 'imoveis',       true),\n    (p_org_id, v_admin_id, 'corretores',    true),\n    (p_org_id, v_admin_id, 'roleta',        true),\n    (p_org_id, v_admin_id, 'conversas',     true),\n    (p_org_id, v_admin_id, 'agenda',        true),\n    (p_org_id, v_admin_id, 'alertas',       true),\n    (p_org_id, v_admin_id, 'atividades',    true),\n    (p_org_id, v_admin_id, 'analytics',     true),\n    (p_org_id, v_admin_id, 'campanhas',     true),\n    (p_org_id, v_admin_id, 'chamados',      true),\n    (p_org_id, v_admin_id, 'treinamento',   true),\n    (p_org_id, v_admin_id, 'obras',         true),\n    (p_org_id, v_admin_id, 'brindes',       true),\n    (p_org_id, v_admin_id, 'mensagens',     true),\n    (p_org_id, v_admin_id, 'configuracoes', true),\n    (p_org_id, v_admin_id, 'sistema',       true)\n  ON CONFLICT (role_id, module) DO NOTHING;\n\n  -- supervisor: tudo exceto configuracoes e sistema\n  INSERT INTO role_permissions (org_id, role_id, module, can_access) VALUES\n    (p_org_id, v_supervisor_id, 'dashboard',     true),\n    (p_org_id, v_supervisor_id, 'pipeline',      true),\n    (p_org_id, v_supervisor_id, 'leads',         true),\n    (p_org_id, v_supervisor_id, 'imoveis',       true),\n    (p_org_id, v_supervisor_id, 'corretores',    true),\n    (p_org_id, v_supervisor_id, 'roleta',        true),\n    (p_org_id, v_supervisor_id, 'conversas',     true),\n    (p_org_id, v_supervisor_id, 'agenda',        true),\n    (p_org_id, v_supervisor_id, 'alertas',       true),\n    (p_org_id, v_supervisor_id, 'atividades',    true),\n    (p_org_id, v_supervisor_id, 'analytics',     true),\n    (p_org_id, v_supervisor_id, 'campanhas',     true),\n    (p_org_id, v_supervisor_id, 'chamados',      true),\n    (p_org_id, v_supervisor_id, 'treinamento',   true),\n    (p_org_id, v_supervisor_id, 'obras',         true),\n    (p_org_id, v_supervisor_id, 'brindes',       true),\n    (p_org_id, v_supervisor_id, 'mensagens',     true),\n    (p_org_id, v_supervisor_id, 'configuracoes', false),\n    (p_org_id, v_supervisor_id, 'sistema',       false)\n  ON CONFLICT (role_id, module) DO NOTHING;\n\n  -- broker: operação no dia-a-dia\n  INSERT INTO role_permissions (org_id, role_id, module, can_access) VALUES\n    (p_org_id, v_broker_id, 'dashboard',     false),\n    (p_org_id, v_broker_id, 'pipeline',      true),\n    (p_org_id, v_broker_id, 'leads',         true),\n    (p_org_id, v_broker_id, 'imoveis',       true),\n    (p_org_id, v_broker_id, 'corretores',    false),\n    (p_org_id, v_broker_id, 'roleta',        false),\n    (p_org_id, v_broker_id, 'conversas',     true),\n    (p_org_id, v_broker_id, 'agenda',        true),\n    (p_org_id, v_broker_id, 'alertas',       true),\n    (p_org_id, v_broker_id, 'atividades',    true),\n    (p_org_id, v_broker_id, 'analytics',     false),\n    (p_org_id, v_broker_id, 'campanhas',     false),\n    (p_org_id, v_broker_id, 'chamados',      true),\n    (p_org_id, v_broker_id, 'treinamento',   true),\n    (p_org_id, v_broker_id, 'obras',         false),\n    (p_org_id, v_broker_id, 'brindes',       false),\n    (p_org_id, v_broker_id, 'mensagens',     false),\n    (p_org_id, v_broker_id, 'configuracoes', false),\n    (p_org_id, v_broker_id, 'sistema',       false)\n  ON CONFLICT (role_id, module) DO NOTHING;\n\n  -- obras: acesso restrito a obras e brindes\n  INSERT INTO role_permissions (org_id, role_id, module, can_access) VALUES\n    (p_org_id, v_obras_id, 'dashboard',     false),\n    (p_org_id, v_obras_id, 'pipeline',      false),\n    (p_org_id, v_obras_id, 'leads',         false),\n    (p_org_id, v_obras_id, 'imoveis',       false),\n    (p_org_id, v_obras_id, 'corretores',    false),\n    (p_org_id, v_obras_id, 'roleta',        false),\n    (p_org_id, v_obras_id, 'conversas',     false),\n    (p_org_id, v_obras_id, 'agenda',        false),\n    (p_org_id, v_obras_id, 'alertas',       false),\n    (p_org_id, v_obras_id, 'atividades',    false),\n    (p_org_id, v_obras_id, 'analytics',     false),\n    (p_org_id, v_obras_id, 'campanhas',     false),\n    (p_org_id, v_obras_id, 'chamados',      false),\n    (p_org_id, v_obras_id, 'treinamento',   false),\n    (p_org_id, v_obras_id, 'obras',         true),\n    (p_org_id, v_obras_id, 'brindes',       true),\n    (p_org_id, v_obras_id, 'mensagens',     false),\n    (p_org_id, v_obras_id, 'configuracoes', false),\n    (p_org_id, v_obras_id, 'sistema',       false)\n  ON CONFLICT (role_id, module) DO NOTHING;\nEND;\n"
+    },
+    {
+      "name": "set_chamados_updated_at",
+      "args": "",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\nBEGIN\n  NEW.updated_at = now();\n  RETURN NEW;\nEND;\n"
+    },
+    {
+      "name": "sparsevec",
+      "args": "sparsevec, integer, boolean",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "sparsevec"
+    },
+    {
+      "name": "sparsevec_cmp",
+      "args": "sparsevec, sparsevec",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "sparsevec_cmp"
+    },
+    {
+      "name": "sparsevec_eq",
+      "args": "sparsevec, sparsevec",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "sparsevec_eq"
+    },
+    {
+      "name": "sparsevec_ge",
+      "args": "sparsevec, sparsevec",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "sparsevec_ge"
+    },
+    {
+      "name": "sparsevec_gt",
+      "args": "sparsevec, sparsevec",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "sparsevec_gt"
+    },
+    {
+      "name": "sparsevec_in",
+      "args": "cstring, oid, integer",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "sparsevec_in"
+    },
+    {
+      "name": "sparsevec_l2_squared_distance",
+      "args": "sparsevec, sparsevec",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "sparsevec_l2_squared_distance"
+    },
+    {
+      "name": "sparsevec_le",
+      "args": "sparsevec, sparsevec",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "sparsevec_le"
+    },
+    {
+      "name": "sparsevec_lt",
+      "args": "sparsevec, sparsevec",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "sparsevec_lt"
+    },
+    {
+      "name": "sparsevec_ne",
+      "args": "sparsevec, sparsevec",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "sparsevec_ne"
+    },
+    {
+      "name": "sparsevec_negative_inner_product",
+      "args": "sparsevec, sparsevec",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "sparsevec_negative_inner_product"
+    },
+    {
+      "name": "sparsevec_out",
+      "args": "sparsevec",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "sparsevec_out"
+    },
+    {
+      "name": "sparsevec_recv",
+      "args": "internal, oid, integer",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "sparsevec_recv"
+    },
+    {
+      "name": "sparsevec_send",
+      "args": "sparsevec",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "sparsevec_send"
+    },
+    {
+      "name": "sparsevec_to_halfvec",
+      "args": "sparsevec, integer, boolean",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "sparsevec_to_halfvec"
+    },
+    {
+      "name": "sparsevec_to_vector",
+      "args": "sparsevec, integer, boolean",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "sparsevec_to_vector"
+    },
+    {
+      "name": "sparsevec_typmod_in",
+      "args": "cstring[]",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "sparsevec_typmod_in"
+    },
+    {
+      "name": "stamp_primeiro_atendimento",
+      "args": "",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\nDECLARE\n  v_novo_id uuid;\n  v_sdr_id uuid;\nBEGIN\n  -- Só age quando o estágio realmente muda e ainda não há carimbo (idempotente:\n  -- mover de volta para \"novo\" e sair de novo NÃO sobrescreve o primeiro).\n  IF NEW.stage_id IS DISTINCT FROM OLD.stage_id\n     AND NEW.primeiro_atendimento_em IS NULL THEN\n    SELECT id INTO v_novo_id\n      FROM public.kanban_stages\n     WHERE slug = 'novo' AND org_id = NEW.org_id\n     LIMIT 1;\n\n    SELECT id INTO v_sdr_id\n      FROM public.kanban_stages\n     WHERE slug = 'sdr' AND org_id = NEW.org_id\n     LIMIT 1;\n\n    -- Carimba apenas quando SAI de \"novo\" para outro estágio que NÃO seja a\n    -- etapa \"SDR\" (requalificação de base parada, não atendimento — 75-213).\n    IF OLD.stage_id = v_novo_id\n       AND NEW.stage_id IS DISTINCT FROM v_novo_id\n       AND (v_sdr_id IS NULL OR NEW.stage_id IS DISTINCT FROM v_sdr_id) THEN\n      NEW.primeiro_atendimento_em := now();\n    END IF;\n  END IF;\n\n  RETURN NEW;\nEND;\n"
+    },
+    {
+      "name": "subvector",
+      "args": "halfvec, integer, integer",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "halfvec_subvector"
+    },
+    {
+      "name": "subvector",
+      "args": "vector, integer, integer",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "subvector"
+    },
+    {
+      "name": "sum",
+      "args": "halfvec",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "aggregate_dummy"
+    },
+    {
+      "name": "sum",
+      "args": "vector",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "aggregate_dummy"
+    },
+    {
+      "name": "sync_property_available_units",
+      "args": "",
+      "securityDefiner": true,
+      "config": [],
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\nDECLARE\n  target_property_id UUID;\nBEGIN\n  target_property_id := COALESCE(NEW.property_id, OLD.property_id);\n  UPDATE properties\n  SET available_units = (\n    SELECT COUNT(*) FROM units\n    WHERE property_id = target_property_id AND status = 'available'\n  )\n  WHERE id = target_property_id;\n  RETURN COALESCE(NEW, OLD);\nEND;\n"
+    },
+    {
+      "name": "update_campaign_email_images_updated_at",
+      "args": "",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": " BEGIN NEW.updated_at = now(); RETURN NEW; END; "
+    },
+    {
+      "name": "update_conversation_last_msg",
+      "args": "",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": " BEGIN UPDATE conversations SET last_message_preview = LEFT(NEW.content, 100), last_message_role = NEW.role, last_message_at = NEW.created_at WHERE id = NEW.conversation_id; RETURN NEW; END; "
+    },
+    {
+      "name": "update_email_settings_updated_at",
+      "args": "",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\nBEGIN\n  NEW.updated_at = now();\n  RETURN NEW;\nEND;\n"
+    },
+    {
+      "name": "update_updated_at",
+      "args": "",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\nBEGIN\n  NEW.updated_at = now();\n  RETURN NEW;\nEND;\n"
+    },
+    {
+      "name": "user_broker_id",
+      "args": "",
+      "securityDefiner": true,
+      "config": [
+        "search_path=public, pg_temp"
+      ],
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\n  SELECT id FROM public.brokers WHERE user_id = public.public_user_id()\n"
+    },
+    {
+      "name": "user_has_capability",
+      "args": "p_user_id uuid, p_key text",
+      "securityDefiner": true,
+      "config": [
+        "search_path=public, pg_temp"
+      ],
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\n  SELECT COALESCE((\n    SELECT CASE\n      WHEN exc.can_access IS NOT NULL THEN exc.can_access\n      WHEN u.role = 'admin' THEN COALESCE(excp.can_access, true)\n      WHEN rp.can_access IS NOT NULL THEN rp.can_access\n      WHEN excp.can_access IS NOT NULL THEN excp.can_access\n      ELSE COALESCE(rpp.can_access, false)\n    END\n    FROM public.users u\n    LEFT JOIN public.user_permission_exceptions exc\n      ON exc.user_id = u.id AND exc.module = p_key\n    LEFT JOIN public.roles r ON r.name = u.role AND r.org_id = u.org_id\n    LEFT JOIN public.role_permissions rp ON rp.role_id = r.id AND rp.module = p_key\n    LEFT JOIN public.user_permission_exceptions excp\n      ON excp.user_id = u.id AND excp.module = split_part(p_key, '.', 1)\n    LEFT JOIN public.role_permissions rpp\n      ON rpp.role_id = r.id AND rpp.module = split_part(p_key, '.', 1)\n    WHERE u.id = p_user_id\n    LIMIT 1\n  ), false)\n"
+    },
+    {
+      "name": "user_org_id",
+      "args": "",
+      "securityDefiner": true,
+      "config": [
+        "search_path=public, pg_temp"
+      ],
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\n  SELECT org_id FROM public.users WHERE auth_id = auth.uid()\n"
+    },
+    {
+      "name": "user_role",
+      "args": "",
+      "securityDefiner": true,
+      "config": [
+        "search_path=public, pg_temp"
+      ],
+      "acl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "anon=X/postgres",
+        "authenticated=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "body": "\n  SELECT role FROM public.users WHERE auth_id = auth.uid()\n"
+    },
+    {
+      "name": "vector",
+      "args": "vector, integer, boolean",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "vector"
+    },
+    {
+      "name": "vector_accum",
+      "args": "double precision[], vector",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "vector_accum"
+    },
+    {
+      "name": "vector_add",
+      "args": "vector, vector",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "vector_add"
+    },
+    {
+      "name": "vector_avg",
+      "args": "double precision[]",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "vector_avg"
+    },
+    {
+      "name": "vector_cmp",
+      "args": "vector, vector",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "vector_cmp"
+    },
+    {
+      "name": "vector_combine",
+      "args": "double precision[], double precision[]",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "vector_combine"
+    },
+    {
+      "name": "vector_concat",
+      "args": "vector, vector",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "vector_concat"
+    },
+    {
+      "name": "vector_dims",
+      "args": "vector",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "vector_dims"
+    },
+    {
+      "name": "vector_dims",
+      "args": "halfvec",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "halfvec_vector_dims"
+    },
+    {
+      "name": "vector_eq",
+      "args": "vector, vector",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "vector_eq"
+    },
+    {
+      "name": "vector_ge",
+      "args": "vector, vector",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "vector_ge"
+    },
+    {
+      "name": "vector_gt",
+      "args": "vector, vector",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "vector_gt"
+    },
+    {
+      "name": "vector_in",
+      "args": "cstring, oid, integer",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "vector_in"
+    },
+    {
+      "name": "vector_l2_squared_distance",
+      "args": "vector, vector",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "vector_l2_squared_distance"
+    },
+    {
+      "name": "vector_le",
+      "args": "vector, vector",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "vector_le"
+    },
+    {
+      "name": "vector_lt",
+      "args": "vector, vector",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "vector_lt"
+    },
+    {
+      "name": "vector_mul",
+      "args": "vector, vector",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "vector_mul"
+    },
+    {
+      "name": "vector_ne",
+      "args": "vector, vector",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "vector_ne"
+    },
+    {
+      "name": "vector_negative_inner_product",
+      "args": "vector, vector",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "vector_negative_inner_product"
+    },
+    {
+      "name": "vector_norm",
+      "args": "vector",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "vector_norm"
+    },
+    {
+      "name": "vector_out",
+      "args": "vector",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "vector_out"
+    },
+    {
+      "name": "vector_recv",
+      "args": "internal, oid, integer",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "vector_recv"
+    },
+    {
+      "name": "vector_send",
+      "args": "vector",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "vector_send"
+    },
+    {
+      "name": "vector_spherical_distance",
+      "args": "vector, vector",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "vector_spherical_distance"
+    },
+    {
+      "name": "vector_sub",
+      "args": "vector, vector",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "vector_sub"
+    },
+    {
+      "name": "vector_to_float4",
+      "args": "vector, integer, boolean",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "vector_to_float4"
+    },
+    {
+      "name": "vector_to_halfvec",
+      "args": "vector, integer, boolean",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "vector_to_halfvec"
+    },
+    {
+      "name": "vector_to_sparsevec",
+      "args": "vector, integer, boolean",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "vector_to_sparsevec"
+    },
+    {
+      "name": "vector_typmod_in",
+      "args": "cstring[]",
+      "securityDefiner": false,
+      "config": [],
+      "acl": [
+        "=X/supabase_admin",
+        "supabase_admin=X/supabase_admin",
+        "postgres=X/supabase_admin",
+        "anon=X/supabase_admin",
+        "authenticated=X/supabase_admin",
+        "service_role=X/supabase_admin"
+      ],
+      "body": "vector_typmod_in"
+    }
+  ],
   "source": "management-api",
-  "capturedAt": "2026-08-23T11:53:48.779Z",
+  "capturedAt": "2026-08-23T12:39:14.292Z",
   "projectRef": "dsopqkqjkmhytudaaolv"
 }
