@@ -2,7 +2,7 @@
 
 ## Metadata
 - **Epic:** 900 · **Onda:** 1 — Isolamento · **Story:** 900-11
-- **Status:** InReview — migration escrita e VALIDADA no banco de teste. Falta só T3/AC6 (aplicar em produção + smoke), que exige sua autorização.
+- **Status:** Done — aplicada em produção 2026-08-23, smoke executado.
 - **Priority:** P0 — furo de leitura cross-tenant ativo em produção
 - **Complexity:** M
 - **Created:** 2026-08-23 · **Author:** @sm (River)
@@ -90,7 +90,7 @@ só migrando o que já existe.
 - [x] **AC5 — Rollback documentado no arquivo**, conforme NFR-8: bloco `-- ROLLBACK` com o
   `DROP/CREATE` reverso de cada policy.
 
-- [ ] **AC6 — Verificação pós-aplicação:** o gate passa a contar policies de storage com escopo de
+- [x] **AC6 — Verificação pós-aplicação:** o gate passa a contar policies de storage com escopo de
   org > 0, e um roteiro de smoke confirma que portal do cliente e chamados seguem funcionando.
 
 ---
@@ -98,7 +98,7 @@ só migrando o que já existe.
 ## Tasks
 - [x] **T1** — Migration com as policies dos 6 buckets ancoráveis (AC1-AC3, AC5)
 - [x] **T2** — Comentário na migration explicando os 3 buckets fora de escopo (AC4)
-- [ ] **T3** — Aplicar em produção pela Management API e rodar o smoke (AC6)
+- [x] **T3** — Aplicar em produção pela Management API e rodar o smoke (AC6)
 
 ---
 
@@ -148,6 +148,56 @@ de isolamento por uma quebra funcional.
 melhora o controle via API, mas **em bucket público a URL basta** — quem tiver o link lê o arquivo,
 policy nenhuma impede. O furo real desse bucket só fecha na `900-12`, e esta story não deve ser lida
 como tendo resolvido a exposição de fotos de obra.
+
+### Aplicação em produção — 2026-08-23
+
+Aplicada em `dsopqkqjkmhytudaaolv` num único POST (transação implícita), depois de validada no
+banco de teste. Resultado idêntico ao do teste:
+
+| | antes | depois |
+|---|---|---|
+| policies em `storage` | 21 | 21 |
+| **com escopo de org** | **0** | **13** |
+
+Estado anterior salvo antes de aplicar (`storage-policies-ANTES.json`, 21 policies) — sem isso, o
+`-- ROLLBACK` do arquivo seria a única referência, e conferir o que existia viraria adivinhação.
+
+### Smoke — o que passou, e o que NÃO vale como evidência
+
+**1. Acesso legítimo preservado — 100%, sem uma perda:**
+
+| Bucket | Objetos | Alcançáveis pelo predicado novo |
+|---|---|---|
+| obra-docs | 179 | **179** |
+| obra-fotos | 115 | **115** |
+| obra-mensagens | 2 | **2** |
+| chamados-attachments | 10 | **10** |
+| marketing-artes | 18 | **18** |
+| marketing-brands | 38 | **38** |
+
+**2. Listagem por `anon` fechada** — `POST /storage/v1/object/list/obra-docs` com a chave
+publishable retorna `[]`.
+
+⚠️ **Ressalva honesta sobre este item:** não capturei o comportamento **antes** de aplicar, então o
+`[]` é *consistente* com o fechamento, mas não é prova comparativa. O que sustenta a conclusão é a
+lógica da policy — `user_org_id()` devolve NULL para `anon`, o que torna o predicado falso e não
+retorna linha. Um smoke melhor teria medido os dois lados; fica registrado como lição de método.
+
+**3. Primeira tentativa do smoke de `anon` foi descartada.** Deu `403 signature verification failed`
+usando a chave `anon` legada — erro de **formato de chave**, não recusa por policy. Tratá-lo como
+"furo fechado" teria sido uma conclusão certa por motivo errado. Refeito com a chave
+`sb_publishable_…`.
+
+**4. ⚠️ O bucket público continua servindo por URL direta — verificado, não suposto:**
+
+```
+GET /storage/v1/object/public/obra-fotos/obras/{obra_id}/fotos/{arquivo}  →  HTTP 200
+```
+
+Isto **prova empiricamente** o limite declarado no escopo: em bucket público a policy de SELECT é
+irrelevante, porque a URL basta. **Esta story não resolveu a exposição de fotos de obra** — quem
+tiver o link continua lendo. Fechar isso é a `900-12`, e o `HTTP 200` acima é a evidência de que ela
+não é opcional.
 
 ### File List
 - `supabase/migrations/238_storage_policies_org_scoped.sql` (novo) — 6 buckets, com bloco ROLLBACK
