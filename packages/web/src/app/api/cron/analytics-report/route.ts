@@ -169,5 +169,40 @@ export async function GET(request: NextRequest) {
 
   await finishCronRun(supabase, runId, { sent, errors })
 
+  if (errors > 0) {
+    // Follow-up do gate da 75-367 (concern C1). Até aqui uma falha de envio só
+    // existia como `console.error` e como um número em `cron_locks.last_result` —
+    // e ninguém consulta `cron_locks`. Como a trava só libera depois de 144h, o
+    // silêncio duraria até a semana seguinte: "não chegou relatório" ficava
+    // indistinguível de "o agendador não disparou".
+    //
+    // UM evento agregado, não um por organização: a falha típica é do lado do
+    // Resend (chave, domínio, quota), que erra todas as orgs da mesma run e
+    // viraria N linhas idênticas em `system_events`.
+    //
+    // DEPOIS do `finishCronRun`, e não antes como o gate sugeriu: o recibo é
+    // exigência do AC5 desta story, este evento é adicional. A trava em si não
+    // depende dele (o intervalo mínimo é medido pelo `started_at` — migration 234),
+    // mas se a lambda for cortada no meio das escritas tardias, o que se perde
+    // deve ser o diagnóstico novo e não um comportamento coberto por AC.
+    // `logEventOnce` (aguardado) em vez de `logEvent` porque esta passa a ser a
+    // última escrita antes do response, e o fire-and-forget morre no
+    // congelamento da lambda (Story 87-6).
+    await logEventOnce({
+      level: "error",
+      category: "cron",
+      event_type: "ANALYTICS_REPORT_ENVIO_FALHOU",
+      message: `Relatório semanal falhou em ${errors} de ${errors + sent} organização(ões) — ${sent} enviado(s). Próxima tentativa só depois do intervalo mínimo da trava.`,
+      metadata: {
+        job: "analytics-report",
+        run_id: runId,
+        falharam: errors,
+        enviados: sent,
+        intervalo_minimo_s: INTERVALO_MINIMO_ANALYTICS_REPORT_SEGUNDOS,
+      },
+      source: "api/cron/analytics-report",
+    })
+  }
+
   return NextResponse.json({ sent, errors })
 }

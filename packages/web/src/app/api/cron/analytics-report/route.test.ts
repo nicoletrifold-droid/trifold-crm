@@ -38,6 +38,12 @@ let rpcs: Rpc[]
 /** Assuntos dos e-mails que o Resend recebeu — o que este teste existe para observar. */
 let emailsEnviados: Array<Record<string, unknown>>
 let eventosLogados: Array<Record<string, unknown>>
+/**
+ * Escritas tardias na ordem em que aconteceram, num único array. `rpcs` e
+ * `eventosLogados` são separados e não deixam ver quem veio antes de quem — e a
+ * ordem é decisão de projeto: o recibo (AC5) vem antes do evento de diagnóstico.
+ */
+let ordemDeEscrita: string[]
 let dadosMontados: number
 let pdfsRenderizados: number
 
@@ -45,6 +51,7 @@ vi.mock("@web/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     rpc: (fn: string, args: Record<string, unknown>) => {
       rpcs.push({ fn, args })
+      ordemDeEscrita.push(`rpc:${fn}`)
       if (fn === "claim_cron_run") return Promise.resolve(claimResult)
       return Promise.resolve({ data: null, error: null })
     },
@@ -60,6 +67,7 @@ vi.mock("@web/lib/logger", () => ({
   },
   logEventOnce: async (params: Record<string, unknown>) => {
     eventosLogados.push(params)
+    ordemDeEscrita.push(`evento:${params.event_type}`)
     return { inserted: true }
   },
 }))
@@ -119,6 +127,7 @@ beforeEach(() => {
   rpcs = []
   emailsEnviados = []
   eventosLogados = []
+  ordemDeEscrita = []
   dadosMontados = 0
   pdfsRenderizados = 0
 })
@@ -248,5 +257,68 @@ describe("GET /api/cron/analytics-report — trava de run (Story 75-367)", () =>
   it("declara maxDuration = 300 (o render do PDF leva ~105s)", async () => {
     const mod = await import("./route")
     expect(mod.maxDuration).toBe(300)
+  })
+})
+
+/**
+ * Follow-up do gate da 75-367 (concern C1 do @qa, aprovado depois pelo usuário).
+ *
+ * A trava resolveu o e-mail duplicado, mas deixou o oposto sem rastro: quando o
+ * envio falha, o número só ia para `console.error` e para `cron_locks.last_result`
+ * — e ninguém consulta `cron_locks`. Como a trava tem intervalo mínimo de 144h, o
+ * silêncio duraria até a semana seguinte, com "não chegou relatório"
+ * indistinguível de "o agendador não disparou".
+ */
+describe("GET /api/cron/analytics-report — rastro de falha de envio (follow-up C1)", () => {
+  it("envio falhou: grava ANALYTICS_REPORT_ENVIO_FALHOU e ainda fecha o recibo", async () => {
+    sendError = { message: "domain not verified" }
+
+    const res = await chamar()
+
+    // O comportamento de envio não muda: os contadores do response são os mesmos.
+    expect(await res.json()).toEqual({ sent: 0, errors: 1 })
+
+    const falhou = eventosLogados.find(
+      (e) => e.event_type === "ANALYTICS_REPORT_ENVIO_FALHOU"
+    )
+    expect(falhou).toBeDefined()
+    expect(falhou!.category).toBe("cron")
+    expect(falhou!.level).toBe("error")
+    expect(falhou!.source).toBe("api/cron/analytics-report")
+
+    // Metadata é o que torna o evento diagnosticável sem abrir o log da Vercel:
+    // qual job, qual run em `cron_locks`, quantos falharam vs. quantos saíram, e
+    // quanto tempo falta até a próxima tentativa possível.
+    expect(falhou!.metadata).toEqual({
+      job: "analytics-report",
+      run_id: "run-1",
+      falharam: 1,
+      enviados: 0,
+      intervalo_minimo_s: 144 * 60 * 60,
+    })
+
+    // O rastro é adicional, não substituto: o recibo continua sendo gravado.
+    expect(rpcs[1]).toEqual({
+      fn: "finish_cron_run",
+      args: { p_run_id: "run-1", p_result: { sent: 0, errors: 1 } },
+    })
+
+    // E vem DEPOIS do recibo: o recibo é exigência do AC5, o evento é adicional.
+    // Se a lambda cair no meio das escritas tardias, quem se perde é o novo.
+    expect(ordemDeEscrita).toEqual([
+      "rpc:claim_cron_run",
+      "rpc:finish_cron_run",
+      "evento:ANALYTICS_REPORT_ENVIO_FALHOU",
+    ])
+  })
+
+  it("envio ok: não emite o evento de falha (alerta só quando há o que alertar)", async () => {
+    const res = await chamar()
+
+    expect(await res.json()).toEqual({ sent: 1, errors: 0 })
+    expect(
+      eventosLogados.filter((e) => e.event_type === "ANALYTICS_REPORT_ENVIO_FALHOU")
+    ).toHaveLength(0)
+    expect(ordemDeEscrita).toEqual(["rpc:claim_cron_run", "rpc:finish_cron_run"])
   })
 })

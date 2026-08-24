@@ -186,9 +186,10 @@ mentir sobre uma run que terminou. (Em produção existe uma organização; é b
 ## File List
 
 - `packages/web/src/lib/cron/claim-run.ts` — nova constante `INTERVALO_MINIMO_ANALYTICS_REPORT_SEGUNDOS`
-- `packages/web/src/app/api/cron/analytics-report/route.ts` — AC1, AC3, AC4, AC5
+- `packages/web/src/app/api/cron/analytics-report/route.ts` — AC1, AC3, AC4, AC5 · **+ follow-up C1**
+  (evento `ANALYTICS_REPORT_ENVIO_FALHOU`)
 - `packages/web/src/app/api/cron/analytics-report/route.test.ts` *(novo)* — AC1, AC3, cobertura do
-  caminho vencedor
+  caminho vencedor · **+ follow-up C1** (2 casos)
 
 ## Dev Agent Record
 
@@ -248,6 +249,58 @@ assimetria pedida pelo AC3 foi implementada no chamador e não no helper compart
 Nenhuma migration, `vercel.json` intacto, conteúdo do e-mail/PDF/lista de destinatários intactos,
 nenhuma segunda trava por item, nenhuma investigação do gatilho externo. Sem `git push`/PR —
 handoff para @qa e depois @devops.
+
+### Follow-up do gate — C1 resolvido (pós-gate, 24/08)
+
+Não é AC desta story: é o concern **C1** (LOW) que o @qa registrou no gate e que o usuário aprovou
+implementar depois, na mesma branch do PR #492. Nenhum AC novo foi criado retroativamente.
+
+**O que entrou:** quando `errors > 0` ao fim do processamento, a rota grava **um**
+`ANALYTICS_REPORT_ENVIO_FALHOU` via `logEventOnce` (`level: error`, `category: cron`,
+`source: api/cron/analytics-report`), com metadata `{ job, run_id, falharam, enviados,
+intervalo_minimo_s }`. Antes disso o caminho de falha só existia como `console.error` (`:159` e
+`:165`) e como um número em `cron_locks.last_result` — e ninguém consulta `cron_locks`.
+
+**Três decisões, com o critério:**
+
+1. **Um evento agregado ao fim, não um por organização.** Produção tem uma org só, então hoje é
+   indiferente; o que decide é o modo de falha típico, que é do lado do Resend (chave, domínio,
+   quota) e erra *todas* as orgs da mesma run. Um evento por org transformaria uma falha única em N
+   linhas idênticas em `system_events` — exatamente o ruído que faz alerta virar decoração. Se o
+   relatório passar a ser por organização (a "Nota para o futuro" do gate), o evento por org volta a
+   fazer sentido junto com a dupla trava run+item.
+
+2. **Depois do `finishCronRun`, não antes** — o gate recomendou "antes". Divergi de propósito: o
+   recibo é exigência do AC5 e este evento é adicional, então se a lambda for cortada no meio das
+   escritas tardias o que se perde deve ser o diagnóstico novo, não um comportamento coberto por AC.
+   A trava em si não depende do recibo (o intervalo mínimo é medido pelo `started_at` — migration
+   234, linha 84), o que **enfraquece** o argumento de risco e é a razão de isto ser uma preferência
+   de ordenação e não uma correção de bug. `logEventOnce` (aguardado) e não `logEvent`: com a
+   inversão, esta passa a ser a última escrita antes do response, e o fire-and-forget morre no
+   congelamento da lambda (Story 87-6).
+
+3. **Nada de detalhe do erro na metadata.** Capturar a mensagem do Resend exigiria acumular estado
+   dentro do loop, e o escopo mínimo era exigência explícita. A mensagem segue no `console.error` do
+   log da Vercel; o evento serve para *saber que houve falha*, que era o que faltava.
+
+**Testes:** 7 → 9. `envio falhou` assere `event_type`/`category`/`level`/`source`/`metadata` **e**
+que o `finish_cron_run` continua sendo chamado com `{ sent: 0, errors: 1 }`; `envio ok` assere que o
+evento **não** é emitido. Para poder travar a ordenação da decisão 2, os mocks passaram a registrar
+as escritas tardias num array único (`ordemDeEscrita`) — `rpcs` e `eventosLogados` são separados e
+não deixavam ver quem veio antes de quem. Checagem de mutação: com o `if (errors > 0)` forçado a
+`false`, cai 1 teste (o de sucesso passa nos dois estados, é guarda de regressão).
+
+**Não entrou** (escopo mínimo, exigência do usuário): nenhum push, nenhum e-mail de alerta, a
+constante de 144h intacta, os dois guards existentes intactos, o loop não refatorado, `claim-run.ts`
+não tocado, comportamento de envio idêntico (e-mail, PDF, destinatários, contadores).
+
+**Não resolvidos:** C2 (causa-raiz externa — decisão explícita da story), C3 (teste de ordem
+claim-vs-select) e C4 (já corrigido pelo @devops nas Dev Notes antes do commit).
+
+**Validações desta rodada:** `npx vitest run` nos tocados → 9 passed; suítes de cron + logger (14
+arquivos) → 149 passed; `npx tsc --noEmit` em `packages/web` → 0 erros; `pnpm type-check --force` →
+8/8; `pnpm lint --force` → **0 errors**, 30 warnings todas pré-existentes e nenhuma nos 2 arquivos
+tocados (`grep analytics-report` na saída do lint: 0 linhas).
 
 ## Verificar depois do deploy
 
@@ -316,6 +369,18 @@ handoff para @qa e depois @devops.
   `system_events`, só `console.error` — com 144h de intervalo mínimo, uma run vencedora que falhe passa
   em silêncio e o próximo gatilho é 6 dias depois; recomendação: `ANALYTICS_REPORT_ENVIO_FALHOU` via
   `logEventOnce` quando `errors > 0`).
+- 24/08 @dev: **C1 do gate resolvido** (concern LOW, aprovado pelo usuário depois do gate) — follow-up,
+  **não** AC novo. `errors > 0` agora grava um `ANALYTICS_REPORT_ENVIO_FALHOU` (`logEventOnce`, level
+  error, category cron, metadata `job`/`run_id`/`falharam`/`enviados`/`intervalo_minimo_s`) na mesma
+  branch do PR #492. **Um** evento agregado, não um por org: a falha típica é do Resend e erraria todas
+  as orgs da run, virando N linhas idênticas. Gravado **depois** do `finishCronRun`, e não antes como o
+  gate sugeriu — o recibo é AC5 e este evento é adicional, então numa lambda cortada no meio quem se
+  perde é o novo (a trava não depende do recibo: o intervalo é medido pelo `started_at`). Escopo mínimo
+  respeitado: nenhum push/e-mail de alerta, 144h intacta, guards intactos, loop não refatorado,
+  `claim-run.ts` não tocado, comportamento de envio idêntico. Testes 7 → 9 (falha assere evento +
+  recibo; sucesso assere ausência do evento; ordenação travada por um array único de escritas tardias).
+  Validações: 9 passed nos tocados, 149 passed em cron+logger, `tsc --noEmit` 0 erros, lint 0 errors.
+  C2/C3 seguem abertos como follow-up. Sem `git push` — handoff para @devops.
 
 ## QA Results
 
@@ -403,3 +468,118 @@ congelamento da lambda (Story 87-6), já que é a última escrita antes do respo
 Se o relatório passar a ser por organização com múltiplas orgs, a trava única de RUN vira gargalo: uma
 org que falhe bloqueia todas as outras por 6 dias. Aí é a dupla trava do `followup` (run + item), como
 a própria story antecipa em "Fora de escopo".
+
+---
+
+**Gate:** ✅ **PASS** · **Revisor:** @qa (Quinn) · **Data:** 24/08/2026 · **Round:** 2
+(verificação focada de follow-up — C1, ~35 linhas de superfície)
+**Escopo desta rodada:** só o bloco `if (errors > 0)` adicionado depois do gate. Não é re-gate da
+story; os 7 checks do Round 1 seguem valendo.
+**Ações obrigatórias antes do push:** nenhuma. Segue liberado para @devops.
+
+### O que eu verifiquei, um a um
+
+**1. Nada além do evento mudou.** ✅ Confirmado por `git diff`: `route.ts` é **+35/-0** — zero linhas
+removidas, zero modificadas. O bloco entra inteiro entre o `finishCronRun` (`:170`) e o
+`return NextResponse.json({ sent, errors })` (`:207`). Os dois guards (`already_running` `:59-78`,
+`claim_indisponivel` `:80-100`), a constante de 144h (`claim-run.ts:35`, byte-idêntica), o loop
+(`:117-168`), o `resend.emails.send`, os contadores e o response estão fora do diff. `claim-run.ts`
+**não aparece** no working tree (`git status --porcelain`: só story, route.ts, route.test.ts e duas
+memórias do @dev). `vercel.json` intocado. Nenhuma linha nova de import — `logEventOnce` já vinha
+importado (`:6`).
+
+**2. O evento é aguardado.** ✅ `await logEventOnce({...})` em `:191`, antes do response em `:207`.
+É a versão aguardada, sem `dedupe_key` — cada run que falhar grava a sua linha, que é o que a query
+de contagem precisa. Sobrevive ao congelamento da lambda (Story 87-6).
+
+**3. Os dois testes novos provam o que dizem.** ✅ 7 → 9 confirmado (`--reporter=verbose`: 9 nomes,
+2 no describe novo). Rodei **três** mutações, não uma:
+
+| Mutação | Resultado | O que isso prova |
+|---|---|---|
+| `if (errors > 0)` → `if (false)` | **1 teste cai** | O teste de falha depende do bloco existir. Bate com o que o @dev relatou. |
+| Evento movido para **antes** do `finishCronRun` | **1 teste cai** | A asserção de ordem (`ordemDeEscrita`) é load-bearing, não decorativa — pedir a inversão custaria o código **e** o teste. |
+| `await` → `void` (fire-and-forget) | **9 passam** | ⚠️ Nenhum teste guarda o `await`. Ver C5. |
+
+O teste de sucesso é guarda de regressão (passa nos dois estados do `if`), e o próprio @dev declara
+isso — declaração honesta, não inflada.
+
+**4. A metadata é a que o teste assere.** ✅ `{ job, run_id, falharam, enviados, intervalo_minimo_s }`
+com `toEqual` (exato, não parcial) — um campo a mais ou a menos quebra. `errors + sent` no `message`
+é de fato o total de orgs: cada iteração incrementa exatamente um dos dois contadores.
+
+**5. Nada fora de escopo.** ✅ `grep -inE "org-scoped|sendPush|web-push|webpush|resend.emails.send"`
+no diff de `packages/web`: **zero ocorrências**. Nenhum push, nenhum e-mail de alerta, nada de
+`org-scoped-*`. `QA Results` do Round 1 preservado íntegro pelo @dev (o diff da story toca File List,
+Dev Agent Record e Change Log — seções dele).
+
+### Validações independentes (rodadas por mim, sem cache)
+
+`npx vitest run` na suíte inteira → **245 arquivos / 2984 passed + 6 expected-fail** (15,73s; baseline
+2982, +2 confere) · tocados isolados → 9 + 7 = **16 passed** · `npx tsc --noEmit` direto em
+`packages/web` (não `turbo type-check`) → **EXIT=0** · `npx eslint` nos diretórios tocados → saída
+vazia · `npx eslint` no pacote todo → **0 errors**, 30 warnings, nenhuma nos 2 arquivos tocados.
+
+### Parecer sobre a ordem (item 3): **aceita como está**
+
+O @dev tem razão em duvidar do próprio argumento, e por um motivo mais forte do que ele deu. Fui ao
+banco: migration 234 (`claim_cron_run`) é um `insert … on conflict do update … where l.started_at <
+now() - make_interval(...)` — a trava é reavaliada contra o **`started_at`**, e o comentário da
+própria migration diz que o recibo "não é obrigatório para a trava funcionar". Um recibo perdido deixa
+`finished_at` nulo e nada mais. Já um evento perdido é exatamente o silêncio de 6 dias que o C1
+existe para fechar, e nada mais o cobre. **Pelo conteúdo informacional, a ordem do gate era a
+marginalmente melhor** — o evento carrega `falharam`/`enviados` (superset do recibo), o recibo não
+carrega o evento.
+
+Mas o risco real é nulo, e é isso que decide:
+
+- **`logEventOnce` nunca lança.** Conferi `logger.ts:111-123`: `try/catch` em volta do insert,
+  retorna `{ inserted: false }` no erro. `finishCronRun` também é best-effort e nunca lança
+  (`claim-run.ts:94-103`). Nenhuma das duas ordens pode gerar 500 nem abortar a outra escrita.
+- **As duas escritas são consecutivas, sem trabalho no meio.** O único cenário que as distingue é um
+  kill do runtime na janela de um round-trip, ou um stall transitório em exatamente uma das duas —
+  ambas vão para o **mesmo** Supabase, então "o backend está ruim" derruba as duas em qualquer ordem.
+- **A inversão custaria mais que uma linha.** A asserção `ordemDeEscrita` está pinada (mutação 2
+  acima), então o pedido seria código + teste + re-rodada da suíte para reduzir um risco de segunda
+  ordem que eu não consigo quantificar acima de zero.
+
+Registro a divergência de raciocínio: aceito a **decisão**, não o **argumento** de que "o recibo é o
+mais valioso dos dois" — é o contrário. Se algum dia o `finishCronRun` deixar de ser best-effort, ou
+se algo entrar **entre** as duas escritas, a ordem volta a merecer discussão.
+
+### Parecer sobre o corte (item 5): **aceitável, com uma ressalva de prazo**
+
+O evento serve ao propósito. Ele responde "o relatório semanal falhou?" — a pergunta que era
+literalmente inrespondível — e mais: **quantas** orgs, **quantas** saíram, **qual run** em
+`cron_locks`, e **quanto falta** até a próxima tentativa possível. E cai num lugar com superfície de
+leitura (`/api/system-events`), ao contrário de `cron_locks`, que não tem nenhuma. A ausência do
+motivo não o torna inútil: o motivo está a **um hop** de distância — `run_id` + timestamp do evento
+localizam a janela no log da Vercel, onde o `console.error` (`:159`/`:165`) tem a mensagem do Resend.
+
+A ressalva: esse hop tem **prazo de validade**. A retenção de log de runtime da Vercel é de horas a
+poucos dias; a janela de silêncio que esta story assume é de **6 dias**. Então na prática o evento diz
+"falhou" para sempre, mas diz "por quê" só para quem olhar dentro da retenção. Não é motivo para
+bloquear — capturar a mensagem exigiria acumular estado no loop, e escopo mínimo foi exigência
+explícita do usuário. É motivo para registrar como C6.
+
+### Concerns novos (2 · LOW · nenhum bloqueia)
+
+- **C5 — nenhum teste guarda o `await` do evento.** Trocando `await` por `void`, os 9 testes passam
+  (mutação 3). O mock de `logEventOnce` empurra para `eventosLogados`/`ordemDeEscrita` de forma
+  **síncrona**, na chamada, então a asserção não distingue aguardado de fire-and-forget. Isso vale
+  igualmente para os dois eventos pré-existentes (`RUN_DUPLICADA` e `CLAIM_INDISPONIVEL`) — é lacuna
+  de desenho do arquivo de teste, **não** regressão desta rodada, e não há
+  `@typescript-eslint/no-floating-promises` configurado para pegar isso. O `await` está correto por
+  inspeção (`:191`); o que falta é a rede de proteção contra um refactor futuro. Fecha em ~3 linhas:
+  o mock empurra dentro de uma continuação diferida (`await Promise.resolve()` antes do `push`), e as
+  asserções passam a distinguir.
+- **C6 — o "porquê" da falha expira com o log da Vercel** (detalhado acima). Se a metadata for
+  expandida algum dia, a primeira mensagem de erro do Resend (truncada, uma variável no loop) é o
+  campo de melhor custo-benefício.
+
+**Concerns do Round 1:** C1 **fechado** ✅ · C2 aberto por decisão explícita da story · C3 aberto
+(3 linhas no mock de `from()`) · C4 era procedimento, já ajustado nas Dev Notes.
+
+**CodeRabbit:** ⏭️ SKIP — CLI não instalada nesta máquina (darwin, sem WSL). Revisão manual.
+
+**Veredito:** aceita. Nada a corrigir antes do merge. C5 e C6 são backlog.
