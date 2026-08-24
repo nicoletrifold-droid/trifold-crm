@@ -31,8 +31,12 @@ merge**, o que torna a classe de defeito capaz de parar produção sem nenhum si
   o meu, 2 minutos depois, deu `Compiled successfully` + `Build Completed`. Mesma pipeline, mesmo
   projeto, dois logs. Quando existir um par assim, capturá-lo: vale mais que qualquer reprodução local.
 - Destravou de uma vez o que estava preso em `main`: 900-11, 900-14, 75-366 e o fix de mídia do
-  WhatsApp. O PR #492 (75-367) tinha os 3 previews em ERROR pelo mesmo motivo e passa a poder
-  buildar — mas o merge dele é decisão separada do Marcos.
+  WhatsApp. **Confirmado no PR #492 (75-367)**: os 3 previews em ERROR eram herança desta causa —
+  depois de integrar a `main` na branch (`03b347a4`), o preview
+  `dpl_CUFMW1qNW1dqMZdqLZLBn724Vuuc` ficou READY com o SHA do HEAD, e o merge por squash
+  (`901e366e`) produziu produção READY em `dpl_6Q8UfKJKcLodHgjHhkf7WrzuPjuQ`
+  (2026-08-24T14:49:09Z). O sinal a guardar: **preview em ERROR numa branch não implica defeito da
+  branch** — antes de investigar o PR, integre a `main` atual e veja se o erro sobrevive.
 - **Sem barreira contra reincidência**, por corte de escopo do usuário: não existe regra de lint
   contra import de `packages/web/src` para fora da árvore buildável, nem check de sincronia entre o
   `.generated.ts` e o snapshot. Estão como risco aceito (RA1/RA2) no gate da 900-14b e no backlog,
