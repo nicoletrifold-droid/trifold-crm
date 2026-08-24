@@ -1,6 +1,9 @@
 # Story 75-367 — O relatório semanal chegou duas vezes porque a trava da 75-352 não cobre este cron
 
-**Status:** Ready for Review — implementada pelo @dev 24/08 (ver Dev Agent Record)
+**Status:** InReview — gate PASS · **PR [#492](https://github.com/nicoletrifold-droid/trifold-crm/pull/492)**
+aberto pelo @devops 24/08 (branch `fix/75-367-relatorio-semanal-duplicado`, commit `4b2a90bc`) ·
+testes/type-check/lint/build verdes · sem migration. Vira `Done` quando o PR for mergeado e o deploy de
+produção estiver confirmado.
 **Tipo:** Corrida de concorrência + envio de e-mail duplicado (mesma família de bug da 75-352)
 **Epic:** 75 — CRM Trifold
 **Complexidade:** S (~2 pts — 1 rota editada, 1 constante nova, sem migration)
@@ -299,6 +302,20 @@ handoff para @qa e depois @devops.
   do early return + ausência de superfície pré-auth + `maxDuration`, com assert explícito do
   `logEventOnce` de `ANALYTICS_REPORT_RUN_DUPLICADA` no caminho da perdedora. Suíte inteira: 2911
   passed / 0 falhas; type-check OK; lint 0 errors.
+- 24/08 @devops: **push + PR #492 — InReview**. Branch `fix/75-367-relatorio-semanal-duplicado` criada a
+  partir de `origin/main` atualizada (a `main` local estava 10 commits atrás; Onda 0/1 do Epic 900 até
+  `7cc4f0ab` — esteira de CI + regra de ESLint `no-unscoped-admin-client` novas). Gate de pre-push rodado
+  contra essa base: `pnpm test` 245 arquivos / **2982 passed** + 6 expected-fail, `pnpm type-check` 8/8,
+  `pnpm lint` **0 errors** / 30 warnings (todas pré-existentes; `npx eslint` nos 3 arquivos tocados: saída
+  vazia — a regra nova não reclama do `createAdminClient()` desta rota, que já existia), `pnpm build`
+  5/5. Dois commits: `4b2a90bc` (código + story + gate) e `0c52e4b7` (memórias de agente sm/po/dev, que
+  são versionadas neste repo). **Concern C4 corrigido antes do commit:** a mitigação nas Dev Notes passou
+  a exigir `/api/analytics/report?range=7d` — o param foi confirmado em `analytics/report/route.ts`
+  (`sp.get("range")`) e em `lib/analytics/period.ts` (default `30d`). Os 4 concerns LOW ficaram
+  registrados no corpo do PR como follow-up, com destaque no C1 (falha de envio não gera evento em
+  `system_events`, só `console.error` — com 144h de intervalo mínimo, uma run vencedora que falhe passa
+  em silêncio e o próximo gatilho é 6 dias depois; recomendação: `ANALYTICS_REPORT_ENVIO_FALHOU` via
+  `logEventOnce` quando `errors > 0`).
 
 ## QA Results
 
