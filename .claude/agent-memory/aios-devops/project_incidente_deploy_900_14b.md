@@ -1,6 +1,6 @@
 ---
 name: incidente-deploy-900-14b
-description: Incidente de 2026-08-23/24 — produção sem deploy por ~37h; corrigido pela 900-14b (PR #493), previews verdes, aguardando merge do Marcos e deploy de produção READY
+description: Incidente de 2026-08-23/24 — produção sem deploy por ~37h; RESOLVIDO pela 900-14b (PR #493 mergeado, produção READY em 2026-08-24T14:08Z). Lições sobre .vercelignore e prova de deploy
 metadata:
   type: project
 ---
@@ -10,8 +10,9 @@ Produção parou em `dpl_5AtbXWNUYan2Hc7Bw1Dt7znatcTn` (SHA `a5517c56d`, 2026-08
 `fix/900-14b-snapshot-fora-do-deploy`, aberta 2026-08-24) tira o import de
 `packages/web/src/lib/supabase/org-scoped-admin.ts` para `docs/audits/schema-snapshot.json` e o
 substitui por codegen (`org-scoped-tables.generated.ts`, emitido por
-`scripts/generate-schema-snapshot.ts`). Previews de todos os commits da branch em `READY` — os
-primeiros builds verdes do projeto desde 23/08.
+`scripts/generate-schema-snapshot.ts`). **RESOLVIDO em 2026-08-24T14:08:16Z:** PR #493 mergeado por squash (`8a2e76d0`), deploy de produção
+`dpl_B3AF4nJBRTd6oyQUuigFHgyyGE2u` em `target: production` / `readyState: READY`. ~37h de parada e
+4 deploys de produção em ERROR.
 
 **Why:** o `.vercelignore` da **raiz** lista `docs`, `scripts`, `bin`, `.github`, `.aios-core`,
 `.claude`. Qualquer artefato nesses diretórios consumido por `packages/web` produz a mesma
@@ -22,11 +23,16 @@ passa — e **só** o deploy da Vercel reprova, com `TS2307 Cannot find module`,
 merge**, o que torna a classe de defeito capaz de parar produção sem nenhum sinal prévio.
 
 **How to apply:**
-- **Nada em `main` deploya enquanto o #493 não mergear.** O #492 (75-367) tem os três previews em
-  ERROR pelo mesmo motivo — parte de `main` e herda o import. Preview verde é condição
-  **necessária, não suficiente**: o incidente só fecha com `target=production` em `readyState=READY`
-  depois do merge. **O merge é decisão do Marcos** — ele foi explícito, e eu não mergeio.
-- Ficaram sem chegar a produção: 900-11, 900-14, 75-366 e o fix de mídia do WhatsApp.
+- **Preview verde é condição necessária, não suficiente** — o que fecha um incidente de deploy é
+  `target=production` + `readyState=READY`, e só depois do merge. Vale para o próximo incidente:
+  não declarar resolvido em cima de preview.
+- **A contraprova mais forte veio de graça, em produção.** O merge do PR #494 (escopo alheio) caiu
+  em `main` 2 minutos antes do meu e falhou com `Cannot find module '…/docs/audits/schema-snapshot.json'`;
+  o meu, 2 minutos depois, deu `Compiled successfully` + `Build Completed`. Mesma pipeline, mesmo
+  projeto, dois logs. Quando existir um par assim, capturá-lo: vale mais que qualquer reprodução local.
+- Destravou de uma vez o que estava preso em `main`: 900-11, 900-14, 75-366 e o fix de mídia do
+  WhatsApp. O PR #492 (75-367) tinha os 3 previews em ERROR pelo mesmo motivo e passa a poder
+  buildar — mas o merge dele é decisão separada do Marcos.
 - **Sem barreira contra reincidência**, por corte de escopo do usuário: não existe regra de lint
   contra import de `packages/web/src` para fora da árvore buildável, nem check de sincronia entre o
   `.generated.ts` e o snapshot. Estão como risco aceito (RA1/RA2) no gate da 900-14b e no backlog,
