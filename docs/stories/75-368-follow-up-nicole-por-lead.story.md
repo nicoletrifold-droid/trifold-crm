@@ -1,6 +1,8 @@
 # Story 75-368 — Ligar e desligar o follow-up da Nicole por lead, sem cegar o corretor
 
-**Status:** Done (local) — **@qa PASS** em 24/08/2026 após ciclo FAIL→fix→re-review. Aguarda @devops *push.
+**Status:** InReview — **PR [#500](https://github.com/nicoletrifold-droid/trifold-crm/pull/500) aberto**
+em 24/08/2026, 4 checks verdes (`type-check · lint · test`, `gate de tenancy`, `Vercel – trifold-crm`,
+`Vercel Preview Comments`), `MERGEABLE`. **NÃO mergeado de propósito** — ver "Ordem de deploy" abaixo.
 **Tipo:** Feature — controle operacional por lead
 **Epic:** 75 — CRM Trifold
 **Complexidade:** S (~3 pts — 1 migration aditiva, 1 condição no cron, 1 rota nova, 1 bloco na gaveta)
@@ -115,6 +117,23 @@ duas: uma controla a conversa ao vivo, a outra controla o cron. O @dev não pode
 > (verificado: zero ocorrências em `api/cron/followup/`). Ou seja, lead com conversa já assumida por um
 > humano continua recebendo follow-up da Nicole hoje. Isso é provavelmente o defeito que originou o
 > pedido, e é uma correção diferente desta story. Registrado no backlog para o Marcos decidir separado.
+
+## Ordem de deploy — BLOQUEIO ANTES DO MERGE
+
+**As migrations 240 e 241 precisam ser aplicadas ANTES do merge.**
+
+O cron passa a ler `nicole_followup_off_at` no `select` da consulta de leads. O merge dispara deploy de
+produção na Vercel. Se o código subir antes da 240, o `select` referencia coluna inexistente, o
+PostgREST devolve erro e **o cron de follow-up para de rodar por inteiro** — não só a parte nova.
+
+Sequência correta:
+
+1. aplicar `240_followup_nicole_por_lead.sql` e `241_capability_followup_nicole.sql` em produção
+   (`./scripts/sync-schema.sh`, ou Management API com PAT — ver `docs/deploy-flow.md`)
+2. conferir que a coluna existe
+3. só então mergear o PR #500
+
+Ambas têm `ROLLBACK PLAN` no rodapé. A 241 é idempotente por `ON CONFLICT DO NOTHING`.
 
 ## Riscos
 
@@ -345,3 +364,4 @@ conversa, `daysSinceLastContact === diasSemContatoPreliminar`, e o gate exige `>
 | 24/08/2026 | @po (Pax) | Validação de 10 pontos: **GO condicional, 7/10**. Lacunas corrigidas pelo @po: valor de negócio ausente (ponto 7), seção de Riscos inexistente (ponto 8), e AC5 com a rota não fixada (ponto 3 — `/api/leads/[id]/…` com reticências obrigaria o @dev a inventar o endpoint). Somada a investigação 6 (`conversations.is_ai_active` da Epic 63 já existe e cria risco de confusão de nomenclatura). Pós-correção **10/10** → Status Draft → Ready. |
 | 24/08/2026 | @dev (Dex) | Implementada. 6 tarefas concluídas, regressão completa verde (247 arquivos / 2997 testes). Dois desvios documentados: migration 241 para a capability nova (D1) e extração da decisão para função pura (D2). CodeRabbit não executado — binário indisponível no host. Status Ready → Ready for Review. |
 | 24/08/2026 | @qa (Quinn) | Gate FAIL por H1 (HIGH): a cascata da AC2 fazia lead sem conversa cair no `alert_broker`, quebrando invariante da 75-353 justamente no caso principal do pedido. Corrigido no mesmo ciclo (`temConversa` na função pura, 3 testes novos). AC3 verificada como intacta com prova. Re-review: **PASS** com 3 Concerns LOW. Status → Done (local), aguarda @devops. |
+| 24/08/2026 | @devops (Gage) | Pre-push completo: typecheck limpo, eslint 0 errors (29 warnings pré-existentes), 247 arquivos / 3000 testes, build 5/5 com a rota nova no manifesto. Corrigido de passagem: `.aios/handoffs/` não estava no `.gitignore` apesar da regra `agent-handoff.md` exigir, e 3 artefatos de runtime tinham entrado nos commits — removidos do índice. Branch enviada, PR #500 aberto, 4 checks verdes. **Merge retido**: migrations 240/241 precisam ser aplicadas antes, senão o deploy quebra o cron. |
