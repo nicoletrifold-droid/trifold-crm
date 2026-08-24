@@ -1,0 +1,28 @@
+handoff:
+  from_agent: "dev"
+  to_agent: "qa"
+  last_command: "develop"
+  story_context:
+    story_id: "75-368"
+    story_path: "docs/stories/75-368-follow-up-nicole-por-lead.story.md"
+    story_status: "Ready for Review"
+    current_task: "T1..T6 concluidas; aguarda qa-gate"
+    branch: "feature/75-368-follow-up-nicole-por-lead"
+    commit: "65d8ee0f"
+  decisions:
+    - "D1: migration 241 alem da 240 — capability leads.followup_nicole gerada por scripts/gen-capability-seed.mts (padrao das migs 226/227). 225 nao tocada."
+    - "D2: decisao extraida para funcao pura lib/followup/decidir-acao.ts e o cron LIGADO a ela (padrao 75-353)"
+    - "broker=false na capability de proposito: corretor dono autorizado por assigned_broker_id na rota, igual resume-ai"
+    - "capabilities.test.ts tinha lista fixa; chave nova adicionada (mesma manutencao de 226/227)"
+  files_modified:
+    - "supabase/migrations/240_followup_nicole_por_lead.sql (novo)"
+    - "supabase/migrations/241_capability_followup_nicole.sql (novo, gerado)"
+    - "packages/web/src/app/api/leads/[id]/followup-nicole/route.ts (novo)"
+    - "packages/web/src/lib/followup/decidir-acao.ts + .test.ts (novos)"
+    - "packages/web/src/app/api/cron/followup/route.ts (editado)"
+    - "packages/web/src/components/leads/lead-detail-drawer.tsx (editado)"
+    - "packages/web/src/lib/capabilities.ts + capabilities.test.ts (editados)"
+  blockers:
+    - "CodeRabbit NAO executado: binario ausente (config aponta p/ WSL, host e macOS). @qa decide se bloqueia ou vira Concern."
+  next_action: "@qa *qa-gate 75-368"
+  consumed: false

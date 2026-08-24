@@ -25,6 +25,23 @@ export interface EntradaDecisaoFollowUp {
   alertDays: number
   /** `leads.nicole_followup_off_at` — preenchida = desligado, null = ligado. */
   nicoleFollowUpOffAt: string | null
+  /**
+   * H1 da revisão do @qa (24/08). O ramo `alert_broker` SEMPRE exigiu conversa —
+   * `podeFollowUpSemConversa` só deixa passar lead sem conversa quando a etapa tem
+   * template E ele cruzou o takeover, e o comentário do cron declara: "o ramo de
+   * alert_broker continua exigindo conversa, para não virar rajada de notificação
+   * ao corretor".
+   *
+   * Até a 75-368 isso era garantido por CONSTRUÇÃO: lead sem conversa que passava
+   * do gate tinha dias >= takeover, então caía sempre no ramo da Nicole e nunca
+   * alcançava o alerta. A cascata desta story rompia essa garantia justamente no
+   * caso principal do pedido (lead novo de Meta Ads, sem conversa, desligado para
+   * alguém ligar na mão).
+   *
+   * Passando a conversa para cá, a invariante deixa de ser acidental e passa a ser
+   * checada — mais forte do que era antes.
+   */
+  temConversa: boolean
 }
 
 export function decidirAcaoDoFollowUp({
@@ -32,10 +49,13 @@ export function decidirAcaoDoFollowUp({
   nicoleTakeoverDays,
   alertDays,
   nicoleFollowUpOffAt,
+  temConversa,
 }: EntradaDecisaoFollowUp): AcaoDoFollowUp {
   const nicoleDesligada = nicoleFollowUpOffAt != null
 
   if (diasSemContato >= nicoleTakeoverDays && !nicoleDesligada) return "nicole"
-  if (diasSemContato >= alertDays) return "alerta"
+  // H1 — alerta exige conversa. Sem ela o silêncio é o comportamento correto, e é
+  // o que quem desligou o follow-up está esperando.
+  if (diasSemContato >= alertDays && temConversa) return "alerta"
   return "nada"
 }

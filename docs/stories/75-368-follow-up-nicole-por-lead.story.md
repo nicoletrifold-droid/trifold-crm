@@ -1,6 +1,6 @@
 # Story 75-368 — Ligar e desligar o follow-up da Nicole por lead, sem cegar o corretor
 
-**Status:** Ready for Review — implementada pelo @dev em 24/08/2026, aguarda @qa *qa-gate
+**Status:** Done (local) — **@qa PASS** em 24/08/2026 após ciclo FAIL→fix→re-review. Aguarda @devops *push.
 **Tipo:** Feature — controle operacional por lead
 **Epic:** 75 — CRM Trifold
 **Complexidade:** S (~3 pts — 1 migration aditiva, 1 condição no cron, 1 rota nova, 1 bloco na gaveta)
@@ -289,7 +289,53 @@ massa. O item do backlog aberto pelo @po (cron ignora `is_ai_active`) também **
 
 ## QA Results
 
-_A preencher pelo @qa._
+**Gate completo:** `docs/qa/qa-gate-75-368.md`
+
+**Decisão: FAIL → corrigido → PASS.** 3 Concerns LOW, nenhum bloqueia.
+
+### H1 (HIGH) — encontrado e corrigido no mesmo ciclo
+
+O ramo `alert_broker` sempre exigiu conversa: `podeFollowUpSemConversa` só libera lead sem conversa
+quando a etapa tem template E ele cruzou o takeover, e o comentário do cron declara que "o ramo de
+`alert_broker` continua exigindo conversa, para não virar rajada de notificação ao corretor". Até
+esta story a garantia era **estrutural**: lead sem conversa que passava do gate tinha
+`dias >= takeover` e caía sempre no ramo da Nicole.
+
+A cascata que a 75-368 projetou como virtude rompia essa invariante — e não num canto raro, mas no
+**caso principal do pedido**: lead novo de Meta Ads, sem conversa nenhuma, desligado para alguém
+ligar na mão. O efeito seria o oposto do esperado: quem desliga buscando silêncio passaria a receber
+alerta de lead parado. Confirmei que não havia guarda a jusante — `notifyBrokerOfStalledLead` não
+olha conversa.
+
+**A falha é da story, não da implementação.** A AC2 mandava preservar o `alert_broker` sem ressalvar
+o caso sem-conversa, e o @dev entregou exatamente o pedido. O acoplamento com a 75-353 passou por mim
+e pelo @po na validação.
+
+**Correção:** `temConversa` entra na função pura; sem conversa a decisão é `"nada"`. A invariante da
+75-353 deixa de ser acidental e passa a ser checada — mais forte do que era antes desta story.
+
+**AC3 verificada explicitamente:** a correção não muda nenhum caminho existente. Para lead sem
+conversa, `daysSinceLastContact === diasSemContatoPreliminar`, e o gate exige `>= takeover`; logo o
+`else if` era inalcançável nesse caso. Prova completa no arquivo do gate.
+
+### Concerns (3 · LOW · nenhum bloqueia)
+
+- **C1 — CodeRabbit não executado.** Binário ausente (config aponta para WSL, host é macOS). É
+  indisponibilidade de ferramenta, não review reprovado, e o @dev reportou em vez de omitir. Vale o
+  @devops registrar que o gate automatizado não cobre esta máquina.
+- **C2 — Migration 241 reemite o seed inteiro.** Delta contra a 227 traz também `leads.criar` para
+  `gerente-comercial`/`sdr` (mudança já aplicada pela 228). Inerte por `ON CONFLICT DO NOTHING`.
+- **C3 — `activities` grava mesmo no no-op.** Deliberado, espelha o `resume-ai`, `metadata.no_op`
+  distingue.
+
+### Validações independentes (rodadas por mim, sem cache)
+
+| Validação | Resultado |
+|---|---|
+| `tsc --noEmit` | limpo |
+| `vitest run` (regressão completa) | **247 arquivos / 3000 testes**, 6 expected-fail |
+| `decidir-acao.test.ts` | 10/10 |
+| Segurança (7º check) | `requireAuth`, `org_id` explícito na leitura **e** no UPDATE, `can()` no servidor com fallback para dono, body validado, sem SQL interpolado, sem segredo. Confirmei que a UI **não** é o único gate. |
 
 ## Change Log
 
@@ -298,3 +344,4 @@ _A preencher pelo @qa._
 | 24/08/2026 | @sm (River) | Draft criado a partir do pedido do Marcos, com desenho já fechado por ele (botão silencia só a Nicole, alerta do corretor preservado, coluna como data). |
 | 24/08/2026 | @po (Pax) | Validação de 10 pontos: **GO condicional, 7/10**. Lacunas corrigidas pelo @po: valor de negócio ausente (ponto 7), seção de Riscos inexistente (ponto 8), e AC5 com a rota não fixada (ponto 3 — `/api/leads/[id]/…` com reticências obrigaria o @dev a inventar o endpoint). Somada a investigação 6 (`conversations.is_ai_active` da Epic 63 já existe e cria risco de confusão de nomenclatura). Pós-correção **10/10** → Status Draft → Ready. |
 | 24/08/2026 | @dev (Dex) | Implementada. 6 tarefas concluídas, regressão completa verde (247 arquivos / 2997 testes). Dois desvios documentados: migration 241 para a capability nova (D1) e extração da decisão para função pura (D2). CodeRabbit não executado — binário indisponível no host. Status Ready → Ready for Review. |
+| 24/08/2026 | @qa (Quinn) | Gate FAIL por H1 (HIGH): a cascata da AC2 fazia lead sem conversa cair no `alert_broker`, quebrando invariante da 75-353 justamente no caso principal do pedido. Corrigido no mesmo ciclo (`temConversa` na função pura, 3 testes novos). AC3 verificada como intacta com prova. Re-review: **PASS** com 3 Concerns LOW. Status → Done (local), aguarda @devops. |

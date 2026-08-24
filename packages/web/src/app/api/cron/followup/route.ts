@@ -374,6 +374,9 @@ export async function GET(request: NextRequest) {
         alertDays: rule.alert_days,
         nicoleFollowUpOffAt:
           (lead as { nicole_followup_off_at?: string | null }).nicole_followup_off_at ?? null,
+        // H1 (revisao @qa) — o ramo do alerta sempre exigiu conversa; ate a 75-368
+        // isso era garantido por construcao. Ver decidir-acao.ts.
+        temConversa: !!conversationId,
       })
 
       // Check nicole_takeover_days first (more severe)
