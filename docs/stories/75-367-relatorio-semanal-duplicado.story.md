@@ -1,9 +1,10 @@
 # Story 75-367 — O relatório semanal chegou duas vezes porque a trava da 75-352 não cobre este cron
 
-**Status:** InReview — gate PASS · **PR [#492](https://github.com/nicoletrifold-droid/trifold-crm/pull/492)**
-aberto pelo @devops 24/08 (branch `fix/75-367-relatorio-semanal-duplicado`, commit `4b2a90bc`) ·
-testes/type-check/lint/build verdes · sem migration. Vira `Done` quando o PR for mergeado e o deploy de
-produção estiver confirmado.
+**Status:** Done — **PR [#492](https://github.com/nicoletrifold-droid/trifold-crm/pull/492) squash-merged
+em `901e366e`** (2026-08-24T14:47:18Z) · deploy de produção `dpl_6Q8UfKJKcLodHgjHhkf7WrzuPjuQ`,
+`target: production` / `readyState: READY`, SHA `901e366efb3d`, pronto em **2026-08-24T14:49:09Z** ·
+`/api/cron/analytics-report` responde 401 anônimo em produção · sem migration. A trava só é exercitada
+de verdade no agendamento de **domingo 30/08 02:00 UTC** — é nele que se confirma "um e-mail só".
 **Tipo:** Corrida de concorrência + envio de e-mail duplicado (mesma família de bug da 75-352)
 **Epic:** 75 — CRM Trifold
 **Complexidade:** S (~2 pts — 1 rota editada, 1 constante nova, sem migration)
@@ -381,6 +382,25 @@ tocados (`grep analytics-report` na saída do lint: 0 linhas).
   recibo; sucesso assere ausência do evento; ordenação travada por um array único de escritas tardias).
   Validações: 9 passed nos tocados, 149 passed em cron+logger, `tsc --noEmit` 0 erros, lint 0 errors.
   C2/C3 seguem abertos como follow-up. Sem `git push` — handoff para @devops.
+- 24/08 @devops: **merge + produção READY — Done**. Commit do follow-up C1: `a9330096` (código + testes +
+  story); memórias de dev/qa em `66f8dba9`. A `main` foi trazida para a branch por **merge** (`03b347a4`),
+  não rebase: o merge final é squash — o commit de merge não sobrevive na `main` — e um rebase exigiria
+  force-push, orfanando os previews e comentários já citados no PR. Conflito só nos índices append-only
+  `.claude/agent-memory/aios-{dev,qa}/MEMORY.md`, resolvido mantendo os dois lados. Essa integração é o
+  que destrava o preview: ela traz o fix da 900-14b (PR #493), e os 3 previews em ERROR desta branch eram
+  herança daquele defeito, não da 75-367. Pre-push gate **sem cache do turbo**: `vitest run` 246 arquivos
+  / **2990 passed** + 6 expected-fail · `tsc --noEmit` direto **EXIT=0, zero linhas** · `npx eslint .`
+  **0 errors** / 30 warnings (pré-existentes) · `npx turbo build --force` **5/5 successful, 0 cached**,
+  `Compiled successfully` · `pnpm gate:tenancy` 83 FAIL com catraca **delta +0** (o churn de timestamp em
+  `gate-tenancy-report.json` foi descartado, é ruído fora do escopo). Preview `dpl_CUFMW1qNW1dqMZdqLZLBn724Vuuc`
+  **READY** com SHA `03b347a405ff` = `headRefOid` — evidência registrada em comentário do PR, e não aqui,
+  porque anotar no arquivo da story move o HEAD e invalida o próprio registro. Os 4 checks do PR verdes
+  (`type-check · lint · test`, `gate de tenancy`, `Vercel – trifold-crm`, `Vercel Preview Comments`),
+  `mergeStateStatus: CLEAN`. Squash-merge conforme convenção do repo, branch remota preservada (o repo não
+  apaga branch mergeada — 103 remotas). Produção confirmada **depois** do merge, que é o que fecha deploy:
+  `dpl_6Q8UfKJKcLodHgjHhkf7WrzuPjuQ` / `901e366efb3d` / READY às 14:49:09Z, 1m46s de build. C5 e C6 seguem
+  no backlog. Esta virada de status vem por branch + PR (`docs/75-367-done`), não por commit direto na
+  `main`.
 
 ## QA Results
 
