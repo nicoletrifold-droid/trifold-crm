@@ -38,6 +38,9 @@ supabase/.temp/
 # Lockfile (project uses pnpm)
 package-lock.json
 .aios/install-log.txt
+# Artefatos de handoff entre agentes AIOS — runtime, conforme
+# .claude/rules/agent-handoff.md ("runtime, gitignored").
+.aios/handoffs/
 .vercel
 
 # Environment & Secrets (AIOS)
