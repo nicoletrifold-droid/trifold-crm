@@ -1,6 +1,7 @@
 # SM Agent Memory — River
 
 ## Memory Index (structured files)
+- [Epic 900 — SaaS Multi-Tenant / Isolamento](project_epic900.md) — 900-1..900-15; hotfix 900-15 (2026-08-24): docs/ fora do build Vercel travava produção; codegen preserva lista derivada de snapshot
 - [Epic 51 — Google Ads Marketing API](project_epic51.md) — 5 stories criadas; PM review aplicado; decisões técnicas cravadas; pronto para @po validar
 - [Epic 52 — Agente CRM Read-Only](project_epic52.md) — 52-1/52-4 em Review (QA CONCERNS, runtime pendente); 52-2 v0.5 Ready (contrato sincronizado: funil=RPC p_days, log_pii_access 5 args, NULL spend=sem midia)
 
