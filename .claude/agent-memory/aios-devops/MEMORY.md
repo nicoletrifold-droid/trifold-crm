@@ -1,5 +1,4 @@
 - [Vercel project setup](project_vercel_setup.md) — rootDirectory is `packages/web`, not repo root; affects .vercelignore placement
-- [Vercel prod quebrada desde 900-14](project_vercel_prod_quebrada_schema_snapshot.md) — import de `docs/audits/schema-snapshot.json` vs `.vercelignore`; nada de main deploya desde 2026-08-23
 - [Quality gate signals for trifold-crm](feedback_quality_gate_signals.md) — `next build` is canonical; lint/tsc standalone produce false positives in Next 16
 - [Meta subscription state (prod)](project_meta_subscription.md) — leadgen subscription validada 2026-06-08; verify token sufixo `...a387d2f`
 - [Migration 074 — leads.metadata JSONB](project_leads_metadata_migration_074.md) — bloqueio root-cause attribution Meta; PR #5 (draft) com idempotencia
@@ -10,3 +9,6 @@
 - [Nunca add -A; escanear segredos](feedback_no_add_all_secret_leak.md) — service_role key hardcoded quase vazou via add -A; GitHub Push Protection bloqueou; sempre grep por segredos antes do push
 - [Incidente de deploy 900-14b](project_incidente_deploy_900_14b.md) — RESOLVIDO 24/08 14:08Z (PR #493 + prod READY); preview verde nao fecha incidente, so target=production
 - [Transplantar hotfix de branch alheia](feedback_transplantar_hotfix_de_branch_alheia.md) — patch 3-way, nunca stash pop; unset-upstream ao criar branch de origin/main
+- [Incidente de deploy 900-14b](project_incidente_deploy_900_14b.md) — RESOLVIDO 2026-08-24; `.vercelignore` x import fora de `packages/web`; preview verde não fecha deploy
+- [Main entra na branch por merge, não rebase](feedback_merge_main_na_branch_nao_rebase.md) — repo é squash-merge; rebase force-pusha e orfana preview/comentários do PR
+- [Virada de status vai por branch + PR](feedback_status_story_via_branch_pr.md) — nem commit de doc vai direto na `main`; convenção `docs/<story>-done`
