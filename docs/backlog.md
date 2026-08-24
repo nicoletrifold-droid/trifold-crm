@@ -486,3 +486,47 @@ Fora do escopo da 75-368 por decisão de escopo mínimo — a 75-368 entrega o b
 cobre um caso que este item não cobre (lead sem conversa nenhuma). Os dois são complementares.
 
 **Aguarda decisão do Marcos.**
+
+## [@devops 24/08/2026] CodeRabbit está inativo, mas os artefatos dizem que é gate obrigatório
+
+**Origem:** Story 75-368 (o `@dev` reportou que não conseguiu rodar). **Prioridade sugerida:** média —
+não é o que está falhando hoje, mas é uma mentira documentada. **Complexidade:** XS para acertar os
+documentos; a instalação depende de assinatura.
+
+### O que foi verificado (não repetir a investigação)
+
+- **O app do CodeRabbit não está instalado no repositório.** Conferido nos 4 PRs mais recentes
+  (#497, #496, #495, #492): **zero** revisões dele em qualquer um. O PR #500 desta story também
+  não recebeu nenhuma.
+- **`.coderabbit.yaml` existe e está bem configurado** — `auto_review.enabled: true`,
+  `base_branches: [main]`, `request_changes_workflow: true`. Configuração não instala nada; o arquivo
+  fica no repositório aparentando que o serviço está ativo.
+- **Nenhum workflow da CI chama CodeRabbit.** `.github/workflows/` tem só o `ci.yml`.
+- **O CLI também não roda nesta máquina.** As definições de `@dev`, `@qa` e `@devops` apontam para
+  `~/.local/bin/coderabbit` via `wsl bash -c`, e o host é macOS. O CodeRabbit tem CLI para Mac — a
+  configuração dos agentes é que está desatualizada.
+
+### Por que isso importa mais do que parece
+
+**124 stories** têm seção "CodeRabbit Integration" preenchida, e três definições de agente listam o
+CodeRabbit como gate obrigatório antes de commit, de review e de PR. Quem lê esses artefatos conclui
+que houve revisão automatizada. Na 75-368 deu certo porque o `@dev` reportou honestamente que não
+rodou — mas isso dependeu de o agente ser honesto, não do sistema.
+
+A camada de revisão em si **não é o que está falhando**: nesta mesma story, sem CodeRabbit, o `@po`
+achou 3 lacunas no draft e o `@qa` achou um defeito HIGH real, além da CI com type-check, lint, testes
+e gate de tenancy. CodeRabbit seria uma quarta camada útil, não a primeira.
+
+### Opções
+
+1. **Instalar o app no GitHub** (recomendado) — revisa todo PR automaticamente, independe de máquina e
+   de alguém lembrar de rodar, e o `.coderabbit.yaml` que já existe passa a valer. Produto pago para
+   repositório privado.
+2. **Instalar o CLI no macOS** e corrigir as definições dos agentes (hoje apontam para WSL) — faz os
+   passos locais funcionarem, mas só protege quando alguém executa.
+3. **Não instalar e marcar como inativo** nos três agentes e no `.coderabbit.yaml` — custo zero, e
+   pelo menos os documentos param de afirmar o que não acontece.
+
+**O que não manter:** o estado atual, em que o documento diz uma coisa e a realidade é outra.
+
+**Aguarda decisão do Marcos** (a opção 1 e a 2 envolvem assinatura; a 3 não).
