@@ -12,7 +12,7 @@
   > `packages/web/eslint.config.mjs`. Manter o hotfix como `900-15` invalidaria todos eles — em
   > especial o comentário no código, que passaria a apontar para uma story que **não** promove a
   > regra. O sufixo `b` segue a convenção do próprio epic (`900-27a/b`, `900-42a/b`).
-- **Status:** Ready for Review — implementada pelo @dev em 2026-08-24. **AC1-AC4 fechados.** **AC5 e AC6 fora de escopo** por corte do usuário em 2026-08-24 (ver Dev Agent Record → "Corte de escopo"). **AC7 pendente: preview deployment só existe após o push, que é do @devops.**
+- **Status:** InReview — gate PASS, branch `fix/900-14b-snapshot-fora-do-deploy` pushada e **PR #493** aberto pelo @devops em 2026-08-24. **AC1-AC4 fechados** (@dev/@qa). **AC5 e AC6 fora de escopo** por corte do usuário em 2026-08-24 (ver Dev Agent Record → "Corte de escopo"). **AC7 FECHADO:** preview `dpl_CnrxHUUK454pMLomtY4CQ2NCtv2k` em `readyState: READY`, SHA `3add9cf73ff7daf482747e60f55ca02b14dd5835` = HEAD do PR #493. Vira **Done** quando o PR for mergeado e o deploy de **produção** estiver confirmado `READY` — convenção deste repo, e aqui é a condição que encerra o incidente.
 - **Priority:** P0 — HOTFIX. Produção não recebe deploy desde 2026-08-23 12:46.
 - **Complexity:** S
 - **Created:** 2026-08-24
@@ -179,7 +179,7 @@ o build,
   **A regra `aios/no-unscoped-admin-client` continua em `warn`** — o `error` deste AC é da regra de
   import, e só dela. Promover a outra é da `900-15`.
 
-- [ ] **AC7 — Provado no build da Vercel, não só local:** o defeito só aparecia lá — a prova tem
+- [x] **AC7 — Provado no build da Vercel, não só local:** o defeito só aparecia lá — a prova tem
   que ser lá. O PR desta story precisa gerar um preview deployment da Vercel com status `READY`
   (verificável via API/dashboard da Vercel, o mesmo canal usado para diagnosticar o incidente).
   `pnpm build`, `pnpm lint` e `pnpm test` passando localmente **não** fecham este AC sozinhos.
@@ -205,7 +205,7 @@ o build,
   2026-08-24 (ver Dev Agent Record → "Corte de escopo")
 - [x] **T5** — Rodar `pnpm gate:tenancy:snapshot` uma vez para gerar o `.generated.ts` inicial e
   commitá-lo (AC2, AC3)
-- [ ] **T6** — Abrir o PR e confirmar `READY` no preview deployment da Vercel (AC7)
+- [x] **T6** — Abrir o PR e confirmar `READY` no preview deployment da Vercel (AC7) — **PR #493**, preview `dpl_CnrxHUUK454pMLomtY4CQ2NCtv2k` `READY`
 
 ---
 
@@ -462,10 +462,53 @@ tsc --noEmit → exit=0
 `TS2307 Cannot find module` é a mesma classe de erro do log do `dpl_98TWKtMVwocWNdim1aAyhTM1VWe7`.
 `docs/` foi restaurado ao fim (conferido por `git status`).
 
-### AC7 — PENDENTE, é do @devops
+### AC7 — FECHADO pelo @devops em 2026-08-24
 
-Não fecha aqui: o preview deployment só existe depois do push, e push/PR são exclusivos do
-`@devops`. O que já está medido, lido da API da Vercel (mesmo canal exigido pelo AC):
+Fechado pelo `@devops` em 2026-08-24, depois do push. **PR #493.**
+
+**Evidência exigida pelo AC (`GET /v13/deployments/dpl_CnrxHUUK454pMLomtY4CQ2NCtv2k`):**
+```json
+{ "uid": "dpl_CnrxHUUK454pMLomtY4CQ2NCtv2k", "readyState": "READY", "target": null,
+  "url": "trifold-js3vlsnqs-trifold-s-projects.vercel.app",
+  "sha": "3add9cf73ff7daf482747e60f55ca02b14dd5835",
+  "ref": "fix/900-14b-snapshot-fora-do-deploy",
+  "createdAt": "2026-08-24T13:32:09.258Z", "ready": "2026-08-24T13:33:58.704Z" }
+```
+
+| item do AC | valor |
+|---|---|
+| (a) `uid` | `dpl_CnrxHUUK454pMLomtY4CQ2NCtv2k` |
+| (b) `readyState` lido da API | **`READY`** (`ready` em 2026-08-24T13:33:58.704Z, ~1m50s de build) |
+| (c) SHA do build | `3add9cf73ff7daf482747e60f55ca02b14dd5835` — **igual ao HEAD do PR #493** (`git rev-parse HEAD` = mesmo valor) |
+| (d) nº do PR | **#493** |
+
+**`org-scoped-tables.generated.ts` chegou ao build (B1 do gate).** A Vercel *clona* o repo — não há
+árvore de arquivos enviada para inspecionar (`GET /v7/deployments/…/files` responde
+`not_found: File tree not found`), então a prova é a cadeia de custódia, não um nome de arquivo no
+log:
+
+1. o log abre com `Cloning github.com/nicoletrifold-droid/trifold-crm (Branch:
+   fix/900-14b-snapshot-fora-do-deploy, Commit: 3add9cf)` — o build saiu exatamente deste commit;
+2. `GET /repos/…/contents/packages/web/src/lib/supabase/org-scoped-tables.generated.ts?ref=3add9cf7…`
+   devolve `size: 3321`, blob `76e438eb1f7a013ef6afde83e0f4a1a6047cfd2b` — o arquivo **está** nesse
+   commit, com os mesmos 3321 bytes do local;
+3. `org-scoped-admin.ts` importa `./org-scoped-tables.generated` e o `next build` type-checa com
+   `ignoreBuildErrors: false` → `✓ Compiled successfully in 19.9s`, `Build Completed in
+   /vercel/output [1m]`. Ausente o arquivo, o build teria reprovado com o mesmo `TS2307` do
+   incidente. Ocorrências de `Cannot find module` e `TS2307` nas 691 linhas de log: **zero**.
+
+**Contraprova extra, não pedida pelo AC e forte:** os três previews do PR #492
+(`dpl_83QUfHAQGEP11UqMbuPJzwx7rU8q`, `dpl_4ha9CAJWb4VJgGLpkK6RPe7M9qWD`,
+`dpl_6RSkEsvwHqkEVykT42iD7aEn4up4`, SHAs `9e985396b`/`5b36df4f8`/`0c52e4b7b`) estão **todos em
+ERROR** — aquela branch parte de `main` e carrega o import defeituoso. Mesmo projeto, mesma API,
+mesmo dia: o único preview verde é o desta branch. É a demonstração direta de que o PR #492 depende
+deste, e de que separar as branches era necessário.
+
+**O que ainda NÃO está fechado:** o incidente. Preview `READY` é condição necessária, não
+suficiente — falta um deployment `target=production` em `readyState=READY` depois do merge, e o
+merge é decisão do Marcos.
+
+O que já estava medido antes do push, lido da mesma API (mesmo canal exigido pelo AC):
 
 **Contraprova (`GET /v13/deployments/dpl_98TWKtMVwocWNdim1aAyhTM1VWe7`):**
 ```json
@@ -486,10 +529,10 @@ Não fecha aqui: o preview deployment só existe depois do push, e push/PR são 
 Confirma o diagnóstico da story: a série de ERROR começa exatamente no deploy do PR da `900-14`, e
 produção está parada desde `a5517c56d` (15:46 UTC = 12:46 BRT de 23/08).
 
-**Falta preencher, depois do push (@devops):** (a) `uid` do preview (`dpl_…`); (b) `readyState:
-READY` lido da API; (c) SHA do build **igual ao HEAD do PR**; (d) nº do PR. E, para fechar o
-incidente de verdade — o que o AC7 explicitamente não cobre —, um deployment de **produção**
-`READY` depois do merge.
+~~**Falta preencher, depois do push (@devops):** (a) `uid` do preview (`dpl_…`); (b) `readyState:
+READY` lido da API; (c) SHA do build **igual ao HEAD do PR**; (d) nº do PR.~~ — preenchido acima.
+Segue faltando, e é o que encerra o incidente: um deployment de **produção** `READY` depois do
+merge.
 
 ### ⚠️ Dois avisos para o @devops antes de commitar
 
@@ -798,3 +841,4 @@ produção `READY` pós-merge para fechar o incidente.
 | 2026-08-24 | @po (Pax) | Validação `*validate-story-draft`: **GO 9/10**, Status → Ready. **ID renumerado `900-15` → `900-14b`** (colisão com a story de migração das 129 rotas, referenciada no epic §9.3, no R1, na allowlist, no QA doc, na `900-14` e no comentário de `eslint.config.mjs`). Correções: `~20 tabelas` → **92 de 120** (medido); AC3 ganhou prova de paridade item a item (os 17 testes existentes **não** cobrem o conteúdo da lista, só 3 nomes); AC5 fixado no job **bloqueante** `static` (o `tenancy-gate` é `continue-on-error`) + exigência de uma única função de emissão + limite explícito (consistência ≠ frescor); AC6 com evidência de ocorrência única, alvo = destino do import (não profundidade de `../`) e guarda de que `aios/no-unscoped-admin-client` **continua `warn`**; AC7 com evidência não-falsificável (`dpl_`, `readyState`, SHA = HEAD); Scope OUT + Dev Notes com a lacuna de frescor JSON↔banco (pré-existente → backlog) e o guard de `argv` do gerador; adicionadas File List, Dev Agent Record, QA Results e Change Log |
 | 2026-08-24 | @dev (Dex) | `*develop` (YOLO): codegen implementado — `renderOrgScopedTablesModule()` única, usada pelo gerador e pelo check; import de `docs/` removido de `org-scoped-admin.ts`; `check:org-scoped-tables-sync` (sem banco, com `--write`) plugado no job **bloqueante** `static`; `no-restricted-imports` em `error` mirando o destino do import; `scripts/org-scoped-tables-emissao.test.ts` novo (7 casos) fixando determinismo e a igualdade módulo↔snapshot. **AC1-AC6 fechados** com as provas exigidas (paridade 92/120, diff vazio nos dois sentidos; regra de lint em `error` + `pnpm lint` limpo; 5 cenários de falha do check medidos sem PAT). type-check · lint (0 errors) · 2989 testes · build todos verdes; reproduzida localmente a condição da Vercel (`docs/` ausente → `TS2307` com o import antigo, verde sem ele). **AC7 pendente por desenho** — preview só existe após push (@devops). Status → Ready for Review |
 | 2026-08-24 | @dev (Dex) | **Corte de escopo pedido pelo usuário — decisão do usuário, não falha técnica.** A story foi reduzida ao mínimo que destrava o build da Vercel. **AC5 (check de sincronia no CI) e AC6 (regra de lint) saíram do escopo**, junto com T3/T4: `.github/workflows/ci.yml`, `packages/web/eslint.config.mjs` e `package.json` **revertidos**; `scripts/check-org-scoped-tables-sync.ts` e `scripts/org-scoped-tables-emissao.test.ts` **apagados**. Ficou o fix: `org-scoped-tables.generated.ts` (92 nomes) + `org-scoped-admin.ts` importando o módulo + `generate-schema-snapshot.ts` emitindo os dois artefatos da mesma captura. Comentários e cabeçalho do arquivo gerado **reescritos**: citavam `pnpm check:org-scoped-tables-sync` como verificação bloqueante do CI, que não existe mais — agora declaram a ausência de check como **limitação conhecida**. Template e arquivo gerado provados **byte-idênticos** (3321 bytes, 92 de 120). Revalidado: type-check 8/8 · lint 0 errors/30 warnings · **245 arquivos / 2982 passed / 6 expected fail** (caiu 7 casos com o teste apagado) · build 5/5 · `org-scoped-admin.test.ts` 17 passed sem alteração · `tsc --noEmit` com `docs/` ausente **exit 0** (e `TS2307` com o import antigo). Evidência do AC5/AC6 preservada no Dev Agent Record marcada como HISTÓRICO. Status segue Ready for Review; **AC7 pendente** (@devops) |
+| 2026-08-24 | @devops (Gage) | `*push`. **Branch separada do PR #492 antes de qualquer commit** (B2 do gate): o hotfix estava sem commit por cima de `fix/75-367-relatorio-semanal-duplicado`. Nova branch `fix/900-14b-snapshot-fora-do-deploy` criada de `origin/main` (`7cc4f0ab`) e o delta uncommitted transplantado por patch 3-way — os 3 `MEMORY.md` que o 75-367 também tocou foram resolvidos linha a linha para **não** arrastar entradas alheias. Resultado conferido: 2 commits, 0 commits do 75-367, `git diff origin/main..HEAD` = as mesmas 131 inserções/6 remoções do tree original. **B1 conferido por `git show`:** `org-scoped-tables.generated.ts` está no commit `eacfd94a`, sha256 `b2a45532432e08bc5e20f716877f05843186fcbae42668d7d3268c44523f57f6` — idêntico ao medido pelo @qa. Pre-push sem cache do turbo: `turbo lint --force` 8/8 0 cached (0 errors / 30 warnings pré-existentes) · `turbo type-check --force` 8/8 **0 cached** · `tsc --noEmit` exit 0 · `vitest run` 244 arquivos / **2975 passed** / 6 expected fail · `turbo build --force` **5/5 0 cached** 1m38s · zero imports de `packages/web/src` para `docs/` · scan de segredos limpo. A diferença de 245/2982 (gate do @qa) para 244/2975 é a separação de branch, não regressão: `analytics-report/route.test.ts` (7 casos) não existe em `main`. Commits `eacfd94a` (fix) e `3add9cf7` (`docs(memory)` + P1 no backlog). **PR #493** aberto, com o corte de escopo declarado no corpo e a dependência do #492. **AC7 FECHADO:** preview `dpl_CnrxHUUK454pMLomtY4CQ2NCtv2k` `readyState: READY`, SHA `3add9cf73ff7daf482747e60f55ca02b14dd5835` = HEAD do PR. Status Ready for Review → **InReview**; vira Done com o PR mergeado + produção `READY` — o merge é decisão do Marcos, nada foi mergeado. |
