@@ -8,6 +8,7 @@ import {
   INTERVALO_MINIMO_FOLLOWUP_SEGUNDOS,
 } from "@web/lib/cron/claim-run"
 import { claimFollowUp, fecharClaim } from "@web/lib/followup/claim"
+import { decidirAcaoDoFollowUp } from "@web/lib/followup/decidir-acao"
 import {
   decidirTemplateDoFollowUp,
   podeFollowUpSemConversa,
@@ -203,7 +204,7 @@ export async function GET(request: NextRequest) {
       .from("leads")
       .select(
         `id, name, phone, org_id, assigned_broker_id, property_interest_id, last_contact_at,
-         marketing_optout_at, created_at,
+         marketing_optout_at, nicole_followup_off_at, created_at,
          properties:property_interest_id(name)`
       )
       .eq("org_id", rule.org_id)
@@ -356,8 +357,27 @@ export async function GET(request: NextRequest) {
         (lead as { assigned_broker_id?: string | null }).assigned_broker_id ?? null
       )
 
+      // Story 75-368 — a equipe pode desligar o follow-up da Nicole POR LEAD.
+      //
+      // POR QUE a decisao mora AQUI e nao num `.eq()` na consulta de leads la em
+      // cima: aquela consulta alimenta os DOIS ramos deste if/else. Filtrar nela
+      // mataria tambem o `alert_broker`, e quem desligou a Nicole foi quem vai
+      // atender na mao — e exatamente quem mais precisa do lembrete. Negando aqui,
+      // o lead deixa de entrar no ramo da Nicole e CASCATEIA para o `else if`
+      // abaixo. Nao "simplifique" isto para a query.
+      //
+      // A regra em si vive numa funcao pura, testada sem banco (mesmo desenho da
+      // `decidirTemplateDoFollowUp`, Story 75-353).
+      const acao = decidirAcaoDoFollowUp({
+        diasSemContato: daysSinceLastContact,
+        nicoleTakeoverDays: rule.nicole_takeover_days,
+        alertDays: rule.alert_days,
+        nicoleFollowUpOffAt:
+          (lead as { nicole_followup_off_at?: string | null }).nicole_followup_off_at ?? null,
+      })
+
       // Check nicole_takeover_days first (more severe)
-      if (daysSinceLastContact >= rule.nicole_takeover_days) {
+      if (acao === "nicole") {
         // Story 75-352 — a linha nasce ANTES do envio. O `cooldownSet` acima é só
         // um pré-filtro em lote (barato, evita 800 RPCs); quem decide é este claim,
         // que é atômico por lead. `blockingTypes: null` preserva a semântica do
@@ -570,7 +590,7 @@ export async function GET(request: NextRequest) {
         if (result.sent) messagesSent++
         else messagesSkipped++
         if (result.via === "template" && result.sent) entregasPorTemplate++
-      } else if (daysSinceLastContact >= rule.alert_days) {
+      } else if (acao === "alerta") {
         // Story 75-352 — mesmo claim atômico do outro ramo, e aqui ele importa
         // duas vezes: a run duplicada gerou 21 pares de `alert_broker` no mesmo
         // dia, e a guarda anti-spam do `notifyBrokerOfStalledLead` decide olhando

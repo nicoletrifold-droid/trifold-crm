@@ -192,6 +192,7 @@ describe("enforced — regra anti-'botão que mente' (75-301, AC1)", () => {
         "leads.criar",
         "leads.criar_para_outro",
         "leads.editar_qualquer",
+        "leads.followup_nicole",
         "leads.apagar",
         "leads.reativar",
         "leads.atribuir",

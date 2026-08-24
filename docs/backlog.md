@@ -472,3 +472,17 @@ decisão novo, e por isso não entrou aqui.
 
 **Verificado em:** 2026-06-17
 **Resolução:** Falso positivo. O diretório tinha 696K (10 itens) e o disco ~29 GiB livres. `CLAUDE_CODE_TMPDIR` em default (unset). Nenhuma limpeza necessária — `sudo rm -rf` desaconselhado por ser desnecessário e arriscado. Item fechado.
+
+## [PO 24/08/2026] Follow-up da Nicole ignora o handoff da conversa
+
+**Origem:** validação da Story 75-368 (@po). **Prioridade sugerida:** média. **Complexidade:** XS.
+
+O cron `/api/cron/followup` **não olha** `conversations.is_ai_active` — verificado, zero ocorrências em
+`packages/web/src/app/api/cron/followup/`. Consequência: quando o corretor assume a conversa via
+`handoff/route.ts` (Epic 63), a Nicole para de falar **na conversa**, mas continua mandando follow-up
+pelo cron. É provavelmente o defeito que originou o pedido da 75-368.
+
+Fora do escopo da 75-368 por decisão de escopo mínimo — a 75-368 entrega o botão explícito por lead, que
+cobre um caso que este item não cobre (lead sem conversa nenhuma). Os dois são complementares.
+
+**Aguarda decisão do Marcos.**
