@@ -146,6 +146,8 @@ export async function POST(
   // Envio via WhatsApp Cloud API
   let sent = false
   let sendError: string | undefined
+  /** Corpo cru da resposta da Meta — vai para o log, nunca para a resposta da API. */
+  let sendErrorDetalhe: string | undefined
 
   if (channel === "whatsapp") {
     const { data: waConfig } = await admin
@@ -191,12 +193,55 @@ export async function POST(
           }
         )
         sent = res.ok
-        if (!res.ok) sendError = `HTTP_${res.status}`
+        if (!res.ok) {
+          // O CORPO da resposta é o que importa aqui, não só o status.
+          //
+          // Antes esta linha guardava apenas `HTTP_${res.status}`, e o corpo era descartado.
+          // Só que é no corpo que vem o código de causa da Meta — em particular o
+          // `131053 Media upload error`, que acompanha HTTP 429 quando a Cloud API não
+          // consegue BAIXAR o arquivo da nossa URL. Esse erro é conhecido por ser causado por
+          // rate limit aplicado ao ASN do provedor de hospedagem (não à nossa conta), o que o
+          // torna intermitente e dependente do tráfego agregado de todos os clientes do mesmo
+          // provedor. Sem o corpo, "HTTP_429" não distingue isso de qualquer outro 429.
+          //
+          // Ver Story 900-12b: a saída definitiva é enviar por `media_id` (upload do binário)
+          // em vez de `link`, o que remove a Meta da posição de ter que alcançar nosso Storage.
+          const corpo = await res.text().catch(() => "")
+          // `sendError` continua CURTO porque é devolvido na resposta da API (o frontend o
+          // consome); o corpo cru vai só para o log, que é onde ele serve para diagnóstico.
+          sendError = `HTTP_${res.status}`
+          sendErrorDetalhe = `HTTP_${res.status} ${corpo}`.slice(0, 500)
+        }
       } catch {
         sendError = "TIMEOUT"
       }
     } else {
       sendError = "WHATSAPP_CONFIG_MISSING"
+    }
+
+    // Envio de MÍDIA passa a ser registrado.
+    //
+    // Até aqui, `whatsapp_send_log` só continha templates (2.341 registros, todos com
+    // `template` preenchido). O caminho de mídia não gravava nada — então uma falha de envio
+    // era literalmente invisível: a mensagem entrava em `messages` de qualquer jeito e o
+    // sintoma para o usuário era "aparece no chat do CRM, mas o cliente nunca recebeu",
+    // sem log, sem código de causa e sem como diagnosticar depois.
+    //
+    // `category: "service"` porque mídia enviada pelo corretor responde dentro da janela de
+    // 24h — não é template. `template: null` é aceito pelo schema.
+    try {
+      await db.from("whatsapp_send_log").insert({
+        org_id: appUser.org_id,
+        template: null,
+        category: "service",
+        recipient_type: "lead",
+        to_phone: lead.phone,
+        status: sent ? "sent" : "failed",
+        error: sendErrorDetalhe ?? sendError ?? null,
+      })
+    } catch {
+      // Observabilidade nunca derruba o envio: falhar ao registrar é prejuízo pequeno,
+      // impedir a mensagem de sair é prejuízo grande.
     }
   }
 
