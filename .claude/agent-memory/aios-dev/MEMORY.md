@@ -3,6 +3,8 @@
 ## Index
 - [Trifold CRM — module conventions](project_trifold_crm.md) — Next.js project at packages/web, API auth + schema patterns + script naming
 - [Trifold Epic 35 — Permissions Architecture](project_trifold_epic35_permissions.md) — server-layer permissions module at packages/web/src/lib/permissions.ts consumed by stories 35-3/35-4/35-5
+- [Crons invocados duas vezes](project_cron_gatilho_duplicado.md) — gatilho duplicado externo ao repo; corrige-se com trava no banco (migration 234), nunca investigando
+- [Concern de gate = follow-up, não AC novo](feedback_concern_gate_como_followup.md) — concern aprovado depois do gate entra no Change Log + Dev Agent Record; escopo mínimo é exigência
 - [Prova de deploy vale na Vercel, não local](feedback_prova_vale_no_deploy.md) — CI/build verdes não provam deploy; `.vercelignore` esconde `docs/`, `scripts/`, `bin/` do build
 - [Corte de escopo exige reescrever comentários](feedback_corte_de_escopo_comentarios.md) — comentário que promete garantia cortada é pior que nenhum; provar template↔gerado por bytes
 

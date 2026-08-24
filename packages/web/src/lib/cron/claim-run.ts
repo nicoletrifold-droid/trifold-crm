@@ -24,6 +24,17 @@ import { logEvent } from "@web/lib/logger"
 export const INTERVALO_MINIMO_FOLLOWUP_SEGUNDOS = 90 * 60
 
 /**
+ * 144h (6 dias) — para o relatório semanal (`"0 2 * * 1"`, Story 75-367).
+ *
+ * O cron roda a cada 168h, então 144h deixam 24h inteiras de folga para atraso de
+ * agendamento sem risco de confundir a run desta semana com a da próxima (o evento
+ * mais próximo possível está a 7 dias). A distância real observada entre as duas
+ * invocações duplicadas foi de ~60s — qualquer intervalo de poucos minutos já
+ * cobriria o caso concreto; a margem larga é de graça aqui.
+ */
+export const INTERVALO_MINIMO_ANALYTICS_REPORT_SEGUNDOS = 144 * 60 * 60
+
+/**
  * Reivindica a run. Devolve o `run_id` para quem ganhou e `null` para quem chegou
  * depois — nesse caso o chamador deve sair sem fazer nada.
  *

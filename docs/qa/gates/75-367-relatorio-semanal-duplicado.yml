@@ -1,0 +1,179 @@
+schema: 1
+storyId: "75-367"
+story: "docs/stories/75-367-relatorio-semanal-duplicado.story.md"
+title: "Quality Gate — Relatório semanal duplicado: a trava da 75-352 passa a cobrir o analytics-report"
+epic: 75
+gate: PASS
+verdict: PASS
+review_round: 1
+reviewed_by: "@qa (Quinn)"
+reviewed_at: "2026-08-24"
+branch: "main"
+tipo: "Bug fix — corrida de concorrência / envio de e-mail duplicado"
+migrations: ["nenhuma nova — reaproveita a 234 (cron_locks, claim_cron_run, finish_cron_run), aplicada em prod 20/08 10:49 UTC"]
+
+escopo: >
+  O cron `/api/cron/analytics-report` é invocado duas vezes por agendamento (gatilho externo ao repo,
+  já mapeado na 75-352) e não tinha trava nenhuma. Resultado em produção: dois `emailId` distintos no
+  Resend (`delivered` 02:01:52Z e 02:02:49Z de 24/08), mesmo conteúdo e mesmo anexo. A correção passa a
+  chamar o claim atômico da 234 deste segundo lugar, com fail-CLOSED no chamador.
+
+resumo: >
+  **A correção não é copiar o followup — é invertê-lo no ponto que importa.** O helper compartilhado
+  `claimCronRun` é fail-OPEN de propósito (`{ runId: null, claimed: true }` quando o RPC falha), e o
+  `followup` depende disso porque tem uma segunda trava por lead (`claim_follow_up`). O
+  `analytics-report` não tem segunda trava, então seguir sem trava seria reabrir exatamente o bug. O
+  @dev implementou o fail-closed **no chamador**, discriminando `claimed === true && runId === null`,
+  e não tocou no helper. Conferido por `git diff`: `claim-run.ts` recebeu 11 linhas adicionadas / 0
+  removidas — só a constante. `claim-run.test.ts` roda verde **sem edição**, inclusive o caso "RPC com
+  erro: fail-OPEN". `followup/route.ts` não aparece no diff.
+
+  **A cobertura da causa-raiz é real, não só "o Resend não foi chamado".** Os mocks de
+  `buildAnalyticsReportData` e `renderToBuffer` incrementam contadores próprios, e os dois testes de
+  skip assertam `dadosMontados === 0` **e** `pdfsRenderizados === 0` — quem perde a corrida não paga os
+  ~105s de PDF que a duplicata pagava antes.
+
+status_reason: >
+  Liberado para push. AC1-AC6 atendidos e verificados contra o código (não contra a documentação). Zero
+  regressão: suíte inteira verde, `tsc --noEmit` limpo, eslint 0 erros nos arquivos tocados, build OK.
+  Os 4 concerns são LOW e nenhum bloqueia o merge — o mais relevante (C1) é o custo já conhecido e
+  documentado pelo @po dos 144h, com procedimento manual de recuperação escrito na story.
+
+acoes_obrigatorias: []
+
+verificacoes:
+  - id: V1
+    check: "1. Code review — padrões, legibilidade, manutenibilidade"
+    resultado: >
+      PASS — espelha o padrão já em produção no `followup` (claim → guard com `skipped_reason` →
+      `finishCronRun` aguardado), e onde divergiu, divergiu de propósito e com o porquê no comentário.
+      Dois `if` separados em vez de um composto: `if (!claimed)` cobre a duplicata, `if (runId === null)`
+      só é alcançável com `claimed === true`, que é exatamente o retorno de fail-open do helper. Efeito
+      colateral correto: depois dos guards o TS estreita `runId` para `string`, e o `finishCronRun` do
+      caminho vencedor nunca recebe `null`. Comentários explicam decisão, não sintaxe.
+  - id: V2
+    check: "2. Unit tests — cobertura adequada, todos passando"
+    resultado: >
+      PASS — 7 casos novos em `route.test.ts`, e o que eles seguram é a assimetria de fail-safe (o item
+      fácil de inverter num futuro "vamos padronizar os crons"). Rodado por mim: 14 passed nos dois
+      arquivos tocados; **suíte inteira 242 arquivos / 2911 passed + 6 expected-fail, 20,4s**. Cobertos:
+      caminho vencedor (e-mail único, destinatários, anexo PDF, números no corpo, recibo com
+      contadores), `already_running`, `claim_indisponivel`, early return sem organização fechando o
+      recibo, falha de envio contando em `errors`, 401 sem tocar na trava, `maxDuration === 300`.
+  - id: V3
+    check: "3. Acceptance criteria — todos atendidos"
+    resultado: >
+      PASS nos 6. AC1: claim em route.ts:53-57, antes do select de `organizations` (:102), do
+      `buildAnalyticsReportData` (:121) e do `renderToBuffer` (:124); perdedora responde 200 com
+      `already_running` e loga `ANALYTICS_REPORT_RUN_DUPLICADA` (`category: "cron"`, metadata com `job`
+      e `intervalo_minimo_s`) — os três assertados no teste. AC2: constante em claim-run.ts:35, vizinha
+      da do followup, com o comentário justificando o número. AC3: fail-closed no chamador (:80-100),
+      helper intacto. AC4: `maxDuration = 300` em :19, com teste. AC5: `finishCronRun` aguardado nos
+      DOIS returns do caminho vencedor — :109 (No organizations found, a correção exigida pelo @po) e
+      :170. AC6: nenhuma migration nova; `vercel.json` fora do diff, rota aparece 1 vez com `"0 2 * * 1"`.
+  - id: V4
+    check: "4. No regressions — funcionalidade existente preservada"
+    resultado: >
+      PASS — `git diff --stat` toca 2 arquivos de código: `analytics-report/route.ts` (+74) e
+      `claim-run.ts` (+11, 0 removidas). `claimCronRun`/`finishCronRun` byte-idênticos; o docblock do
+      fail-open segue valendo. `followup/route.ts` não foi tocado e `claim-run.test.ts` passa sem
+      edição (o caso de fail-open na linha 69 é a prova de que a assimetria ficou no chamador). O corpo
+      do e-mail, o PDF e a lista de destinatários seguem intactos — o teste do caminho vencedor assere
+      subject, `to`, `contentType` do anexo e `<strong>69</strong>` no HTML.
+  - id: V5
+    check: "5. Performance — dentro de limites aceitáveis"
+    resultado: >
+      PASS, com ganho. O claim adiciona 1 RPC antes do trabalho e o recibo 1 depois — troca ~105s de
+      render de PDF descartado (o que a invocação duplicada fazia) por um round-trip. `maxDuration = 300`
+      deixa de depender do default implícito da plataforma numa rota que leva ~105s, e é o mesmo valor
+      já em uso por `supremo-sync`, `sienge-customer-sync` e `nicole-agenda-reconcile`.
+  - id: V6
+    check: "6. Security — OWASP básico"
+    resultado: >
+      PASS — o claim vem DEPOIS do `Bearer ${CRON_SECRET}` (:33), então nenhuma requisição não
+      autenticada consegue queimar a janela de 144h; o teste "sem authorization não reivindica a trava"
+      assere `rpcs` vazio no 401. O desvio declarado pelo @dev (`createAdminClient()` em :42, antes do
+      claim) é aceitável: conferi `lib/supabase/admin.ts` — a função só lê env e chama `createClient`
+      com `autoRefreshToken: false` / `persistSession: false`, zero I/O. Nenhuma query acontece antes do
+      `claim_cron_run`. Sem segredo novo, sem PII no metadata dos eventos, `cron_locks` segue com RLS
+      ligada e sem policy (só `service_role`).
+  - id: V7
+    check: "7. Documentation — atualizada se necessário"
+    resultado: >
+      PASS — Dev Agent Record com a ordem de implementação e as 3 decisões, "Verificar depois do deploy"
+      com as duas queries SQL que tornam o AC1 falsificável em produção, e o procedimento de liberar a
+      trava à mão (o único custo real dos 144h). Nada fora da story precisa mudar: os event types novos
+      não alimentam dashboard nem runbook (o `FOLLOWUP_RUN_DUPLICADA` também não).
+
+evidencia_qa:
+  suite_completa: "npx vitest run → 242 arquivos, 2911 passed | 6 expected fail (2917), 20,41s"
+  suite_tocada: "npx vitest run route.test.ts claim-run.test.ts → 2 arquivos, 14 passed"
+  type_check: "npm run type-check → 8/8 (cache) + npx tsc --noEmit direto em packages/web → EXIT=0"
+  lint_arquivos_tocados: "npx eslint route.ts route.test.ts claim-run.ts → saída vazia, EXIT=0"
+  lint_repo: "npm run lint → 29 problems (0 errors, 29 warnings) — todas pré-existentes, nenhuma nos arquivos da story"
+  build: "npm run build → 5/5 successful"
+  diff: "git diff --stat → analytics-report/route.ts +74 · claim-run.ts +11/-0 · route.test.ts (novo, untracked)"
+  helper_intacto: "claimCronRun/finishCronRun sem uma linha alterada; claim-run.test.ts verde sem edição"
+  followup_intacto: "followup/route.ts ausente do diff; claim_cron_run continua fail-open para ele"
+  migration_conferida: "234 tem claim_cron_run(text,int) e finish_cron_run(uuid,jsonb) com as assinaturas usadas; o claim é um único INSERT..ON CONFLICT DO UPDATE WHERE started_at < now()-interval → atômico, serializa no row lock, a 2ª invocação reavalia o WHERE contra o started_at novo e leva NULL"
+  agendamento: "packages/web/vercel.json → 36 crons, /api/cron/analytics-report aparece 1 vez, schedule '0 2 * * 1' inalterado"
+  coderabbit: "SKIP — CLI não instalada nesta máquina (darwin, sem WSL; nada em ~/.local/bin/coderabbit nem no PATH). Revisão 100% manual."
+
+concerns:
+  - id: C1
+    severidade: LOW
+    tipo: recuperabilidade + observabilidade
+    titulo: "Run vencedora que falhe no envio não gera evento — só `console.error` e `last_result`"
+    detalhe: >
+      O trade-off dos 144h que o @po registrou está corretamente documentado (SQL de backdate do
+      `started_at` + PDF sob demanda em `/api/analytics/report`), e a mitigação existe de fato — conferi
+      a rota. O que sobra é o gatilho da mitigação: `errors` é contado e gravado em
+      `cron_locks.last_result`, mas o caminho de falha **não escreve em `system_events`** (só
+      `console.error` nas linhas 159 e 165). Ou seja, das três situações pós-deploy, duas gritam
+      (`ANALYTICS_REPORT_RUN_DUPLICADA`, `ANALYTICS_REPORT_CLAIM_INDISPONIVEL`) e a única que custa 6
+      dias de atraso fica dependendo de alguém rodar a query 1 da story por conta própria. Não é
+      regressão desta story (a rota nunca teve recibo de sucesso, diferente do `FOLLOWUP_EXECUTED`) e
+      não bloqueia o merge — mas é justamente a classe de silêncio que a 75-350/75-351 pagaram caro.
+    recomendacao: >
+      Backlog: emitir `ANALYTICS_REPORT_ENVIO_FALHOU` (level error, category cron, metadata com
+      `errors`/`sent`) via `logEventOnce` quando `errors > 0`, antes do `finishCronRun`. Fecha o
+      triângulo dos event types e faz a query 2 da story cobrir também a falha.
+  - id: C2
+    severidade: LOW
+    tipo: causa-raiz-não-confirmada
+    titulo: "Quem faz a segunda invocação segue desconhecido (herdado da 75-352)"
+    detalhe: >
+      Decisão explícita e correta da story: consertar o efeito sem depender de achar a causa externa ao
+      repo. Reconferi o que dava para reconferir: `vercel.json` tem a rota uma única vez, não há
+      `.github/workflows/`. O `ANALYTICS_REPORT_RUN_DUPLICADA` é o que vai dizer se o gatilho persiste —
+      e sem ele o AC1 seria inverificável em produção (crédito à correção (a) do @po).
+  - id: C3
+    severidade: LOW
+    tipo: lacuna-de-teste
+    titulo: "Nenhum teste prova que o claim vem ANTES do select de `organizations`"
+    detalhe: >
+      O mock do Supabase rastreia `rpc()` em `rpcs[]`, mas `from().select()` não é registrado em lugar
+      nenhum. `expect(rpcs[0])` prova que o claim é o primeiro **RPC**, não que precede a query. A ordem
+      está correta por leitura de código (:53 vs :102) e o efeito prático está coberto (`dadosMontados
+      === 0` / `pdfsRenderizados === 0` nos skips), então o risco é de refactor futuro, não de hoje.
+    recomendacao: >
+      Um `chamadas.push('select organizations')` no mock de `from()` e um assert de ordem relativa
+      fechariam isso em 3 linhas, se alguém voltar ao arquivo.
+  - id: C4
+    severidade: LOW
+    tipo: documentação
+    titulo: "O PDF sob demanda cai em 30 dias por padrão, não nos 7 dias do e-mail"
+    detalhe: >
+      Dev Notes oferece `/api/analytics/report` como recuperação, e a rota existe e não tem trava — mas
+      ela usa `resolvePeriod` a partir da URL, cujo padrão é 30 dias, enquanto o cron chama
+      `resolvePeriod("7d")` fixo (Story 75-69). Para reproduzir o conteúdo do relatório semanal é
+      preciso `?range=7d`. Detalhe de procedimento, não de código.
+    recomendacao: "Se a story for revisitada, acrescentar `?range=7d` à linha da mitigação nas Dev Notes."
+
+futuro:
+  - "Se o relatório passar a ser por organização com múltiplas orgs, a trava única de RUN vira gargalo: uma org que falhe bloqueia todas as outras por 6 dias. Aí é a dupla trava do followup (run + item), como a própria story antecipa em 'Fora de escopo'."
+
+verificar_apos_deploy:
+  - "cron_locks: linha de `analytics-report` nasce no primeiro domingo (hoje só existe a de `followup`) — conferir `finished_at` preenchido e `last_result` = { sent: 1, errors: 0 }"
+  - "system_events: `ANALYTICS_REPORT_RUN_DUPLICADA` = 1 é o resultado esperado e é a prova do AC1; `ANALYTICS_REPORT_CLAIM_INDISPONIVEL` > 0 exige investigar o banco antes da próxima segunda"
+  - "Caixa de entrada de alexandre@/marcos@trifold.eng.br: um e-mail só"

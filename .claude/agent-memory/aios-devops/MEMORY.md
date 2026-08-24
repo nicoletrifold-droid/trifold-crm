@@ -1,4 +1,5 @@
 - [Vercel project setup](project_vercel_setup.md) — rootDirectory is `packages/web`, not repo root; affects .vercelignore placement
+- [Vercel prod quebrada desde 900-14](project_vercel_prod_quebrada_schema_snapshot.md) — import de `docs/audits/schema-snapshot.json` vs `.vercelignore`; nada de main deploya desde 2026-08-23
 - [Quality gate signals for trifold-crm](feedback_quality_gate_signals.md) — `next build` is canonical; lint/tsc standalone produce false positives in Next 16
 - [Meta subscription state (prod)](project_meta_subscription.md) — leadgen subscription validada 2026-06-08; verify token sufixo `...a387d2f`
 - [Migration 074 — leads.metadata JSONB](project_leads_metadata_migration_074.md) — bloqueio root-cause attribution Meta; PR #5 (draft) com idempotencia
