@@ -525,7 +525,7 @@
     var CONFIG = {
       whatsapp: "5544991089698",               // DDI+DDD+número (só dígitos)
       whatsappMsg: "Olá, vim do site do Vind e queria mais informações.",
-      leadEndpoint: "/api/lead"                // proxy serverless -> webhook de leads do trifold-crm
+      leadEndpoint: "https://vind-residence-teste.vercel.app/api/lead"  // URL absoluta: funciona mesmo servida via proxy sob trifold.eng.br/vindresidence (CORS allowlist inclui trifold.eng.br). Atualizar se o projeto/dominio do proxy mudar.
     };
 
     // WhatsApp flutuante
