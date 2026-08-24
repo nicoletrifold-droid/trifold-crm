@@ -3,9 +3,20 @@ import { renderToBuffer } from "@react-pdf/renderer"
 import { createElement } from "react"
 import { Resend } from "resend"
 import { createAdminClient } from "@web/lib/supabase/admin"
+import { logEventOnce } from "@web/lib/logger"
+import {
+  claimCronRun,
+  finishCronRun,
+  INTERVALO_MINIMO_ANALYTICS_REPORT_SEGUNDOS,
+} from "@web/lib/cron/claim-run"
 import { buildAnalyticsReportData } from "@web/lib/analytics-report-data"
 import { AnalyticsReportPDF } from "@web/lib/pdf/analytics-report-pdf"
 import { resolvePeriod } from "@web/lib/analytics/period"
+
+// O render do PDF leva ~105s em produção — a rota nunca declarou limite e vinha
+// contando com o default implícito da plataforma (Story 75-367). Mesmo valor de
+// `supremo-sync`, `sienge-customer-sync` e `nicole-agenda-reconcile`.
+export const maxDuration = 300
 
 const CRON_SECRET = process.env.CRON_SECRET
 const RESEND_API_KEY = process.env.RESEND_API_KEY
@@ -30,11 +41,72 @@ export async function GET(request: NextRequest) {
 
   const supabase = createAdminClient()
 
+  // Story 75-367 — este cron chegou DUAS vezes por agendamento: dois `emailId`
+  // distintos no Resend na run de 24/08 (`delivered` às 02:01:52Z e 02:02:49Z),
+  // mesmo conteúdo, mesmo anexo. É a mesma assinatura de gatilho duplicado da
+  // 75-352, e o gatilho é externo ao repo (`vercel.json` tem a rota uma vez, não
+  // há workflow nem pg_cron). A trava não depende de descobrir qual é.
+  //
+  // Vem DEPOIS da checagem do `Bearer` de propósito: não abrir superfície pré-auth.
+  // E antes de qualquer query, do `buildAnalyticsReportData` e do `renderToBuffer`
+  // — quem perde a corrida não pode pagar 105s de PDF para depois jogar fora.
+  const { runId, claimed } = await claimCronRun(
+    supabase,
+    "analytics-report",
+    INTERVALO_MINIMO_ANALYTICS_REPORT_SEGUNDOS
+  )
+
+  if (!claimed) {
+    // `logEventOnce` porque esta é a ÚLTIMA escrita antes do response: o `logEvent`
+    // fire-and-forget morre no congelamento da lambda (Story 87-6). Sem esta linha,
+    // "chegou um e-mail só" seria compatível tanto com "a trava pegou" quanto com
+    // "o gatilho duplicado sumiu" — e a correção ficaria não verificável em produção.
+    await logEventOnce({
+      level: "warn",
+      category: "cron",
+      event_type: "ANALYTICS_REPORT_RUN_DUPLICADA",
+      message:
+        "Invocação duplicada do cron de relatório semanal — run anterior ainda dentro do intervalo mínimo. Nenhum e-mail enviado.",
+      metadata: {
+        job: "analytics-report",
+        intervalo_minimo_s: INTERVALO_MINIMO_ANALYTICS_REPORT_SEGUNDOS,
+      },
+      source: "api/cron/analytics-report",
+    })
+
+    return NextResponse.json({ sent: 0, errors: 0, skipped_reason: "already_running" })
+  }
+
+  if (runId === null) {
+    // FAIL-CLOSED, ao contrário do `followup`. O helper é fail-open de propósito
+    // (`{ runId: null, claimed: true }` quando o RPC falha) porque lá existe uma
+    // segunda trava por lead cobrindo o caso. Aqui não existe segunda trava: seguir
+    // sem trava é exatamente reabrir o bug que esta story fecha. Um relatório
+    // atrasado é recuperável; dois e-mails idênticos, não.
+    await logEventOnce({
+      level: "error",
+      category: "cron",
+      event_type: "ANALYTICS_REPORT_CLAIM_INDISPONIVEL",
+      message:
+        "claim_cron_run indisponível para o relatório semanal — envio abortado (fail-closed). Sem trava não há como garantir e-mail único.",
+      metadata: {
+        job: "analytics-report",
+        intervalo_minimo_s: INTERVALO_MINIMO_ANALYTICS_REPORT_SEGUNDOS,
+      },
+      source: "api/cron/analytics-report",
+    })
+
+    return NextResponse.json({ sent: 0, errors: 0, skipped_reason: "claim_indisponivel" })
+  }
+
   const { data: orgs } = await supabase
     .from("organizations")
     .select("id, name")
 
   if (!orgs || orgs.length === 0) {
+    // O recibo também é devido aqui: com o claim no topo, sair sem `finishCronRun`
+    // deixaria `finished_at` nulo para sempre numa run que de fato terminou.
+    await finishCronRun(supabase, runId, { sent: 0, errors: 0 })
     return NextResponse.json({ sent: 0, message: "No organizations found" })
   }
 
@@ -94,6 +166,8 @@ export async function GET(request: NextRequest) {
       errors++
     }
   }
+
+  await finishCronRun(supabase, runId, { sent, errors })
 
   return NextResponse.json({ sent, errors })
 }
