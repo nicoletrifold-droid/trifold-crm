@@ -203,6 +203,61 @@ Decisões adicionais tomadas em **2026-07-30** (ex-PEND-2, 7, 5 e 3):
 | D13 | Retenção pós-cancelamento | **90 dias de janela de export, depois exclusão definitiva** | Desbloqueia 900-46; exige exclusão real **incluindo Storage** e cláusula de contrato |
 | D14 | Impersonation | **NÃO haverá impersonation.** Suporte opera só com metadados e agregados | **Remove a story 900-45**; invalida parcialmente o ADR-004; eleva `900-42b` e PEND-4 (ver §3.2) |
 
+### 3.0-bis ⚠️ REVISÃO DE MODELO — 2026-08-24: D2 e D3 REVOGADAS
+
+**O dono do produto mudou o go-to-market.** As decisões D2 (sem gateway) e D3 (sem signup
+público) estavam marcadas como lei e "não reabrir" — foram reabertas e revogadas nesta data.
+Registrar isso explicitamente importa: o resto do epic foi escrito assumindo as duas, e quem
+ler as ondas sem passar por aqui vai planejar contra um modelo que não existe mais.
+
+| # | Decisão nova | Revoga |
+|---|---|---|
+| **D15** | **Signup público self-service.** Landing onde o interessado se cadastra, cria a própria organização e escolhe os módulos que quer contratar. | **D3** ("provisionamento 100% pela Trifold, sem signup público") |
+| **D16** | **Trial de 3 dias com cartão vinculado no cadastro.** Passado o prazo sem cancelamento, a cobrança acontece automaticamente. | **D2** ("nenhum gateway agora; cobrança fora do sistema") |
+
+**Razão de negócio:** colher lead, dar experiência real do produto e chegar à venda já
+madura — PLG em vez de venda assistida.
+
+#### O que isso reordena
+
+1. **Entitlements deixam de ser Onda 3 e viram pré-requisito.** Se o cliente escolhe módulos
+   no cadastro, o sistema precisa ligar e desligar módulo por contrato antes de existir
+   cadastro. `plans`, `plan_modules` e `org_module_grants` passam a ser caminho crítico.
+2. **Gateway sai da Onda 8 e vira P0.** Cartão tokenizado, assinatura recorrente, webhook de
+   cobrança e tratamento de falha de pagamento passam a ser fundação, não "sob demanda".
+3. **`provision_org()` ganha um segundo chamador.** Hoje só o painel a chama, com
+   service-role e autorização na rota. Com signup público, ela passa a ser acionada por
+   requisição anônima — e aí a validação de entrada e o anti-abuso (rate limit, verificação
+   de e-mail, captcha) deixam de ser opcionais.
+
+#### ⚠️ O risco que muda de natureza — e a decisão tomada sobre ele
+
+O epic afirma que *"vender antes do fim da Onda 1 é o único erro irrecuperável"*. No modelo
+antigo isso era administrável, porque **a Trifold escolhia quando o primeiro cliente entrava**.
+Com signup público, não escolhe: qualquer pessoa cria organização a qualquer momento.
+
+Estado do isolamento em 2026-08-24: **83 violações** no baseline do gate, **178 rotas** ainda
+em service-role sem escopo forçado, **3 buckets públicos** (`nicole-media`, `obra-fotos`,
+`campaign-assets`).
+
+**Decisão do dono do produto (2026-08-24): fechar o isolamento ANTES de abrir a landing.**
+A ordem de trabalho passa a ser:
+
+    Onda 1 (isolamento) → entitlements → billing/gateway → landing + signup
+
+Construir a landing antes disso a deixaria pronta antes de haver o que vender **e** antes de
+ser seguro receber quem se cadastrar.
+
+#### Aberto
+
+- **Gateway não escolhido.** Comparação em `docs/research/gateways-pagamento-plg.md`.
+- **Preço dos tiers** (PEND-1) sobe de prioridade: no modelo antigo dava para vender com preço
+  combinado fora do sistema; com autoatendimento, o preço precisa estar na tela.
+- **Compliance de cobrança automática pós-trial**: aviso claro, cancelamento acessível e
+  direito de arrependimento (CDC art. 49) passam a ser requisito da landing, não detalhe.
+
+---
+
 ### 3.1 Composição dos 3 tiers (D7 — literal da §11.3 Q8)
 
 | Tier | `tier_order` | Módulos |
