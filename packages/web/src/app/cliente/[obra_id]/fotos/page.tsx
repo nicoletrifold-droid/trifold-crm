@@ -49,7 +49,6 @@ export default async function FotosPage({ params, searchParams }: PageProps) {
 
   const fases = fasesRes.data ?? []
   const allFotos = fotosRes.data ?? []
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""
 
   // Story 75-253 — só fase COM foto vira pílula. Antes desenhava uma por fase
   // cadastrada (38 no Vind, 9 com foto), estourando a largura da faixa.
@@ -165,7 +164,8 @@ export default async function FotosPage({ params, searchParams }: PageProps) {
                 {/* Photos grid */}
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                   {group.fotos.map((foto) => {
-                    const url = `${supabaseUrl}/storage/v1/object/public/obra-fotos/${foto.storage_path}`
+                    // Story 900-12a: rota autorizada em vez de URL pública.
+                    const url = `/api/obras/fotos/${foto.storage_path}`
                     return (
                       <div
                         key={foto.id}
