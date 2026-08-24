@@ -6,7 +6,7 @@ type: project
 
 Trifold CRM is the project hosted at /Users/marcos/trifold-crm. The Next.js web app lives at packages/web and has its own AGENTS.md noting "This is NOT the Next.js you know" — APIs may differ from training data, so read node_modules/next/dist/docs when uncertain.
 
-**Why:** Multi-package monorepo with custom Next.js conventions; pre-existing 6 lint warnings are baseline and should NOT be touched.
+**Why:** Multi-package monorepo with custom Next.js conventions; `npm run lint` has a pre-existing warning baseline that should NOT be touched (0 errors / 29 warnings as of 2026-08-24 — the count grows over time, so verify only that YOUR files are clean rather than chasing a fixed number).
 
 **How to apply:**
 - API routes use `requireAuth()` + `requireRole(appUser, [...])` from `@web/lib/api-auth`
