@@ -6,6 +6,29 @@ Tarefas operacionais, configurações e ajustes pendentes que não requerem uma 
 
 ## Pendente
 
+### [CI] 🔴 Nada compara o `schema-snapshot.json` commitado com o schema real do banco
+
+**Adicionado em:** 2026-08-24
+**Prioridade:** P1 (candidata à story de migração das rotas `900-15` ou à `900-18`, que torna o gate bloqueante)
+**Origem:** Validação @po da Story `900-14b` (hotfix do deploy travado), AC5 — pergunta levantada pelo dono do produto
+
+O AC5 da `900-14b` garante que `org-scoped-tables.generated.ts` ≡ `docs/audits/schema-snapshot.json`
+**commitado**. Não garante que o JSON esteja em dia com o banco — e essa lacuna é **anterior** ao
+hotfix: a `900-14` já lia o mesmo JSON commitado.
+
+Hoje nenhum gate fecha essa porta. `scripts/gate-tenancy.ts` introspecta ao vivo e a **R3** acusa
+*tabela nova sem `org_id`*; uma tabela nova **com** `org_id` que não entrou no snapshot passa em
+silêncio — e o efeito é `createOrgScopedAdminClient()` **deixar de escopá-la**, exatamente o modo de
+falha silencioso que a `900-14` existe para eliminar. Agrava: o job `tenancy-gate` do
+`.github/workflows/ci.yml` é `continue-on-error: true`.
+
+**Ação:** regra/passo que compara a introspecção ao vivo com o snapshot commitado e falha no diff
+(com PAT, portanto no job que já tem o secret), ou torna a defasagem visível no comentário do PR.
+Enquanto não existir, o frescor da lista depende de alguém rodar `pnpm gate:tenancy:snapshot`.
+
+---
+
+
 ### [CI] 🔴 Job de diff de `agent_prompts` — a única rede contra a paridade apodrecer de novo
 
 **Adicionado em:** 2026-08-05

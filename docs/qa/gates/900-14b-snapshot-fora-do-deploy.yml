@@ -1,0 +1,297 @@
+schema: 1
+storyId: "900-14b"
+story: "docs/stories/900-14b-snapshot-fora-do-deploy.story.md"
+title: "Quality Gate — Tirar org-scoped-admin.ts de dentro de docs/: o import que só quebrava na Vercel"
+epic: 900
+gate: PASS
+verdict: PASS
+review_round: 1
+reviewed_by: "@qa (Quinn)"
+reviewed_at: "2026-08-24"
+branch: "fix/75-367-relatorio-semanal-duplicado (hotfix POR CIMA, sem commit — ver bloqueio_de_release B1)"
+tipo: "Hotfix de build — import fora da árvore que o .vercelignore envia"
+migrations: ["nenhuma"]
+
+escopo: >
+  HOTFIX P0. `packages/web/src/lib/supabase/org-scoped-admin.ts` (criado pela 900-14) importava
+  `docs/audits/schema-snapshot.json` subindo cinco níveis. O `.vercelignore` da raiz lista `docs`,
+  então o arquivo existe no disco local e no CI do GitHub — e não existe no build da Vercel. Três
+  deploys de produção em ERROR, produção parada desde 2026-08-23 15:46 UTC (12:46 BRT). A correção é
+  codegen: `generate-schema-snapshot.ts` passa a emitir, da MESMA captura que produz o JSON, o módulo
+  `packages/web/src/lib/supabase/org-scoped-tables.generated.ts`, e o client importa esse módulo.
+  Escopo cortado ao mínimo pelo usuário em 2026-08-24: AC5 (check de sincronia no CI) e AC6 (regra
+  ESLint de import) saíram — ver riscos_aceitos.
+
+resumo: >
+  **A correção está na camada exata onde o build falhava, e isso foi provado, não assumido.** O erro
+  da Vercel é `Cannot find module` — classe `TS2307`, emitida pelo type-check que o `next build` roda
+  sobre o projeto inteiro. Conferi que essa camada está de fato ligada:
+  `packages/web/next.config.ts` traz `typescript: { ignoreBuildErrors: false }` explícito e o
+  `tsconfig.json` inclui `**/*.ts`. É por isso que o defeito quebrava o deploy mesmo sem nenhuma rota
+  importar `createOrgScopedAdminClient()` ainda (os únicos consumidores hoje são o próprio arquivo e
+  seu teste; as 129 rotas são da 900-15). Reproduzi a condição da Vercel movendo `docs/` para fora da
+  árvore e rodando `tsc --noEmit` em `packages/web`: **exit 0**. E, no MESMO cenário, com um arquivo
+  sonda trazendo de volta o import antigo: **exit 2, `TS2307 Cannot find module`**. A contraprova é o
+  que dá valor à prova — sem ela, um `exit 0` poderia significar apenas que o type-check não rodou.
+
+  **A paridade da lista foi remedida por mim, de forma independente do @dev.** Não conferi o número
+  que o Dev Agent Record afirma; alimentei `renderOrgScopedTablesModule()` com o JSON commitado e
+  comparei conjuntos contra a expressão ANTIGA (`tables.filter(t => t.hasOrgId).map(t => t.name)`,
+  literalmente o código removido): 120 tabelas no snapshot, 92 com `org_id` pelos dois caminhos, sem
+  duplicatas, `JSON \ módulo = []`, `módulo \ JSON = []`. E fui além do que o AC3 pede, conferindo a
+  igualdade na forma em que o código realmente consome a lista — `Set(JSON) ≡ Set(módulo)` — porque é
+  o `Set` que decide se o client escopa ou não.
+
+  **A prova de equivalência template ↔ arquivo gerado é a que mais importava, e ela fecha por
+  sha256.** O cabeçalho do `.generated.ts` vive num template dentro do gerador, e regerar de verdade
+  exige `SUPABASE_MANAGEMENT_PAT`, que não temos — então o @dev editou os dois em par. Se
+  divergissem, o arquivo commitado deixaria de ser o que o gerador produz e a próxima regeneração
+  legítima viraria um diff fantasma. Renderizei o template do zero e comparei bytes com o commitado:
+  3321 = 3321, **sha256 idêntico**
+  (`b2a45532432e08bc5e20f716877f05843186fcbae42668d7d3268c44523f57f6`). Também verifiquei o que o AC
+  não pedia e que sustenta a garantia no tempo: a emissão é determinística (renderizar 2x → mesmos
+  bytes) e **estável à reordenação da entrada** (embaralhei `schema.tables` e saiu byte-idêntico),
+  porque o gerador ordena os nomes. Sem isso, a ordem em que o Postgres devolve tabelas produziria
+  diff espúrio a cada regeneração.
+
+status_reason: >
+  Liberado para push. AC1-AC4 verificados contra o código e contra execução própria, não contra a
+  documentação da story. AC5/AC6 são risco aceito por decisão do usuário, não pendência. AC7 é do
+  @devops por desenho — o preview só existe depois do push. Suíte inteira verde
+  (245 arquivos / 2982 passed / 6 expected fail — exatamente o número de antes da story), lint
+  0 errors, `turbo build --force` 5/5 sem cache, `tsc --noEmit` limpo com `docs/` ausente. Nada fora
+  de escopo foi tocado. Nenhum item exige volta ao @dev.
+
+acoes_obrigatorias: []
+
+itens_para_o_dev: []
+
+verificacoes:
+  - id: V1
+    check: "1. O fix resolve a causa-raiz — nenhum import de packages/web/src saindo para docs/"
+    resultado: >
+      PASS. `org-scoped-admin.ts` tem exatamente 2 imports, ambos irmãos: `./admin` e
+      `./org-scoped-tables.generated`. Varredura de `packages/` por import relativo aterrissando em
+      `docs/`: zero. Varredura por qualquer import subindo 4+ níveis em `packages/web/src`: uma única
+      ocorrência, `app/api/cron/followup/notify-alert.test.ts:25 → "../../../../lib/broker/
+      notify-stalled-lead"`, que é legítima (aterrissa dentro de `src/lib`, não fora da árvore) — o
+      mesmo falso positivo que o @po tinha antecipado. `schema-snapshot` só aparece em `packages/`
+      dentro de dois comentários do próprio arquivo gerado (procedência), nunca num caminho de módulo.
+      **Reprodução da condição da Vercel, executada por mim:** `docs/` movido para fora da árvore,
+      `tsc --noEmit` em `packages/web` → **exit 0**; mesmo cenário + sonda com o import antigo →
+      **exit 2 / `TS2307 Cannot find module '../../../../../docs/audits/schema-snapshot.json'`**.
+      `docs/` restaurado ao fim, `git status` idêntico ao inicial e
+      `git diff docs/audits/schema-snapshot.json` = 0 linhas (sha256 conferido).
+  - id: V2
+    check: "2. Paridade da lista — 92 de 120, diff vazio nos dois sentidos, 17 testes sem alteração"
+    resultado: >
+      PASS. Diff refeito de forma independente, comparando o conjunto do módulo contra a expressão
+      antiga aplicada ao JSON commitado: total 120 · via JSON 92 (92 distintos) · via módulo 92
+      (92 distintos) · `JSON \ módulo = []` · `módulo \ JSON = []` · lista ordenada = true ·
+      `Set(JSON) ≡ Set(módulo)` = true (a forma em que `org-scoped-admin.ts` realmente consome).
+      `git diff` de `org-scoped-admin.test.ts` = **0 linhas** (numstat vazio) e
+      `npx vitest run org-scoped-admin.test.ts` → **17 passed**, expectativas intocadas. Como o @po
+      registrou, esses 17 casos não provam o conteúdo da lista (3 asserts cobrem `leads`,
+      `organizations` e uma tabela inexistente — um array manual com dois nomes passaria igual); a
+      prova é o diff acima, e é por isso que o AC3 exigia esse número.
+  - id: V3
+    check: "3. Template ↔ arquivo gerado byte-idênticos (prova independente)"
+    resultado: >
+      PASS. Refeito por mim, sem reaproveitar o script do @dev: `renderOrgScopedTablesModule()`
+      importado direto do gerador (o guard de `argv` não dispara — meu script não se chama
+      `generate-schema-snapshot`) e alimentado com `docs/audits/schema-snapshot.json` commitado.
+      Renderizado 3321 bytes · commitado 3321 bytes ·
+      **sha256 igual nos dois: b2a45532432e08bc5e20f716877f05843186fcbae42668d7d3268c44523f57f6** ·
+      byte-idênticos SIM. Extras que sustentam a garantia adiante: determinismo (render 2x → mesmos
+      bytes) SIM; estabilidade à reordenação da entrada (`schema.tables` invertido → mesmos bytes)
+      SIM, porque `renderOrgScopedTablesModule()` faz `[...new Set(...)].sort()`. Consequência: a
+      próxima regeneração legítima por `pnpm gate:tenancy:snapshot` não produz diff fantasma. Script
+      da prova ficou **fora do repo** (scratchpad da sessão) — nenhum artefato novo adicionado.
+  - id: V4
+    check: "4. Nenhum comentário mente — nada promete check automático inexistente"
+    resultado: >
+      PASS. `grep` por `check-org-scoped-tables-sync` / `check:org-scoped-tables-sync` fora de `docs/`:
+      **zero em código**. Existe 1 ocorrência textual fora de `docs/`, em
+      `.claude/agent-memory/aios-dev/feedback_corte_de_escopo_comentarios.md:14` — é a memória do
+      próprio @dev descrevendo o incidente no passado ("ficaram comentários citando… script que havia
+      sido apagado"), como lição aprendida. Não é código, não é comentário de código e não promete
+      garantia: é o registro de por que a limpeza foi feita. Informativo, não achado. E a limitação
+      está declarada **como limitação** nos três lugares certos, não escondida: cabeçalho do
+      `.generated.ts` ("LIMITAÇÃO CONHECIDA: não existe check automático…"), docblock de
+      `org-scoped-admin.ts` ("**Limitação conhecida.** Não existe check automático…") e cabeçalho de
+      `generate-schema-snapshot.ts` ("Não há check automático de sincronia… `main()` grava os dois a
+      partir da MESMA captura, e é isso (e só isso) que os mantém alinhados"). Os três dizem a mesma
+      coisa e nenhum inventa garantia substituta.
+  - id: V5
+    check: "5. Nada reintroduzido — AC5/AC6 realmente fora do working tree"
+    resultado: >
+      PASS. `git diff --numstat` **vazio** nos três: `.github/workflows/ci.yml`,
+      `packages/web/eslint.config.mjs`, `package.json` (raiz). `scripts/check-org-scoped-tables-sync.ts`
+      e `scripts/org-scoped-tables-emissao.test.ts` **não existem** (`No such file or directory` nos
+      dois). Conferido por leitura, não só por diff: `eslint.config.mjs` não tem
+      `no-restricted-imports` nem `DIRS_FORA_DO_BUILD_DA_VERCEL`, e `aios/no-unscoped-admin-client`
+      segue em **`warn`** na linha 26 — a promoção dela continua sendo da 900-15, como o Scope manda.
+      `package.json` não tem script `check:org-scoped-tables-sync`.
+  - id: V6
+    check: "6. Nada fora de escopo tocado"
+    resultado: >
+      PASS. `git diff --numstat` **vazio** em `scripts/gate-tenancy.ts` (AC4),
+      `docs/audits/schema-snapshot.json` (Scope OUT) e
+      `packages/web/src/lib/supabase/org-scoped-admin.test.ts` (AC3). Nenhum arquivo de
+      `analytics-report` aparece no `git status` — o PR #492 não foi contaminado no que é código.
+      O diff de código da entrega tem exatamente 3 arquivos: `org-scoped-admin.ts` (troca de import +
+      docblock; o corpo da função e `select`/`insert`/`update`/`delete` intocados — o diff mostra
+      apenas `new Set(TABELAS_GERADAS)` no lugar do `filter/map` sobre o JSON),
+      `generate-schema-snapshot.ts` (+~90 linhas: `renderOrgScopedTablesModule()`,
+      `writeOrgScopedTablesModule()`, `ORG_SCOPED_TABLES_MODULE`, `SchemaParaEmissao`, e a chamada em
+      `main()`) e o `.generated.ts` novo.
+  - id: V7
+    check: "7. org-scoped-tables.generated.ts é commitável"
+    resultado: >
+      PASS. `git check-ignore -v` → sem saída, **exit 1** (não é ignorado); aparece como `??` no
+      `git status`. Não há padrão `*.generated.ts` em `.gitignore`. Esta é a checagem que sustenta o
+      modo de falha mais irônico da story — ver bloqueio_de_release B1: se o arquivo ficar fora do
+      commit, a Vercel quebra exatamente igual, porque ela importa o módulo e **não** roda codegen.
+  - id: V8
+    check: "8. Suíte, lint, type-check e build — executados por mim"
+    resultado: >
+      PASS, e a contagem de testes fecha com o esperado. `pnpm test` → **245 arquivos · 2982 passed ·
+      6 expected fail (2988) · 21,47s** — exatamente o número de antes da story, confirmando que a
+      queda de 246/2989 foi só o arquivo de 7 casos que saiu no corte, e não regressão.
+      `npx turbo lint --force` (sem cache) → **0 errors, 30 warnings**, todas pré-existentes (unused
+      vars, `<img>`, diretivas `eslint-disable` órfãs), nenhuma nos arquivos da story.
+      `npx turbo build --force` → **5/5 successful, 0 cached, 1m47s** — build real, não replay de
+      cache. `pnpm type-check` deu FULL TURBO (8/8 cache hit), então não me apoiei nele: rodei
+      `npx tsc --noEmit` direto em `packages/web`, duas vezes, exit 0.
+  - id: V9
+    check: "9. Efeito colateral declarado — os 194 KB de JSON saíram do bundle"
+    resultado: >
+      PASS, verificado no artefato de build e não só no argumento. Marcadores exclusivos do snapshot
+      em `.next/server/**/*.js`: `capturedAt` 0 arquivos, `hasOrgId` 0 arquivos, `management-api`
+      0 arquivos. (`dsopqkqjkmhytudaaolv` aparece em 341 arquivos, mas é a URL do Supabase inlinada
+      por env var, não o snapshot — conferido para não virar falso positivo.) `schema-snapshot` só
+      sobrevive em `.next/cache/.tsbuildinfo`, que é metadado de cache, não bundle.
+
+evidencia_qa:
+  suite_completa: "pnpm test → 245 arquivos, 2982 passed | 6 expected fail (2988), 21,47s"
+  suite_alvo: "npx vitest run packages/web/src/lib/supabase/org-scoped-admin.test.ts → 17 passed, 332ms"
+  type_check_direto: "npx tsc --noEmit em packages/web → EXIT=0 (rodado 2x; o pnpm type-check foi FULL TURBO e por isso não foi usado como prova)"
+  lint: "npx turbo lint --force → 8/8, 0 cached, ✖ 30 problems (0 errors, 30 warnings) — todas pré-existentes"
+  build: "npx turbo build --force → 5/5 successful, 0 cached, 1m46.9s"
+  reproducao_vercel: "docs/ movido para fora da árvore + npx tsc --noEmit em packages/web → EXIT=0"
+  contraprova_vercel: "mesmo cenário + sonda com o import antigo → EXIT=2, TS2307 Cannot find module '../../../../../docs/audits/schema-snapshot.json' — a mesma classe de erro do log do dpl_98TWKtMVwocWNdim1aAyhTM1VWe7"
+  camada_do_defeito: "packages/web/next.config.ts → typescript.ignoreBuildErrors: false; tsconfig include **/*.ts — o next build type-checa o projeto inteiro, o que explica a quebra mesmo sem rota importando createOrgScopedAdminClient()"
+  paridade: "120 tabelas · 92 com org_id via JSON (expressão antiga) · 92 no módulo · JSON\\módulo=[] · módulo\\JSON=[] · ordenado=true · Set(JSON)≡Set(módulo)=true"
+  equivalencia_template: "render(snapshot commitado) vs arquivo commitado → 3321 = 3321 bytes, sha256 b2a45532432e08bc5e20f716877f05843186fcbae42668d7d3268c44523f57f6 nos dois, byte-idênticos SIM"
+  determinismo: "render 2x → mesmos bytes SIM; schema.tables reordenado → mesmos bytes SIM (o gerador ordena com [...new Set(...)].sort())"
+  diff_intocados: "git diff --numstat vazio em scripts/gate-tenancy.ts, docs/audits/schema-snapshot.json, org-scoped-admin.test.ts, .github/workflows/ci.yml, packages/web/eslint.config.mjs, package.json"
+  ac5_ac6_ausentes: "scripts/check-org-scoped-tables-sync.ts e scripts/org-scoped-tables-emissao.test.ts inexistentes; eslint.config.mjs sem no-restricted-imports; aios/no-unscoped-admin-client em warn (linha 26)"
+  commitavel: "git check-ignore packages/web/src/lib/supabase/org-scoped-tables.generated.ts → exit 1 (não ignorado), status ??"
+  bundle: "capturedAt/hasOrgId/management-api → 0 arquivos em .next/server/**/*.js"
+  escritor_unico_do_json: "grep em scripts/ e .github/ → generate-schema-snapshot.ts é o único que escreve o snapshot; gate-tenancy.ts só lê (SNAPSHOT_PATH, linha 152)"
+  integridade_pos_experimento: "docs/ restaurado, nenhum diretório de backup remanescente, git status idêntico ao inicial, sha256 do snapshot 745f6b7b3abbc7973a083f4279ede8e92e3544d943c864910083caeb2a7037df"
+  coderabbit: "SKIP — CLI não instalada nesta máquina (darwin, sem WSL). Revisão 100% manual."
+
+riscos_aceitos:
+  - id: RA1
+    origem: "Corte de escopo do usuário em 2026-08-24 (AC5) — decisão de produto, não falha técnica"
+    titulo: "Não existe check automático de sincronia entre o .generated.ts e o schema-snapshot.json"
+    severidade_residual: LOW
+    detalhe: >
+      Registro como risco aceito, não como pendência, e **não recomendo reintroduzir como bloqueio**.
+      Medi a superfície real do risco antes de classificá-la, porque ela é menor do que parece:
+      `generate-schema-snapshot.ts` é o **único** escritor de `docs/audits/schema-snapshot.json` em
+      todo o repo (`gate-tenancy.ts` apenas lê, via `SNAPSHOT_PATH`), e o `main()` agora grava os dois
+      artefatos da mesma captura, numa execução. Não há caminho automatizado que atualize o JSON sem
+      atualizar o módulo. Logo a divergência exige **edição manual** de um dos dois arquivos — e o
+      cabeçalho do gerado abre com "ARQUIVO GERADO — NÃO EDITE À MÃO". O que o corte tira não é uma
+      proteção contra o fluxo normal; é a rede contra o desvio deliberado.
+    mitigacao_existente: "gerador de escrita conjunta + cabeçalho de arquivo gerado + limitação declarada nos 3 comentários"
+    recomendacao: "Backlog, se e quando a 900-15 migrar as 129 rotas — aí a lista passa a ter 129 consumidores em produção e o custo de uma defasagem silenciosa muda de ordem de grandeza. Hoje o único consumidor é o próprio arquivo e seu teste."
+  - id: RA2
+    origem: "Corte de escopo do usuário em 2026-08-24 (AC6) — decisão de produto, não falha técnica"
+    titulo: "Não existe barreira de lint contra um novo import de packages/web/src para fora da árvore buildável"
+    severidade_residual: MEDIUM
+    detalhe: >
+      Também risco aceito, também sem recomendação de bloqueio. Mas é o de maior severidade residual
+      dos dois, e por um motivo específico: a classe de defeito que esta story conserta é **invisível
+      em todos os sinais que o time olha** — `pnpm build` local passa, o CI do GitHub passa, os testes
+      passam, o type-check passa. Só o deploy da Vercel reprova, e reprova depois do merge. Foi
+      exatamente assim que a 900-14 parou produção por 3 deploys e ~37 horas. Hoje a ocorrência é
+      única e está sendo removida por esta story, então o repo fica em zero; o que não fica é o
+      impedimento de voltar a um.
+    mitigacao_existente: "docblock de org-scoped-admin.ts explica o mecanismo (.vercelignore exclui docs/, passa local e no CI, quebra só na Vercel) para quem editar o arquivo; a story documenta o incidente"
+    recomendacao: "Backlog. Quando voltar, mirar o DESTINO do import (nunca a profundidade dos ../) — a evidência do @po e a minha coincidem: app/api/cron/followup/notify-alert.test.ts:25 importa '../../../../lib/broker/notify-stalled-lead' legitimamente e precisa continuar passando."
+
+concerns:
+  - id: C1
+    severidade: LOW
+    tipo: robustez do gerador
+    titulo: "writeOrgScopedTablesModule() resolve o destino por process.cwd(), não pela raiz do repo"
+    detalhe: >
+      `main()` chama `writeOrgScopedTablesModule(schema, process.cwd())`, e o `join(repoRoot,
+      ORG_SCOPED_TABLES_MODULE)` resultante só aponta para o lugar certo se o comando rodar da raiz.
+      Rodado de um subdiretório, o módulo é gravado num caminho errado (ou o write falha) em silêncio.
+      **Não é defeito novo desta story e não peço mudança:** a gravação do JSON, na linha logo acima,
+      já usava `join(process.cwd(), "docs", "audits", …)` desde a 900-2a — o código novo seguiu a
+      convenção local, que é a decisão certa num hotfix. Vale só o registro de que `gate-tenancy.ts`
+      resolve isso melhor, com um `REPO_ROOT` calculado (linha 152), e que a inconsistência entre os
+      dois scripts é um convite a erro futuro. `pnpm gate:tenancy:snapshot` sempre roda da raiz, então
+      o caminho normal está protegido.
+    recomendacao: "Se alguém voltar ao gerador por outro motivo, trocar process.cwd() pelo REPO_ROOT que gate-tenancy.ts já exporta — 1 linha, e alinha os dois escritores."
+  - id: C2
+    severidade: LOW
+    tipo: cobertura de teste
+    titulo: "Nada em pnpm test afirma módulo ≡ render(snapshot) — a prova é de gate, não de suíte"
+    detalhe: >
+      Consequência direta e conhecida do corte (o teste que fazia essa afirmação era um dos 7 casos
+      apagados), e por isso **não é achado nem pedido de volta ao @dev** — está coberto por RA1. O
+      registro que importa para quem ler este gate depois: a igualdade byte-a-byte que eu medi vale
+      para o commit de hoje, não é um invariante que a suíte reafirma amanhã. Quem regenerar deve
+      fazê-lo por `pnpm gate:tenancy:snapshot`, o único caminho que emite os dois juntos.
+    recomendacao: "Nenhuma ação nesta story. Se RA1 voltar ao escopo, este teste é o artefato mais baratode todos — 1 arquivo, sem credencial, sem banco."
+
+bloqueio_de_release:
+  - id: B1
+    dono: "@devops (Gage)"
+    severidade: HIGH
+    titulo: "org-scoped-tables.generated.ts é untracked (??) e PRECISA entrar no commit"
+    detalhe: >
+      Não é defeito de código — é condição de release, e é o modo de falha mais irônico desta story:
+      se o arquivo ficar fora do commit, o build da Vercel quebra **exatamente igual**, com o mesmo
+      `Cannot find module`, porque a Vercel importa o módulo e não roda codegen. `git check-ignore`
+      retorna 1 (não é ignorado), então nada impede o `git add` — só o esquecimento.
+  - id: B2
+    dono: "@devops (Gage)"
+    severidade: HIGH
+    titulo: "O hotfix está por cima da branch do PR #492, sem commit, e o tree carrega mudanças alheias"
+    detalhe: >
+      Branch atual `fix/75-367-relatorio-semanal-duplicado` (PR #492, escopo 75-367, em revisão).
+      Commitar como está mistura o hotfix dentro do PR #492 e faz o preview dele deixar de servir de
+      evidência para o AC7 desta story. O tree também traz `.claude/agent-memory/aios-dev|aios-po|
+      aios-sm` e `docs/backlog.md`, que são de @dev/@po/@sm — um stash ou checkout às cegas os
+      arrastaria junto. Separar isso é trabalho do @devops; eu não toquei em git (nem branch, nem
+      stash, nem commit), por restrição de papel e porque a avaliação do código não depende disso.
+      O hotfix precisa de branch própria a partir de `main` (`7cc4f0ab`).
+
+ac_status:
+  AC1: "FECHADO — verificado por varredura de imports + reprodução com docs/ ausente (V1)"
+  AC2: "FECHADO — módulo existe, emitido pelo gerador, cabeçalho de arquivo gerado; equivalência template↔commitado provada por sha256 (V3)"
+  AC3: "FECHADO — 92 de 120, diff vazio nos dois sentidos, refeito de forma independente; 17 testes passam com git diff = 0 linhas (V2)"
+  AC4: "FECHADO — git diff --numstat vazio em scripts/gate-tenancy.ts (V6)"
+  AC5: "FORA DE ESCOPO — corte do usuário. Não penalizado. Registrado como RA1"
+  AC6: "FORA DE ESCOPO — corte do usuário. Não penalizado. Registrado como RA2"
+  AC7: "ABERTO, do @devops por desenho — o preview só existe depois do push. Não bloqueia este gate"
+
+verificar_apos_deploy:
+  - "AC7 (@devops): preview deployment do PR com readyState READY lido da API da Vercel, e o SHA do build IGUAL ao HEAD do PR — um preview READY de um commit anterior não prova nada. Registrar uid (dpl_…), readyState, SHA e nº do PR no Dev Agent Record."
+  - "O INCIDENTE SÓ FECHA COM PRODUÇÃO: o AC7 exige preview, mas produção está parada desde dpl_5AtbXWNUYan2Hc7Bw1Dt7znatcTn (SHA a5517c56d, 2026-08-23T15:46:33Z). O encerramento exige um deployment com target=production e readyState=READY depois do merge em main. Preview verde é condição necessária, não suficiente."
+  - "Contraprova do canal, para quem for conferir: dpl_98TWKtMVwocWNdim1aAyhTM1VWe7 (ERROR, target production, SHA 7cc4f0ab6) é o mesmo endpoint lido do mesmo jeito — se o READY vier da mesma API, a evidência é comparável."
+  - "Confirmar no log do build da Vercel que org-scoped-tables.generated.ts foi enviado (o defeito reaparece idêntico se B1 falhar)."
+
+futuro:
+  - "Quando a 900-15 migrar as 129 rotas para createOrgScopedAdminClient(), a lista sai de 1 consumidor (o próprio arquivo + teste) para 129 em produção. É o momento em que RA1 muda de severidade: uma defasagem silenciosa deixa de ser um teste faltando e passa a ser tabela nova sem escopo de org em rota real."
+  - "A lacuna de frescor entre docs/audits/schema-snapshot.json e o schema real do banco é anterior a esta story e segue aberta — consistência JSON↔módulo, que é o que este gate mediu, não é frescor JSON↔banco. Já está em Dev Notes e no backlog."
+  - "Vale generalizar o aprendizado além do import: qualquer artefato consumido por packages/web que more num diretório do .vercelignore da raiz (docs, scripts, bin, .aios-core, .claude, .github) tem a mesma assinatura de falha — verde em tudo, vermelho só no deploy."
+
+waiver: { active: false }
