@@ -12,10 +12,9 @@ interface Foto {
 
 interface FotosGridProps {
   fotos: Foto[]
-  supabaseUrl: string
 }
 
-export function FotosGrid({ fotos, supabaseUrl }: FotosGridProps) {
+export function FotosGrid({ fotos }: FotosGridProps) {
   if (fotos.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center rounded-xl border border-stone-800 bg-stone-900/60 py-10 text-center">
@@ -46,7 +45,9 @@ export function FotosGrid({ fotos, supabaseUrl }: FotosGridProps) {
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
       {fotos.map((foto) => {
-        const url = `${supabaseUrl}/storage/v1/object/public/obra-fotos/${foto.storage_path}`
+        // Story 900-12a: rota autorizada em vez de URL pública. A permissão é decidida pela
+        // policy org_read_obra_fotos (migration 239), não aqui.
+        const url = `/api/obras/fotos/${foto.storage_path}`
         return (
           <div key={foto.id} className="overflow-hidden rounded-xl">
             <div className="relative aspect-square w-full bg-stone-800">

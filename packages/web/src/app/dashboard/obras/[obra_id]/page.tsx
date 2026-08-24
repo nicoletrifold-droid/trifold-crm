@@ -224,7 +224,6 @@ export default async function ObraDetailPage({
   const sp = await searchParams
   const tabParam = typeof sp.tab === "string" ? sp.tab : undefined
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""
   const statusBadge = STATUS_BADGE[obra.status] ?? "bg-gray-100 text-gray-700 dark:bg-stone-700/50 dark:text-stone-200"
   const statusLabel = STATUS_LABEL[obra.status] ?? obra.status
 
@@ -333,7 +332,6 @@ export default async function ObraDetailPage({
         mensagens={mensagens}
         clientes={clientes}
         docDestinatarios={docDestinatarios}
-        supabaseUrl={supabaseUrl}
         userRole={user.role}
         initialAprovacoes={initialAprovacoes}
         initialTab={tabParam}

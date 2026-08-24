@@ -30,7 +30,7 @@
  */
 
 import { createAdminClient } from "./admin"
-import schemaSnapshot from "../../../../../docs/audits/schema-snapshot.json"
+import { TABELAS_COM_ORG_ID as TABELAS_GERADAS } from "./org-scoped-tables.generated"
 
 /**
  * Tabelas que possuem coluna `org_id`, derivadas do snapshot versionado pela Story 900-2a.
@@ -40,12 +40,19 @@ import schemaSnapshot from "../../../../../docs/audits/schema-snapshot.json"
  * client simplesmente deixa de escopar. O snapshot é gerado por introspecção, versionado, e
  * aparece em diff quando muda. A regra R3 do gate fecha o ciclo, acusando tabela nova sem
  * `org_id`.
+ *
+ * **Por que via módulo gerado e não lendo o JSON (Story 900-14b).** Este arquivo importava o
+ * snapshot de auditoria direto de `docs/`, subindo cinco níveis. O `.vercelignore` da raiz exclui
+ * `docs/` do build: passava local e no CI do GitHub e quebrava **só** na Vercel, com
+ * `Cannot find module` — três deploys de produção em ERROR. `org-scoped-tables.generated.ts` é o
+ * mesmo dado, emitido pelo mesmo gerador, dentro da árvore que a Vercel envia. A garantia
+ * "derivada por introspecção, nunca digitada" continua de pé; muda só de onde o TypeScript lê.
+ *
+ * **Limitação conhecida.** Não existe check automático garantindo que o módulo não defase do
+ * snapshot. O que os mantém alinhados é o gerador: os dois artefatos saem da mesma captura, numa
+ * única execução de `pnpm gate:tenancy:snapshot`.
  */
-const TABELAS_COM_ORG_ID: ReadonlySet<string> = new Set(
-  (schemaSnapshot as { tables: Array<{ name: string; hasOrgId: boolean }> }).tables
-    .filter((t) => t.hasOrgId)
-    .map((t) => t.name),
-)
+const TABELAS_COM_ORG_ID: ReadonlySet<string> = new Set(TABELAS_GERADAS)
 
 /** Exportado para teste e diagnóstico. */
 export function tabelaTemOrgId(tabela: string): boolean {

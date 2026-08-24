@@ -68,3 +68,5 @@
 - [project_epic_52_qa_patterns.md](project_epic_52_qa_patterns.md) — Epic 52 (agente CRM read-only) QA: 52-1/52-4 PASS validado em runtime DEV; user_role() (NÃO JWT app_metadata); REVOKE deterministico p/ append-only no Supabase (TRUNCATE não passa RLS); admin-only testado c/ non-admin da MESMA org; SEC-002 forward-gate da 52-2
 - [Mutação prova teste real](feedback_mutacao_prova_teste_real.md) — mutar guarda/ordem/`await`; mock síncrono de `logEventOnce` NUNCA prova `await`
 - [Trava de cron: recibo vs evento](project_cron_lock_recibo_vs_evento.md) — migration 234 mede pelo `started_at`; recibo é descartável, evento em `system_events` não
+- [Armadilha do .vercelignore](project_vercelignore_trap_qa.md) — import de packages/web p/ docs|scripts|bin passa local+CI e quebra SÓ na Vercel; como reproduzir com contraprova
+- [Artefato gerado vs template](project_artefato_gerado_vs_template_qa.md) — provar .generated ≡ render(fonte) por sha256 + determinismo + estabilidade à reordenação, sem credencial
