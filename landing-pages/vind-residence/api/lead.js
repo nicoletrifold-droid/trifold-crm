@@ -6,7 +6,7 @@ const CRM_WEBHOOK_URL =
 // Origens autorizadas a chamar este proxy. Ao trocar de empreendimento ou
 // promover para o domínio final, adicione a nova origem aqui.
 const ALLOWED_ORIGINS = [
-  "https://vind-residence-teste.vercel.app",
+  "https://vind-residence.vercel.app",
   "https://trifold.eng.br",
   "https://www.trifold.eng.br",
 ]
