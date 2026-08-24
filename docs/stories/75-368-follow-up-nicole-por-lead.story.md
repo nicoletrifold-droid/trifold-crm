@@ -1,8 +1,10 @@
 # Story 75-368 — Ligar e desligar o follow-up da Nicole por lead, sem cegar o corretor
 
-**Status:** InReview — **PR [#500](https://github.com/nicoletrifold-droid/trifold-crm/pull/500) aberto**
-em 24/08/2026, 4 checks verdes (`type-check · lint · test`, `gate de tenancy`, `Vercel – trifold-crm`,
-`Vercel Preview Comments`), `MERGEABLE`. **NÃO mergeado de propósito** — ver "Ordem de deploy" abaixo.
+**Status:** Done — **PR [#500](https://github.com/nicoletrifold-droid/trifold-crm/pull/500) squash-merged
+em `8d005b9d`** (2026-08-24T18:47:47Z). Migrations aplicadas em produção ANTES do merge, pelo SQL Editor
+(ver "Ordem de deploy"): conferência devolveu `coluna 1` / `capability 10`. Deploy no ar e verificado:
+`POST /api/leads/[id]/followup-nicole` responde **401** anônimo (existe e o gate funciona),
+`/api/cron/followup` segue **401** fail-closed, `/login` **200**.
 **Tipo:** Feature — controle operacional por lead
 **Epic:** 75 — CRM Trifold
 **Complexidade:** S (~3 pts — 1 migration aditiva, 1 condição no cron, 1 rota nova, 1 bloco na gaveta)
@@ -126,14 +128,28 @@ O cron passa a ler `nicole_followup_off_at` no `select` da consulta de leads. O 
 produção na Vercel. Se o código subir antes da 240, o `select` referencia coluna inexistente, o
 PostgREST devolve erro e **o cron de follow-up para de rodar por inteiro** — não só a parte nova.
 
-Sequência correta:
+### ⛔ `supabase db push` NÃO pode ser usado neste projeto — descoberto aqui
 
-1. aplicar `240_followup_nicole_por_lead.sql` e `241_capability_followup_nicole.sql` em produção
-   (`./scripts/sync-schema.sh`, ou Management API com PAT — ver `docs/deploy-flow.md`)
-2. conferir que a coluna existe
-3. só então mergear o PR #500
+Ia mandar o Marcos rodar `supabase db push --dry-run`. Um print do painel do Supabase mostrou
+**LAST MIGRATION: `supervisor_notificacoes_fina…`**, que é a migration **168**. O repositório está na
+**241**.
 
-Ambas têm `ROLLBACK PLAN` no rodapé. A 241 é idempotente por `ON CONFLICT DO NOTHING`.
+Produção não está 73 migrations atrás — isso é impossível, porque a 234 (`cron_locks`, Story 75-352) e
+a 235 (template HSM, Story 75-353) estão documentadas como aplicadas e em uso. O que acontece é que o
+painel e o CLI leem `supabase_migrations.schema_migrations`, e **só o CLI escreve nessa tabela**. Tudo
+que foi aplicado por Management API ou SQL Editor — que é como o time vem fazendo desde a 169, conforme
+o `CLAUDE.md` — não deixa registro.
+
+**Consequência:** `supabase db push` acharia 169..241 pendentes e tentaria aplicar **73 migrations de
+uma vez em produção**. Não foi rodado. Registrado em memória e no `CLAUDE.md` para não se repetir.
+
+**Como foi aplicado de fato (24/08, antes do merge):** SQL colado no SQL Editor do projeto
+`dsopqkqjkmhytudaaolv`, contendo a migration 240 na íntegra e **apenas as 10 linhas úteis** da 241 — o
+resto do arquivo gerado é reemissão do seed que cairia toda em `ON CONFLICT DO NOTHING`, e a
+`has_capability` é `CREATE OR REPLACE` de função idêntica. Efeito no banco é o mesmo do arquivo
+completo. Conferência no fim do script: `coluna 1`, `capability 10`.
+
+Ambas as migrations têm `ROLLBACK PLAN` no rodapé.
 
 ## Riscos
 
@@ -365,3 +381,4 @@ conversa, `daysSinceLastContact === diasSemContatoPreliminar`, e o gate exige `>
 | 24/08/2026 | @dev (Dex) | Implementada. 6 tarefas concluídas, regressão completa verde (247 arquivos / 2997 testes). Dois desvios documentados: migration 241 para a capability nova (D1) e extração da decisão para função pura (D2). CodeRabbit não executado — binário indisponível no host. Status Ready → Ready for Review. |
 | 24/08/2026 | @qa (Quinn) | Gate FAIL por H1 (HIGH): a cascata da AC2 fazia lead sem conversa cair no `alert_broker`, quebrando invariante da 75-353 justamente no caso principal do pedido. Corrigido no mesmo ciclo (`temConversa` na função pura, 3 testes novos). AC3 verificada como intacta com prova. Re-review: **PASS** com 3 Concerns LOW. Status → Done (local), aguarda @devops. |
 | 24/08/2026 | @devops (Gage) | Pre-push completo: typecheck limpo, eslint 0 errors (29 warnings pré-existentes), 247 arquivos / 3000 testes, build 5/5 com a rota nova no manifesto. Corrigido de passagem: `.aios/handoffs/` não estava no `.gitignore` apesar da regra `agent-handoff.md` exigir, e 3 artefatos de runtime tinham entrado nos commits — removidos do índice. Branch enviada, PR #500 aberto, 4 checks verdes. **Merge retido**: migrations 240/241 precisam ser aplicadas antes, senão o deploy quebra o cron. |
+| 24/08/2026 | @devops (Gage) | Migrations aplicadas em produção pelo SQL Editor (`coluna 1` / `capability 10`), PR #500 squash-merged em `8d005b9d`, branch remota removida. Produção verificada: rota nova 401 anônimo, cron 401 fail-closed, app 200. **Achado que evitou incidente:** `supabase db push` é inutilizável neste projeto — `schema_migrations` está parada na 168 e o comando tentaria aplicar 73 migrations em produção. Status → **Done**. |
