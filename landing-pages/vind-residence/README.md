@@ -47,11 +47,35 @@ O tema e os comportamentos são parametrizados. Para clonar:
    - `whatsapp` — número no formato DDI+DDD+telefone (só dígitos)
    - `leadEndpoint` — URL do webhook/CRM. Vazio = o form só simula sucesso e loga no console.
 
-## Integração com o CRM (pendente / opcional)
+## Integração com o CRM
 
-O formulário hoje envia para `CONFIG.leadEndpoint` (POST JSON) se preenchido, senão apenas
-registra no console. Para gravar em `leads` no trifold-crm, aponte `leadEndpoint` para um
-endpoint/webhook que crie o lead com `source: "landing_vind_residence"`.
+O formulário envia para `CONFIG.leadEndpoint` (POST JSON) → `api/lead.js` (proxy, guarda o
+token fora do browser) → `POST /api/webhooks/landing-page` no trifold-crm, que cria o lead.
+
+## Tracking Meta — Pixel + CAPI (Story 86-11)
+
+| Onde | O quê |
+|---|---|
+| `index.html` `<head>` | Pixel base code + helpers vanilla de `visitor_id`, `fbc`/`fbp`/`fbclid`; dispara `PageView` (só browser) e `ViewContent` (browser + servidor) |
+| `index.html` fim da página | `InitiateCheckout` no primeiro `focus` em `#nome`/`#whats`; no envio do form, gera dois `event_id` e dispara `Lead` + `CompleteRegistration` no Pixel quando o proxy confirma sucesso |
+| `api/track.js` | Proxy de `ViewContent`/`InitiateCheckout` → `POST /api/webhooks/landing-page/track` |
+| `api/lead.js` | Além do lead, repassa o bloco `tracking` e **preenche `client_ip`/`client_ua`** com os headers que só ele enxerga |
+
+Pontos que não podem regredir:
+
+- **IP e UA do visitante vêm dos headers do PROXY, nunca do CRM.** O CRM é chamado
+  servidor-a-servidor e só veria o IP do datacenter da Vercel. Por isso os dois viajam no
+  corpo, e o CRM dá precedência ao corpo sobre os próprios headers.
+- **`TRACK_ENDPOINT` (no `<head>`) e `CONFIG.leadEndpoint` (no fim) apontam para o mesmo
+  projeto Vercel.** Ao trocar o domínio, atualizar os dois.
+- **A CSP vive em outro projeto** (`landing-pages/trifold-design-system/vercel.json`, que
+  serve `trifold.eng.br/vindresidence/`). Sem `connect.facebook.net` em `script-src`,
+  `www.facebook.com` em `img-src` e ambos em `connect-src`, o Pixel é bloqueado em silêncio.
+- Nada de tracking pode derrubar o formulário: bloqueador de anúncios, `localStorage`
+  bloqueado ou `/api/track` fora do ar são estados normais.
+
+Testes: `landing-pages/vind-residence/api-proxy.test.ts` (roda com `pnpm vitest run` na raiz).
+O arquivo fica fora de `api/` de propósito — tudo dentro de `api/` vira função serverless.
 
 ## Origem dos assets
 

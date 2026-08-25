@@ -141,6 +141,26 @@ Enviar ao Meta dois eventos que a campanha precisa:
 | 86-6 | Captura de fbclid/fbc/fbp + IP/UA na entrada do lead | @dev | P1 | 86-4 |
 | 86-7 | Advanced Matching no Pixel (AAM + external_id/em/ph) | @dev | P1 | 86-5, 86-6 |
 | 86-8 | Custom Conversion "Visitou" + Lookalike + ajuste de otimização | @devops (runbook manual) | P1 | 86-4, 86-7 |
+| 86-9 | Pixel + eventos CAPI no formulário de qualificação (`/formulario/[token]`) | @dev | P0 | 86-3, 86-4 |
+| 86-10 | Follow-up de e-mail opcional no passo de agendamento | @dev | P2 | 86-9 |
+| 86-11 | Pixel + CAPI na landing do Vind Residence (`/vindresidence/`) | @dev | P1 | 86-1, 86-3 |
+
+> **Correção de curso (registrada em 2026-08-24 pelo @po).** A tabela acima
+> parou na 86-8 por um tempo e não refletia o que de fato aconteceu:
+>
+> - **86-5, 86-6 e 86-7 foram substituídas pela 86-9.** As três presumiam uma
+>   landing nova com `POST /api/public/leads` que nunca foi construída — o
+>   Epic 89 entregou, no lugar, o formulário de qualificação em
+>   `/formulario/[token]`. Devem ser tratadas como `Superseded`.
+> - **86-9 está implementada e em produção** (QA PASS). É ela que criou os
+>   módulos hoje reusados por toda story de tracking:
+>   `packages/shared/src/meta/*` (`buildCapiUserData`, `buildFormEvent`,
+>   `FORM_CAPI_EVENTS`) e `packages/web/src/lib/meta/*` (`form-capi.ts`,
+>   `visitor-id.ts`, `browser-attribution.ts`, `pixel-events.ts`).
+> - **86-10 está reservada, ainda não redigida.**
+> - **86-11 é a irmã arquitetural da 86-9**, levando o mesmo padrão para a
+>   landing estática do Vind Residence — runtime standalone, fora do workspace
+>   pnpm. Validada pelo @po em 2026-08-24 (GO 9.0/10), status `Ready`.
 
 ## Fora do escopo deste epic
 
@@ -159,3 +179,4 @@ Enviar ao Meta dois eventos que a campanha precisa:
 | Date | Version | Description | Author |
 |------|---------|-------------|--------|
 | 2026-08-04 | 0.1 | Epic criado a partir da auditoria de tracking Meta (@architect Aria + @analyst Atlas). 8 stories esboçadas, sequenciadas por dependência. | @sm (River) |
+| 2026-08-24 | 0.2 | Tabela de stories reconciliada com a realidade durante a validação da 86-11: acrescentadas 86-9 (implementada, em produção, QA PASS), 86-10 (reservada) e 86-11 (`Ready`), e registrado que 86-5/86-6/86-7 foram substituídas pela 86-9 — as três apontavam para uma landing (`POST /api/public/leads`) que nunca existiu. Nenhuma mudança nas Decisões de Produto travadas nem na arquitetura recomendada. | @po (Pax) |

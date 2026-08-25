@@ -12,15 +12,69 @@ const ALLOWED_ORIGINS = [
 ]
 
 const MAX_FIELD_LENGTH = 300
+// User-Agent real passa dos 300 chars com folga; cortar transformaria o UA numa
+// string que não casa com nada no Meta. Os demais campos de tracking são curtos.
+const MAX_UA_LENGTH = 512
+
+// Story 86-11 (AC7) — o único bloco extra que este proxy repassa ao CRM. Tudo
+// que não estiver aqui é descartado: o proxy não é um encaminhador cego de corpo
+// arbitrário. `client_ip`/`client_ua` NÃO entram — o browser não os dita, eles
+// são preenchidos abaixo a partir dos headers que só este proxy enxerga.
+const TRACKING_FIELDS = [
+  "event_id",
+  "complete_registration_event_id",
+  "visitor_id",
+  "fbc",
+  "fbp",
+  "fbclid",
+  "page_url",
+]
 
 function resolveCorsOrigin(req) {
   const origin = req.headers.origin || ""
   return ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0]
 }
 
-function sanitizeField(value) {
+function sanitizeField(value, maxLength) {
   if (typeof value !== "string") return ""
-  return value.trim().slice(0, MAX_FIELD_LENGTH)
+  return value.trim().slice(0, maxLength || MAX_FIELD_LENGTH)
+}
+
+/**
+ * IP e User-Agent REAIS do visitante.
+ *
+ * Este proxy é o único ponto da cadeia que os enxerga: o browser chama esta
+ * função diretamente, enquanto o CRM é chamado servidor-a-servidor daqui e só
+ * veria o IP do datacenter da Vercel. Por isso os dois viajam no CORPO, e o CRM
+ * dá precedência ao corpo sobre os próprios headers (Story 86-11 AC7).
+ */
+function sinaisDoVisitante(req) {
+  const fwd = req.headers["x-forwarded-for"]
+  const primeiro = typeof fwd === "string" ? fwd.split(",")[0] : Array.isArray(fwd) ? fwd[0] : ""
+  return {
+    client_ip: sanitizeField(primeiro, 64) || sanitizeField(req.headers["x-real-ip"], 64),
+    client_ua: sanitizeField(req.headers["user-agent"], MAX_UA_LENGTH),
+  }
+}
+
+/** Monta o bloco `tracking` do payload, ou `null` quando não há nada de útil. */
+function montarTracking(req, rawBody) {
+  const recebido =
+    rawBody.tracking && typeof rawBody.tracking === "object" && !Array.isArray(rawBody.tracking)
+      ? rawBody.tracking
+      : {}
+
+  const tracking = {}
+  for (const campo of TRACKING_FIELDS) {
+    const valor = sanitizeField(recebido[campo], campo === "page_url" ? 512 : MAX_FIELD_LENGTH)
+    if (valor) tracking[campo] = valor
+  }
+
+  const visitante = sinaisDoVisitante(req)
+  if (visitante.client_ip) tracking.client_ip = visitante.client_ip
+  if (visitante.client_ua) tracking.client_ua = visitante.client_ua
+
+  return Object.keys(tracking).length > 0 ? tracking : null
 }
 
 module.exports = async function handler(req, res) {
@@ -47,9 +101,14 @@ module.exports = async function handler(req, res) {
   // Honeypot: campo invisível no formulário. Bots que preenchem tudo caem aqui;
   // usuários reais nunca veem esse campo. Responde 200 "ok" sem repassar ao CRM,
   // para não sinalizar ao bot que foi identificado.
+  //
+  // `tracked: false` no corpo (Story 86-11) diz ao browser para NÃO disparar
+  // `Lead`/`CompleteRegistration` no Pixel: sem contraparte de servidor, o
+  // evento sairia sem deduplicação e poluiria o dataset. O status HTTP continua
+  // 200, indistinguível de um envio real — é o status que o bot observa.
   if (sanitizeField(rawBody.empresa)) {
     console.warn("[lead-proxy] honeypot acionado — descartado silenciosamente")
-    return res.status(200).json({ status: "ok" })
+    return res.status(200).json({ status: "ok", tracked: false })
   }
 
   const nome = sanitizeField(rawBody.nome)
@@ -63,6 +122,11 @@ module.exports = async function handler(req, res) {
   try {
     const payload = { nome, whatsapp, email, page: "vind-residence" }
 
+    // Aditivo: quando ausente, o corpo enviado ao CRM é byte a byte o de antes
+    // da Story 86-11. O CRM trata `tracking` como opcional (AC6/AC10).
+    const tracking = montarTracking(req, rawBody)
+    if (tracking) payload.tracking = tracking
+
     const upstream = await fetch(`${CRM_WEBHOOK_URL}?token=${encodeURIComponent(secret)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -74,9 +138,11 @@ module.exports = async function handler(req, res) {
       return res.status(502).json({ error: "Upstream error" })
     }
 
-    return res.status(200).json({ status: "ok" })
+    return res.status(200).json({ status: "ok", tracked: true })
   } catch (err) {
-    console.error("[lead-proxy] erro:", err)
+    // Só a mensagem do erro — nunca o corpo da requisição, que carrega PII e os
+    // sinais de atribuição em texto puro (AC9).
+    console.error("[lead-proxy] erro:", err && err.message ? err.message : err)
     return res.status(500).json({ error: "Internal error" })
   }
 }
