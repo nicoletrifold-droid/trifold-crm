@@ -138,6 +138,35 @@ describe('buildFormEvent — atribuição web (AC6)', () => {
     expect(semScore.custom_data.value).toBe(0)
   })
 
+  it('mantém form_qualificacao quando o chamador não pede categoria (86-9 intacta)', () => {
+    // O default é o que garante que a Story 86-11 não mexeu no funil do
+    // formulário de qualificação, que já está em produção.
+    const semCategoria = buildFormEvent({
+      eventName: FORM_CAPI_EVENTS.LEAD,
+      eventId: 'e1',
+      eventTime: 1,
+      userData: {},
+      eventSourceUrl: 'https://x/y',
+      contentName: 'F',
+    })
+    expect(semCategoria.custom_data.content_category).toBe('form_qualificacao')
+  })
+
+  it('aceita uma categoria própria — é o que separa as origens (86-11 AC4)', () => {
+    const daLanding = buildFormEvent({
+      eventName: FORM_CAPI_EVENTS.LEAD,
+      eventId: 'e1',
+      eventTime: 1,
+      userData: {},
+      eventSourceUrl: 'https://trifold.eng.br/vindresidence/',
+      contentName: 'Landing Vind Residence',
+      contentCategory: 'landing_vind_residence',
+    })
+    expect(daLanding.custom_data.content_category).toBe('landing_vind_residence')
+    // Sem score nesta landing: `value` fica no default, sem inventar valor.
+    expect(daLanding.custom_data.value).toBe(0)
+  })
+
   it('não altera o evento "Visitou", que segue system_generated', () => {
     const visitou = buildVisitouEvent({
       eventId: 'visit_1',

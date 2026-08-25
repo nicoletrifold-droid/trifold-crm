@@ -46,6 +46,41 @@ export interface CorpoTracking {
   fbc?: string
   fbclid?: string
   page_url?: string
+  /**
+   * IP do visitante, quando quem monta o corpo é um proxy que fala com o CRM
+   * servidor-a-servidor (Story 86-11: a landing do Vind Residence passa pelo
+   * proxy `api/lead.js`, hospedado em outro projeto Vercel).
+   *
+   * ⚠️ Nesse arranjo o `x-forwarded-for` que o CRM enxerga é o do datacenter da
+   * Vercel, não o do visitante — por isso este campo pode ter precedência sobre
+   * o header. Mas SÓ quando o chamador pede explicitamente:
+   * `extrairSinais(request, corpo, { confiarEmClientIpDoCorpo: true })`.
+   * Ver `OpcoesSinais` e o defeito `86.11-QA-001`.
+   */
+  client_ip?: string
+  /** User-Agent do visitante. Mesma precedência e mesma justificativa de `client_ip`. */
+  client_ua?: string
+}
+
+/** Opções de `extrairSinais`. */
+export interface OpcoesSinais {
+  /**
+   * Liga a precedência de `client_ip`/`client_ua` do CORPO sobre os headers da
+   * request. Default `false`.
+   *
+   * 🔴 Ligar SOMENTE quando quem monta o corpo é um servidor confiável que
+   * enxergou o IP real do visitante — hoje, os dois proxies serverless da
+   * landing do Vind Residence (`api/lead.js` e `api/track.js`), que sobrescrevem
+   * qualquer valor vindo do browser antes de repassar ao CRM.
+   *
+   * Nas rotas chamadas DIRETO pelo browser (`/formulario/[token]` e
+   * `/formulario/[token]/tracking`, Story 86-9) isto fica desligado: ali o corpo
+   * é digitado pelo próprio visitante, e aceitá-lo deixaria qualquer um forjar
+   * `client_ip_address`/`client_user_agent` no evento CAPI — forja de
+   * atribuição no dataset do Meta (`86.11-QA-001`). O header é a única fonte
+   * que o visitante não escolhe.
+   */
+  confiarEmClientIpDoCorpo?: boolean
 }
 
 function texto(v: unknown): string | undefined {
@@ -70,13 +105,26 @@ function ipDaRequest(request: NextRequest): string | undefined {
  *
  * ⚠️ Todos os quatro campos (`fbp`, `fbc`, IP, UA) trafegam em TEXTO PURO até o
  * payload final. Hashear qualquer um deles quebra a correspondência (AC9).
+ *
+ * 🔴 IP e UA: por padrão vêm SEMPRE dos headers desta request — o corpo não tem
+ * como influenciá-los. Só com `confiarEmClientIpDoCorpo: true` o corpo passa a
+ * ter precedência (Story 86-11 AC7): quando há um proxy servidor-a-servidor
+ * entre o browser e esta rota, o `x-forwarded-for` visto aqui é o do datacenter
+ * da Vercel — usá-lo degradaria a correspondência em silêncio, sem erro e sem
+ * log, exatamente como o defeito `86.9-QA-001`. Nas rotas chamadas direto pelo
+ * browser o default desligado é o que impede a forja (`86.11-QA-001`).
  */
 export function extrairSinais(
   request: NextRequest,
   corpo: CorpoTracking | undefined,
+  opcoes?: OpcoesSinais,
 ): SinaisTracking {
   const fbclid = texto(corpo?.fbclid)
   const fbc = texto(corpo?.fbc) ?? (fbclid ? `fb.1.${Date.now()}.${fbclid}` : undefined)
+
+  // Opt-in explícito: sem ele, o corpo é ignorado para IP/UA (não é fallback —
+  // é como se os campos não existissem).
+  const confiaNoCorpo = opcoes?.confiarEmClientIpDoCorpo === true
 
   return {
     visitorId: texto(corpo?.visitor_id),
@@ -84,8 +132,10 @@ export function extrairSinais(
     fbc,
     fbclid,
     pageUrl: texto(corpo?.page_url),
-    clientIp: ipDaRequest(request),
-    clientUa: texto(request.headers.get("user-agent")),
+    clientIp: (confiaNoCorpo ? texto(corpo?.client_ip) : undefined) ?? ipDaRequest(request),
+    clientUa:
+      (confiaNoCorpo ? texto(corpo?.client_ua) : undefined) ??
+      texto(request.headers.get("user-agent")),
   }
 }
 
@@ -129,57 +179,98 @@ export interface EnviarEventoInput {
   value?: number
   /** URL de fallback quando o browser não mandou `page_url`. */
   urlPadrao: string
+  /**
+   * Segmenta a origem nas Custom Conversions. Omitido → `'form_qualificacao'`
+   * (o default de `buildFormEvent`, preservado para o chamador da 86-9).
+   */
+  contentCategory?: string
+  /**
+   * Deriva a UF (`st`) a partir do DDD do telefone. Ligado por default, que é o
+   * comportamento da Story 86-9 em `/formulario/[token]`.
+   *
+   * A landing do Vind Residence (86-11) desliga: o telefone chega ali já
+   * normalizado por um normalizador DIFERENTE (`+55DDNNNNNNNNN`, do
+   * `landing-page/route.ts`), e `st`/`ct` estão explicitamente fora do escopo
+   * daquela story. Ligar aqui seria implementar escopo que a story excluiu.
+   */
+  derivarUf?: boolean
+}
+
+/** Monta o evento CAPI de UM item do funil. Pura — sem I/O. */
+function montarEvento(input: EnviarEventoInput) {
+  const telefone = input.lead?.telefone
+  const userData = buildCapiUserData({
+    leadId: input.lead?.leadId,
+    externalIds: input.sinais.visitorId ? [input.sinais.visitorId] : undefined,
+    name: input.lead?.nome,
+    email: input.lead?.email,
+    phone: telefone,
+    // UF derivada do DDD. A cidade NÃO é derivada — ver uf-from-ddd.ts (AC7).
+    ...(input.derivarUf === false
+      ? {}
+      : { state: ufFromDDD(normalizePhoneBR(telefone) ?? telefone) ?? undefined }),
+    fbc: input.sinais.fbc,
+    fbp: input.sinais.fbp,
+    clientIp: input.sinais.clientIp,
+    clientUserAgent: input.sinais.clientUa,
+  })
+
+  return buildFormEvent({
+    eventName: input.evento,
+    eventId: input.eventId,
+    eventTime: Math.floor(Date.now() / 1000),
+    userData,
+    eventSourceUrl: input.sinais.pageUrl ?? input.urlPadrao,
+    contentName: input.contentName,
+    value: input.value,
+    ...(input.contentCategory ? { contentCategory: input.contentCategory } : {}),
+  })
 }
 
 /**
- * Envia UM evento do funil à CAPI. Nunca lança: devolve `false` em qualquer
- * falha, para que o chamador siga o fluxo do lead sem se importar.
+ * Envia N eventos do funil à CAPI em UMA só chamada (batch nativo do
+ * `sendCapiEvents`). Nunca lança: devolve `false` em qualquer falha, para que o
+ * chamador siga o fluxo do lead sem se importar.
+ *
+ * O batch existe porque a landing do Vind Residence (86-11) dispara `Lead` e
+ * `CompleteRegistration` no MESMO instante — dois POSTs ao Meta seriam duas
+ * chances de falha de rede para um único fato de negócio.
  *
  * ⚠️ Chamar SEMPRE de dentro de `after()`. Um `void` solto morre no meio: na
  * Vercel a invocação congela assim que a resposta sai (foi assim que o e-mail de
  * reset da Story 75-139 nunca chegava). Aqui, o sintoma seria um evento que
  * simplesmente não existe no Events Manager, sem erro em lugar nenhum.
  */
-export async function enviarEventoFormulario(input: EnviarEventoInput): Promise<boolean> {
+export async function enviarEventosFormulario(
+  inputs: EnviarEventoInput[],
+): Promise<boolean> {
+  const nomes = inputs.map((i) => i.evento).join("+")
   try {
-    const telefone = input.lead?.telefone
-    const userData = buildCapiUserData({
-      leadId: input.lead?.leadId,
-      externalIds: input.sinais.visitorId ? [input.sinais.visitorId] : undefined,
-      name: input.lead?.nome,
-      email: input.lead?.email,
-      phone: telefone,
-      // UF derivada do DDD. A cidade NÃO é derivada — ver uf-from-ddd.ts (AC7).
-      state: ufFromDDD(normalizePhoneBR(telefone) ?? telefone) ?? undefined,
-      fbc: input.sinais.fbc,
-      fbp: input.sinais.fbp,
-      clientIp: input.sinais.clientIp,
-      clientUserAgent: input.sinais.clientUa,
-    })
+    if (inputs.length === 0) return true
 
-    const evento = buildFormEvent({
-      eventName: input.evento,
-      eventId: input.eventId,
-      eventTime: Math.floor(Date.now() / 1000),
-      userData,
-      eventSourceUrl: input.sinais.pageUrl ?? input.urlPadrao,
-      contentName: input.contentName,
-      value: input.value,
-    })
+    const eventos = inputs.map(montarEvento)
 
     const testEventCode = process.env.META_CAPI_TEST_EVENT_CODE
     const resultado = await sendCapiEvents(
-      [evento],
+      eventos,
       testEventCode ? { testEventCode } : undefined,
     )
 
     if (!resultado.success) {
       // Só o nome do evento e a mensagem de erro — nunca o user_data (AC9).
-      console.error(`[form-capi] falha ao enviar ${input.evento}:`, resultado.error)
+      console.error(`[form-capi] falha ao enviar ${nomes}:`, resultado.error)
     }
     return resultado.success
   } catch (e) {
-    console.error(`[form-capi] erro inesperado ao enviar ${input.evento}:`, e)
+    console.error(`[form-capi] erro inesperado ao enviar ${nomes}:`, e)
     return false
   }
+}
+
+/**
+ * Envia UM evento do funil à CAPI. Atalho sobre `enviarEventosFormulario` —
+ * mantido como a assinatura que a Story 86-9 já usa em produção.
+ */
+export async function enviarEventoFormulario(input: EnviarEventoInput): Promise<boolean> {
+  return enviarEventosFormulario([input])
 }

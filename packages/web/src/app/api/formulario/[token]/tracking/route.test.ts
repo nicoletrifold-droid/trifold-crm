@@ -121,6 +121,35 @@ describe("eventos aceitos", () => {
     expect(sinais.clientUa).toBe("Mozilla/5.0 (iPhone)")
   })
 
+  it("SEGURANÇA 86.11-QA-001: client_ip/client_ua forjados no corpo são IGNORADOS", async () => {
+    // 🔴 Esta rota é pública e o corpo é o JSON BRUTO do visitante, apenas
+    // *castado* para `CorpoPost extends CorpoTracking` — uma interface do
+    // TypeScript não filtra chave nenhuma em runtime. Quando a Story 86-11 deu
+    // precedência a `client_ip`/`client_ua` do corpo (para o proxy da landing do
+    // Vind Residence), qualquer visitante passou a poder forjar a geografia e o
+    // dispositivo no dataset do Meta. A precedência virou opt-in; aqui ela NÃO é
+    // pedida, então o header — a única fonte que o visitante não escolhe — vence.
+    await POST(
+      requisicao(
+        {
+          evento: "ViewContent",
+          event_id: EVENT_ID,
+          client_ip: "1.2.3.4",
+          client_ua: "UA-forjado-pelo-visitante",
+        },
+        { "x-forwarded-for": "187.1.2.3, 10.0.0.1", "user-agent": "Mozilla/5.0 (iPhone)" },
+      ),
+      params,
+    )
+
+    const sinais = enviados[0]?.sinais as Record<string, string>
+    expect(sinais.clientIp).toBe("187.1.2.3")
+    expect(sinais.clientUa).toBe("Mozilla/5.0 (iPhone)")
+    // O valor forjado não pode sobreviver em canto nenhum do que vai à CAPI.
+    expect(JSON.stringify(enviados)).not.toContain("1.2.3.4")
+    expect(JSON.stringify(enviados)).not.toContain("UA-forjado-pelo-visitante")
+  })
+
   it("deriva o fbc do fbclid quando o cookie _fbc ainda não existe", async () => {
     await POST(
       requisicao({ evento: "ViewContent", event_id: EVENT_ID, fbclid: "IwAR123" }),
