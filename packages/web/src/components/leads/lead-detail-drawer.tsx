@@ -5,7 +5,7 @@ import { CAPABILITY_SEED } from "@web/lib/capabilities"
 import { usePathname } from "next/navigation"
 import { createClient } from "@web/lib/supabase/client"
 import Link from "next/link"
-import { X, Phone, MessageCircle, Mail, Calendar, Check, Plus, Trash2, Clock, XCircle, AlertTriangle, ChevronDown, Pencil, History, UserCheck } from "lucide-react"
+import { X, Phone, MessageCircle, Mail, Calendar, Check, Plus, Trash2, Clock, XCircle, AlertTriangle, ChevronDown, Pencil, History, UserCheck, BellRing, BellOff } from "lucide-react"
 import { QuickHistoryModal } from "@web/app/broker/_components/quick-history-modal"
 import { INTEREST_LEVEL_LABELS as interestLevelLabels, INTEREST_LEVEL_COLORS as interestLevelColors, LOST_REASON_GROUP_LABELS, SOURCE_LABELS } from "@web/lib/constants"
 import { ehIdMeta } from "@web/lib/leads/meta-utm"
@@ -61,6 +61,8 @@ interface LeadQuickData {
   preferred_floor: string | null
   preferred_view: string | null
   preferred_garage_count: number | null
+  // Story 75-368 — follow-up automatico da Nicole neste lead. null = LIGADO.
+  nicole_followup_off_at: string | null
   stage: { id: string; name: string; color: string | null } | null
   property_interest: { id: string; name: string } | null
   broker: { id: string; name: string; email: string } | null
@@ -248,6 +250,11 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
   // fonte da verdade é public.users (que também dá o id público p/ o check de
   // dono contra lead.broker.id).
   const [viewer, setViewer] = useState<{ id: string | null; role: string }>({ id: null, role: "" })
+  // Story 75-368 — estado otimista do toggle de follow-up. `null` = ainda nao
+  // divergiu do servidor; o render usa o valor do lead nesse caso.
+  const [followUpOff, setFollowUpOff] = useState<boolean | null>(null)
+  const [followUpSaving, setFollowUpSaving] = useState(false)
+  const [followUpError, setFollowUpError] = useState(false)
   useEffect(() => {
     let cancelled = false
     supabase.auth.getUser().then(async ({ data }) => {
@@ -351,6 +358,8 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
             email: (raw.email as string | null) ?? null,
             qualification_score: (raw.qualification_score as number | null) ?? null,
             interest_level: (raw.interest_level as string | null) ?? null,
+            // Story 75-368 — chega pelo `select("*")` do GET /api/leads/[id].
+            nicole_followup_off_at: (raw.nicole_followup_off_at as string | null) ?? null,
             qualificacao_comercial: (raw.qualificacao_comercial as string | null) ?? null,
             source: (raw.source as string | null) ?? null,
             channel: (raw.channel as string | null) ?? null,
@@ -434,6 +443,29 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
   // etapa ativa mas pode manter lost_reason residual — não pode ser tratado como perdido
   // (senão fica read-only indevidamente). Portanto: gate SÓ por etapa.
   const isPerdido = !!lead?.stage && PERDIDO_STAGE_IDS.includes(lead.stage.id)
+
+  // Story 75-368 — liga/desliga o follow-up automatico da Nicole neste lead.
+  // Otimista com rollback: se a rota falhar, o rotulo NAO pode ficar mentindo
+  // sobre o estado real (AC4).
+  const toggleFollowUpNicole = async (proximoOff: boolean) => {
+    setFollowUpSaving(true)
+    setFollowUpError(false)
+    const anterior = followUpOff
+    setFollowUpOff(proximoOff)
+    try {
+      const res = await fetch(`/api/leads/${leadId}/followup-nicole`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ off: proximoOff }),
+      })
+      if (!res.ok) throw new Error(String(res.status))
+    } catch {
+      setFollowUpOff(anterior)
+      setFollowUpError(true)
+    } finally {
+      setFollowUpSaving(false)
+    }
+  }
 
   // ── Task actions ──────────────────────────────────────────────────────
 
@@ -710,6 +742,47 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
                   </Link>
                 )
               )}
+              {/* Story 75-368 — follow-up automatico da Nicole neste lead.
+                  O rotulo PRECISA dizer "Follow-up": ja existe o controle de IA da
+                  CONVERSA (conversations.is_ai_active, Epic 63) e o operador nao pode
+                  confundir os dois. Encurtar para "Nicole: Ligado/Desligado" perderia
+                  a distincao. Gate real e na rota; aqui e so affordance. */}
+              {(() => {
+                const off = followUpOff ?? lead.nicole_followup_off_at != null
+                const podeMexer =
+                  viewer.id !== null &&
+                  (lead.broker?.id === viewer.id ||
+                    ["admin", "supervisor", "gerente-comercial", "sdr"].includes(viewer.role))
+                if (!podeMexer) return null
+                return (
+                  <span className="mt-3 inline-flex flex-col">
+                    <button
+                      type="button"
+                      onClick={() => toggleFollowUpNicole(!off)}
+                      disabled={followUpSaving}
+                      aria-pressed={!off}
+                      title={
+                        off
+                          ? "A Nicole nao envia follow-up automatico para este lead. O alerta ao corretor continua."
+                          : "A Nicole envia follow-up automatico para este lead (padrao)."
+                      }
+                      className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition disabled:opacity-60 ${
+                        off
+                          ? "border-stone-300 bg-stone-100 text-stone-600 hover:bg-stone-200 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700"
+                          : "border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100 dark:border-orange-500/40 dark:bg-orange-500/10 dark:text-orange-300 dark:hover:bg-orange-500/20"
+                      }`}
+                    >
+                      {off ? <BellOff className="h-4 w-4" /> : <BellRing className="h-4 w-4" />}
+                      Follow-up Nicole: {off ? "Desligado" : "Ligado"}
+                    </button>
+                    {followUpError && (
+                      <span className="mt-1 text-xs text-red-600 dark:text-red-400">
+                        Nao deu para salvar. Tente de novo.
+                      </span>
+                    )}
+                  </span>
+                )
+              })()}
               {/* Story 75-186 — feedback da visita direto do drawer do pipeline */}
               {pendingFeedbackAptId && (
                 <span className="mt-3 inline-flex">

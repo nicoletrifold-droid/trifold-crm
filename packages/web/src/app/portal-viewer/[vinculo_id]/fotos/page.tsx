@@ -19,7 +19,6 @@ export default async function ViewerFotosPage({
     .eq("obra_id", ctx.obra.id)
     .order("created_at", { ascending: false })
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""
 
-  return <FotosGrid fotos={fotos ?? []} supabaseUrl={supabaseUrl} />
+  return <FotosGrid fotos={fotos ?? []} />
 }

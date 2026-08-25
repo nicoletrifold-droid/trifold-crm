@@ -86,7 +86,6 @@ interface ObraDetailTabsProps {
   mensagens: Mensagem[]
   clientes: Cliente[]
   docDestinatarios?: DocDestinatario[]
-  supabaseUrl: string
   userRole: string
   /** can("obras.aprovar_uploads") */
   canAprovarUploads: boolean
@@ -420,7 +419,6 @@ export function ObraDetailTabs({
   mensagens,
   clientes,
   docDestinatarios = [],
-  supabaseUrl,
   userRole,
   canAprovarUploads,
   canApagarDireto,
@@ -809,7 +807,8 @@ export function ObraDetailTabs({
                     </h3>
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
                 {group.fotos.map((foto) => {
-                  const url = `${supabaseUrl}/storage/v1/object/public/obra-fotos/${foto.storage_path}`
+                  // Story 900-12a: rota autorizada em vez de URL pública.
+                  const url = `/api/obras/fotos/${foto.storage_path}`
                   return (
                     <div
                       key={foto.id}
@@ -1113,7 +1112,7 @@ export function ObraDetailTabs({
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={`${supabaseUrl}/storage/v1/object/public/obra-fotos/${lightboxFoto.storage_path}`}
+            src={`/api/obras/fotos/${lightboxFoto.storage_path}`}
             alt={lightboxFoto.caption ?? "Foto da obra"}
             className="max-h-[90vh] max-w-[90vw] rounded object-contain shadow-2xl"
             onClick={(e) => e.stopPropagation()}
