@@ -25,4 +25,6 @@ Durante merge dos PRs #5 (migration 075) e #6 (Story 50-3 CTWA), descobri que `m
 
 **Padrão para commitar trabalho untracked quando a branch atual está suja com trabalho não relacionado:** `git worktree add -b nova-branch <path-no-scratchpad> origin/main` → copiar (`rsync -a`) só a pasta desejada pra dentro do worktree → `git add` seletivo + commit + `git push -u origin HEAD:refs/heads/nova-branch` → `git worktree remove`. Zero risco de stash/checkout mexer na branch original (ela nem é tocada). Cuidado: worktree criado de `origin/main` nasce **trackeando `origin/main`**, então `git push` sem refspec explícito tentaria empurrar pra main — sempre use `HEAD:refs/heads/<branch>`.
 
+**Sincronizar `main` local estando em outra branch suja (2026-08-26):** `git fetch origin main:main` fast-forwarda o ref local de `main` **sem checkout** — working tree e branch atual ficam intactos. Prefira isso a `git checkout main && git pull` quando há arquivos modificados/untracked, porque o checkout é exatamente o passo que dispara as colisões descritas em [[feedback_untracked_collision_arquivo_a_arquivo]]. Se o fetch recusar (não-fast-forward), aí sim main local divergiu e precisa investigação — o erro é o sinal, não um obstáculo a contornar com `-f`.
+
 Veja [[project_meta_subscription]] para contexto do Epic 50/51.

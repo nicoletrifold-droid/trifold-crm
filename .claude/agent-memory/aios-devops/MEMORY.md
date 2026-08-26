@@ -13,7 +13,7 @@
 - [Colisão com untracked: arquivo a arquivo](feedback_untracked_collision_arquivo_a_arquivo.md) — "untracked would be overwritten": backup+sha256 do arquivo isolado; nunca clean/checkout -f/stash -u
 - [Virada de status vai por branch + PR](feedback_status_story_via_branch_pr.md) — nem commit de doc vai direto na `main`; convenção `docs/<story>-done`
 - [Epic 86 migration 200 colisao](project_epic86_migration_200_collision.md) — PR #358 traz 200_meta_capi_outbox.sql que colide com 200_marketing_brand_assets_icone.sql em main; renumerar (215+) antes de deploy
-- [Epic 86 CAPI estado prod](project_epic86_capi_prod_state.md) — migration 215 JA aplicada em prod; NAO reaplicar as-is; PENDENCIA: `META_CAPI_TEST_EVENT_CODE=TEST15571` ligada em prod desde 2026-08-26, remover apos AC11
+- [Epic 86 CAPI estado prod](project_epic86_capi_prod_state.md) — migration 215 JA aplicada em prod, NAO reaplicar as-is; env de teste já removida (2026-08-26); `vercel redeploy` não aceita `--yes`
 - [Epic 86 CAPI outbox schema+reset](project_epic86_capi_outbox_schema.md) — meta_capi_outbox NAO tem updated_at; fluxo reset failed→pending + cron dispatch validado prod 2026-08-10 (CRON_SECRET em .env.local)
 - [Landing pages = projetos Vercel separados](project_vercel_landing_pages_projects.md) — sem git link (merge NÃO publica, deploy manual); `vind-residence-teste` virou `vind-residence`; push em main redeploya o CRM
 - [Concorrencia em deploy estatico](feedback_vercel_static_deploy_concurrency.md) — outro processo pode deployar por cima; revalidar com `vercel ls` + diff byte a byte, nao grep com head
@@ -33,4 +33,7 @@
 - [LCP: auto-hospedar terceiros](project_lcp_self_hosting_third_party.md) — React e Google Fonts já saíram do caminho crítico; não reintroduzir CDNs no `<head>` (só o Babel lazy do unpkg resta)
 - [trifold.eng.br exige TXT em _vercel](project_trifold_domain_vercel_txt_verification.md) — apex é de outra conta Vercel e o DNS (Cloudflare) é de terceiro; Custom Domain + TXT ANTES do A record
 - [Conferir valor real de env var Vercel](reference_vercel_env_verify_plaintext.md) — `decrypt=true` na listagem não decripta; use `GET /v1/projects/{id}/env/{envId}`; `len()` do blob cifrado é prova zero
+- [Validar Pixel+CAPI exige 2 ferramentas](feedback_meta_pixel_validation_two_channels.md) — painel Test Events é cego p/ evento client-only (`fbq` não carrega `test_event_code`); `PageView` só no Pixel Helper; "Desduplicado" = prova do pareamento
 - [Memória de agente só na raiz do repo](feedback_agent_memory_only_at_repo_root.md) — `.claude/` em pasta de deploy estático fica publicado na web E fora do git ao mesmo tempo; nunca criar subprojeto
+- [Descartar cópia já mergeada em main](feedback_discard_already_merged_copy.md) — ` M` + `git diff origin/main` vazio: `checkout HEAD --`, nunca `checkout origin/main --` (esse recommita)
+- [`.agents/` + skills-lock.json](project_agents_dir_skill_installer.md) — instalador de skill de terceiro (symlink em `.claude/skills/`); não é lixo nem escopo da branch — deixar untracked

@@ -70,3 +70,9 @@
 - [Trava de cron: recibo vs evento](project_cron_lock_recibo_vs_evento.md) — migration 234 mede pelo `started_at`; recibo é descartável, evento em `system_events` não
 - [Armadilha do .vercelignore](project_vercelignore_trap_qa.md) — import de packages/web p/ docs|scripts|bin passa local+CI e quebra SÓ na Vercel; como reproduzir com contraprova
 - [Artefato gerado vs template](project_artefato_gerado_vs_template_qa.md) — provar .generated ≡ render(fonte) por sha256 + determinismo + estabilidade à reordenação, sem credencial
+- [project_epic_86_qa_patterns.md](project_epic_86_qa_patterns.md) — Epic 86 (Pixel+CAPI) QA: 5 checks de tracking silencioso (cadeia de IP, ADAPT que muda superfície dos outros chamadores, hashing, PII em webhook_logs, dedup) + gotcha de rebase do trifold-design-system
+- [Baseline do trifold-design-system](project_trifold_design_system_baseline.md) — `.dc.html` untracked de propósito: baseline é a produção via `curl`, não o git; sem lint/typecheck; falso positivo de `{{ }}`
+
+## Método de QA
+
+- [feedback_reverificacao_focada.md](feedback_reverificacao_focada.md) — re-verificação de gate: `turbo --force` (cache hit não é evidência), `git diff` vazio prova "não tocado", teste de segurança vacuoso, metadata do gate vem do `git` e não do contexto
