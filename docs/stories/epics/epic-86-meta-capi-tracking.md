@@ -3,13 +3,13 @@ epic: 86
 title: Conversions API (CAPI) e Rastreamento Meta — Evento "Visitou"
 status: Draft
 created_at: 2026-08-04
-updated_at: 2026-08-04
+updated_at: 2026-08-26
 created_by: River (@sm)
 priority: High
 sub_epics:
   - 86A: Base CAPI (credenciais, outbox, dispatcher, helper de payload)
   - 86B: Atribuição de Origem (fbclid/fbc/fbp) e Migração de Landing/Forms
-stories_planned: [86-1, 86-2, 86-3, 86-4, 86-5, 86-6, 86-7, 86-8]
+stories_planned: [86-1, 86-2, 86-3, 86-4, 86-5, 86-6, 86-7, 86-8, 86-12]
 stories_added: []
 stories_done: []
 ---
@@ -144,6 +144,7 @@ Enviar ao Meta dois eventos que a campanha precisa:
 | 86-9 | Pixel + eventos CAPI no formulário de qualificação (`/formulario/[token]`) | @dev | P0 | 86-3, 86-4 |
 | 86-10 | Follow-up de e-mail opcional no passo de agendamento | @dev | P2 | 86-9 |
 | 86-11 | Pixel + CAPI na landing do Vind Residence (`/vindresidence/`) | @dev | P1 | 86-1, 86-3 |
+| 86-12 | Pixel + CAPI na landing do Yarden (`/yarden/`), landing nova sem tracking nem conteúdo | @dev | P2 | 86-1, 86-3, 86-11 |
 
 > **Correção de curso (registrada em 2026-08-24 pelo @po).** A tabela acima
 > parou na 86-8 por um tempo e não refletia o que de fato aconteceu:
@@ -180,3 +181,4 @@ Enviar ao Meta dois eventos que a campanha precisa:
 |------|---------|-------------|--------|
 | 2026-08-04 | 0.1 | Epic criado a partir da auditoria de tracking Meta (@architect Aria + @analyst Atlas). 8 stories esboçadas, sequenciadas por dependência. | @sm (River) |
 | 2026-08-24 | 0.2 | Tabela de stories reconciliada com a realidade durante a validação da 86-11: acrescentadas 86-9 (implementada, em produção, QA PASS), 86-10 (reservada) e 86-11 (`Ready`), e registrado que 86-5/86-6/86-7 foram substituídas pela 86-9 — as três apontavam para uma landing (`POST /api/public/leads`) que nunca existiu. Nenhuma mudança nas Decisões de Produto travadas nem na arquitetura recomendada. | @po (Pax) |
+| 2026-08-26 | 0.3 | Acrescentada 86-12 (`Draft`) — Pixel + CAPI na landing nova do Yarden (`/yarden/`), irmã arquitetural da 86-11 (Vind Residence), motivada pela constatação de que a landing WordPress antiga do Yarden (`/y/`) está 404 em produção. A 86-12 introduz um AC novo (discriminador multi-landing em `landing-page-tracking.ts`, ADAPT) porque os módulos server-side reusados da 86-11 hardcodavam identificadores "Vind Residence" — achado não previsto na auditoria original. Duas decisões de negócio deixadas abertas na story para @po validar com o usuário: dataset/Pixel ID do Yarden e a ausência de conteúdo definitivo da página. 86-10 permanece reservada e não redigida. | @sm (River) |
