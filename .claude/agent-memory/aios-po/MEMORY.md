@@ -4,5 +4,5 @@
 - [Validar stories de "cron duplicado" (Epic 75)](project_cron_claim_validation.md) — caminho suprimido precisa de log; helper claim-run é fail-open de propósito
 - [Close-story with CONCERNS](feedback_close_story_concerns_acceptance.md) — Closing InReview→Done on a CONCERNS gate when stakeholder accepts the gap; what the closure Change Log must capture
 - [Epic 900 — numeração e o trap do .vercelignore](project_epic900_numbering_vercel_trap.md) — 900-15 é da migração das rotas; import de packages/web para docs/ falha só na Vercel
-- [Sibling-story reuse audit](feedback_validate_sibling_story_reuse_audit.md) — Validating a story ported from an implemented one: list the modules the sibling created, check AC by AC
+- [Sibling-story reuse audit](feedback_validate_sibling_story_reuse_audit.md) — Story portada de outra: listar módulos da irmã + caçar literais da entidade antiga em arquivos clonados
 - [landing-pages deploy asymmetry](project_landing_pages_deploy_asymmetry.md) — vind-residence is git-tracked and goes via PR; trifold-design-system is untracked, deploy-only
