@@ -27,3 +27,11 @@ For trifold-crm, treat `cd packages/web && pnpm build` (i.e. `next build`) as th
   `fonte: management-api` → `snapshot`). Rodar o gate suja o working tree; descarte com
   `git checkout --` antes de commitar, senão o churn entra no PR como ruído fora de escopo.
 
+**`exit 137` no `turbo type-check` é OOM, NÃO erro de tipo (2026-08-25, PR #502).** `npx turbo
+type-check --force` matou o `@trifold/web` com `exited (137)` — SIGKILL por falta de memória, com
+os outros 7 pacotes verdes. Ler isso como "type-check falhou" e sair caçando erro de tipo é perder
+tempo: rodando `cd packages/web && NODE_OPTIONS="--max-old-space-size=8192" npx tsc --noEmit` deu
+**0 erros**. O turbo roda os 8 pacotes em paralelo e o `packages/web` sozinho já quer ~8GB. Remédio:
+`--concurrency=2` (foi o que fez o `turbo lint --force` passar) ou `tsc` direto no pacote com heap
+maior. Regra: **137 = infraestrutura, qualquer outro exit != 0 = código.**
+
