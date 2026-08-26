@@ -1,13 +1,17 @@
 # Story 86-12 — Pixel Meta + CAPI na landing do Yarden (landing nova, sem tracking nem conteúdo hoje)
 
-**Status:** Draft
+**Status:** Ready
 **Epic:** 86 — Conversions API (CAPI) e Rastreamento Meta
 **Executor:** @dev (Dex)
 **Quality Gate:** @qa (Quinn) — `*qa-gate` ao fim da implementação
 **Prioridade:** P2 (não há tráfego pago ativo apontando para esta URL hoje — confirmado com o stakeholder, lucas@trifold.eng.br, em 2026-08-26, sem urgência de campanha)
 **Estimativa:** 6 pontos (M) — menor que a 86-11 porque os módulos server-side e a rota `/track` já existem e são reusados sem criar nada novo no lado CRM; o ponto novo de complexidade é o discriminador multi-landing (AC5) e um projeto Vercel que ainda não existe
 **Depende de:** 86-1 (credenciais CAPI, já em produção — nenhuma nova env no `trifold-crm`), 86-3 (módulo `packages/shared/src/meta/*`), **86-11** (Done — é a story-irmã cujos módulos server-side esta story reusa quase sem alteração)
-**Bloqueado por decisão de negócio (ver AC1):** qual dataset/Pixel ID do Meta usar para o Yarden — não decidido nesta sessão. @po deve confirmar com o usuário **antes** do @dev iniciar a implementação do AC1.
+**Decisões de negócio — TRAVADAS pelo stakeholder (lucas@trifold.eng.br) em 2026-08-26, na validação @po. Não reabrir:**
+1. **Dataset/Pixel Meta = `1337310707164669`** (conta "TRIFOLD - VIND") — o **mesmo** já usado pelo Vind Residence. **NÃO** criar dataset/Pixel próprio do Yarden. A segmentação por empreendimento é feita por `content_category` (`landing_yarden` vs `landing_vind_residence`, AC5), não por dataset. Ver AC1.
+2. **Nome do projeto Vercel = `yarden`**, URL de deployment `https://yarden.vercel.app` (análogo a `vind-residence` / `vind-residence.vercel.app`). Não é mais placeholder — é o valor definitivo a usar em `ALLOWED_ORIGINS` (AC8), nos `rewrites` da CSP (AC9) e nos endpoints do `index.html` (AC12). Ver "Pré-requisito de infraestrutura".
+
+**Nenhum bloqueio de decisão restante.** A única dependência externa aberta é o conteúdo/copy definitivo da página (AC12), que **não bloqueia** esta story — o placeholder estrutural é o entregável.
 **Não confundir com:** a landing WordPress antiga do Yarden (`trifold.eng.br/y/`) — verificado por `curl` em 2026-08-26, retorna **404** em produção. Não existe mais, não há nada para migrar dela, e não há tráfego pago apontando para lá hoje. Esta story constrói uma landing nova do zero no padrão pós-WordPress, não uma migração.
 
 ## Contexto — por que esta story existe
@@ -84,17 +88,31 @@ produção, não presumido.
   novo projeto Vercel do Yarden.
 - **Não existe hoje nenhum projeto Vercel para o Yarden.** Diferente da 86-11
   (onde `vind-residence` e `vind-residence.vercel.app` já existiam), esta
-  story exige que @devops **crie um projeto Vercel novo** antes do deploy
-  final — ver "Pré-requisito de infraestrutura" abaixo. Isso não bloqueia a
-  criação do código (que pode ser desenvolvido e testado localmente via
+  story exige que @devops **crie um projeto Vercel novo**, chamado **`yarden`**
+  (nome travado na validação @po de 2026-08-26), antes do deploy final — ver
+  "Pré-requisito de infraestrutura" abaixo. Isso não bloqueia a criação do
+  código (que pode ser desenvolvido e testado localmente via
   `python3 -m http.server`, mesmo padrão da 86-11), só o deploy em produção.
 - **Conteúdo/design da página não está pronto.** O usuário vai construir/
   fornecer copy, imagens e seções separadamente. Esta story trata isso como
   dependência externa — ver AC12.
-- **Dataset/Pixel ID do Yarden não foi decidido.** O Vind Residence usa
-  `1337310707164669` ("TRIFOLD - VIND"). Não foi definido nesta sessão se o
-  Yarden usa o mesmo dataset ou um próprio — é uma decisão de conta de
-  anúncios/negócio, não técnica. Ver AC1.
+- **Dataset/Pixel ID: decidido — reusar `1337310707164669`.** O Vind Residence
+  já usa esse dataset ("TRIFOLD - VIND") e o stakeholder confirmou em
+  2026-08-26 que o Yarden usa o **mesmo**. Ver AC1.
+- **🔴 Segundo achado do @po (verificado lendo `api/lead.js:123`, não
+  presumido): o proxy também carrega um identificador de landing FORA do
+  bloco `tracking`.** `landing-pages/vind-residence/api/lead.js` monta
+  `const payload = { nome, whatsapp, email, page: "vind-residence" }`. Esse
+  `page` **não** é campo de tracking Meta — ele é achatado por
+  `flattenIntoFields` em `fields.page`, virá `ctx.pageName` e é gravado no CRM
+  em **quatro** lugares: `webhook_logs.payload.page`,
+  `leads.metadata.landing_page` (`route.ts:282`, `formName ?? ctx.pageName`),
+  `leads.metadata.page` (`route.ts:343`) e a descrição da activity
+  (`route.ts:325`, "Lead criado via landing page: vind-residence"). Se o
+  proxy do Yarden for clonado sem trocar esse literal, **todo lead do Yarden
+  entra no CRM rotulado como Vind Residence** — bug de qualidade de dado no
+  próprio CRM, independente do Meta, e invisível nos testes de CAPI. Coberto
+  agora pelo AC8.
 
 ## Decisão arquitetural (travada agora — não reabrir em modo YOLO no @dev)
 
@@ -186,23 +204,30 @@ story, é manutenção normal de acoplamento HTML↔JS.
 
 ## Acceptance Criteria
 
-### AC1 — Pixel carregado na landing (browser) — dataset ID pendente de decisão de negócio
+### AC1 — Pixel carregado na landing (browser) — dataset `1337310707164669` (DECISÃO TRAVADA)
 
 Em `landing-pages/yarden/index.html`, adicionar o Pixel Base Code oficial do
 Meta no `<head>`, o mais cedo possível (mesma justificativa do `_fbp` da
-86-11 AC1). `fbq('init', '<DATASET_ID>')` com o ID hardcoded como constante.
+86-11 AC1).
 
-**[AUTO-DECISION]** Assumir, por default, o **mesmo dataset do Vind
-Residence** (`1337310707164669`, conta "TRIFOLD - VIND") até segunda ordem —
-reason: é a opção de menor atrito (nenhum ativo novo no Business Manager,
-nenhuma credencial nova), e as duas landings já ficam segmentadas por
-`content_category` (`landing_vind_residence` vs `landing_yarden`, AC5), então
-Custom Conversions por empreendimento continuam possíveis mesmo com um único
-dataset. **Isto NÃO é uma decisão travada** — é uma decisão de conta de
-anúncios que só o usuário pode confirmar. **@po deve validar esta escolha com
-o usuário antes do @dev implementar este AC**; se o usuário preferir um
-dataset/Pixel próprio para o Yarden, o `DATASET_ID` hardcoded muda mas nenhum
-outro AC desta story é afetado.
+**Dataset/Pixel ID = `1337310707164669`** (conta "TRIFOLD - VIND") — o **mesmo**
+do Vind Residence. Decisão de produto **travada** pelo stakeholder
+(lucas@trifold.eng.br) em 2026-08-26; não reabrir, nem em modo YOLO. Razão
+registrada: nenhum ativo novo no Business Manager, nenhuma credencial nova, e a
+segmentação por empreendimento já é garantida por `content_category`
+(`landing_vind_residence` vs `landing_yarden`, AC5) — Custom Conversions por
+empreendimento continuam possíveis com um único dataset.
+
+O ID aparece em **dois** pontos do `<head>` do `index.html` do Vind Residence e
+precisa estar consistente nos dois no Yarden (verificado pelo @po lendo
+`landing-pages/vind-residence/index.html`):
+
+1. `window.TRIFOLD_PIXEL_ID = '1337310707164669'` (linha 21) usado em
+   `fbq('init', window.TRIFOLD_PIXEL_ID)` (linha 30) — manter o mesmo padrão de
+   constante nomeada, não literal solto no `init`.
+2. O fallback `<noscript><img src="https://www.facebook.com/tr?id=1337310707164669&ev=PageView&noscript=1" /></noscript>` (linha 468) —
+   se divergir do `init`, o `PageView` sem-JS vai para o dataset errado em
+   silêncio.
 
 Dispara `fbq('track', 'PageView', {}, { eventID: <uuid> })` imediatamente ao
 carregar. Sem contraparte servidor (mesma razão da 86-11 AC1).
@@ -297,13 +322,23 @@ Novo diretório `landing-pages/yarden/api/`, com `lead.js` e `track.js`
 **clonados de `landing-pages/vind-residence/api/{lead,track}.js`**, com estas
 mudanças (e só estas):
 
-- `ALLOWED_ORIGINS`: trocar `"https://vind-residence.vercel.app"` pela origem
-  do novo projeto Vercel do Yarden (ver "Pré-requisito de infraestrutura" —
-  nome exato a confirmar com @devops antes do deploy; usar
-  `https://yarden.vercel.app` como placeholder de desenvolvimento).
+- `ALLOWED_ORIGINS`: trocar `"https://vind-residence.vercel.app"` por
+  **`"https://yarden.vercel.app"`** (nome do projeto Vercel travado pelo
+  stakeholder em 2026-08-26 — não é mais placeholder).
   `"https://trifold.eng.br"` e `"https://www.trifold.eng.br"` permanecem
   (mesmo domínio final).
 - `CRM_WEBHOOK_URL`/`CRM_TRACK_URL`: **sem mudança** — mesmo `trifold-crm`.
+- **🔴 `page: "vind-residence"` → `page: "yarden"` em `lead.js` (obrigatório,
+  acrescentado pelo @po na validação).** Em
+  `landing-pages/vind-residence/api/lead.js:123` o payload é
+  `{ nome, whatsapp, email, page: "vind-residence" }`. Esse `page` **não** é
+  campo Meta: ele é achatado por `flattenIntoFields` em `fields.page`, vira
+  `ctx.pageName` e é persistido no CRM em `webhook_logs.payload.page`,
+  `leads.metadata.landing_page`, `leads.metadata.page` e na descrição da
+  activity ("Lead criado via landing page: …"). Clonar sem trocar faria **todo
+  lead do Yarden entrar no CRM rotulado como Vind Residence** — e nenhum teste
+  de CAPI pegaria isso. `track.js` **não** tem campo `page` (a rota `/track`
+  não grava nada), então essa mudança é exclusiva do `lead.js`.
 - **Novidade desta story:** cada proxy passa a incluir `landing: "yarden"`
   como um campo fixo do `payload.tracking` (`lead.js`) / `payload`
   (`track.js`) — **não lido de `rawBody`**, uma constante no próprio arquivo,
@@ -325,15 +360,25 @@ mudança adicional necessária além do que o AC6/AC7 já cobrem.
 Mesma mecânica da 86-11 AC8, para os novos caminhos `/yarden`, `/yarden/` e
 `/yarden/:path*`:
 
+**Inventário atual do arquivo, conferido pelo @po (parse do JSON, não presumido):**
+`redirects` = 1 entrada (`/vindresidence` → `/vindresidence/`); `rewrites` = 3
+entradas (`/` → `/Home.dc.html`, `/vindresidence/`, `/vindresidence/:path*`) —
+ou seja, só **2** delas são do Vind Residence; `headers` = 4 blocos
+(`/vindresidence`, `/vindresidence/`, `/vindresidence/:path*`, catch-all
+`/((?!vindresidence).*)`).
+
 - Adicionar 3 novos blocos de `headers` (clonados dos 3 blocos existentes de
   `/vindresidence*`, com `source` trocado), com `script-src` incluindo
   `https://connect.facebook.net`, `connect-src` incluindo
   `https://connect.facebook.net https://www.facebook.com` e (se o Pixel
   hospedar no domínio novo do Yarden algo além de `trifold.eng.br`) o próprio
   domínio Vercel do Yarden, e `img-src` incluindo `https://www.facebook.com`.
-- Adicionar 3 novos blocos de `rewrites` (clonados de `/vindresidence*`),
-  apontando para o domínio de produção do projeto Vercel do Yarden (a
-  confirmar — ver "Pré-requisito de infraestrutura").
+- Adicionar **2** novos blocos de `rewrites` (`/yarden/` e `/yarden/:path*`,
+  clonados dos 2 blocos de `/vindresidence*` — o terceiro rewrite do arquivo é
+  o `/` → `/Home.dc.html` e não tem contraparte aqui), apontando para
+  **`https://yarden.vercel.app`** (nome travado; @devops confirma o domínio
+  real do deployment antes do deploy final — ver "Pré-requisito de
+  infraestrutura").
 - Adicionar 1 novo `redirect` (`/yarden` → `/yarden/`, não permanente, mesmo
   padrão de `/vindresidence`).
 - **Atualizar o bloco catch-all** (hoje `/((?!vindresidence).*)`) para
@@ -357,6 +402,18 @@ PII em `console.log`/`console.error` nos proxies novos do Yarden (mesmo
 padrão de log já usado em `lead.js`/`track.js` do Vind Residence — só a
 mensagem do erro, nunca o corpo da requisição).
 
+**⚠️ Defeito herdado a NÃO clonar (`86.11-QA-005`, status OPEN na 86-11):** o
+`index.html` do Vind Residence contém um `console.log('[lead capturado]', data)`
+que passa a logar `fbc`/`fbp` no console do browser. É caminho morto em produção
+naquela story, mas **clonar o HTML propagaria o defeito para uma landing nova** —
+o que seria uma regressão introduzida por esta story, não herdada. O @dev deve
+remover (ou reduzir a um log sem payload) qualquer `console.log` que imprima o
+corpo/resposta do envio de lead no `index.html` do Yarden, e registrar isso no
+Dev Agent Record. Os itens `86.11-QA-003` (sem rate limit em
+`/landing-page/track`) e `86.11-QA-006` (`tracking:{client_ip,client_ua}`
+anexado mesmo sem tracking do browser) são herdados **conscientemente** e estão
+fora de escopo aqui — são propriedades das rotas compartilhadas, não do clone.
+
 ### AC11 — Degradação graciosa
 
 Mesmas quatro garantias da 86-11 AC10: ad-blocker não impede o envio do lead;
@@ -379,8 +436,11 @@ captação equivalente (nome, WhatsApp, e-mail opcional, aceite obrigatório de
 política de privacidade + opt-in de contato, mesmos dois checkboxes da
 86-11), com os elementos de tracking do AC1-AC4 já ligados a esse formulário
 (Pixel base code, helpers de `visitor_id`/`fbc`/`fbp`/`fbclid`, disparo dos 5
-eventos, `CONFIG.leadEndpoint`/`TRACK_ENDPOINT` apontando para o proxy do
-Yarden). Seções de marketing (hero, galeria, localização, etc.) podem ser
+eventos, `CONFIG.leadEndpoint = "https://yarden.vercel.app/api/lead"` e
+`TRACK_ENDPOINT = "https://yarden.vercel.app/api/track"` — URLs absolutas, mesmo
+motivo documentado no Vind Residence: funcionam mesmo servidas via proxy sob
+`trifold.eng.br/yarden/`, e a allowlist de CORS do AC8 inclui `trifold.eng.br`).
+Seções de marketing (hero, galeria, localização, etc.) podem ser
 placeholders textuais simples (ex.: um `<h1>Yarden</h1>` e um comentário
 `<!-- conteúdo definitivo pendente -->`) — o objetivo é que a infraestrutura
 de tracking já esteja completa e testável (AC13) antes do conteúdo chegar.
@@ -396,7 +456,9 @@ Mesma mecânica da 86-11 AC11: com `META_CAPI_TEST_EVENT_CODE` setada no
 projeto `trifold-crm` (nenhum projeto novo envolvido — as credenciais CAPI
 já vivem lá), uma visita real seguida de um preenchimento do formulário
 placeholder em `https://trifold.eng.br/yarden/` produz, no Test Events do
-Events Manager (dataset confirmado no AC1):
+Events Manager do dataset **`1337310707164669`** (o mesmo do Vind Residence —
+AC1; filtrar por `content_category: "landing_yarden"` para não confundir com o
+tráfego da outra landing, que compartilha o dataset):
 
 - `PageView` (browser).
 - `ViewContent` x2 (browser + servidor, deduplicados).
@@ -406,15 +468,27 @@ Events Manager (dataset confirmado no AC1):
 
 Env removida e `trifold-crm` redeployado ao fim da validação. **Depende de**
 o projeto Vercel do Yarden estar em produção (ver "Pré-requisito de
-infraestrutura") e do AC1 ter o dataset ID confirmado.
+infraestrutura"). O dataset ID já está confirmado (AC1) — não é mais bloqueio.
+
+**Não-regressão obrigatória no mesmo passo:** confirmar que uma visita+lead na
+landing do **Vind Residence** continua produzindo
+`content_category: "landing_vind_residence"` e `metadata.landing_page:
+"vind-residence"` depois do deploy do AC5/AC6/AC7. É o único teste que fecha o
+risco real do ADAPT em produção (os testes unitários provam a função, não o
+deploy).
 
 ## Pré-requisito de infraestrutura (bloqueia o deploy final, não bloqueia o desenvolvimento do código)
 
 Diferente da 86-11, **não existe hoje nenhum projeto Vercel para o Yarden**.
 Antes do AC9/AC13 poderem ser validados em produção, @devops precisa:
 
-1. Criar um novo projeto Vercel (nome sugerido: `yarden`, para espelhar
-   `vind-residence` — confirmar disponibilidade do nome antes).
+1. Criar um novo projeto Vercel chamado **`yarden`** (nome **definido pelo
+   stakeholder em 2026-08-26**, espelhando `vind-residence`; URL esperada
+   `https://yarden.vercel.app`). Se o nome estiver indisponível no scope
+   `trifold-s-projects`, **não escolher um substituto por conta própria** —
+   escalar para o stakeholder, porque o nome aparece em `ALLOWED_ORIGINS`
+   (AC8), nos `rewrites` da CSP (AC9) e nos endpoints do `index.html` (AC12), e
+   uma divergência silenciosa quebra CORS ou o rewrite.
 2. Configurar `LANDING_PAGE_WEBHOOK_SECRET` **nesse projeto novo**, com o
    **mesmo valor** já usado pelo `vind-residence` (não é um segredo novo, é o
    mesmo token replicado para um segundo projeto Vercel — mesma chave que
@@ -426,18 +500,22 @@ Antes do AC9/AC13 poderem ser validados em produção, @devops precisa:
    do risco #1 da 86-11, para não apontar a CSP/rewrite para um domínio
    errado.
 
-O desenvolvimento do HTML/JS/proxies (AC1-AC8, AC12) não depende deste
-pré-requisito — pode ser feito e testado localmente
-(`python3 -m http.server`, mesmo fluxo da 86-11) antes do projeto Vercel
-existir. Só o AC9 (CSP com o domínio real) e o AC13 (validação em produção)
-dependem dele.
+> **⚠️ Este pré-requisito NÃO bloqueia o @dev.** Ele é um bloqueio de **deploy**,
+> de responsabilidade do @devops (T12), não um bloqueio de desenvolvimento. O
+> @dev pode e deve implementar AC1-AC8, AC10-AC12 e todos os testes automatizados
+> integralmente antes de o projeto Vercel existir, usando
+> `https://yarden.vercel.app` como valor definitivo (já travado) e
+> `python3 -m http.server` para o teste local — mesmo fluxo da 86-11. O AC9
+> (arquivo de CSP) também pode ser **escrito** pelo @dev; só a sua **validação
+> em produção** e o AC13 dependem do T12. Se o @dev encontrar este pré-requisito
+> pendente, isso **não é motivo para pausar a story**.
 
 ## Fora de escopo (explícito, não invente na implementação)
 
 - **Copy, imagens, design visual definitivo da página** (AC12) — dependência
   externa do usuário.
-- **Dataset/Pixel ID definitivo** (AC1) — decisão de negócio pendente,
-  default documentado como AUTO-DECISION reversível.
+- **Criar um dataset/Pixel próprio do Yarden** — decisão travada em contrário
+  (AC1: reusar `1337310707164669`). Não criar ativo novo no Business Manager.
 - **Advanced Matching no Pixel**, **Custom Conversions/Lookalike/otimização
   de campanha** — mesmo escopo excluído nas 86-8/86-9/86-11.
 - **`st`/`ct` (UF/cidade via DDD)** — mesma exclusão da 86-11, mesmo motivo
@@ -451,9 +529,10 @@ dependem dele.
 
 ## Riscos e itens fora do nosso controle
 
-1. **Nome do projeto Vercel do Yarden pode já estar em uso ou divergir do
-   sugerido** — @devops confirma antes do deploy (mesma cautela do risco #1
-   da 86-11).
+1. **O nome `yarden` pode estar indisponível no scope da Vercel** — nome já
+   travado pelo stakeholder, então uma indisponibilidade **escala de volta para
+   ele**, não é escolha do @devops (ver "Pré-requisito de infraestrutura",
+   item 1). Mesma cautela do risco #1 da 86-11.
 2. **EMQ é métrica lagged** (mesmo risco já registrado nas stories
    anteriores).
 3. **Volume desta landing é desconhecido** (empreendimento novo, sem
@@ -541,7 +620,12 @@ dependem dele.
   sempre está presente no `tracking` enviado ao CRM, independente do que o
   browser mandar (inclusive se o browser tentar mandar um `landing` diferente
   no corpo — deve ser ignorado, mesmo padrão de defesa de `client_ip`/
-  `client_ua` da 86-11 `86.11-QA-001`).
+  `client_ua` da 86-11 `86.11-QA-001`). **Acrescentar também um caso para
+  `page`:** o payload enviado ao CRM por `lead.js` deve conter
+  `page: "yarden"` e **nunca** `"vind-residence"` — é o teste que trava o
+  achado do @po no AC8 e o único que pega essa classe de erro
+  (assert explícito `expect(payload.page).toBe("yarden")`, não só
+  `not.toBe("vind-residence")`).
 - Testes manuais (mesmo runtime sem framework de testes): `index.html`/
   `api/lead.js`/`api/track.js` do Yarden — `python3 -m http.server` local +
   Test Events do Meta (AC13).
@@ -559,26 +643,28 @@ dependem dele.
 
 ## Tasks / Subtasks
 
-- [ ] **T0 (bloqueante para AC1)** — @po confirma com o usuário o dataset/Pixel ID do Yarden (mesmo dataset do Vind Residence ou um novo)
-- [ ] **T1 (AC1)** — Pixel base code + `fbq('track', 'PageView', ...)` em `landing-pages/yarden/index.html`
+- [x] **T0 (era bloqueante para AC1)** — ✅ **FECHADA em 2026-08-26 pelo @po:** stakeholder confirmou reusar o dataset `1337310707164669` (mesmo do Vind Residence) e o nome de projeto Vercel `yarden`. Nenhuma decisão de negócio pendente.
+- [ ] **T1 (AC1)** — Pixel base code (`window.TRIFOLD_PIXEL_ID = '1337310707164669'` + `<noscript>` com o mesmo ID) + `fbq('track', 'PageView', ...)` em `landing-pages/yarden/index.html`
 - [ ] **T2 (AC2)** — helper vanilla JS de `visitor_id` (clonado da 86-11)
 - [ ] **T3 (AC3)** — helper vanilla JS de captura `fbc`/`fbp`/`fbclid` (clonado da 86-11)
 - [ ] **T4 (AC4)** — disparo dos eventos browser-side com `event_id` compartilhado; listener de primeiro foco para `InitiateCheckout`; dois UUIDs para `Lead`/`CompleteRegistration`
 - [ ] **T5 (AC5)** — ADAPT `packages/web/src/lib/meta/landing-page-tracking.ts`: `LandingSlug`, `LANDING_CONFIGS`, `DEFAULT_LANDING_SLUG`, `resolveLandingConfig`, `TrackingLanding.landing?` + testes
 - [ ] **T6 (AC6)** — ajustar `landing-page/track/route.ts` para usar `resolveLandingConfig(tracking.landing)`
 - [ ] **T7 (AC7)** — ajustar `landing-page/route.ts` (`dispararEventosCapi`) para usar `resolveLandingConfig(tracking.landing)`
-- [ ] **T8 (AC8)** — criar `landing-pages/yarden/api/lead.js` e `api/track.js` (clonados do Vind Residence, `ALLOWED_ORIGINS` + `landing: "yarden"` fixo)
-- [ ] **T9 (AC12)** — criar `landing-pages/yarden/index.html` placeholder (formulário funcional + tracking completo, sem copy de marketing) + `package.json`/`.vercelignore`/`README.md` clonados
-- [ ] **T10 (AC9)** — atualizar CSP em `landing-pages/trifold-design-system/vercel.json`: 3 blocos novos (`/yarden`, `/yarden/`, `/yarden/:path*`), 1 redirect novo, atualizar regex catch-all para `/((?!vindresidence|yarden).*)`
+- [ ] **T8 (AC8)** — criar `landing-pages/yarden/api/lead.js` e `api/track.js` (clonados do Vind Residence) com as **3** mudanças: `ALLOWED_ORIGINS` → `https://yarden.vercel.app`, `landing: "yarden"` fixo, e **`page: "yarden"` no payload do `lead.js`** (o literal `"vind-residence"` da linha 123 — sem isso o lead entra no CRM rotulado como Vind Residence)
+- [ ] **T9 (AC12)** — criar `landing-pages/yarden/index.html` placeholder (formulário funcional + tracking completo, endpoints em `https://yarden.vercel.app/api/{lead,track}`, sem copy de marketing, **sem clonar o `console.log('[lead capturado]', data)`** — ver AC10) + `package.json`/`.vercelignore`/`.gitignore`/`README.md` clonados
+- [ ] **T10 (AC9)** — atualizar CSP em `landing-pages/trifold-design-system/vercel.json`: 3 blocos novos de `headers` (`/yarden`, `/yarden/`, `/yarden/:path*`), **2** `rewrites` novos (`/yarden/`, `/yarden/:path*` → `https://yarden.vercel.app`), 1 `redirect` novo (`/yarden` → `/yarden/`), e atualizar o regex catch-all para `/((?!vindresidence|yarden).*)`
 - [ ] **T11 (AC11)** — testes de degradação graciosa
-- [ ] **T12 (infra, @devops)** — criar projeto Vercel do Yarden + replicar `LANDING_PAGE_WEBHOOK_SECRET` (mesmo valor do Vind Residence) via `scripts/vercel-env-set.sh`
-- [ ] **T13 (AC13, @devops)** — validação end-to-end com `META_CAPI_TEST_EVENT_CODE` + remoção da env de teste
+- [ ] **T12 (infra, @devops — bloqueia deploy, NÃO bloqueia T1-T11)** — criar projeto Vercel `yarden` + replicar `LANDING_PAGE_WEBHOOK_SECRET` (mesmo valor do Vind Residence) via `scripts/vercel-env-set.sh` (nunca `vercel env add` via pipe)
+- [ ] **T13 (AC13, @devops)** — validação end-to-end com `META_CAPI_TEST_EVENT_CODE` (dataset `1337310707164669`, filtrar `content_category: "landing_yarden"`) + **não-regressão do Vind Residence em produção** + remoção da env de teste
 
 ## Change Log
 
 | Date | Version | Description | Author |
 |------|---------|-------------|--------|
 | 2026-08-26 | 0.1 | Story criada a partir da constatação de que `trifold.eng.br/y/` (landing WordPress antiga do Yarden) está 404 em produção e o usuário decidiu reconstruir em `trifold.eng.br/yarden/`, replicando o padrão Done da Story 86-11. Achado crítico verificado nesta sessão: os módulos server-side reusados da 86-11 hardcodam identificadores "Vind Residence" — introduzido o AC5 (discriminador multi-landing, ADAPT em `landing-page-tracking.ts`) para resolver isso sem duplicar rotas/módulo. Duas decisões de negócio deixadas explicitamente abertas para @po validar com o usuário: dataset/Pixel ID (AC1) e a inexistência de conteúdo definitivo da página (AC12, tratado como dependência externa). | @sm (River) |
+| 2026-08-26 | 0.2 | **Decisões de negócio confirmadas pelo stakeholder (lucas@trifold.eng.br) e TRAVADAS na story.** (1) Dataset/Pixel Meta: reusar `1337310707164669` (conta "TRIFOLD - VIND"), o mesmo do Vind Residence — NÃO criar dataset próprio do Yarden; a marcação `[AUTO-DECISION]`/"reversível, não travado" foi removida do AC1 e a segmentação por empreendimento fica por `content_category` (AC5). (2) Nome do projeto Vercel: `yarden`, URL `https://yarden.vercel.app` — deixou de ser placeholder e passou a valor definitivo no cabeçalho, na Descoberta de runtime, no AC8 (`ALLOWED_ORIGINS`), no AC9 (`rewrites`), no AC12 (`CONFIG.leadEndpoint`/`TRACK_ENDPOINT`) e no "Pré-requisito de infraestrutura"; uma indisponibilidade do nome agora escala de volta ao stakeholder em vez de virar escolha do @devops. T0 marcada como fechada. | @po (Pax) |
+| 2026-08-26 | 0.3 | **Validação `*validate-story-draft`: GO, 9.5/10** — todas as afirmações técnicas do @sm re-verificadas pelo @po lendo o código (não por relato): as 3 constantes `LANDING_VIND_*` (`landing-page-tracking.ts:29/32/35`), os exatamente 2 consumidores (`route.ts:16-18,412-414` e `track/route.ts:6-8,116-118`), a allowlist de 9 campos de `lerTracking` sem `landing`, `confiarEmClientIpDoCorpo: true` fixo nas duas rotas, o corpo da rota `/track` sendo ele mesmo o bloco de tracking (justificando a assimetria `payload.tracking` vs `payload` do AC8), e o inventário real do `vercel.json` (1 redirect / 3 rewrites dos quais 2 são do Vind Residence / 4 blocos de headers com catch-all `/((?!vindresidence).*)`). **Correções aplicadas pelo @po:** (a) 🔴 **AC8 ganhou uma terceira mudança obrigatória — `page: "vind-residence"` → `page: "yarden"` em `lead.js:123`**: esse campo não é tracking Meta, é achatado por `flattenIntoFields` e persistido em `webhook_logs.payload.page`, `leads.metadata.landing_page`, `leads.metadata.page` e na descrição da activity; clonar sem trocar rotularia todo lead do Yarden como Vind Residence no próprio CRM, e nenhum teste de CAPI pegaria — com teste dedicado acrescentado em Testing; (b) AC9 corrigido de "3 novos blocos de rewrites" para 2, com o inventário real do arquivo documentado; (c) AC1 explicitou que o dataset ID aparece em DOIS pontos do `<head>` (`window.TRIFOLD_PIXEL_ID` e o `<noscript>` de fallback) e os dois precisam bater; (d) AC10 passou a proibir explicitamente a clonagem do `console.log('[lead capturado]', data)` do Vind Residence (`86.11-QA-005`, OPEN) — herdar o defeito num arquivo novo seria regressão introduzida, não herdada — e registrou `86.11-QA-003`/`86.11-QA-006` como herdados conscientemente; (e) AC13 ganhou a não-regressão obrigatória do Vind Residence em produção pós-deploy do ADAPT; (f) "Pré-requisito de infraestrutura" recebeu um bloco explícito de que é bloqueio de DEPLOY (@devops/T12) e não de desenvolvimento — o @dev não deve pausar a story por ele. **Status: `Draft` → `Ready`** conforme `story-lifecycle.md`. | @po (Pax) |
 
 ## Dev Agent Record
 
