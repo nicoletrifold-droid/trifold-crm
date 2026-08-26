@@ -33,3 +33,4 @@
 - [LCP: auto-hospedar terceiros](project_lcp_self_hosting_third_party.md) — React e Google Fonts já saíram do caminho crítico; não reintroduzir CDNs no `<head>` (só o Babel lazy do unpkg resta)
 - [trifold.eng.br exige TXT em _vercel](project_trifold_domain_vercel_txt_verification.md) — apex é de outra conta Vercel e o DNS (Cloudflare) é de terceiro; Custom Domain + TXT ANTES do A record
 - [Conferir valor real de env var Vercel](reference_vercel_env_verify_plaintext.md) — `decrypt=true` na listagem não decripta; use `GET /v1/projects/{id}/env/{envId}`; `len()` do blob cifrado é prova zero
+- [Memória de agente só na raiz do repo](feedback_agent_memory_only_at_repo_root.md) — `.claude/` em pasta de deploy estático fica publicado na web E fora do git ao mesmo tempo; nunca criar subprojeto
