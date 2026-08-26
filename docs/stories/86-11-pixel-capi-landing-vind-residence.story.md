@@ -1,6 +1,6 @@
 # Story 86-11 — Pixel Meta + CAPI na landing do Vind Residence (hoje sem nenhum tracking)
 
-**Status:** InReview
+**Status:** Done
 **Epic:** 86 — Conversions API (CAPI) e Rastreamento Meta
 **Executor:** @dev (Dex)
 **Quality Gate:** @qa (Quinn) — `*qa-gate` ao fim da implementação
@@ -675,7 +675,7 @@ redeploy lá é necessário para isso) redeployado ao fim da validação.
 - [x] **T9 (AC5, AC7)** — criar `landing-pages/vind-residence/api/track.js` (proxy para a nova rota `/track`, mesmo padrão de CORS/honeypot/`LANDING_PAGE_WEBHOOK_SECRET` de `api/lead.js` — a env já existe nesse projeto Vercel)
 - [x] **T10 (AC8)** — atualizar CSP em `landing-pages/trifold-design-system/vercel.json` (3 blocos, não o 4º): `script-src`, `connect-src` **e `img-src`**
 - [x] **T11 (AC10)** — testes de degradação graciosa (ad-blocker, sem localStorage, tracking ausente/malformado, falha de rede no `/track`)
-- [ ] **T12 (AC11)** — validação end-to-end com `META_CAPI_TEST_EVENT_CODE` (@devops, pós-deploy) + remoção da env de teste — **PARCIAL (2026-08-26):** os 3 deploys estão confirmados em produção e a metade **server-side** do AC11 foi verificada com evidência direta (AC5/AC6/AC7/AC9, incluindo o IP real do visitante em `metadata.meta_ad` e a rejeição do IP forjado pelo browser); a CSP live cobre 100% dos recursos da página. Falta **só** a observação dos 5 eventos no painel Test Events, que exige login Meta + browser. Ver "Execução do T12 pelo @devops — 2026-08-26" no Dev Agent Record
+- [x] **T12 (AC11)** — validação end-to-end com `META_CAPI_TEST_EVENT_CODE` (@devops, pós-deploy) + remoção da env de teste — **CONCLUÍDA (2026-08-26, 14:06–14:23 BRT).** A metade **server-side** já estava verificada com evidência direta na rodada anterior (AC5/AC6/AC7/AC9, incluindo o IP real do visitante em `metadata.meta_ad` e a rejeição do IP forjado pelo browser) e a CSP live cobre 100% dos recursos da página. Nesta rodada o Lucas fechou a metade **browser** com sessão real em `trifold.eng.br/vindresidence/?fbclid=TESTE123`: os **5 eventos** apareceram "Ativo" no Meta Pixel Helper (`PageView`, `ViewContent`, `InitiateCheckout`, `Lead`, `CompleteRegistration`) e o Events Manager marcou `Lead`/`CompleteRegistration` como **"Desduplicado"** — prova do pareamento por `event_id` entre browser e servidor. Env `META_CAPI_TEST_EVENT_CODE` removida do `trifold-crm` e prod redeployada; leads de teste apagados. Ver "Fechamento do T12 — 2026-08-26" no Dev Agent Record
   - _Fora do alcance do @dev: depende dos 3 deploys em produção (ver "Convenção de deploy"). Roteiro no Dev Agent Record._
 
 ## Dev Agent Record
@@ -934,7 +934,11 @@ Env de teste **removida** e `trifold-crm` redeployada sem ela
 `/api/ping` 200, rota `/track` ainda 401 sem token). `vercel env ls production`
 não lista mais `META_CAPI_TEST_EVENT_CODE`.
 
-#### 4. O que continua faltando para fechar o T12 (e por quê)
+#### 4. O que continua faltando para fechar o T12 (e por quê) — ⚠️ SUPERADO em 2026-08-26 14:23 BRT
+
+> **Nota (2026-08-26):** esta subseção descreve o estado da rodada **anterior** e está
+> mantida como histórico. O gap descrito abaixo foi fechado — ver
+> "Fechamento do T12 — 2026-08-26" logo adiante.
 
 O `test_event_code` usado no smoke test (`TEST8611GAGE`) foi **gerado por mim**,
 não obtido do Events Manager — a aba "Test Events" só existe na UI do
@@ -962,6 +966,63 @@ ser feita numa única sessão porque os passos são acoplados:
    o que essa passada acrescenta é a metade browser (`fbq`) e o pareamento por
    `event_id`.**
 5. Remover a env e redeployar; apagar o lead de teste.
+
+### Fechamento do T12 — 2026-08-26 (AC11 VERIFICADO, story `Done`)
+
+A passada humana descrita no item 4 acima foi executada pelo **Lucas** em
+`https://trifold.eng.br/vindresidence/?fbclid=TESTE123`, entre **14:06 e 14:23
+BRT de 2026-08-26**, com o `test_event_code` real `TEST15571` obtido na UI do
+Events Manager (dataset `1337310707164669`, conta "TRIFOLD - VIND"). A evidência
+é **visual e real** (prints de tela), não simulada. Quatro fontes independentes:
+
+1. **Servidor (Events Manager → Eventos de teste, código `TEST15571`):** 5 eventos
+   recebidos via CAPI ao longo do teste — `Ver conteúdo` (ViewContent, "Processado"),
+   `Iniciar finalização da compra` (InitiateCheckout, "Processado"), `Lead`
+   ("Desduplicado") e `Concluir inscrição` (CompleteRegistration, "Desduplicado").
+   O selo **"Desduplicado"** em `Lead`/`CompleteRegistration` é a prova direta de que
+   o Meta casou o `event_id` do servidor com a cópia vinda do browser pelo canal ao
+   vivo (não-teste): a dedup de 48h do AC4 funciona **de verdade em produção**, não
+   só em teste unitário.
+2. **Browser (aba Rede do DevTools):** `fbevents.js` carregado, arquivo de config do
+   pixel `1337310707164669` carregado, e requisições `tr` para `www.facebook.com`
+   disparando — beacons de evento reais saindo do browser.
+3. **Browser (extensão oficial Meta Pixel Helper) — confirmação definitiva:** os
+   **5 eventos** listados como "Ativo" na página: `PageView`, `ViewContent`,
+   `InitiateCheckout` (após focar o campo Nome, conforme AC3) e, depois do envio do
+   formulário, `Lead` e `CompleteRegistration`.
+4. **Console do navegador:** **zero** erro de CSP / `facebook.net` / `facebook.com`
+   → AC8 confirmado com browser real, fechando o que a conferência determinística
+   da rodada anterior já indicava.
+
+**Por que o `PageView` não aparece no painel de Test Events (e não é defeito):** o
+SDK JS (`fbq()`) não tem como carregar um `test_event_code` — esse parâmetro só
+existe no payload da Conversions API. Logo, o painel filtrado por `TEST15571` só
+enxerga a metade **servidor** de cada par e **nunca** exibiria um evento
+client-only como o `PageView`. É limitação da ferramenta do Meta. Quem prova o
+`PageView` é o Pixel Helper (fonte 3). Registrado aqui porque essa assimetria
+painel-vs-browser é armadilha garantida em qualquer revalidação futura.
+
+**Encerramento operacional (executado pelo @devops nesta sessão):**
+
+- Env `META_CAPI_TEST_EVENT_CODE` **removida** do projeto `trifold-crm` (target
+  `production`) e ausência **reconferida** com `vercel env ls production` — só
+  `META_CAPI_DATASET_ID` e `META_CAPI_ACCESS_TOKEN` permanecem. Prod redeployada
+  sem ela (`https://trifold-88krb748r-trifold-s-projects.vercel.app`, aliasada em
+  `crm.trifold.eng.br`, build Ready). A partir daqui os eventos CAPI de produção
+  voltam a contar para reporting/otimização.
+- **4 leads de teste** desta sessão apagados do banco de produção, com os
+  dependentes: `a59043fb` ("teste", `+556949495305`, 17:23Z), `127a9709`
+  ("teste2", `+5559583838384`, 17:15Z), `904cc007` ("teste", `+557858483838`,
+  17:06Z) e `e1a9394e` ("teste", `+5544599999999`, 16:59Z) — todos com
+  `metadata.landing_page = vind-residence`. Junto: 12 `activities`, 5
+  `lead_distribution_log` (CASCADE) e os 4 `webhook_logs` correspondentes
+  (`source=landing_page`, `event_type=lead_submission`), mapeamento 1:1 conferido
+  antes do DELETE. Reconferência pós-limpeza: 0 linhas em todas as tabelas.
+  Os leads reais do dia (3 `whatsapp_organic`/`whatsapp_click_to_ad` + 1) **não
+  foram tocados** — o filtro foi por ID explícito, nunca por data.
+
+**Resultado:** AC11 ✅. Os **12 de 12 ACs** da story estão entregues e verificados.
+`86.11-QA-007` fechado (RESOLVED). Nada mais pendente para o `Done`.
 
 ### Nota de auditoria — CSP aplicada (o diretório é untracked)
 
@@ -1068,6 +1129,7 @@ Diferenças em relação ao valor anterior: `+https://connect.facebook.net` em
 | 2026-08-25 | 1.3 | **Re-QA (`*qa-gate`, iteração 2) — veredito PASS. Status `Ready for Review` → `InReview`.** Re-verificação após as correções 1.1/1.2. `86.11-QA-001` fechado: precedência do corpo virou opt-in verdadeiro (`OpcoesSinais.confiarEmClientIpDoCorpo`, default `false`) — verificado no diff real de `form-capi.ts` (linhas 127/135/137, não é fallback) e nos 4 call-sites por grep (86-11 passam `true`, 86-9 não passam nada e não foram editadas); 5 testes novos de segurança existem, testam o cenário certo (forja no corpo IGNORADA nas rotas da 86-9, IP do header vence, valor forjado não sobrevive na CAPI) e passam. `86.11-QA-002` fechado: seção "Convenção de deploy" reflete o PR #501. Suíte re-executada por mim: 249 arquivos, 3051 testes passando + 6 expected fail, 0 falhas; type-check 8/8; lint 0 erros / 30 warnings pré-existentes. Restam só achados LOW aceitos como dívida (QA-003/005 OPEN, 004/006 ACCEPTED, 007 pós-deploy) — nenhum bloqueia. Liberado para @devops seguir com commit/PR/push; AC11/T12 (validação Test Events) permanece pós-deploy e bloqueia só o `Done`. | @qa (Quinn) |
 | 2026-08-26 | 1.4 | **T12/AC11 executada pelo @devops — PARCIAL. Status permanece `InReview` (NÃO virou `Done`).** `main` local sincronizada com `origin/main` (`0a037103`) por fast-forward. `vercel project ls` confirmou os 3 projetos reais (`trifold-crm`, `trifold-design-system`, `vind-residence` — o `-teste` do risco #1 não existe mais). **Os 3 deploys já estavam no ar e foram confirmados, não presumidos:** (a) `packages/web` em `dpl_ErG5rBwkp3V35dQZEgYFGjucmndF` / commit `0a037103` ⊇ `3c26163e`, com a rota `/api/webhooks/landing-page/track` respondendo 401 sem token (existe) contra 404 num path irmão inexistente; (b) `vind-residence` em `dpl_2GUUahYBfYETXHkN14dv48aXqcY9`, com o `index.html` servido **byte a byte idêntico** ao working tree (sha256 `cee2bd4e…`) e os proxies na versão nova (honeypot devolvendo `{"status":"ok","tracked":false}`, marcador que só existe nesta story); (c) `trifold-design-system` servindo a CSP **exatamente igual** ao valor final da "Nota de auditoria". **AC8 verificado de forma determinística:** cada origem externa referenciada pelo `index.html` foi conferida contra a diretiva correspondente da CSP live — `connect.facebook.net` (`script-src`+`connect-src`), `www.facebook.com` (`connect-src`+`img-src`, cobrindo o beacon `<noscript>` que está presente), e mais 6 origens pré-existentes; nada da página fica fora da CSP. **Smoke test server-side em produção** (env `META_CAPI_TEST_EVENT_CODE` setada só no `trifold-crm` via `scripts/vercel-env-set.sh` + redeploy, fluxo simulado com `curl` atravessando os proxies reais, com `fbclid=TESTE123` e `client_ip`/`client_ua` **forjados no corpo de propósito**): os 3 endpoints em 200 (`tracked:true` = lead criado), e no banco de produção `metadata.meta_ad.client_ip` = **IP público real do cliente**, com o `1.2.3.4` e o `UA-FORJADO-PELO-BROWSER` do corpo **descartados** — a armadilha do AC7 está fechada nos dois lados **em produção**, não só em teste unitário. `metadata.raw_fields` (`{nome,page,email,whatsapp}`) e `webhook_logs.payload` (`{fields,page,utm}`) sem nenhum sinal de atribuição → AC9 confirmado em prod. Logs de runtime sem nenhuma linha `[form-capi] falha ao enviar` → os 4 eventos server-side foram aceitos pelo Meta. Lead de smoke test deletado (0 linhas na reconferência); env de teste removida e `trifold-crm` redeployada sem ela (`dpl_8dQoXBxyqEwzg8vspA4hM6AkQq2A`, `/api/ping` 200). **Por que a T12 NÃO foi marcada e o status NÃO virou `Done`:** o `test_event_code` só é obtenível na UI do Events Manager (não há endpoint de Graph API que o leia ou emita) e nenhum código real está documentado no repo — a T4 da 86-1 e a T8 da 86-9 seguem `[ ]` pelo mesmo motivo. O código usado no smoke test foi autogerado, o que manteve os eventos fora do reporting de produção (o objetivo do AC11) mas os tornou invisíveis em qualquer painel. Falta uma passada humana com login Meta + browser para observar `PageView` 1x e os outros 4 eventos 2x deduplicados — roteiro de 5 passos no Dev Agent Record. `86.11-QA-007` continua OPEN. | @devops (Gage) |
 | 2026-08-25 | 1.2 | **Correção do `86.11-QA-002` (medium, process) — atualizada a seção "Convenção de deploy". Status permanece `Ready for Review`.** A v0.3/1.0 afirmava que `landing-pages/trifold-design-system/` era untracked e que a CSP do AC8 vivia num "ponto cego de auditoria" sem diff versionado. Isso ficou obsoleto: o **PR #501** ("docs: registra vercel.json do proxy trifold-design-system"), mergeado em `main` em 2026-08-24, passou a versionar `landing-pages/trifold-design-system/vercel.json` e `README.md` — confirmado por `git ls-tree origin/main` + `diff`, o conteúdo em `main` é byte a byte idêntico ao do working tree, já com as três adições de CSP do AC8. Reescrita a tabela "Como o código entra / Como o site sobe" para os dois diretórios como versionados; adicionado alerta para o @devops sobre o `main` local estar atrás de `origin/main` (o rebase precisa tratar `vercel.json` como arquivo já rastreado, não como untracked, para não abortar com "untracked working tree file would be overwritten"). Nenhuma mudança de código — só documentação. | @dev (Dex) |
+| 2026-08-26 | 1.5 | **T12/AC11 FECHADA — validação end-to-end concluída com evidência visual real. Status `InReview` → `Done`.** O gap deixado pela v1.4 (a metade **browser** do AC11, que exigia login Meta + browser e não tinha caminho por API) foi fechado pelo **Lucas** em sessão real em `https://trifold.eng.br/vindresidence/?fbclid=TESTE123`, entre **14:06 e 14:23 BRT**, com o `test_event_code` real `TEST15571` obtido na UI do Events Manager (dataset `1337310707164669`, conta "TRIFOLD - VIND"). Quatro fontes independentes, todas por print de tela: (1) **Events Manager → Eventos de teste:** 5 eventos recebidos via CAPI — `Ver conteúdo` (ViewContent, "Processado"), `Iniciar finalização da compra` (InitiateCheckout, "Processado"), `Lead` ("Desduplicado") e `Concluir inscrição` (CompleteRegistration, "Desduplicado"); o selo **"Desduplicado"** prova que o Meta casou o `event_id` do servidor com a cópia do browser vinda pelo canal ao vivo — a dedup de 48h do AC4 funciona em produção, não só em teste unitário. (2) **Aba Rede do DevTools:** `fbevents.js` + arquivo de config do pixel `1337310707164669` carregados e requisições `tr` para `www.facebook.com` disparando. (3) **Extensão oficial Meta Pixel Helper — confirmação definitiva:** os **5 eventos** como "Ativo" na página — `PageView`, `ViewContent`, `InitiateCheckout` (após focar o campo Nome, conforme AC3) e, pós-submit, `Lead` e `CompleteRegistration`. (4) **Console:** zero erro de CSP/`facebook.net`/`facebook.com` → AC8 confirmado com browser real. **O `PageView` nunca aparece no painel de Test Events e isso não é defeito:** o SDK JS (`fbq()`) não tem como carregar `test_event_code` (o parâmetro só existe no payload da CAPI), então o painel filtrado por `TEST15571` só enxerga a metade servidor de cada par e jamais exibiria um evento client-only — quem prova o `PageView` é o Pixel Helper. **Encerramento operacional pelo @devops:** env `META_CAPI_TEST_EVENT_CODE` **removida** do `trifold-crm` (target production) com ausência **reconferida** por `vercel env ls production` (restam só `META_CAPI_DATASET_ID` e `META_CAPI_ACCESS_TOKEN`), e prod redeployada sem ela (`trifold-88krb748r`, aliasada em `crm.trifold.eng.br`, Ready) — eventos CAPI voltam a contar para reporting/otimização; **4 leads de teste** da sessão apagados de produção (`a59043fb`, `127a9709`, `904cc007`, `e1a9394e` — todos `metadata.landing_page=vind-residence`) junto de 12 `activities`, 5 `lead_distribution_log` (CASCADE) e os 4 `webhook_logs` pareados 1:1, com reconferência em 0 linhas e **nenhum lead real tocado** (DELETE por ID explícito, nunca por data). **12 de 12 ACs entregues e verificados**; `86.11-QA-007` fechado (RESOLVED). | @devops (Gage) |
 
 ## QA Results
 
@@ -1133,7 +1195,7 @@ apareceu hoje e invalida a "Convenção de deploy" da story.
 | 86.11-QA-004 | low | `quandoFbpPronto` atrasa o par server-side em até 5s (bounce < 5s perde o evento de servidor) | ACCEPTED |
 | 86.11-QA-005 | low | Desvio literal do AC9: `console.log('[lead capturado]', data)` passa a logar `fbc`/`fbp` (caminho morto em prod) | OPEN |
 | 86.11-QA-006 | low | `api/lead.js` anexa `tracking:{client_ip,client_ua}` mesmo sem tracking do browser → IP/UA persistidos em todo lead | ACCEPTED |
-| 86.11-QA-007 | low | AC11/T12 só verificável pós-deploy | OPEN |
+| 86.11-QA-007 | low | AC11/T12 só verificável pós-deploy | RESOLVED (2026-08-26, @devops — ver "Fechamento do T12") |
 
 **`86.11-QA-001` em uma frase:** `extrairSinais` é compartilhada, e os outros dois
 chamadores — `formulario/[token]/route.ts:173` e `formulario/[token]/tracking/route.ts:82`
@@ -1303,7 +1365,9 @@ lido do contexto da sessão:
   vale um round-trip com o @dev só para isto.
 - `86.11-QA-004`/`86.11-QA-006` (low) — ACCEPTED no gate da iteração 1.
 - `86.11-QA-007` (low) — AC11/T12 só verificável pós-deploy (bloqueia o `Done`,
-  não o merge).
+  não o merge). **RESOLVED em 2026-08-26** pela validação com browser real
+  (Pixel Helper + Events Manager); ver "Fechamento do T12 — 2026-08-26" no Dev
+  Agent Record. Deixou de bloquear o `Done`.
 
 #### Escopo desta re-revisão
 
