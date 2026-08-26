@@ -1,0 +1,45 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# trifold-design-system — o que entra e o que não entra no git
+#
+# Este projeto NÃO é deployado via git (deploy manual: `vercel deploy --prod`).
+# Versionamos aqui o que é auditável à mão — as páginas `*.dc.html`, o
+# `support.js`, o `api/contact.js` e a config (`vercel.json`, `.vercelignore`).
+# O material pesado exportado pelo canvas (~77 MB) fica fora.
+#
+# ⚠️ ESTE ARQUIVO NÃO É ESPELHO DO `.vercelignore`.
+# `assets/`, `uploads/`, `preview/` e `brand_imgs/` são ignorados AQUI mas são
+# OBRIGATÓRIOS no deploy. Nunca copie estas linhas para o `.vercelignore` — o
+# site subiria sem imagens e sem fontes.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Internals da Vercel CLI (também no .vercelignore)
+.vercel
+
+# Memória de agente / tooling local — nunca publicar nem versionar
+# (a exposição pública deste diretório foi o bug que originou o PR #505)
+.claude
+
+# Assets pesados exportados pelo canvas — vivem só no deployment da Vercel
+assets/
+uploads/
+preview/
+brand_imgs/
+.thumbnail
+
+# Rede de segurança: o canvas às vezes exporta mídia binária solta fora de
+# assets/. Nada disso deve entrar no repo do CRM.
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.gif
+*.svg
+*.avif
+*.mp4
+*.webm
+*.woff
+*.woff2
+*.ttf
+*.otf
+*.eot
+*.zip

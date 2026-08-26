@@ -1,0 +1,5 @@
+# Vercel CLI internals (mirrors .gitignore — do not remove)
+.vercel
+
+# Agent memory / local tooling — must never be published
+.claude

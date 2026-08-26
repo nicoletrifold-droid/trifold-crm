@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>@view-transition{navigation:auto}</style>
+<title>Artigo — Blog Trifold Engenharia</title>
+<meta name="description" content="Artigo do blog da Trifold Engenharia.">
+<link rel="preload" as="image" href="assets/card-vind.webp" fetchpriority="high">
+<link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-variable.woff2" crossorigin>
+<script src="./support.js" defer></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<link href="assets/fonts/fonts.css" rel="stylesheet">
+<style>
+  html{scroll-behavior:smooth}
+  ::view-transition-old(root),::view-transition-new(root){animation-duration:.38s;animation-timing-function:cubic-bezier(.4,0,.2,1)}
+  body{margin:0;background:#000;color:#fff;font-family:'Space Grotesk',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  ::selection{background:#F27A5E;color:#000}
+  a{color:inherit;text-decoration:none}
+</style>
+</helmet>
+
+<div style="background:#000;color:#fff;font-family:'Space Grotesk',system-ui,sans-serif">
+
+  <!-- ============ NAV ============ -->
+  <div style="position:fixed;top:0;left:0;right:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:20px {{ sidePad }};box-sizing:border-box;background:linear-gradient(180deg,rgba(0,0,0,0.65),rgba(0,0,0,0))">
+    <a href="Home.dc.html" aria-label="Ir para a Home" style="display:flex;align-items:center"><dc-import name="Logo" tone="dark" size="{{ 26 }}" hint-size="220px,30px"></dc-import></a>
+    <div style="{{ navLinksStyle }}">
+      <a href="Home.dc.html" style="color:#C9C9C9;white-space:nowrap;transition:color .2s ease" style-hover="color:#fff">HOME</a>
+      <a href="Sobre Nós.dc.html" style="color:#C9C9C9;white-space:nowrap;transition:color .2s ease" style-hover="color:#fff">SOBRE NÓS</a>
+      <a href="Empreendimentos.dc.html" style="color:#C9C9C9;white-space:nowrap;transition:color .2s ease" style-hover="color:#fff">EMPREENDIMENTOS</a>
+      <a href="B2B.dc.html" style="color:#C9C9C9;white-space:nowrap;transition:color .2s ease" style-hover="color:#fff">CORPORATIVAS</a>
+      <a href="Blog.dc.html" style="color:#fff;border-bottom:1px solid #F27A5E;padding-bottom:3px;white-space:nowrap">BLOG</a>
+      <a href="Home.dc.html#contato" style="padding:11px 22px;background:#F27A5E;color:#000;border-radius:2px;font-weight:600;letter-spacing:0.02em;white-space:nowrap;transition:filter .25s ease,transform .25s ease" style-hover="filter:brightness(1.08);transform:scale(1.02)">CONTATO</a>
+    </div>
+    <button onClick="{{ toggleMenu }}" style="{{ hamburgerBtnStyle }}">
+      <span style="{{ barStyle }}"></span><span style="{{ barStyle }}"></span><span style="{{ barStyle }}"></span>
+    </button>
+  </div>
+
+  <!-- ============ MOBILE MENU OVERLAY ============ -->
+  <sc-if value="{{ menuOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;inset:0;z-index:200;background:#050505;display:flex;flex-direction:column;padding:26px 28px 40px;overflow-y:auto">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:52px">
+        <a href="Home.dc.html" aria-label="Ir para a Home" style="display:flex;align-items:center"><dc-import name="Logo" tone="dark" size="{{ 26 }}" hint-size="200px,28px"></dc-import></a>
+        <button onClick="{{ toggleMenu }}" style="width:38px;height:38px;background:none;border:1px solid rgba(255,255,255,0.2);border-radius:6px;color:#fff;font-size:18px;cursor:pointer">✕</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;font-size:24px;font-weight:500">
+        <a href="Home.dc.html" style="padding:14px 4px;border-bottom:1px solid rgba(255,255,255,0.08)">Home</a>
+        <a href="Sobre Nós.dc.html" style="padding:14px 4px;border-bottom:1px solid rgba(255,255,255,0.08)">Sobre nós</a>
+        <a href="Empreendimentos.dc.html" style="padding:14px 4px;border-bottom:1px solid rgba(255,255,255,0.08)">Empreendimentos</a>
+        <a href="B2B.dc.html" style="padding:14px 4px;border-bottom:1px solid rgba(255,255,255,0.08)">Corporativas</a>
+        <a href="#" onClick="{{ toggleMenu }}" style="padding:14px 4px;border-bottom:1px solid rgba(255,255,255,0.08);color:#F27A5E">Blog</a>
+      </div>
+      <a href="Home.dc.html#contato" style="display:inline-flex;align-items:center;justify-content:center;margin-top:32px;padding:16px 24px;background:#F27A5E;color:#000;border-radius:2px;font-weight:600;font-size:15px">Contato</a>
+    </div>
+  </sc-if>
+
+  <!-- ============ HEADER: TÍTULO + META ============ -->
+  <section style="padding:{{ heroPadTop }} {{ sidePad }} 40px;max-width:1120px;margin:0 auto">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:22px">
+      <span style="font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.22em;text-transform:uppercase;color:#F27A5E">{{ post.category }}</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:32px;flex-wrap:wrap">
+      <h1 style="margin:0;font-size:clamp(28px,4.4vw,50px);font-weight:600;letter-spacing:-0.02em;line-height:1.15;max-width:820px;flex:1">{{ post.title }}</h1>
+      <div style="display:flex;align-items:center;gap:12px;flex:none">
+        <div style="text-align:right">
+          <div style="font-size:14px;font-weight:600">{{ post.author }}</div>
+          <div style="font-family:'Space Mono',monospace;font-size:11px;color:#9A9A9A;margin-top:2px">{{ post.readTime }}</div>
+        </div>
+        <div style="width:46px;height:46px;border-radius:50%;background:#1c1c1c;flex:none;display:flex;align-items:center;justify-content:center;overflow:hidden">
+          <svg viewBox="0 0 100 100" width="60%" height="60%" fill="none"><circle cx="50" cy="36" r="18" fill="#4A4A4A"/><path d="M12 92c4-24 20-38 38-38s34 14 38 38" fill="#4A4A4A"/></svg>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ IMAGEM DE CAPA ============ -->
+  <section style="padding:0 {{ sidePad }} 56px;max-width:1120px;margin:0 auto">
+    <div style="position:relative;width:100%;aspect-ratio:{{ coverRatio }};overflow:hidden;border-radius:6px">
+      <div style="{{ coverStyle }}"></div>
+    </div>
+  </section>
+
+  <!-- ============ CORPO DO ARTIGO ============ -->
+  <section style="padding:0 {{ sidePad }} 100px;max-width:760px;margin:0 auto">
+    <sc-for list="{{ post.body }}" as="para" hint-placeholder-count="6">
+      <p style="margin:0 0 26px;font-size:17px;line-height:1.85;font-weight:300;color:#D6D6D6">{{ para }}</p>
+    </sc-for>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:48px;padding-top:32px;border-top:1px solid rgba(255,255,255,0.08)">
+      <sc-for list="{{ post.tags }}" as="tg" hint-placeholder-count="4">
+        <span style="padding:8px 15px;background:rgba(242,122,94,0.12);color:#F27A5E;font-size:13px;font-weight:500;border-radius:6px">{{ tg }}</span>
+      </sc-for>
+    </div>
+  </section>
+
+  <!-- ============ CONTINUE LENDO ============ -->
+  <section style="padding:0 {{ sidePad }} 110px;max-width:1120px;margin:0 auto;border-top:1px solid rgba(255,255,255,0.08);padding-top:80px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
+      <span style="font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.22em;text-transform:uppercase;color:#9A9A9A">Continue lendo</span>
+    </div>
+    <h2 style="margin:0 0 40px;font-size:clamp(22px,3vw,32px);font-weight:500;letter-spacing:-0.02em">Mais do blog Trifold</h2>
+    <div style="display:grid;grid-template-columns:{{ cols3 }};gap:20px">
+      <sc-for list="{{ related }}" as="r" hint-placeholder-count="3">
+        <a href="{{ r.href }}" style="display:block;border-radius:6px;overflow:hidden;border:1px solid rgba(255,255,255,0.08);background:#0A0A0A;transition:transform .3s ease,border-color .3s ease" style-hover="transform:translateY(-4px);border-color:rgba(242,122,94,0.5)">
+          <div style="position:relative;aspect-ratio:16/11;overflow:hidden"><div style="{{ r.imgStyle }}"></div></div>
+          <div style="padding:20px 20px 22px">
+            <span style="font-family:'Space Mono',monospace;font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;color:#F27A5E">{{ r.category }}</span>
+            <h3 style="margin:10px 0 0;font-size:15.5px;font-weight:600;line-height:1.4">{{ r.title }}</h3>
+          </div>
+        </a>
+      </sc-for>
+    </div>
+  </section>
+
+  <!-- ============ CTA FINAL ============ -->
+  <section style="padding:0 {{ sidePad }} 110px;max-width:700px;margin:0 auto;text-align:center">
+    <span style="display:block;font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.22em;text-transform:uppercase;color:#F27A5E;margin-bottom:24px">Fique por dentro</span>
+    <h2 style="margin:0 0 34px;font-size:clamp(24px,3.6vw,40px);font-weight:600;letter-spacing:-0.025em;line-height:1.15">Tem uma dúvida sobre seu próximo projeto?</h2>
+    <a href="Home.dc.html#contato" style="display:inline-flex;align-items:center;gap:10px;padding:16px 34px;background:#F27A5E;color:#000;border-radius:2px;font-size:15px;font-weight:600;letter-spacing:0.02em;transition:transform .25s ease,filter .25s ease" style-hover="filter:brightness(1.08);transform:translateY(-2px)">Falar com a Trifold <span style="font-size:17px;display:inline-block;transition:transform .25s ease" style-hover="transform:translateX(4px)">→</span></a>
+  </section>
+
+  <!-- ============ FOOTER ============ -->
+  <footer style="padding:64px {{ sidePad }} 44px;border-top:1px solid rgba(255,255,255,0.08);background:#050505">
+    <div style="max-width:1120px;margin:0 auto">
+      <div style="display:flex;flex-wrap:wrap;gap:32px;justify-content:space-between;align-items:flex-start;padding-bottom:44px;border-bottom:1px solid rgba(255,255,255,0.08)">
+        <div style="max-width:320px">
+          <dc-import name="Logo" tone="dark" size="{{ 30 }}" hint-size="280px,34px"></dc-import>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:20px 26px;font-size:13px;letter-spacing:0.04em;color:#9A9A9A">
+          <a href="Home.dc.html" style="transition:color .2s ease" style-hover="color:#fff">HOME</a><a href="Sobre Nós.dc.html" style="transition:color .2s ease" style-hover="color:#fff">SOBRE</a><a href="Empreendimentos.dc.html" style="transition:color .2s ease" style-hover="color:#fff">EMPREENDIMENTOS</a><a href="B2B.dc.html" style="transition:color .2s ease" style-hover="color:#fff">CORPORATIVAS</a><a href="Blog.dc.html" style="transition:color .2s ease" style-hover="color:#fff">BLOG</a>
+        </div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:20px;justify-content:space-between;align-items:center;padding-top:28px;font-family:'Space Mono',monospace;font-size:11px;color:#5A5A5A">
+        <span>© 2026 Trifold Engenharia. Todos os direitos reservados.</span>
+        <span style="display:inline-flex;align-items:center;gap:8px">Desenvolvido por <img src="assets/dois-logo.svg" alt="Dois" style="height:12px;width:auto;opacity:0.7" /></span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- WhatsApp float -->
+  <a href="https://wa.me/5544991089698?text=Ol%C3%A1%2C%20estava%20no%20site%20da%20Trifold%20e%20gostaria%20de%20mais%20informa%C3%A7%C3%B5es%20sobre..." target="_blank" rel="noopener" style="position:fixed;right:20px;bottom:20px;z-index:120;width:58px;height:58px;border-radius:50%;background:#111111;border:1px solid #F27A5E;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 20px rgba(0,0,0,0.4);transition:transform .25s ease,box-shadow .25s ease" style-hover="transform:scale(1.08);box-shadow:0 8px 26px rgba(0,0,0,0.5)" title="WhatsApp">
+    <svg viewBox="0 0 32 32" width="30" height="30" fill="#fff"><path fill-rule="evenodd" clip-rule="evenodd" d="M16 3C8.82 3 3 8.82 3 16c0 2.49.69 4.82 1.9 6.81L3 29l6.37-1.85A12.94 12.94 0 0 0 16 29c7.18 0 13-5.82 13-13S23.18 3 16 3zm0 23.8a10.7 10.7 0 0 1-5.46-1.49l-.39-.23-4.06 1.18 1.21-3.96-.25-.41A10.75 10.75 0 1 1 16 26.8z"/><path d="M21.6 18.9c-.32-.16-1.88-.93-2.17-1.03-.29-.11-.5-.16-.72.16-.21.32-.82 1.03-1 1.24-.19.21-.37.24-.69.08-.32-.16-1.34-.5-2.55-1.58-.94-.84-1.58-1.87-1.76-2.19-.19-.32-.02-.49.14-.65.14-.14.32-.37.48-.55.16-.19.21-.32.32-.53.11-.21.05-.4-.03-.56-.08-.16-.72-1.74-.99-2.38-.26-.62-.53-.54-.72-.55-.19-.01-.4-.01-.61-.01-.21 0-.56.08-.85.4-.29.32-1.11 1.09-1.11 2.65 0 1.56 1.14 3.07 1.29 3.28.16.21 2.24 3.42 5.42 4.8.76.33 1.35.52 1.81.67.76.24 1.45.21 2 .13.61-.09 1.88-.77 2.14-1.51.27-.75.27-1.39.19-1.52-.08-.14-.29-.21-.61-.37z"/></svg>
+  </a>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{}">
+const ARTICLES = {
+  f0: {
+    category: 'Empreendimentos',
+    title: 'Apartamento Boutique: o novo desejo de morar bem com sofisticação, exclusividade e propósito',
+    author: 'Equipe Trifold', readTime: '4 min de leitura', cover: 'assets/card-vind.webp',
+    body: [
+      'O apartamento boutique é a nova tendência que une exclusividade, sofisticação e bem-estar. Em Maringá, o Vind Residence incorpora esse conceito com poucas unidades, acabamento premium e áreas comuns pensadas para uma experiência única.',
+      'Diferente dos grandes empreendimentos, o formato boutique aposta na escassez como valor: menos unidades significam mais privacidade, um convívio mais próximo entre moradores e um padrão de acabamento que seria inviável em escala maior.',
+      'No Vind Residence, cada detalhe foi pensado para essa proposta — da varanda gourmet ampliada à seleção de materiais nobres nas áreas sociais. É um convite a repensar o que significa morar bem no interior do Paraná.',
+      'Para a Trifold, esse é apenas o começo de uma nova fase de empreendimentos que unem design, tecnologia e wellness — sempre com a mesma exigência técnica que marca nossa atuação em obras corporativas.',
+    ],
+    tags: ['Apartamento Boutique', 'Vind Residence', 'Maringá', 'Alto padrão'],
+  },
+  f1: {
+    category: 'Mercado Imobiliário',
+    title: 'Mercado Imobiliário em Maringá',
+    author: 'Equipe Trifold', readTime: '3 min de leitura',
+    body: [
+      'Maringá vive um momento de expansão imobiliária consistente, puxado pelo crescimento populacional, pela diversificação econômica e pela reputação de cidade planejada que a coloca entre as mais desejadas do interior do Paraná para se viver e investir.',
+      'Bairros que até pouco tempo eram considerados periféricos hoje concentram parte significativa dos lançamentos residenciais, impulsionados pela chegada de nova infraestrutura viária, comércio de bairro e proximidade com polos de emprego em expansão na cidade.',
+      'Do lado corporativo, o crescimento de indústrias, redes de varejo e serviços de saúde também pressiona a demanda por obras comerciais bem planejadas — reforçando Maringá como polo regional que vai muito além do mercado residencial.',
+      'Para os próximos lançamentos, a expectativa é de empreendimentos cada vez mais qualificados: menos unidades, mais exclusividade e um padrão construtivo alinhado com um comprador que já entende o valor de investir bem, não apenas barato. É esse panorama que orienta cada novo projeto da Trifold na cidade.',
+    ],
+    tags: ['Mercado imobiliário', 'Maringá', 'Panorama do mercado', 'Novos bairros'],
+  },
+  p0: {
+    category: 'Empreendimentos',
+    title: 'Os novos estilos de vida estão moldando os projetos residenciais',
+    author: 'Equipe Trifold', readTime: '3 min de leitura',
+    body: [
+      'A forma como as pessoas querem viver mudou — e os projetos residenciais estão acompanhando essa transformação. Trabalho híbrido, busca por bem-estar e valorização do tempo em casa fizeram com que espaços multifuncionais, áreas de lazer completas e conforto acústico deixassem de ser diferenciais para se tornarem exigências básicas de quem procura um novo lar.',
+      'Ambientes que antes eram secundários, como varandas e áreas comuns, ganharam protagonismo. Coworkings dentro do próprio condomínio, espaços pet friendly e academias completas refletem uma rotina que combina produtividade e qualidade de vida sob o mesmo teto, sem depender de deslocamentos longos.',
+      'Essa mudança também é geracional: compradores mais jovens priorizam localização estratégica, tecnologia embarcada e sustentabilidade, enquanto famílias buscam segurança, metragens que respirem e proximidade com escolas e comércio. Projetar bem, hoje, significa entender essas camadas de necessidade antes de desenhar a primeira planta.',
+      'Na Trifold, cada empreendimento nasce a partir desse diagnóstico de estilo de vida — não de uma planta padrão. É assim que conseguimos entregar projetos como o Vind Residence, pensados para quem busca exclusividade sem abrir mão da praticidade do dia a dia em Maringá.',
+    ],
+    tags: ['Estilo de vida', 'Empreendimentos residenciais', 'Maringá', 'Arquitetura residencial'],
+  },
+  p1: {
+    category: 'Trifold',
+    title: 'Construa com segurança e planeje com quem entende: o caminho para uma obra comercial de sucesso',
+    author: 'Equipe Trifold', readTime: '3 min de leitura', cover: 'assets/blog/p21.webp',
+    body: [
+      'Toda obra comercial de sucesso começa muito antes da fundação: começa no planejamento. Definir escopo, orçamento realista e cronograma com folga para imprevistos evita os dois maiores vilões de qualquer obra — atraso e estouro de custo — e é o que separa um projeto profissional de uma aposta.',
+      'Segurança do trabalho não é item de checklist, é cultura. Equipamentos de proteção, treinamento constante e um canteiro organizado reduzem acidentes e, na prática, também aceleram a obra: menos interrupções, menos retrabalho, menos passivo trabalhista para o cliente final.',
+      'Contar com um time de engenharia próprio, e não terceirizado ponta a ponta, muda a qualidade da execução. Decisões técnicas ficam mais rápidas, a comunicação com o cliente é direta e cada etapa é auditada por quem realmente entende de construção civil — não apenas de gestão de contratos.',
+      'É assim que a Trifold conduz obras corporativas para hospitais, indústrias e redes de varejo: com planejamento rigoroso, segurança como prioridade e um time próprio que responde pelo resultado do início ao fim da obra.',
+    ],
+    tags: ['Obra comercial', 'Planejamento de obra', 'Gestão de obras', 'Trifold'],
+  },
+  p2: {
+    category: 'Empreendimentos',
+    title: 'Financiamento Imobiliário Dispara: Alta de 40,3% em um Ano!',
+    author: 'Equipe Trifold', readTime: '3 min de leitura', cover: 'assets/blog/p7.webp',
+    body: [
+      'O crédito imobiliário voltou a acelerar, com alta expressiva de 40,3% na comparação anual — um sinal claro de que famílias e investidores estão retomando a confiança no setor. Esse movimento reflete tanto a queda gradual em algumas linhas de financiamento quanto a percepção de que o imóvel segue como um dos ativos mais sólidos do país.',
+      'Para quem está pensando em comprar, o momento pede atenção: taxas e condições variam bastante entre bancos e programas habitacionais, e simular diferentes cenários antes de fechar negócio pode representar economia significativa ao longo dos anos de financiamento.',
+      'Do lado da incorporação, o aumento do crédito disponível estimula novos lançamentos e dá fôlego para empreendimentos que unem localização estratégica a um padrão construtivo mais alto — exatamente o segmento onde a demanda mais cresce.',
+      'Em Maringá, esse cenário favorece empreendimentos bem posicionados, com poucas unidades e forte apelo de exclusividade, como é o caso do Vind Residence — que já sente o reflexo direto desse aquecimento no interesse de compradores e investidores.',
+    ],
+    tags: ['Financiamento imobiliário', 'Mercado imobiliário', 'Crédito habitacional', 'Investimento'],
+  },
+  p3: {
+    category: 'Empreendimentos',
+    title: 'Investimentos do Agronegócio no Mercado Imobiliário: Uma Tendência Promissora no Paraná',
+    author: 'Equipe Trifold', readTime: '3 min de leitura',
+    body: [
+      'O capital do agronegócio paranaense está encontrando um novo destino: o mercado imobiliário urbano. Produtores e empresários do setor, historicamente concentrados em terra e maquinário, têm diversificado patrimônio em imóveis residenciais e comerciais nas cidades polo do interior do estado.',
+      'Maringá se destaca nesse movimento por combinar infraestrutura urbana consolidada com proximidade das principais regiões produtoras. Isso atrai não só famílias ligadas ao agro que buscam moradia na cidade, mas também investidores que enxergam no setor imobiliário uma forma de proteger capital com liquidez maior que a terra rural.',
+      'Esse fluxo de investimento tem impulsionado empreendimentos de médio e alto padrão, com exigência crescente por qualidade construtiva, segurança patrimonial e localização estratégica — características que fazem parte do DNA de quem constrói pensando no longo prazo.',
+      'A Trifold acompanha de perto essa tendência, desenvolvendo empreendimentos corporativos e residenciais que atendem exatamente esse perfil de investidor: sólido, exigente e com visão de futuro para o Paraná.',
+    ],
+    tags: ['Agronegócio', 'Mercado imobiliário', 'Paraná', 'Investimento imobiliário'],
+  },
+  p4: {
+    category: 'Empreendimentos',
+    title: 'Imóveis de luxo seguem em alta e se destacam como investimento seguro, apesar dos juros elevados',
+    author: 'Equipe Trifold', readTime: '3 min de leitura',
+    body: [
+      'Mesmo com os juros ainda em patamar elevado, o segmento de imóveis de alto padrão segue resiliente. Diferente do mercado popular, mais sensível ao crédito, o comprador de luxo costuma operar com capital próprio ou financiamentos menores proporcionalmente ao valor do imóvel — o que reduz sua exposição ao custo do dinheiro.',
+      'Esse perfil de comprador busca, acima de tudo, segurança patrimonial: um imóvel exclusivo, bem localizado e com baixa oferta similar no mercado tende a se valorizar mesmo em cenários econômicos mais apertados, funcionando como reserva de valor tangível.',
+      'Empreendimentos boutique, com poucas unidades e acabamento diferenciado, reforçam essa lógica de escassez. Menos unidades disponíveis significam maior valorização potencial e um padrão de vizinhança que dificilmente se repete em lançamentos de grande escala.',
+      'É exatamente essa proposta que sustenta empreendimentos como o Vind Residence: exclusividade real, localização estratégica em Maringá e um padrão construtivo que faz do imóvel um investimento tão seguro quanto desejável.',
+    ],
+    tags: ['Imóveis de alto padrão', 'Investimento imobiliário', 'Mercado de luxo', 'Segurança patrimonial'],
+  },
+  p5: {
+    category: 'Dica',
+    title: 'Tendências do mercado imobiliário em Maringá',
+    author: 'Equipe Trifold', readTime: '3 min de leitura',
+    body: [
+      'Maringá segue como uma das cidades mais atrativas do interior do Paraná para quem quer morar bem ou investir com segurança. Infraestrutura urbana de qualidade, arborização premiada e um polo econômico diversificado sustentam a valorização constante dos imóveis na região.',
+      'Entre as tendências mais fortes está a verticalização inteligente: empreendimentos menores, com metragens mais enxutas e áreas comuns completas, ganham espaço frente aos grandes condomínios genéricos, atendendo tanto jovens profissionais quanto famílias que priorizam localização central.',
+      'A demanda por empreendimentos corporativos também cresce junto com a expansão de indústrias, redes de varejo e serviços de saúde na cidade — reforçando a necessidade de obras comerciais bem planejadas e entregues no prazo.',
+      'Acompanhar essas tendências de perto é o que permite à Trifold antecipar demandas e lançar empreendimentos residenciais e corporativos alinhados com o que Maringá realmente precisa nos próximos anos.',
+    ],
+    tags: ['Mercado imobiliário', 'Maringá', 'Tendências', 'Investimento'],
+  },
+  p6: {
+    category: 'Dica',
+    title: 'IGP-M e o impacto nos contratos de compra e aluguel',
+    author: 'Equipe Trifold', readTime: '3 min de leitura', cover: 'assets/blog/p2.webp',
+    body: [
+      'O IGP-M (Índice Geral de Preços do Mercado) é o indexador mais usado em contratos de aluguel no Brasil, e entender seu funcionamento evita surpresas na hora do reajuste anual. Diferente do IPCA, ele é fortemente influenciado por preços no atacado e câmbio, o que pode gerar oscilações mais bruscas.',
+      'Para o locatário, isso significa que reajustes podem vir acima da inflação percebida no dia a dia — por isso, negociar cláusulas alternativas, como um teto de reajuste ou a troca por outro índice, é uma prática cada vez mais comum e recomendável.',
+      'Já para o proprietário, o IGP-M funciona como proteção do valor real do imóvel ao longo do contrato, evitando que a renda do aluguel perca poder de compra frente à inflação acumulada no período.',
+      'Seja comprando, vendendo ou alugando, entender como esses índices afetam o valor do seu imóvel ao longo do tempo é parte do planejamento financeiro que a Trifold sempre recomenda a clientes e investidores.',
+    ],
+    tags: ['IGP-M', 'Contrato de aluguel', 'Reajuste de aluguel', 'Mercado imobiliário'],
+  },
+  p7: {
+    category: 'Dica',
+    title: 'Checklist para comprar seu primeiro imóvel sem dores de cabeça',
+    author: 'Equipe Trifold', readTime: '3 min de leitura', cover: 'assets/blog/p6.webp',
+    body: [
+      'Comprar o primeiro imóvel costuma ser tão empolgante quanto assustador. O primeiro passo é organizar as finanças: simular financiamentos, entender sua capacidade de entrada e reservar uma margem extra para custos que vão além do valor do imóvel, como escritura, registro e ITBI.',
+      'Verifique a documentação com atenção: matrícula atualizada, certidões negativas do vendedor e do imóvel, e a regularidade da construtora ou incorporadora no caso de lançamentos. Pular essa etapa é o erro mais comum — e o mais caro de corrigir depois.',
+      'Visite o imóvel (ou o estande de vendas e a obra, se for na planta) mais de uma vez, em horários diferentes. Isso ajuda a perceber ruído, incidência de sol e a real dinâmica da vizinhança antes de assinar qualquer contrato.',
+      'Por fim, escolha uma incorporadora com histórico comprovado de entrega no prazo e transparência durante a obra. Esse cuidado, mais do que qualquer detalhe estético, é o que garante uma compra tranquila do início à entrega das chaves.',
+    ],
+    tags: ['Primeiro imóvel', 'Compra de imóvel', 'Checklist', 'Financiamento'],
+  },
+  p8: {
+    category: 'Engenharia',
+    title: 'Gestão da qualidade em obras de edifícios',
+    author: 'Equipe Trifold', readTime: '3 min de leitura',
+    body: [
+      'Qualidade em uma obra de edifício não é resultado de sorte, é processo. Isso significa ter procedimentos claros para cada etapa — do recebimento de materiais à execução de estruturas — com critérios de aceite bem definidos antes mesmo do primeiro tijolo ser assentado.',
+      'Inspeções periódicas e checklists técnicos por etapa (fundação, estrutura, alvenaria, instalações e acabamento) permitem identificar não conformidades cedo, quando o custo de correção ainda é baixo. Deixar para corrigir no final da obra é sempre mais caro e mais lento.',
+      'A gestão da qualidade também depende de gente: mão de obra treinada, engenheiros presentes no canteiro e uma cultura onde reportar um problema é incentivado, não punido. Isso reduz retrabalho e aumenta a vida útil da edificação entregue.',
+      'Na Trifold, cada obra corporativa passa por auditoria técnica independente — um compromisso com a qualidade que vai além do que a legislação exige, porque entendemos que o edifício entregue carrega a operação do nosso cliente.',
+    ],
+    tags: ['Gestão da qualidade', 'Engenharia civil', 'Controle de obra', 'Construção civil'],
+  },
+  p9: {
+    category: 'Empreendimentos',
+    title: 'Por que 2025 será o Ano do Imobiliário? Cenários de Valorização em Maringá',
+    author: 'Equipe Trifold', readTime: '3 min de leitura',
+    body: [
+      'Diversos indicadores apontam para um ciclo de valorização imobiliária consistente em Maringá: crescimento populacional acima da média do estado, expansão do polo de serviços e saúde, e uma infraestrutura urbana que segue atraindo empresas e famílias de outras regiões do Paraná.',
+      'Esse cenário cria uma combinação rara — demanda crescente e oferta de terrenos bem localizados cada vez mais escassa. É justamente essa escassez que sustenta a valorização de lançamentos bem posicionados nos próximos anos, especialmente em bairros com infraestrutura consolidada.',
+      'Para quem pensa em investir, o timing importa: entrar em um lançamento na planta, em regiões com potencial de valorização já mapeado, costuma gerar um retorno superior ao de imóveis prontos comprados no mesmo período.',
+      'É esse cenário de oportunidade que a Trifold mira ao planejar cada novo empreendimento — sempre com estudo de viabilidade e localização estratégica como ponto de partida, não como consequência.',
+    ],
+    tags: ['Mercado imobiliário', 'Valorização imobiliária', 'Maringá', 'Investimento'],
+  },
+  p10: {
+    category: 'Empreendimentos',
+    title: 'Smart Homes: Como a Automação Residencial Valoriza Seu Imóvel',
+    author: 'Equipe Trifold', readTime: '3 min de leitura', cover: 'assets/blog/p10.webp',
+    body: [
+      'A automação residencial deixou de ser luxo e virou expectativa. Controle de iluminação, climatização, segurança e persianas via aplicativo já fazem parte da lista de desejos de quem procura um imóvel novo — e influenciam diretamente o valor de revenda.',
+      'Além do conforto, tecnologia embarcada significa economia: sistemas inteligentes de iluminação e climatização reduzem o consumo de energia, e sensores de segurança integrados diminuem custos com monitoramento tradicional ao longo dos anos de uso do imóvel.',
+      'Para incorporadoras, investir em infraestrutura para automação desde o projeto — e não como reforma posterior — é mais barato e permite oferecer um diferencial real de mercado, sem depender de soluções improvisadas de terceiros.',
+      'A Trifold já incorpora essa visão de tecnologia em seus empreendimentos residenciais, entendendo que a casa inteligente de hoje é o padrão mínimo esperado pelo comprador de amanhã.',
+    ],
+    tags: ['Smart Home', 'Automação residencial', 'Tecnologia', 'Valorização imobiliária'],
+  },
+  p11: {
+    category: 'Engenharia',
+    title: 'Diário de Obras na Construção Civil',
+    author: 'Equipe Trifold', readTime: '3 min de leitura',
+    body: [
+      'O diário de obras é um dos documentos mais subestimados — e mais importantes — de qualquer construção. Registrar diariamente atividades, condições climáticas, efetivo de mão de obra e ocorrências cria um histórico técnico e jurídico completo de toda a execução.',
+      'Em caso de disputas contratuais, atrasos ou necessidade de comprovar decisões técnicas tomadas durante a obra, o diário é a principal fonte de evidência. Sua ausência, ou preenchimento incompleto, pode custar caro em negociações e até processos judiciais.',
+      'Mais do que burocracia, um diário de obras bem mantido também é ferramenta de gestão: permite identificar padrões de produtividade, antecipar atrasos e embasar decisões de cronograma com dados reais, não apenas percepção da equipe em campo.',
+      'Na Trifold, o controle rigoroso de diário de obras faz parte do padrão de gestão que aplicamos em toda obra corporativa — garantindo rastreabilidade total do início ao fim do projeto.',
+    ],
+    tags: ['Diário de obras', 'Gestão de obras', 'Engenharia civil', 'Documentação técnica'],
+  },
+  p12: {
+    category: 'Arquitetura',
+    title: 'Arquitetura Vernacular: O que podemos aprender com o passado?',
+    author: 'Equipe Trifold', readTime: '3 min de leitura',
+    body: [
+      'Muito antes do ar-condicionado, construções vernaculares já resolviam o conforto térmico com sabedoria: pé-direito alto, ventilação cruzada, materiais locais e orientação solar estudada. Essa arquitetura nascida da necessidade guarda lições valiosas para o projeto contemporâneo.',
+      'Recuperar esses princípios não significa abrir mão de tecnologia — significa usá-la a favor de soluções que já provaram funcionar. Um projeto que aproveita ventilação natural e luz do dia reduz consumo de energia antes mesmo de qualquer sistema automatizado entrar em cena.',
+      'Materiais regionais também fazem parte dessa equação: usar o que está disponível localmente reduz custo logístico, impacto ambiental do transporte e, muitas vezes, resulta em uma identidade arquitetônica mais autêntica com o entorno.',
+      'Projetar olhando para o passado, com os recursos técnicos do presente, é uma das formas mais inteligentes de construir para o futuro — um princípio que orienta boa parte das decisões de projeto da Trifold.',
+    ],
+    tags: ['Arquitetura vernacular', 'Sustentabilidade', 'Arquitetura bioclimática', 'Design'],
+  },
+  p13: {
+    category: 'Engenharia',
+    title: 'A Inteligência Artificial na Construção Civil',
+    author: 'Equipe Trifold', readTime: '3 min de leitura',
+    body: [
+      'A inteligência artificial já deixou de ser promessa distante na construção civil. Softwares de IA hoje ajudam a prever atrasos de cronograma, otimizar o consumo de materiais e até identificar riscos de segurança a partir de imagens de câmeras no canteiro de obras.',
+      'No planejamento, algoritmos conseguem simular milhares de cenários de sequenciamento de obra em minutos, algo que levaria dias de análise manual — permitindo escolher a rota mais eficiente antes mesmo do primeiro trabalhador chegar ao canteiro.',
+      'Na manutenção predial, sensores conectados a sistemas de IA detectam falhas estruturais ou de instalação antes que se tornem problemas visíveis, reduzindo custos de manutenção corretiva ao longo da vida útil do edifício.',
+      'A Trifold acompanha de perto essa evolução, incorporando ferramentas tecnológicas de gestão e planejamento que tornam cada obra mais previsível, segura e eficiente — sem nunca substituir a experiência técnica do time de engenharia.',
+    ],
+    tags: ['Inteligência artificial', 'Construção civil', 'Inovação', 'Tecnologia na construção'],
+  },
+  p14: {
+    category: 'Empreendimentos',
+    title: 'Custos e Prazos na Construção de Imóveis',
+    author: 'Equipe Trifold', readTime: '3 min de leitura',
+    body: [
+      'Custo e prazo são os dois pilares que definem a saúde financeira de qualquer empreendimento imobiliário. Um orçamento mal dimensionado ou um cronograma otimista demais comprometem não só a margem do incorporador, mas a confiança de quem comprou na planta.',
+      'Boa parte dos estouros de custo vem de decisões tomadas na fase de projeto, não na execução: especificações mal definidas, falta de compatibilização entre projetos e mudanças de escopo no meio da obra são os principais vilões do orçamento.',
+      'Prazos realistas exigem margem para variáveis externas — clima, disponibilidade de insumos, aprovações de órgãos públicos — sem virar desculpa para atraso crônico. O equilíbrio está em planejar com rigor e executar com disciplina.',
+      'É esse equilíbrio entre custo, prazo e qualidade que a Trifold busca em cada empreendimento, com um time de engenharia próprio que acompanha de perto cada etapa, do orçamento inicial à entrega das chaves.',
+    ],
+    tags: ['Custo de obra', 'Prazo de entrega', 'Gestão de obras', 'Planejamento imobiliário'],
+  },
+  p15: {
+    category: 'Engenharia',
+    title: 'Compatibilização de Projetos em BIM na Construção de Edifícios',
+    author: 'Equipe Trifold', readTime: '3 min de leitura',
+    body: [
+      'A compatibilização de projetos é a etapa que evita que uma viga apareça exatamente onde deveria passar um duto de ar-condicionado — um problema clássico quando projetos estrutural, elétrico e hidráulico são desenvolvidos sem diálogo entre si.',
+      'O BIM (Building Information Modeling) resolve isso ao unificar todas as disciplinas em um único modelo tridimensional. Conflitos que só seriam descobertos na obra — com custo alto de correção — aparecem na tela antes da primeira escavação.',
+      'Além de evitar retrabalho, o BIM permite simular quantitativos de material com precisão, reduzindo desperdício e imprevistos no orçamento. É uma mudança de postura: da correção reativa no canteiro para a prevenção ativa no projeto.',
+      'A Trifold utiliza BIM e auditoria independente em obras corporativas justamente para eliminar esse tipo de conflito antes que ele vire atraso ou custo extra para o cliente.',
+    ],
+    tags: ['BIM', 'Compatibilização de projetos', 'Engenharia civil', 'Tecnologia construtiva'],
+  },
+  p16: {
+    category: 'Inovação',
+    title: 'Exoesqueleto e Robótica: Revolução da Segurança nas Obras de Construção?',
+    author: 'Equipe Trifold', readTime: '3 min de leitura',
+    body: [
+      'Exoesqueletos vestíveis, antes restritos à ficção científica, começam a aparecer em canteiros de obra ao redor do mundo. Esses dispositivos reduzem a carga física sobre a coluna e os ombros de trabalhadores que erguem peso repetidamente, diminuindo lesões musculoesqueléticas — uma das principais causas de afastamento na construção civil.',
+      'A robótica também avança em tarefas repetitivas ou de alto risco: braços robóticos para assentamento de blocos e drones para inspeção de fachadas e coberturas já reduzem a exposição de trabalhadores a situações perigosas em altura.',
+      'Essa tecnologia não substitui o profissional da construção — ela protege quem mais importa na obra: as pessoas. O papel humano se desloca da força física repetitiva para a supervisão técnica e tomada de decisão qualificada.',
+      'Acompanhar essas inovações é parte do compromisso da Trifold com a segurança do trabalho, entendendo que cada avanço tecnológico bem aplicado é, antes de tudo, um avanço na proteção de quem constrói.',
+    ],
+    tags: ['Exoesqueleto', 'Robótica na construção', 'Segurança do trabalho', 'Inovação'],
+  },
+  p17: {
+    category: 'Engenharia',
+    title: 'Obras Hospitalares, um foco em Centros Cirúrgicos',
+    author: 'Equipe Trifold', readTime: '3 min de leitura',
+    body: [
+      'Construir um centro cirúrgico exige um nível de precisão técnica muito acima de uma obra convencional. Fluxos de ar controlados, pressurização de salas, revestimentos antimicrobianos e instalações elétricas redundantes são exigências não negociáveis — e cada erro de projeto pode colocar vidas em risco.',
+      'As normas técnicas para esse tipo de obra são rígidas e específicas, exigindo conhecimento de legislação sanitária além da engenharia estrutural tradicional. Um erro de especificação de material ou de dimensionamento de climatização pode inviabilizar a operação de um centro cirúrgico inteiro.',
+      'Além da execução, o planejamento logístico é crítico: muitas obras hospitalares acontecem em unidades que continuam funcionando durante a construção, exigindo cronogramas segmentados e controle rigoroso de ruído, poeira e contaminação cruzada.',
+      'A Trifold tem experiência comprovada em obras hospitalares e de saúde, unindo know-how técnico especializado a um planejamento que respeita a operação contínua do cliente — porque sabemos que, nesse tipo de obra, não existe margem para erro.',
+    ],
+    tags: ['Obras hospitalares', 'Centro cirúrgico', 'Engenharia hospitalar', 'Construção especializada'],
+  },
+  p18: {
+    category: 'Empreendimentos',
+    title: 'Como a sustentabilidade está sendo integrada nos projetos imobiliários?',
+    author: 'Equipe Trifold', readTime: '3 min de leitura', cover: 'assets/blog/p18.webp',
+    body: [
+      'Sustentabilidade na construção civil deixou de ser diferencial de marketing para se tornar critério de decisão de compra. Captação de água da chuva, painéis solares, iluminação natural otimizada e materiais de baixo impacto ambiental já aparecem como padrão em lançamentos de médio e alto padrão.',
+      'Além do benefício ambiental, essas soluções representam economia direta para o morador: contas de água e energia menores ao longo de toda a vida útil do imóvel, o que torna o investimento inicial mais alto plenamente justificável no médio prazo.',
+      'Do ponto de vista urbano, empreendimentos sustentáveis também aliviam a pressão sobre a infraestrutura pública — menos demanda de água tratada, menos carga na rede elétrica — um benefício que extrapola os limites do próprio condomínio.',
+      'Incorporar sustentabilidade desde a concepção do projeto, e não como reforma posterior, é a abordagem que a Trifold adota em seus empreendimentos, unindo responsabilidade ambiental a retorno financeiro real para o comprador.',
+    ],
+    tags: ['Sustentabilidade', 'Construção sustentável', 'Empreendimentos verdes', 'Eficiência energética'],
+  },
+  p19: {
+    category: 'Arquitetura',
+    title: 'A Importância da Neuroarquitetura no design de espaços',
+    author: 'Equipe Trifold', readTime: '3 min de leitura',
+    body: [
+      'A neuroarquitetura estuda como o ambiente construído afeta o cérebro humano — humor, produtividade, níveis de estresse e até qualidade do sono. Cor, luz natural, pé-direito e até a forma de um teto influenciam diretamente o bem-estar de quem ocupa o espaço.',
+      'Ambientes com boa incidência de luz natural, por exemplo, reduzem níveis de cortisol e melhoram o ciclo circadiano dos moradores, enquanto espaços mal ventilados e escuros tendem a aumentar sensação de fadiga e ansiedade ao longo do tempo.',
+      'Aplicar esses princípios não exige grandes investimentos: a orientação solar do projeto, a escolha de paletas de cor e a proporção entre cheios e vazios já fazem diferença mensurável na experiência de quem vive ou trabalha no ambiente.',
+      'Projetar pensando em como o espaço faz as pessoas se sentirem, e não apenas em como ele parece nas fotos, é um princípio que guia as decisões de design em cada empreendimento da Trifold.',
+    ],
+    tags: ['Neuroarquitetura', 'Bem-estar', 'Design de interiores', 'Arquitetura'],
+  },
+  p20: {
+    category: 'Engenharia',
+    title: 'Laje Plana Protendida',
+    author: 'Equipe Trifold', readTime: '3 min de leitura',
+    body: [
+      'A laje plana protendida é uma solução estrutural que elimina vigas aparentes, permitindo vãos maiores e um pé-direito mais aproveitável — características muito valorizadas em empreendimentos comerciais e residenciais de alto padrão que buscam flexibilidade de layout.',
+      'O sistema funciona por meio de cabos de aço tensionados dentro da laje, que compensam os esforços de tração do concreto. Isso reduz a espessura necessária da estrutura e, consequentemente, o consumo de material e o peso próprio do edifício.',
+      'Além do ganho estético e de flexibilidade, a laje protendida costuma reduzir prazo de execução, já que elimina etapas de forma e cimbramento associadas a vigas convencionais — um benefício direto para o cronograma da obra.',
+      'A Trifold aplica sistemas construtivos como a laje protendida sempre que a viabilidade técnica e o projeto permitem, buscando o equilíbrio entre eficiência estrutural, custo e liberdade arquitetônica para o cliente final.',
+    ],
+    tags: ['Laje protendida', 'Engenharia estrutural', 'Construção civil', 'Sistemas construtivos'],
+  },
+  p21: {
+    category: 'Arquitetura',
+    title: 'Além da Luz, Emoção e Conforto',
+    author: 'Equipe Trifold', readTime: '3 min de leitura', cover: 'assets/blog/p19.webp',
+    body: [
+      'Um bom projeto de iluminação vai muito além de garantir visibilidade — ele constrói emoção. A forma como a luz entra em um ambiente, natural ou artificial, define atmosferas: aconchego em uma sala de estar, foco em um escritório, tranquilidade em um quarto.',
+      'Luz e sombra trabalham juntas na percepção de conforto de um espaço. Ambientes com contraste bem calibrado parecem mais acolhedores do que espaços uniformemente iluminados, que tendem a parecer clínicos e impessoais, mesmo quando tecnicamente bem resolvidos.',
+      'A temperatura de cor da luz também importa: tons mais quentes favorecem relaxamento em áreas de convívio, enquanto tons mais neutros ou frios ajudam na concentração em espaços de trabalho — um detalhe técnico com grande impacto emocional.',
+      'Projetar iluminação pensando em como as pessoas vão se sentir em cada cômodo, e não apenas em atender à norma técnica, é o que diferencia um projeto funcional de um projeto que realmente acolhe — um cuidado presente em cada empreendimento da Trifold.',
+    ],
+    tags: ['Arquitetura sensorial', 'Iluminação', 'Design de interiores', 'Conforto ambiental'],
+  },
+  p22: {
+    category: 'Engenharia',
+    title: 'Eficiência e Inovação: O Poder das Lajes Pré-Protendidas',
+    author: 'Equipe Trifold', readTime: '3 min de leitura',
+    body: [
+      'Lajes pré-protendidas são fabricadas fora do canteiro, sob condições controladas de qualidade, e depois transportadas e instaladas na obra — um processo que reduz significativamente o tempo de execução comparado a sistemas moldados in loco.',
+      'Essa industrialização também melhora o controle de qualidade: cura do concreto, dimensionamento dos cabos de protensão e acabamento são padronizados em fábrica, reduzindo a variabilidade que normalmente existe em execuções manuais no canteiro.',
+      'Do ponto de vista de canteiro, menos etapas de forma e escoramento significam menos resíduo, menos mão de obra exposta a riscos e um cronograma mais previsível — ganhos que se traduzem diretamente em economia para o cliente.',
+      'A Trifold avalia sistemas pré-fabricados como a laje pré-protendida em projetos onde eficiência de prazo e padronização de qualidade fazem diferença real no resultado final da obra corporativa ou residencial.',
+    ],
+    tags: ['Laje pré-protendida', 'Engenharia estrutural', 'Eficiência construtiva', 'Inovação na construção'],
+  },
+  p23: {
+    category: 'Trifold',
+    title: 'Somos a Trifold',
+    author: 'Equipe Trifold', readTime: '3 min de leitura', cover: 'assets/blog/p1.webp',
+    body: [
+      'A Trifold nasceu da experiência acumulada por mais de 28 anos de engenharia, unindo a solidez de quem já viu o mercado mudar várias vezes à energia de uma nova geração de visão estratégica e comercial. Somos uma construtora e incorporadora de Maringá com a ambição de propor novas soluções ao mercado.',
+      'Nosso trabalho se divide entre dois mundos que se complementam: empreendimentos residenciais que unem design, tecnologia e bem-estar, e obras corporativas para indústrias, hospitais e redes de varejo que não podem parar de operar.',
+      'O que une essas duas frentes é o mesmo compromisso: um time de engenharia próprio, mais de 300 mil m² entregues e a exigência técnica de quem trata cada obra como se fosse a mais importante da carreira — porque, para o cliente, ela é.',
+      'Se você está buscando um parceiro para construir, morar ou investir com solidez em Maringá e região, a Trifold está pronta para transformar esse projeto em realidade — com transparência, qualidade e o compromisso de entregar mais do que se promete.',
+    ],
+    tags: ['Trifold Engenharia', 'Institucional', 'Maringá', 'Nossa história'],
+  },
+};
+
+function resolveArticle() {
+  const params = (typeof window !== 'undefined') ? new URLSearchParams(window.location.search) : null;
+  const slug = params ? params.get('slug') : null;
+  const resolvedSlug = (slug && ARTICLES[slug]) ? slug : 'f0';
+  return { slug: resolvedSlug, article: ARTICLES[resolvedSlug] };
+}
+
+class Component extends DCLogic {
+  state = { menuOpen: false, vw: (typeof window !== 'undefined' ? window.innerWidth : 1280) };
+  componentDidMount() {
+    this._onResize = () => this.setState({ vw: window.innerWidth });
+    window.addEventListener('resize', this._onResize);
+    const { article } = resolveArticle();
+    document.title = article.title + ' — Blog Trifold Engenharia';
+    const metaDesc = document.querySelector('meta[name="description"]');
+    if (metaDesc) metaDesc.setAttribute('content', article.body[0].slice(0, 155));
+  }
+  componentWillUnmount() { window.removeEventListener('resize', this._onResize); }
+  toggleMenu() { this.setState(s => ({ menuOpen: !s.menuOpen })); }
+
+  renderVals() {
+    const vw = this.state.vw || 1280;
+    const isMobile = vw < 900;
+    const menuOpen = this.state.menuOpen;
+    const sidePad = vw < 520 ? '24px' : isMobile ? '34px' : '48px';
+    const heroPadTop = isMobile ? '130px' : '170px';
+    const cols3 = isMobile ? '1fr' : 'repeat(3,1fr)';
+    const coverRatio = isMobile ? '4/3' : '21/9';
+
+    const navLinksStyle = { display: isMobile ? 'none' : 'flex', alignItems: 'center', flexWrap: 'nowrap', gap: '26px', marginLeft: '56px', fontSize: '12.5px', letterSpacing: '0.05em' };
+    const hamburgerBtnStyle = { display: isMobile ? 'flex' : 'none', flexDirection: 'column', justifyContent: 'center', gap: '5px', width: '38px', height: '38px', background: 'none', border: 'none', cursor: 'pointer', padding: 0 };
+    const barStyle = { width: '22px', height: '2px', background: '#fff', display: 'block' };
+
+    const { slug: resolvedSlug, article } = resolveArticle();
+    const post = this.props.post ?? {
+      ...article,
+      cover: article.cover || ('assets/blog/' + resolvedSlug + '.webp'),
+    };
+    const coverStyle = { width:'100%', height:'100%', backgroundImage:'url(' + post.cover + ')', backgroundSize:'cover', backgroundPosition:'center' };
+
+    const allSlugs = Object.keys(ARTICLES);
+    const otherSlugs = allSlugs.filter((s) => s !== resolvedSlug);
+    const sameCategory = otherSlugs.filter((s) => ARTICLES[s].category === article.category);
+    const rest = otherSlugs.filter((s) => ARTICLES[s].category !== article.category);
+    const relatedSlugs = [...sameCategory, ...rest].slice(0, 3);
+    const relatedRaw = relatedSlugs.map((s) => ({
+      slug: s,
+      href: 'Artigo.dc.html?slug=' + s,
+      title: ARTICLES[s].title,
+      category: ARTICLES[s].category,
+      img: ARTICLES[s].cover || ('assets/blog/' + s + '.webp'),
+    }));
+    const related = relatedRaw.map(r => ({ ...r, imgStyle: { width:'100%', height:'100%', backgroundImage:'url('+r.img+')', backgroundSize:'cover', backgroundPosition:'center' } }));
+
+    return { sidePad, heroPadTop, cols3, coverRatio, navLinksStyle, hamburgerBtnStyle, barStyle, menuOpen, toggleMenu: () => this.toggleMenu(), post, coverStyle, related };
+  }
+}
+</script>
+</body>
+</html>
