@@ -1,2 +1,3 @@
 - [Trifold brand identity tokens](project_trifold_brand.md) — Locked palette (black + orange #F27A5E), Space Grotesk type, voice vocabulary
 - [Trifold public site asset references](reference_trifold_site_assets.md) — URLs for official logo, fonts, and CSS source of truth
+- [Escolha de gateway PLG (Epic 900)](project_gateway_selection_epic900.md) — Asaas vetado por suporte; suporte>taxas>requisito; Pagar.me vs AbacatePay
