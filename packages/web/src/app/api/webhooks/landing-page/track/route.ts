@@ -3,16 +3,18 @@ import { extrairSinais, enviarEventoFormulario } from "@web/lib/meta/form-capi"
 import {
   eventIdValido,
   lerTracking,
-  LANDING_VIND_CONTENT_CATEGORY,
-  LANDING_VIND_CONTENT_NAME,
-  LANDING_VIND_URL_PADRAO,
+  resolveLandingConfig,
 } from "@web/lib/meta/landing-page-tracking"
 import { FORM_CAPI_EVENTS, type FormCapiEventName } from "@trifold/shared"
 
 /**
- * Story 86-11 (AC5) — o par server-side dos eventos de TOPO de funil da landing
- * do Vind Residence: `ViewContent` (carregou a página) e `InitiateCheckout`
+ * Story 86-11 (AC5) — o par server-side dos eventos de TOPO de funil das
+ * landings standalone: `ViewContent` (carregou a página) e `InitiateCheckout`
  * (focou no primeiro campo do formulário).
+ *
+ * Story 86-12 (AC6) — a rota é compartilhada por TODAS as landings
+ * (`vind-residence`, `yarden`, ...). Quem diz de onde o evento veio é
+ * `tracking.landing`, resolvido por `resolveLandingConfig`.
  *
  * Rota separada do `/api/webhooks/landing-page` porque estes dois eventos
  * acontecem ANTES de existir um lead. Pendurá-los no endpoint principal exigiria
@@ -105,6 +107,11 @@ export async function POST(request: NextRequest) {
   const tracking = lerTracking(body)
   const sinais = extrairSinais(request, tracking, { confiarEmClientIpDoCorpo: true })
 
+  // Story 86-12 (AC5/AC6) — qual landing originou o evento. O slug vem do proxy
+  // (constante do arquivo, nunca do browser); ausente/desconhecido cai no
+  // default `vind_residence`, preservando o comportamento da 86-11.
+  const landingConfig = resolveLandingConfig(tracking?.landing)
+
   // `after()`, nunca `void` — ver o aviso em form-capi.ts. Aqui é telemetria de
   // topo de funil: perder o timing não perde dado de negócio, mas perder o
   // evento inteiro (o que um `void` solto faria) perde.
@@ -113,9 +120,9 @@ export async function POST(request: NextRequest) {
       evento: eventName as FormCapiEventName,
       eventId,
       sinais,
-      contentName: LANDING_VIND_CONTENT_NAME,
-      contentCategory: LANDING_VIND_CONTENT_CATEGORY,
-      urlPadrao: LANDING_VIND_URL_PADRAO,
+      contentName: landingConfig.contentName,
+      contentCategory: landingConfig.contentCategory,
+      urlPadrao: landingConfig.urlPadrao,
       // Sem lead, sem telefone — não há DDD de onde derivar UF. Explícito para
       // não depender do acaso de `lead` ser undefined.
       derivarUf: false,

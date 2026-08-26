@@ -102,6 +102,26 @@ describe("eventos aceitos", () => {
     )
   })
 
+  // --- Story 86-12 (AC6) — discriminador multi-landing ---
+  it("com landing:'yarden' o evento sai na categoria do Yarden", async () => {
+    const res = await POST(post({ ...CORPO, landing: "yarden" }, HEADERS_DO_PROXY))
+    await flush()
+
+    expect(res.status).toBe(200)
+    const custom = batches[0]![0]!.custom_data as Record<string, unknown>
+    expect(custom.content_category).toBe("landing_yarden")
+    expect(custom.content_name).toBe("Landing Yarden")
+  })
+
+  it("landing desconhecido cai no Vind Residence em vez de quebrar o evento", async () => {
+    await POST(post({ ...CORPO, landing: "empreendimento-inexistente" }, HEADERS_DO_PROXY))
+    await flush()
+
+    expect((batches[0]![0]!.custom_data as Record<string, unknown>).content_category).toBe(
+      "landing_vind_residence",
+    )
+  })
+
   it("aceita InitiateCheckout", async () => {
     const res = await POST(post({ ...CORPO, event_name: "InitiateCheckout" }))
     await flush()
@@ -255,6 +275,15 @@ describe("AC10 — degradação graciosa", () => {
     await POST(post(semUrl, HEADERS_DO_PROXY))
     await flush()
     expect(batches[0]![0]?.event_source_url).toBe("https://trifold.eng.br/vindresidence/")
+  })
+
+  it("a URL padrão acompanha a landing quando o browser não mandou page_url", async () => {
+    const semUrl = { ...CORPO, landing: "yarden" } as Record<string, unknown>
+    delete semUrl.page_url
+
+    await POST(post(semUrl, HEADERS_DO_PROXY))
+    await flush()
+    expect(batches[0]![0]?.event_source_url).toBe("https://trifold.eng.br/yarden/")
   })
 
   it("responde CORS preflight sem exigir token", async () => {

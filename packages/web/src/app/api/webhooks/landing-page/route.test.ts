@@ -240,6 +240,48 @@ describe("AC6 — tracking presente: meta_ad + Lead + CompleteRegistration", () 
     expect((lead?.custom_data as Record<string, unknown>).value).toBe(0)
   })
 
+  // --- Story 86-12 (AC7) — discriminador multi-landing ---
+  it("com tracking.landing:'yarden' os DOIS eventos saem na categoria do Yarden", async () => {
+    await POST(
+      post({ ...LEAD, tracking: { ...TRACKING_COMPLETO, landing: "yarden" } }, HEADERS_DO_PROXY),
+    )
+    await flush()
+
+    expect(batches).toHaveLength(1)
+    for (const evento of batches[0]!) {
+      const custom = evento.custom_data as Record<string, unknown>
+      expect(custom.content_category).toBe("landing_yarden")
+      expect(custom.content_name).toBe("Landing Yarden")
+    }
+  })
+
+  it("landing desconhecido cai no Vind Residence em vez de derrubar o lead", async () => {
+    const res = await POST(
+      post({ ...LEAD, tracking: { ...TRACKING_COMPLETO, landing: "nao-existe" } }, HEADERS_DO_PROXY),
+    )
+    await flush()
+
+    expect(res.status).toBe(200)
+    expect((batches[0]![0]!.custom_data as Record<string, unknown>).content_category).toBe(
+      "landing_vind_residence",
+    )
+  })
+
+  it("`landing` não vaza para webhook_logs nem para metadata.raw_fields", async () => {
+    // Mesma propriedade do resto do bloco `tracking`: `flattenIntoFields`
+    // descarta objetos aninhados, então o campo novo é invisível para o
+    // tráfego WordPress que compartilha o endpoint.
+    await POST(
+      post({ ...LEAD, tracking: { ...TRACKING_COMPLETO, landing: "yarden" } }, HEADERS_DO_PROXY),
+    )
+    await flush()
+
+    const log = escritasEm("webhook_logs", "insert")[0]?.payload
+    expect(JSON.stringify(log?.payload)).not.toContain("landing")
+    const metadata = escritasEm("leads", "insert")[0]?.payload.metadata as Record<string, unknown>
+    expect(JSON.stringify(metadata.raw_fields)).not.toContain("landing")
+  })
+
   it("external_id leva leadId e visitor_id; st fica de fora (escopo da story)", async () => {
     await POST(post({ ...LEAD, tracking: TRACKING_COMPLETO }, HEADERS_DO_PROXY))
     await flush()
