@@ -35,5 +35,6 @@
 - [Conferir valor real de env var Vercel](reference_vercel_env_verify_plaintext.md) — `decrypt=true` na listagem não decripta; use `GET /v1/projects/{id}/env/{envId}`; `len()` do blob cifrado é prova zero
 - [Validar Pixel+CAPI exige 2 ferramentas](feedback_meta_pixel_validation_two_channels.md) — painel Test Events é cego p/ evento client-only (`fbq` não carrega `test_event_code`); `PageView` só no Pixel Helper; "Desduplicado" = prova do pareamento
 - [Memória de agente só na raiz do repo](feedback_agent_memory_only_at_repo_root.md) — `.claude/` em pasta de deploy estático fica publicado na web E fora do git ao mesmo tempo; nunca criar subprojeto
+- [Branch é segura de apagar? Compare a árvore](feedback_branch_merged_check_squash_repo.md) — `git log origin/main..branch` NUNCA sai vazio em repo squash-merge; prova é tree SHA / diff
 - [Descartar cópia já mergeada em main](feedback_discard_already_merged_copy.md) — ` M` + `git diff origin/main` vazio: `checkout HEAD --`, nunca `checkout origin/main --` (esse recommita)
 - [`.agents/` + skills-lock.json](project_agents_dir_skill_installer.md) — instalador de skill de terceiro (symlink em `.claude/skills/`); não é lixo nem escopo da branch — deixar untracked
