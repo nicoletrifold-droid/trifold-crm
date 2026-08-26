@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>@view-transition{navigation:auto}</style>
+<title>Blog — Trifold Engenharia</title>
+<meta name="description" content="Conteúdo sobre mercado imobiliário, construção e incorporação assinado pela Trifold Engenharia.">
+<link rel="preload" as="image" href="assets/blog/p21.webp" fetchpriority="high">
+<link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-variable.woff2" crossorigin>
+<script src="./support.js" defer></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<link href="assets/fonts/fonts.css" rel="stylesheet">
+<style>
+  html{scroll-behavior:smooth}
+  ::view-transition-old(root),::view-transition-new(root){animation-duration:.38s;animation-timing-function:cubic-bezier(.4,0,.2,1)}
+  body{margin:0;background:#000;color:#fff;font-family:'Space Grotesk',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  ::selection{background:#F27A5E;color:#000}
+  a{color:inherit;text-decoration:none}
+</style>
+</helmet>
+
+<div style="background:#000;color:#fff;font-family:'Space Grotesk',system-ui,sans-serif">
+
+  <!-- ============ NAV ============ -->
+  <div style="position:fixed;top:0;left:0;right:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:20px {{ sidePad }};box-sizing:border-box;background:linear-gradient(180deg,rgba(0,0,0,0.65),rgba(0,0,0,0))">
+    <a href="Home.dc.html" aria-label="Ir para a Home" style="display:flex;align-items:center"><dc-import name="Logo" tone="dark" size="{{ 26 }}" hint-size="220px,30px"></dc-import></a>
+    <div style="{{ navLinksStyle }}">
+      <a href="Home.dc.html" style="color:#C9C9C9;white-space:nowrap;transition:color .2s ease" style-hover="color:#fff">HOME</a>
+      <a href="Sobre Nós.dc.html" style="color:#C9C9C9;white-space:nowrap;transition:color .2s ease" style-hover="color:#fff">SOBRE NÓS</a>
+      <a href="Empreendimentos.dc.html" style="color:#C9C9C9;white-space:nowrap;transition:color .2s ease" style-hover="color:#fff">EMPREENDIMENTOS</a>
+      <a href="B2B.dc.html" style="color:#C9C9C9;white-space:nowrap;transition:color .2s ease" style-hover="color:#fff">CORPORATIVAS</a>
+      <a href="#" style="color:#fff;border-bottom:1px solid #F27A5E;padding-bottom:3px;white-space:nowrap">BLOG</a>
+      <a href="Home.dc.html#contato" style="padding:11px 22px;background:#F27A5E;color:#000;border-radius:2px;font-weight:600;letter-spacing:0.02em;white-space:nowrap;transition:filter .25s ease,transform .25s ease" style-hover="filter:brightness(1.08);transform:scale(1.02)">CONTATO</a>
+    </div>
+    <button onClick="{{ toggleMenu }}" style="{{ hamburgerBtnStyle }}">
+      <span style="{{ barStyle }}"></span><span style="{{ barStyle }}"></span><span style="{{ barStyle }}"></span>
+    </button>
+  </div>
+
+  <!-- ============ MOBILE MENU OVERLAY ============ -->
+  <sc-if value="{{ menuOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;inset:0;z-index:200;background:#050505;display:flex;flex-direction:column;padding:26px 28px 40px;overflow-y:auto">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:52px">
+        <a href="Home.dc.html" aria-label="Ir para a Home" style="display:flex;align-items:center"><dc-import name="Logo" tone="dark" size="{{ 26 }}" hint-size="200px,28px"></dc-import></a>
+        <button onClick="{{ toggleMenu }}" style="width:38px;height:38px;background:none;border:1px solid rgba(255,255,255,0.2);border-radius:6px;color:#fff;font-size:18px;cursor:pointer">✕</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;font-size:24px;font-weight:500">
+        <a href="Home.dc.html" style="padding:14px 4px;border-bottom:1px solid rgba(255,255,255,0.08)">Home</a>
+        <a href="Sobre Nós.dc.html" style="padding:14px 4px;border-bottom:1px solid rgba(255,255,255,0.08)">Sobre nós</a>
+        <a href="Empreendimentos.dc.html" style="padding:14px 4px;border-bottom:1px solid rgba(255,255,255,0.08)">Empreendimentos</a>
+        <a href="B2B.dc.html" style="padding:14px 4px;border-bottom:1px solid rgba(255,255,255,0.08)">Corporativas</a>
+        <a href="#" onClick="{{ toggleMenu }}" style="padding:14px 4px;border-bottom:1px solid rgba(255,255,255,0.08);color:#F27A5E">Blog</a>
+      </div>
+      <a href="Home.dc.html#contato" style="display:inline-flex;align-items:center;justify-content:center;margin-top:32px;padding:16px 24px;background:#F27A5E;color:#000;border-radius:2px;font-weight:600;font-size:15px">Contato</a>
+    </div>
+  </sc-if>
+
+  <!-- ============ HEADER ============ -->
+  <section style="padding:{{ heroPadTop }} {{ sidePad }} 64px;max-width:1120px;margin:0 auto">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:22px">
+      <span style="font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.22em;text-transform:uppercase;color:#9A9A9A">Blog</span>
+    </div>
+    <h1 style="margin:0;font-size:clamp(28px,4.4vw,50px);font-weight:500;letter-spacing:-0.02em;max-width:760px;line-height:1.15">Acompanhe tudo sobre o mercado imobiliário, arquitetura e engenharia</h1>
+  </section>
+
+  <!-- ============ POSTS EM DESTAQUE (2 mais recentes) ============ -->
+  <section style="padding:0 {{ sidePad }} 60px;max-width:1120px;margin:0 auto">
+    <div style="display:grid;grid-template-columns:{{ cols2 }};gap:20px">
+      <sc-for list="{{ featured }}" as="f" hint-placeholder-count="2">
+        <a href="{{ f.href }}" onMouseEnter="{{ f.onEnter }}" onMouseLeave="{{ f.onLeave }}" style="{{ f.cardStyle }}">
+          <div style="position:relative;aspect-ratio:16/10;overflow:hidden">
+            <div style="{{ f.imgStyle }}"></div>
+            <span style="position:absolute;top:16px;left:16px;padding:8px 14px;border-radius:6px;background:linear-gradient(90deg,#2E3033,#000000);border:1.5px solid rgba(255,255,255,0.14);font-size:11.5px;font-weight:500;color:#E6E6E6">{{ f.category }}</span>
+          </div>
+          <div style="padding:26px 24px">
+            <h2 style="margin:0 0 12px;font-size:20px;font-weight:600;letter-spacing:-0.01em;line-height:1.3">{{ f.title }}</h2>
+            <p style="margin:0 0 18px;font-size:14px;line-height:1.6;color:#9A9A9A">{{ f.excerpt }}</p>
+            <span style="display:inline-flex;align-items:center;gap:8px;font-family:'Space Mono',monospace;font-size:11.5px;letter-spacing:0.1em;text-transform:uppercase;color:#F27A5E">Leia mais <span style="font-size:14px;display:inline-block;transition:transform .25s ease" style-hover="transform:translateX(4px)">→</span></span>
+          </div>
+        </a>
+      </sc-for>
+    </div>
+  </section>
+
+  <!-- ============ FILTROS ============ -->
+  <section style="padding:0 {{ sidePad }} 40px;max-width:1120px;margin:0 auto">
+    <div style="display:flex;flex-wrap:wrap;gap:10px">
+      <sc-for list="{{ filters }}" as="cat" hint-placeholder-count="8">
+        <button onClick="{{ cat.onClick }}" style="{{ cat.chipStyle }}">{{ cat.label }}</button>
+      </sc-for>
+    </div>
+  </section>
+
+  <!-- ============ GRID DE POSTS ============ -->
+  <section style="padding:0 {{ sidePad }} {{ sectionPadV }};max-width:1120px;margin:0 auto">
+    <div style="display:grid;grid-template-columns:{{ cols3 }};gap:20px">
+      <sc-for list="{{ posts }}" as="p" hint-placeholder-count="9">
+        <a href="{{ p.href }}" onMouseEnter="{{ p.onEnter }}" onMouseLeave="{{ p.onLeave }}" style="{{ p.cardStyle }}">
+          <div style="position:relative;aspect-ratio:16/11;overflow:hidden">
+            <div style="{{ p.imgStyle }}"></div>
+            <span style="position:absolute;top:14px;right:14px;padding:7px 13px;border-radius:6px;background:linear-gradient(90deg,#2E3033,#000000);border:1.5px solid rgba(255,255,255,0.14);font-size:10.5px;font-weight:500;color:#E6E6E6;white-space:nowrap">{{ p.category }}</span>
+          </div>
+          <div style="padding:22px 22px 24px">
+            <h3 style="margin:0 0 12px;font-size:16.5px;font-weight:600;letter-spacing:-0.005em;line-height:1.4">{{ p.title }}</h3>
+            <span style="display:inline-flex;align-items:center;gap:7px;font-family:'Space Mono',monospace;font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;color:#F27A5E">Leia mais <span style="font-size:13px;display:inline-block;transition:transform .25s ease" style-hover="transform:translateX(4px)">→</span></span>
+          </div>
+        </a>
+      </sc-for>
+    </div>
+  </section>
+
+  <!-- ============ CTA FINAL ============ -->
+  <section style="padding:{{ sectionPadV }} {{ sidePad }};border-top:1px solid rgba(255,255,255,0.08);text-align:center">
+    <div style="max-width:700px;margin:0 auto;display:flex;flex-direction:column;align-items:center">
+      <span style="font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.22em;text-transform:uppercase;color:#F27A5E;margin-bottom:24px">Fique por dentro</span>
+      <h2 style="margin:0 0 34px;font-size:clamp(26px,4vw,46px);font-weight:600;letter-spacing:-0.025em;line-height:1.1">Tem uma dúvida sobre seu próximo projeto?</h2>
+      <a href="Home.dc.html#contato" style="display:inline-flex;align-items:center;gap:10px;padding:16px 34px;background:#F27A5E;color:#000;border-radius:2px;font-size:15px;font-weight:600;letter-spacing:0.02em;transition:transform .25s ease,filter .25s ease" style-hover="filter:brightness(1.08);transform:translateY(-2px)">Falar com a Trifold <span style="font-size:17px;display:inline-block;transition:transform .25s ease" style-hover="transform:translateX(4px)">→</span></a>
+    </div>
+  </section>
+
+  <!-- ============ FOOTER ============ -->
+  <footer style="padding:64px {{ sidePad }} 44px;border-top:1px solid rgba(255,255,255,0.08);background:#050505">
+    <div style="max-width:1120px;margin:0 auto">
+      <div style="display:flex;flex-wrap:wrap;gap:32px;justify-content:space-between;align-items:flex-start;padding-bottom:44px;border-bottom:1px solid rgba(255,255,255,0.08)">
+        <div style="max-width:320px">
+          <dc-import name="Logo" tone="dark" size="{{ 30 }}" hint-size="280px,34px"></dc-import>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:20px 26px;font-size:13px;letter-spacing:0.04em;color:#9A9A9A">
+          <a href="Home.dc.html" style="transition:color .2s ease" style-hover="color:#fff">HOME</a><a href="Sobre Nós.dc.html" style="transition:color .2s ease" style-hover="color:#fff">SOBRE</a><a href="Empreendimentos.dc.html" style="transition:color .2s ease" style-hover="color:#fff">EMPREENDIMENTOS</a><a href="B2B.dc.html" style="transition:color .2s ease" style-hover="color:#fff">CORPORATIVAS</a><a href="#" style="transition:color .2s ease" style-hover="color:#fff">BLOG</a>
+        </div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:20px;justify-content:space-between;align-items:center;padding-top:28px;font-family:'Space Mono',monospace;font-size:11px;color:#5A5A5A">
+        <span>© 2026 Trifold Engenharia. Todos os direitos reservados.</span>
+        <span style="display:inline-flex;align-items:center;gap:8px">Desenvolvido por <img src="assets/dois-logo.svg" alt="Dois" style="height:12px;width:auto;opacity:0.7" /></span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- WhatsApp float -->
+  <a href="https://wa.me/5544991089698?text=Ol%C3%A1%2C%20estava%20no%20site%20da%20Trifold%20e%20gostaria%20de%20mais%20informa%C3%A7%C3%B5es%20sobre..." target="_blank" rel="noopener" style="position:fixed;right:20px;bottom:20px;z-index:120;width:58px;height:58px;border-radius:50%;background:#111111;border:1px solid #F27A5E;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 20px rgba(0,0,0,0.4);transition:transform .25s ease,box-shadow .25s ease" style-hover="transform:scale(1.08);box-shadow:0 8px 26px rgba(0,0,0,0.5)" title="WhatsApp">
+    <svg viewBox="0 0 32 32" width="30" height="30" fill="#fff"><path fill-rule="evenodd" clip-rule="evenodd" d="M16 3C8.82 3 3 8.82 3 16c0 2.49.69 4.82 1.9 6.81L3 29l6.37-1.85A12.94 12.94 0 0 0 16 29c7.18 0 13-5.82 13-13S23.18 3 16 3zm0 23.8a10.7 10.7 0 0 1-5.46-1.49l-.39-.23-4.06 1.18 1.21-3.96-.25-.41A10.75 10.75 0 1 1 16 26.8z"/><path d="M21.6 18.9c-.32-.16-1.88-.93-2.17-1.03-.29-.11-.5-.16-.72.16-.21.32-.82 1.03-1 1.24-.19.21-.37.24-.69.08-.32-.16-1.34-.5-2.55-1.58-.94-.84-1.58-1.87-1.76-2.19-.19-.32-.02-.49.14-.65.14-.14.32-.37.48-.55.16-.19.21-.32.32-.53.11-.21.05-.4-.03-.56-.08-.16-.72-1.74-.99-2.38-.26-.62-.53-.54-.72-.55-.19-.01-.4-.01-.61-.01-.21 0-.56.08-.85.4-.29.32-1.11 1.09-1.11 2.65 0 1.56 1.14 3.07 1.29 3.28.16.21 2.24 3.42 5.42 4.8.76.33 1.35.52 1.81.67.76.24 1.45.21 2 .13.61-.09 1.88-.77 2.14-1.51.27-.75.27-1.39.19-1.52-.08-.14-.29-.21-.61-.37z"/></svg>
+  </a>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{}">
+class Component extends DCLogic {
+  state = { hoverCard: null, activeCategory: 'Todos', menuOpen: false, vw: (typeof window !== 'undefined' ? window.innerWidth : 1280) };
+  componentDidMount() {
+    this._onResize = () => this.setState({ vw: window.innerWidth });
+    window.addEventListener('resize', this._onResize);
+  }
+  componentWillUnmount() {
+    window.removeEventListener('resize', this._onResize);
+  }
+  toggleMenu() { this.setState(s => ({ menuOpen: !s.menuOpen })); }
+
+  renderVals() {
+    const hoverCard = this.state.hoverCard;
+    const activeCategory = this.state.activeCategory;
+    const vw = this.state.vw || 1280;
+    const isMobile = vw < 900;
+    const isTablet = vw < 1060 && vw >= 900;
+    const menuOpen = this.state.menuOpen;
+
+    const sidePad = vw < 520 ? '24px' : isMobile ? '34px' : '48px';
+    const sectionPadV = isMobile ? '72px' : '110px';
+    const heroPadTop = isMobile ? '130px' : '170px';
+    const cols2 = isMobile ? '1fr' : '1fr 1fr';
+    const cols3 = isMobile ? '1fr' : isTablet ? '1fr 1fr' : 'repeat(3,1fr)';
+
+    const navLinksStyle = { display: isMobile ? 'none' : 'flex', alignItems: 'center', flexWrap: 'nowrap', gap: '26px', marginLeft: '56px', fontSize: '12.5px', letterSpacing: '0.05em' };
+    const hamburgerBtnStyle = { display: isMobile ? 'flex' : 'none', flexDirection: 'column', justifyContent: 'center', gap: '5px', width: '38px', height: '38px', background: 'none', border: 'none', cursor: 'pointer', padding: 0 };
+    const barStyle = { width: '22px', height: '2px', background: '#fff', display: 'block' };
+
+    const TINTS = {
+      'Empreendimentos': 'linear-gradient(150deg,#1a2436,#2b3348)',
+      'Mercado Imobiliário': 'linear-gradient(150deg,#141b16,#243328)',
+      'Engenharia': 'linear-gradient(150deg,#1c1a14,#332a1c)',
+      'Arquitetura': 'linear-gradient(150deg,#201820,#3a2438)',
+      'Dica': 'linear-gradient(150deg,#101820,#1c2b38)',
+      'Inovação': 'linear-gradient(150deg,#2a1c12,#4a3320)',
+      'Trifold': 'linear-gradient(150deg,#1a1a1a,#2E1A14)',
+    };
+
+    const featuredRaw = [
+      { key:'f0', title:'Apartamento Boutique: o novo desejo de morar bem com sofisticação, exclusividade e propósito', category:'Empreendimentos', excerpt:'O apartamento boutique é a nova tendência que une exclusividade, sofisticação e bem-estar. Em Maringá, o Vind Residence incorpora esse conceito com poucas unidades e acabamento premium.' },
+      { key:'f1', title:'Mercado Imobiliário em Maringá', category:'Mercado Imobiliário', excerpt:'Um panorama do momento do mercado imobiliário em Maringá: crescimento, novos bairros em valorização e o que esperar para os próximos lançamentos na cidade.' },
+    ];
+
+    const postsRaw = [
+      { key:'p0', title:'Os novos estilos de vida estão moldando os projetos residenciais', category:'Empreendimentos' },
+      { key:'p1', title:'Construa com segurança e planeje com quem entende: o caminho para uma obra comercial de sucesso', category:'Trifold', img:'assets/blog/p21.webp' },
+      { key:'p2', title:'Financiamento Imobiliário Dispara: Alta de 40,3% em um Ano!', category:'Empreendimentos', img:'assets/blog/p7.webp' },
+      { key:'p3', title:'Investimentos do Agronegócio no Mercado Imobiliário: Uma Tendência Promissora no Paraná', category:'Empreendimentos' },
+      { key:'p4', title:'Imóveis de luxo seguem em alta e se destacam como investimento seguro, apesar dos juros elevados', category:'Empreendimentos' },
+      { key:'p5', title:'Tendências do mercado imobiliário em Maringá', category:'Dica' },
+      { key:'p6', title:'IGP-M e o impacto nos contratos de compra e aluguel', category:'Dica', img:'assets/blog/p2.webp' },
+      { key:'p7', title:'Checklist para comprar seu primeiro imóvel sem dores de cabeça', category:'Dica', img:'assets/blog/p6.webp' },
+      { key:'p8', title:'Gestão da qualidade em obras de edifícios', category:'Engenharia' },
+      { key:'p9', title:'Por que 2025 será o Ano do Imobiliário? Cenários de Valorização em Maringá', category:'Empreendimentos' },
+      { key:'p10', title:'Smart Homes: Como a Automação Residencial Valoriza Seu Imóvel', category:'Empreendimentos' },
+      { key:'p11', title:'Diário de Obras na Construção Civil', category:'Engenharia' },
+      { key:'p12', title:'Arquitetura Vernacular: O que podemos aprender com o passado?', category:'Arquitetura' },
+      { key:'p13', title:'A Inteligência Artificial na Construção Civil', category:'Engenharia' },
+      { key:'p14', title:'Custos e Prazos na Construção de Imóveis', category:'Empreendimentos' },
+      { key:'p15', title:'Compatibilização de Projetos em BIM na Construção de Edifícios', category:'Engenharia' },
+      { key:'p16', title:'Exoesqueleto e Robótica: Revolução da Segurança nas Obras de Construção?', category:'Inovação' },
+      { key:'p17', title:'Obras Hospitalares, um foco em Centros Cirúrgicos', category:'Engenharia' },
+      { key:'p18', title:'Como a sustentabilidade está sendo integrada nos projetos imobiliários?', category:'Empreendimentos', img:'assets/blog/p18.webp' },
+      { key:'p19', title:'A Importância da Neuroarquitetura no design de espaços', category:'Arquitetura' },
+      { key:'p20', title:'Laje Plana Protendida', category:'Engenharia' },
+      { key:'p21', title:'Além da Luz, Emoção e Conforto', category:'Arquitetura', img:'assets/blog/p19.webp' },
+      { key:'p22', title:'Eficiência e Inovação: O Poder das Lajes Pré-Protendidas', category:'Engenharia' },
+      { key:'p23', title:'Somos a Trifold', category:'Trifold', img:'assets/blog/p1.webp' },
+    ];
+
+    const styleFor = (key, category, active, customImg) => ({
+      cardStyle: {
+        display: 'block', borderRadius: '6px', overflow: 'hidden', border: '1px solid ' + (active ? 'rgba(242,122,94,0.5)' : 'rgba(255,255,255,0.08)'), background: '#0A0A0A',
+        transform: active ? 'translateY(-4px)' : 'translateY(0)',
+        boxShadow: active ? '0 14px 32px rgba(0,0,0,0.4)' : '0 0 0 rgba(0,0,0,0)',
+        transition: 'transform .3s ease, box-shadow .3s ease, border-color .3s ease',
+        cursor: 'pointer',
+      },
+      imgStyle: {
+        position: 'absolute', inset: '-4%', backgroundImage: 'url(' + (customImg || ('assets/blog/' + key + '.webp')) + ')', backgroundSize: 'cover', backgroundPosition: 'center',
+        transform: active ? 'scale(1.06)' : 'scale(1)', transition: 'transform .6s ease',
+      },
+    });
+
+    const featured = featuredRaw.map((f) => {
+      const active = hoverCard === f.key;
+      const s = styleFor(f.key, f.category, active, f.img);
+      return { ...f, ...s, href: 'Artigo.dc.html?slug=' + f.key, onEnter: () => this.setState({ hoverCard: f.key }), onLeave: () => this.setState({ hoverCard: null }) };
+    });
+
+    const categories = ['Empreendimentos', 'Mercado Imobiliário', 'Engenharia', 'Arquitetura', 'Dica', 'Inovação', 'Trifold'];
+    const filters = ['Todos', ...categories].map((label) => {
+      const active = activeCategory === label;
+      return {
+        label,
+        onClick: () => this.setState({ activeCategory: label }),
+        chipStyle: {
+          padding: '10px 18px', borderRadius: '999px', border: '1px solid ' + (active ? 'transparent' : 'rgba(255,255,255,0.16)'),
+          background: active ? '#fff' : 'transparent', color: active ? '#000' : '#C9C9C9',
+          fontFamily: "'Space Grotesk',sans-serif", fontSize: '13px', fontWeight: 500, cursor: 'pointer',
+          transition: 'background .25s ease, color .25s ease, border-color .25s ease',
+        },
+      };
+    });
+
+    const filteredPosts = activeCategory === 'Todos' ? postsRaw : postsRaw.filter((p) => p.category === activeCategory);
+    const posts = filteredPosts.map((p) => {
+      const active = hoverCard === p.key;
+      const s = styleFor(p.key, p.category, active, p.img);
+      return { ...p, ...s, href: 'Artigo.dc.html?slug=' + p.key, onEnter: () => this.setState({ hoverCard: p.key }), onLeave: () => this.setState({ hoverCard: null }) };
+    });
+
+    return { sidePad, sectionPadV, heroPadTop, cols2, cols3, navLinksStyle, hamburgerBtnStyle, barStyle, menuOpen, toggleMenu: () => this.toggleMenu(), featured, filters, posts };
+  }
+}
+</script>
+</body>
+</html>

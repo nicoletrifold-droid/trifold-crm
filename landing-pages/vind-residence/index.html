@@ -9,6 +9,187 @@
   <link rel="icon" href="assets/favicon.png" />
   <link rel="apple-touch-icon" href="assets/favicon.png" />
 
+  <!-- =====================================================================
+       Meta Pixel — Story 86-11 (AC1)
+       O mais cedo possível no <head>: é o que faz o cookie `_fbp` existir a
+       tempo do primeiro evento. No baseline do Epic 86 o `fbp` aparecia em
+       9,2% dos eventos — a maior lacuna isolada da nota de correspondência.
+       O id do Pixel é PÚBLICO (aparece no HTML de qualquer site que use Pixel);
+       o segredo é o token da CAPI, que vive só no CRM.
+       ===================================================================== -->
+  <script>
+    window.TRIFOLD_PIXEL_ID = '1337310707164669';
+    !function(f,b,e,v,n,t,s)
+    {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+    n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+    if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+    n.queue=[];t=b.createElement(e);t.async=!0;
+    t.src=v;s=b.getElementsByTagName(e)[0];
+    s.parentNode.insertBefore(t,s)}(window,document,'script',
+    'https://connect.facebook.net/en_US/fbevents.js');
+    fbq('init', window.TRIFOLD_PIXEL_ID);
+  </script>
+
+  <!-- =====================================================================
+       Tracking Trifold — Story 86-11 (AC2, AC3, AC4, AC10)
+       Reimplementação vanilla, deliberada, do que `packages/web/src/lib/meta/*`
+       já faz no CRM (`visitor-id.ts`, `browser-attribution.ts`,
+       `pixel-events.ts`). Este projeto Vercel não tem bundler nem dependências
+       declaradas — `import`/`require` de `packages/shared` falharia no deploy.
+       A duplicação é do MÍNIMO necessário e só do lado browser; o lado servidor
+       reusa os módulos do CRM sem cópia.
+
+       Nada aqui pode lançar: um bloqueador de anúncios não pode derrubar o
+       formulário de captação (AC10).
+       ===================================================================== -->
+  <script>
+  (function(){
+    /* Par de `CONFIG.leadEndpoint` (script no fim da página). Fica duplicado
+       aqui porque `CONFIG` só existe depois, e o `ViewContent` precisa sair no
+       carregamento. Ao trocar o domínio do proxy, atualizar OS DOIS. */
+    var TRACK_ENDPOINT = 'https://vind-residence.vercel.app/api/track';
+    var VISITOR_KEY = 'trifold_visitor_id';
+    var FBCLID_KEY  = 'trifold_fbclid';
+    var PAGE_URL    = (function(){ try { return window.location.href; } catch(e){ return ''; } })();
+
+    /* --- UUID v4, com fallback para navegador sem crypto.randomUUID --------
+       `crypto.randomUUID` exige contexto seguro (https), que é sempre o caso em
+       produção. O fallback cobre http://localhost e navegadores antigos. */
+    function novoId(prefixo){
+      try {
+        if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+          return window.crypto.randomUUID();
+        }
+      } catch(e){ /* segue para o fallback */ }
+      return prefixo + '-' + Date.now().toString(36) + '-' +
+             Math.random().toString(36).slice(2, 12);
+    }
+
+    /* --- visitor_id estável (AC2) -----------------------------------------
+       É o `external_id` dos eventos: sem ele, `ViewContent`/`InitiateCheckout`
+       (que acontecem antes de existir lead) chegariam ao Meta como um
+       desconhecido, sem ligação com o `Lead` que vem depois.
+       Sem localStorage (aba anônima), cai para memória: vale só este
+       carregamento de página — reduz a persistência, não quebra nada. */
+    var visitorMemoria = null;
+    function visitorId(){
+      try {
+        var existente = window.localStorage.getItem(VISITOR_KEY);
+        if (existente) return existente;
+        var id = novoId('v');
+        window.localStorage.setItem(VISITOR_KEY, id);
+        return id;
+      } catch(e){
+        if (!visitorMemoria) visitorMemoria = novoId('v');
+        return visitorMemoria;
+      }
+    }
+
+    /* --- fbc / fbp / fbclid (AC3) ----------------------------------------- */
+    function lerCookie(nome){
+      try {
+        var m = document.cookie.match(new RegExp('(?:^|; )' + nome + '=([^;]*)'));
+        return m && m[1] ? decodeURIComponent(m[1]) : '';
+      } catch(e){ return ''; }
+    }
+
+    function lerFbclid(){
+      try {
+        var daUrl = new URLSearchParams(window.location.search).get('fbclid');
+        if (daUrl) {
+          try { window.sessionStorage.setItem(FBCLID_KEY, daUrl); } catch(e){}
+          return daUrl;
+        }
+        return window.sessionStorage.getItem(FBCLID_KEY) || '';
+      } catch(e){ return ''; }
+    }
+
+    /* O `_fbc` é criado pelo Pixel quando há `fbclid` na URL, mas há corrida: na
+       primeira visualização o script pode não ter rodado ainda. Quando o cookie
+       falta e o `fbclid` existe, montamos o valor no formato oficial. O `_fbp`
+       NUNCA é fabricado à mão — só o script oficial o gera. */
+    function atribuicao(){
+      try {
+        var fbclid = lerFbclid();
+        var fbp = lerCookie('_fbp');
+        var fbc = lerCookie('_fbc') || (fbclid ? 'fb.1.' + Date.now() + '.' + fbclid : '');
+        var out = {};
+        if (fbp) out.fbp = fbp;
+        if (fbc) out.fbc = fbc;
+        if (fbclid) out.fbclid = fbclid;
+        return out;
+      } catch(e){ return {}; }
+    }
+
+    /* --- espera o cookie `_fbp` NASCER ------------------------------------
+       [Defeito 86.9-QA-004, medido em produção no CRM]
+       O snippet do Meta define `window.fbq` de forma síncrona, mas isso é só o
+       stub que enfileira chamadas; o `fbevents.js` real carrega depois e é ELE
+       quem grava o `_fbp`. Disparar o par server-side na hora manda o evento
+       sem `fbp` — o sintoma exato que esta story veio corrigir. Para o disparo
+       NO Pixel o stub basta (a fila é drenada); para LER a atribuição, não.
+       O teto existe para quem usa bloqueador: ali o cookie nunca nasce. */
+    function quandoFbpPronto(cb){
+      var tentativas = 0;
+      function temFbp(){ try { return document.cookie.indexOf('_fbp=') !== -1; } catch(e){ return false; } }
+      if (temFbp()) { cb(); return; }
+      var timer = setInterval(function(){
+        if (temFbp() || ++tentativas >= 50) { clearInterval(timer); cb(); }
+      }, 100);
+    }
+
+    /* --- disparo --------------------------------------------------------- */
+    function pixelTrack(evento, eventId){
+      try { if (window.fbq) window.fbq('track', evento, {}, { eventID: eventId }); } catch(e){}
+    }
+
+    /* Fire-and-forget: uma falha de rede aqui não pode afetar o envio do lead,
+       que é uma chamada independente (AC10). */
+    function enviarAoServidor(evento, eventId){
+      try {
+        var corpo = atribuicao();
+        corpo.event_name = evento;
+        corpo.event_id = eventId;
+        corpo.visitor_id = visitorId();
+        corpo.page_url = PAGE_URL;
+        fetch(TRACK_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(corpo),
+          keepalive: true
+        }).catch(function(){});
+      } catch(e){}
+    }
+
+    /* Browser + servidor com o MESMO event_id: é isso que faz o Meta contar uma
+       conversão só, com a união dos sinais dos dois lados. Ids divergentes
+       inflam a contagem — pior do que não ter o evento. */
+    function evento(nome){
+      var id = novoId('e');
+      pixelTrack(nome, id);
+      quandoFbpPronto(function(){ enviarAoServidor(nome, id); });
+    }
+
+    /* API usada pelo script do fim da página (formulário e InitiateCheckout). */
+    window.TrifoldTracking = {
+      novoId: novoId,
+      visitorId: visitorId,
+      atribuicao: atribuicao,
+      pixelTrack: pixelTrack,
+      evento: evento,
+      quandoFbpPronto: quandoFbpPronto,
+      pageUrl: PAGE_URL
+    };
+
+    /* PageView — só browser. Página anônima, sem lead ainda e sem correlato
+       confiável no backend: um par server-side aqui seria ruído (AC1). */
+    pixelTrack('PageView', novoId('e'));
+
+    /* ViewContent — browser + servidor, deduplicados pelo event_id (AC4). */
+    evento('ViewContent');
+  })();
+  </script>
+
   <!-- Open Graph -->
   <meta property="og:locale" content="pt_BR" />
   <meta property="og:type" content="website" />
@@ -279,6 +460,13 @@
   </style>
 </head>
 <body>
+  <!-- Beacon do Pixel para quem tem JS desligado (parte do base code oficial).
+       Fica no <body>, não no <head>: um <img> dentro de <noscript> no <head> é
+       inválido e encerraria o parsing do head. Exige `img-src
+       https://www.facebook.com` na CSP do trifold-design-system (Story 86-11 AC8). -->
+  <noscript><img height="1" width="1" style="display:none" alt=""
+    src="https://www.facebook.com/tr?id=1337310707164669&ev=PageView&noscript=1" /></noscript>
+
 
   <!-- ===================== HEADER ===================== -->
   <header class="nav" id="nav">
@@ -525,7 +713,7 @@
     var CONFIG = {
       whatsapp: "5544991089698",               // DDI+DDD+número (só dígitos)
       whatsappMsg: "Olá, vim do site do Vind e queria mais informações.",
-      leadEndpoint: "https://vind-residence.vercel.app/api/lead"  // URL absoluta: funciona mesmo servida via proxy sob trifold.eng.br/vindresidence (CORS allowlist inclui trifold.eng.br). Atualizar se o projeto/dominio do proxy mudar.
+      leadEndpoint: "https://vind-residence.vercel.app/api/lead"  // URL absoluta: funciona mesmo servida via proxy sob trifold.eng.br/vindresidence (CORS allowlist inclui trifold.eng.br). Atualizar se o projeto/dominio do proxy mudar — e junto com o TRACK_ENDPOINT do script de tracking no <head>.
     };
 
     // WhatsApp flutuante
@@ -580,6 +768,26 @@
     // Envio do formulário
     var form = document.getElementById('leadForm');
     var msg = document.getElementById('formMsg');
+
+    // Story 86-11 (AC4) — InitiateCheckout no PRIMEIRO foco em nome ou WhatsApp.
+    // A landing não tem passos sequenciais como o formulário de qualificação; o
+    // primeiro foco num campo é o sinal real de "engajou com o formulário", e é
+    // um momento que hoje ninguém mede. Uma vez por carregamento de página.
+    (function(){
+      var T = window.TrifoldTracking;
+      if (!T) return; // tracking bloqueado — o formulário segue funcionando
+      var disparado = false;
+      function aoFocar(){
+        if (disparado) return;
+        disparado = true;
+        T.evento('InitiateCheckout');
+      }
+      ['nome','whats'].forEach(function(id){
+        var el = document.getElementById(id);
+        if (el) el.addEventListener('focus', aoFocar, { once:true });
+      });
+    })();
+
     form.addEventListener('submit', function(e){
       e.preventDefault();
       if(!form.checkValidity()){ form.reportValidity(); return; }
@@ -589,6 +797,31 @@
         email: form.email.value.trim(),
         empresa: form.empresa.value.trim() // honeypot — deve chegar vazio
       };
+
+      // Story 86-11 (AC4, AC6) — dois event_id DISTINTOS, gerados aqui, no mesmo
+      // instante: um para `Lead`, outro para `CompleteRegistration`. Os dois
+      // eventos saem juntos porque esta landing não tem um segundo marco
+      // temporal (página única, POST atômico) — ressalva documentada na story.
+      // Ids distintos deixam os Test Events auditáveis sem ambiguidade.
+      var T = window.TrifoldTracking;
+      var eventIdLead = T ? T.novoId('e') : '';
+      var eventIdCadastro = T ? T.novoId('e') : '';
+      if (T) {
+        var atrib = T.atribuicao();
+        data.tracking = {
+          event_id: eventIdLead,
+          complete_registration_event_id: eventIdCadastro,
+          visitor_id: T.visitorId(),
+          page_url: T.pageUrl
+        };
+        if (atrib.fbc) data.tracking.fbc = atrib.fbc;
+        if (atrib.fbp) data.tracking.fbp = atrib.fbp;
+        if (atrib.fbclid) data.tracking.fbclid = atrib.fbclid;
+        // client_ip/client_ua NÃO vão daqui: o browser não sabe o próprio IP e
+        // não deve ditar esses campos. O proxy `api/lead.js` os preenche a
+        // partir dos headers que só ele enxerga (AC7).
+      }
+
       function ok(){
         msg.className = 'form-msg ok';
         msg.textContent = 'Cadastro enviado! Em breve entraremos em contato. 🌿';
@@ -601,7 +834,21 @@
       if(CONFIG.leadEndpoint){
         fetch(CONFIG.leadEndpoint, {
           method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)
-        }).then(function(r){ if(r.ok){ ok(); } else { fail(); } }).catch(fail);
+        }).then(function(r){
+          if(!r.ok){ fail(); return; }
+          // `tracked: false` = honeypot (bot). O proxy responde 200 de propósito,
+          // para não sinalizar ao bot; mas sem lead no CRM não há contraparte
+          // server-side, e disparar no Pixel poluiria o dataset com um evento
+          // sem deduplicação. Corpo ilegível/antigo → assume tracked (o caminho
+          // normal), que é o comportamento correto para um envio real.
+          return r.json().catch(function(){ return {}; }).then(function(corpo){
+            if (T && (!corpo || corpo.tracked !== false)) {
+              T.pixelTrack('Lead', eventIdLead);
+              T.pixelTrack('CompleteRegistration', eventIdCadastro);
+            }
+            ok();
+          });
+        }).catch(fail);
       } else {
         console.log('[lead capturado]', data); // sem endpoint configurado — apenas log
         ok();

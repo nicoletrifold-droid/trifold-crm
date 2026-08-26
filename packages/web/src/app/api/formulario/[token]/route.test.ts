@@ -18,6 +18,24 @@ vi.mock("@web/lib/leads/default-stage", () => ({
   getDefaultStageId: async () => "stage-novo",
 }))
 
+// `after()` só existe dentro do contexto de request da Vercel. No teste, roda na hora.
+vi.mock("next/server", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/server")>()),
+  after: (fn: () => unknown) => {
+    void fn()
+  },
+}))
+
+/** Eventos que chegariam à Conversions API. O teste não fala com o Meta. */
+const eventosCapi: Record<string, unknown>[] = []
+vi.mock("@web/lib/meta/form-capi", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@web/lib/meta/form-capi")>()),
+  enviarEventoFormulario: async (input: Record<string, unknown>) => {
+    eventosCapi.push(input)
+    return true
+  },
+}))
+
 type Row = Record<string, unknown>
 type Db = { lead_forms: Row[]; leads: Row[]; lead_form_responses: Row[]; activities: Row[] }
 let db: Db
@@ -125,10 +143,22 @@ async function post(body: Record<string, unknown>) {
   return POST(req as never, { params: Promise.resolve({ token: TOKEN }) })
 }
 
+/** Igual a `post()`, mas com controle dos headers da requisição. */
+async function postComHeaders(body: Record<string, unknown>, headers: Record<string, string>) {
+  const { POST } = await import("./route")
+  const req = new Request("http://x/api/formulario/x", {
+    method: "POST",
+    body: JSON.stringify(body),
+    headers: { "content-type": "application/json", ...headers },
+  })
+  return POST(req as never, { params: Promise.resolve({ token: TOKEN }) })
+}
+
 const respostasContato = { n: "Lucas Teste", t: "44988447212" }
 
 beforeEach(() => {
   estadoBase()
+  eventosCapi.length = 0
   vi.resetModules()
 })
 
@@ -182,5 +212,56 @@ describe("POST /api/formulario/[token] — origem do lead que já existia", () =
     expect(lead.source).toBe("form_qualificacao")
     expect(lead.stage_id).toBe("stage-novo") // nunca stage null (75-218)
     expect(db.activities.filter((a) => a.type === "lead_source_updated")).toHaveLength(0)
+  })
+})
+
+describe("SEGURANÇA 86.11-QA-001 — o corpo não dita IP/UA do evento CAPI", () => {
+  // 🔴 Esta rota é um link PÚBLICO: quem monta o corpo é o próprio visitante.
+  // A Story 86-11 deu precedência a `client_ip`/`client_ua` do corpo sobre os
+  // headers em `extrairSinais` — necessário lá, onde existe um proxy
+  // servidor-a-servidor no meio, mas a função é compartilhada com esta rota, que
+  // já estava em produção pela 86-9. A precedência virou opt-in e AQUI ela não é
+  // pedida; o header é a única fonte que o visitante não escolhe.
+  const EVENT_ID = "44444444-4444-4444-8444-444444444444"
+
+  it("client_ip/client_ua forjados em `tracking` são IGNORADOS — vale o IP real da request", async () => {
+    await postComHeaders(
+      {
+        respostas: respostasContato,
+        event_ids: { lead: EVENT_ID },
+        tracking: {
+          visitor_id: "visitante-1",
+          fbp: "fb.1.1.p",
+          client_ip: "1.2.3.4",
+          client_ua: "UA-forjado-pelo-visitante",
+        },
+      },
+      { "x-forwarded-for": "187.1.2.3, 10.0.0.1", "user-agent": "Mozilla/5.0 (iPhone)" },
+    )
+
+    expect(eventosCapi).toHaveLength(1)
+    const sinais = eventosCapi[0]!.sinais as Record<string, string>
+    expect(sinais.clientIp).toBe("187.1.2.3")
+    expect(sinais.clientUa).toBe("Mozilla/5.0 (iPhone)")
+    // Os sinais legítimos do corpo continuam passando — a trava é só de IP/UA.
+    expect(sinais.fbp).toBe("fb.1.1.p")
+    // O valor forjado não sobrevive em canto nenhum do que vai à CAPI.
+    expect(JSON.stringify(eventosCapi)).not.toContain("1.2.3.4")
+    expect(JSON.stringify(eventosCapi)).not.toContain("UA-forjado-pelo-visitante")
+  })
+
+  it("NÃO-REGRESSÃO 86-9: sem nada forjado, IP/UA seguem vindo dos headers", async () => {
+    await postComHeaders(
+      {
+        respostas: respostasContato,
+        event_ids: { lead: EVENT_ID },
+        tracking: { visitor_id: "visitante-1" },
+      },
+      { "x-forwarded-for": "187.9.9.9, 10.0.0.1", "user-agent": "Mozilla/5.0" },
+    )
+
+    const sinais = eventosCapi[0]!.sinais as Record<string, string>
+    expect(sinais.clientIp).toBe("187.9.9.9")
+    expect(sinais.clientUa).toBe("Mozilla/5.0")
   })
 })

@@ -1,14 +1,39 @@
 - [Vercel project setup](project_vercel_setup.md) — rootDirectory is `packages/web`, not repo root; affects .vercelignore placement
-- [Quality gate signals for trifold-crm](feedback_quality_gate_signals.md) — `next build` is canonical; lint/tsc standalone produce false positives in Next 16
+- [Quality gate signals for trifold-crm](feedback_quality_gate_signals.md) — `next build` é canônico; lint/tsc standalone dão falso positivo; `exit 137` no turbo = OOM, não erro de tipo
 - [Meta subscription state (prod)](project_meta_subscription.md) — leadgen subscription validada 2026-06-08; verify token sufixo `...a387d2f`
 - [Migration 074 — leads.metadata JSONB](project_leads_metadata_migration_074.md) — bloqueio root-cause attribution Meta; PR #5 (draft) com idempotencia
 - [Vercel env source of truth](reference_vercel_env_source_of_truth.md) — `vercel env pull` para producao; `.env.local` locais podem divergir
-- [Main divergence 2026-06-08](project_main_divergence_2026-06-08.md) — main local ficou ~30 commits atras de origin/main durante merge PRs #5/#6; sempre fetch antes de mergear
+- [Main divergence: main local e lixo](project_main_divergence_2026-06-08.md) — 177 commits atras em 2026-08-20; branch sempre de origin/main; padrao worktree p/ commitar de branch suja
 - [Force-push vs merge em main](feedback_force_push_vs_merge_main.md) — regra `-f origin main` NAO autoriza sobrescrever commits de terceiros; behind>0 com arquivos disjuntos = merge, nao force
 - [creative_performance fn signature](project_creative_performance_fn_signature.md) — RETURNS TABLE que muda colunas OUT precisa DROP FUNCTION antes do CREATE OR REPLACE (Postgres 42P13)
 - [Nunca add -A; escanear segredos](feedback_no_add_all_secret_leak.md) — service_role key hardcoded quase vazou via add -A; GitHub Push Protection bloqueou; sempre grep por segredos antes do push
-- [Incidente de deploy 900-14b](project_incidente_deploy_900_14b.md) — RESOLVIDO 24/08 14:08Z (PR #493 + prod READY); preview verde nao fecha incidente, so target=production
+- [Incidente de deploy 900-14b](project_incidente_deploy_900_14b.md) — RESOLVIDO 2026-08-24 14:08Z (PR #493); `.vercelignore` x import fora de `packages/web`; preview verde não fecha deploy
 - [Transplantar hotfix de branch alheia](feedback_transplantar_hotfix_de_branch_alheia.md) — patch 3-way, nunca stash pop; unset-upstream ao criar branch de origin/main
-- [Incidente de deploy 900-14b](project_incidente_deploy_900_14b.md) — RESOLVIDO 2026-08-24; `.vercelignore` x import fora de `packages/web`; preview verde não fecha deploy
 - [Main entra na branch por merge, não rebase](feedback_merge_main_na_branch_nao_rebase.md) — repo é squash-merge; rebase force-pusha e orfana preview/comentários do PR
+- [Colisão com untracked: arquivo a arquivo](feedback_untracked_collision_arquivo_a_arquivo.md) — "untracked would be overwritten": backup+sha256 do arquivo isolado; nunca clean/checkout -f/stash -u
 - [Virada de status vai por branch + PR](feedback_status_story_via_branch_pr.md) — nem commit de doc vai direto na `main`; convenção `docs/<story>-done`
+- [Epic 86 migration 200 colisao](project_epic86_migration_200_collision.md) — PR #358 traz 200_meta_capi_outbox.sql que colide com 200_marketing_brand_assets_icone.sql em main; renumerar (215+) antes de deploy
+- [Epic 86 CAPI estado prod](project_epic86_capi_prod_state.md) — migration 215 JA aplicada em prod, NAO reaplicar as-is; env de teste já removida (2026-08-26); `vercel redeploy` não aceita `--yes`
+- [Epic 86 CAPI outbox schema+reset](project_epic86_capi_outbox_schema.md) — meta_capi_outbox NAO tem updated_at; fluxo reset failed→pending + cron dispatch validado prod 2026-08-10 (CRON_SECRET em .env.local)
+- [Landing pages = projetos Vercel separados](project_vercel_landing_pages_projects.md) — sem git link (merge NÃO publica, deploy manual); `vind-residence-teste` virou `vind-residence`; push em main redeploya o CRM
+- [Concorrencia em deploy estatico](feedback_vercel_static_deploy_concurrency.md) — outro processo pode deployar por cima; revalidar com `vercel ls` + diff byte a byte, nao grep com head
+- [Validar inlining de NEXT_PUBLIC_*](feedback_verify_next_public_env_inlining.md) — grepar HTML SSR nao prova nada com next/script afterInteractive; grepe o client chunk `?dpl=`
+- [Token Vercel expira](feedback_vercel_token_expiry_refresh.md) — REST API com `invalidToken:true` = token vencido; `vercel whoami` renova (expiresAt esta em segundos)
+- [Verificacao de dominio Resend](project_resend_domain_verification.md) — `not_started` = verify nunca disparado, nao é DNS faltando; POST /domains/{id}/verify
+- [HTTP 200 nao prova envio de email](feedback_verify_email_delivery_not_http_200.md) — /api/contact retorna 200 falso p/ honeypot e time-guard; confirme via `last_event` em GET /emails
+- [Dominios Vercel do trifold-crm](reference_trifold_crm_domains.md) — canonico `crm.trifold.eng.br`; alias real e `trifold-crm-delta.vercel.app` (NAO `trifold-crm.vercel.app`)
+- [Landing page webhook](project_landing_page_webhook.md) — PR#473 fix perda silenciosa (after→await); 200 so se lead criado; smoke test cria lead real, sempre limpar
+- [Vind em trifold.eng.br/vindresidence via proxy](project_vindresidence_proxy_path_resolution.md) — receita rewrite-proxy: redirect trailing-slash + 2 rewrites + CSP escopada (negative-lookahead) + endpoint absoluto na landing
+- [.vercelignore em projeto estatico](feedback_vercelignore_static_projects_exposure.md) — sem ele o `.claude/` vai pra web (era 200 em prod); ao criar migre as regras antigas (fallback morre), mas NUNCA espelhe o `.gitignore` depois: `assets/` é fora do git e obrigatório no deploy
+- [Render headless p/ validar .dc.html](reference_headless_render_validation.md) — Chrome `--dump-dom` trava; Playwright com `NODE_PATH` de `playwright@1.60.0` (não `@playwright+test@`); probes de scroll e view transition
+- [CSP precisa de frame-src p/ Google Maps](project_csp_frame_src_google_maps.md) — sem `frame-src https://www.google.com` o mapa de "Sobre Nós" morre sem aviso; hoje são 4 blocos de CSP no `vercel.json`
+- [Deploy estatico: cache de edge stale](project_vercel_static_deploy_cdn_stale.md) — asset removido pode dar 200 logo após o deploy (revalidar); mesmo path trocado se prova por SHA256, não por `size_download`
+- [View Transitions: at-rule, não meta tag](project_view_transitions_optin_atrule.md) — `@view-transition{navigation:auto}` nas 7 `.dc.html`; opt-in vale por par de docs, página nova sem ela quebra a transição de saída
+- [Âncoras cross-page nas .dc.html](project_home_dc_hash_anchor_client_render.md) — `#contato` falha silenciosamente (render client-side); scroll tem que ser refeito no `componentDidMount`
+- [LCP: auto-hospedar terceiros](project_lcp_self_hosting_third_party.md) — React e Google Fonts já saíram do caminho crítico; não reintroduzir CDNs no `<head>` (só o Babel lazy do unpkg resta)
+- [trifold.eng.br exige TXT em _vercel](project_trifold_domain_vercel_txt_verification.md) — apex é de outra conta Vercel e o DNS (Cloudflare) é de terceiro; Custom Domain + TXT ANTES do A record
+- [Conferir valor real de env var Vercel](reference_vercel_env_verify_plaintext.md) — `decrypt=true` na listagem não decripta; use `GET /v1/projects/{id}/env/{envId}`; `len()` do blob cifrado é prova zero
+- [Validar Pixel+CAPI exige 2 ferramentas](feedback_meta_pixel_validation_two_channels.md) — painel Test Events é cego p/ evento client-only (`fbq` não carrega `test_event_code`); `PageView` só no Pixel Helper; "Desduplicado" = prova do pareamento
+- [Memória de agente só na raiz do repo](feedback_agent_memory_only_at_repo_root.md) — `.claude/` em pasta de deploy estático fica publicado na web E fora do git ao mesmo tempo; nunca criar subprojeto
+- [Descartar cópia já mergeada em main](feedback_discard_already_merged_copy.md) — ` M` + `git diff origin/main` vazio: `checkout HEAD --`, nunca `checkout origin/main --` (esse recommita)
+- [`.agents/` + skills-lock.json](project_agents_dir_skill_installer.md) — instalador de skill de terceiro (symlink em `.claude/skills/`); não é lixo nem escopo da branch — deixar untracked

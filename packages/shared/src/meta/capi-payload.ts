@@ -206,7 +206,19 @@ export interface BuildFormEventInput {
   contentName: string
   /** Score de qualificação, quando já calculado (`CompleteRegistration`). */
   value?: number
+  /**
+   * Segmenta a origem do evento nas Custom Conversions.
+   *
+   * Default `'form_qualificacao'` (Story 86-9, o único chamador até então). A
+   * landing do Vind Residence usa `'landing_vind_residence'` (Story 86-11) para
+   * que as duas origens possam ser separadas no Events Manager sem depender do
+   * `content_name`, que é texto livre editável pelo corretor.
+   */
+  contentCategory?: string
 }
+
+/** Origem padrão dos eventos de funil — preservada para o chamador da 86-9. */
+export const DEFAULT_FORM_CONTENT_CATEGORY = 'form_qualificacao'
 
 /**
  * Monta um evento do funil do formulário.
@@ -226,7 +238,7 @@ export function buildFormEvent(input: BuildFormEventInput): CapiEvent {
     user_data: input.userData,
     custom_data: {
       content_name: input.contentName,
-      content_category: 'form_qualificacao',
+      content_category: input.contentCategory ?? DEFAULT_FORM_CONTENT_CATEGORY,
       currency: 'BRL',
       value: input.value ?? 0,
     },

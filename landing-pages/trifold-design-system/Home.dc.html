@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>@view-transition{navigation:auto}</style>
+<title>Trifold Engenharia — Construtora e Incorporadora em Maringá</title>
+<meta name="description" content="Trifold Engenharia: empreendimentos residenciais e corporativos em Maringá e região, do projeto à entrega.">
+<link rel="preload" as="image" href="assets/banner-vind.webp" fetchpriority="high">
+<link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-variable.woff2" crossorigin>
+<script src="./support.js" defer></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<link href="assets/fonts/fonts.css" rel="stylesheet">
+<style>
+  html{scroll-behavior:smooth}
+  ::view-transition-old(root),::view-transition-new(root){animation-duration:.38s;animation-timing-function:cubic-bezier(.4,0,.2,1)}
+  body{margin:0;background:#000;color:#fff;font-family:'Space Grotesk',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  ::selection{background:#F27A5E;color:#000}
+  a{color:inherit;text-decoration:none}
+  @keyframes marq{0%{transform:translateX(0)}100%{transform:translateX(-16.6667%)}}
+</style>
+</helmet>
+
+<div style="background:#000;color:#fff;font-family:'Space Grotesk',system-ui,sans-serif">
+
+  <!-- ============ NAV ============ -->
+  <div style="position:fixed;top:0;left:0;right:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:20px {{ sidePad }};box-sizing:border-box;background:linear-gradient(180deg,rgba(0,0,0,0.65),rgba(0,0,0,0))">
+    <a href="#" aria-label="Ir para a Home" style="display:flex;align-items:center"><dc-import name="Logo" tone="dark" size="{{ 26 }}" hint-size="220px,30px"></dc-import></a>
+    <div style="{{ navLinksStyle }}">
+      <a href="#" style="color:#fff;border-bottom:1px solid #F27A5E;padding-bottom:3px;white-space:nowrap">HOME</a>
+      <a href="Sobre Nós.dc.html" style="color:#C9C9C9;white-space:nowrap;transition:color .2s ease" style-hover="color:#fff">SOBRE NÓS</a>
+      <a href="Empreendimentos.dc.html" style="color:#C9C9C9;white-space:nowrap;transition:color .2s ease" style-hover="color:#fff">EMPREENDIMENTOS</a>
+      <a href="B2B.dc.html" style="color:#C9C9C9;white-space:nowrap;transition:color .2s ease" style-hover="color:#fff">CORPORATIVAS</a>
+      <a href="Blog.dc.html" style="color:#C9C9C9;white-space:nowrap;transition:color .2s ease" style-hover="color:#fff">BLOG</a>
+      <a href="#contato" style="padding:11px 22px;background:#F27A5E;color:#000;border-radius:2px;font-weight:600;letter-spacing:0.02em;white-space:nowrap" style-hover="filter:brightness(1.08);transform:scale(1.02)">CONTATO</a>
+    </div>
+    <button onClick="{{ toggleMenu }}" style="{{ hamburgerBtnStyle }}" aria-label="Abrir menu">
+      <span style="{{ barStyle1 }}"></span>
+      <span style="{{ barStyle2 }}"></span>
+      <span style="{{ barStyle3 }}"></span>
+    </button>
+  </div>
+
+  <!-- ============ MOBILE MENU OVERLAY ============ -->
+  <sc-if value="{{ menuOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;inset:0;z-index:200;background:#050505;display:flex;flex-direction:column;padding:26px 28px 40px;overflow-y:auto">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:52px">
+        <a href="#" aria-label="Ir para a Home" style="display:flex;align-items:center"><dc-import name="Logo" tone="dark" size="{{ 26 }}" hint-size="200px,28px"></dc-import></a>
+        <button onClick="{{ toggleMenu }}" style="width:38px;height:38px;background:none;border:1px solid rgba(255,255,255,0.2);border-radius:6px;color:#fff;font-size:18px;cursor:pointer" aria-label="Fechar menu">✕</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;font-size:24px;font-weight:500">
+        <a href="#" onClick="{{ toggleMenu }}" style="padding:14px 4px;border-bottom:1px solid rgba(255,255,255,0.08);color:#F27A5E">Home</a>
+        <a href="Sobre Nós.dc.html" style="padding:14px 4px;border-bottom:1px solid rgba(255,255,255,0.08)">Sobre nós</a>
+        <a href="Empreendimentos.dc.html" style="padding:14px 4px;border-bottom:1px solid rgba(255,255,255,0.08)">Empreendimentos</a>
+        <a href="B2B.dc.html" style="padding:14px 4px;border-bottom:1px solid rgba(255,255,255,0.08)">Corporativas</a>
+        <a href="Blog.dc.html" style="padding:14px 4px;border-bottom:1px solid rgba(255,255,255,0.08)">Blog</a>
+      </div>
+      <a href="#contato" onClick="{{ toggleMenu }}" style="display:inline-flex;align-items:center;justify-content:center;margin-top:32px;padding:16px 24px;background:#F27A5E;color:#000;border-radius:2px;font-weight:600;font-size:15px">Contato</a>
+    </div>
+  </sc-if>
+
+  <!-- ============ HERO CARROSSEL ============ -->
+  <section style="position:relative;height:{{ heroHeight }};min-height:{{ heroMinHeight }};overflow:hidden">
+    <sc-for list="{{ slides }}" as="s" hint-placeholder-count="3">
+      <div style="{{ s.layerStyle }}">
+        <div style="position:absolute;inset:0;background-image:{{ s.bgImage }};background-size:cover;background-position:{{ s.bgPosition }}"></div>
+        <div style="position:absolute;inset:0;background:linear-gradient(90deg,rgba(0,0,0,0.72) 0%,rgba(0,0,0,0.30) 45%,rgba(0,0,0,0.10) 100%)"></div>
+        <div style="{{ heroContentStyle }}">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+            <span style="font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.22em;text-transform:uppercase;color:#F27A5E">{{ s.eyebrow }}</span>
+          </div>
+          <sc-if value="{{ s.logoSrc }}" hint-placeholder-val="{{ false }}">
+            <img src="{{ s.logoSrc }}" alt="{{ s.name }}" style="{{ s.logoStyle }}" />
+          </sc-if>
+          <sc-if value="{{ s.heading }}" hint-placeholder-val="{{ false }}">
+            <h2 style="margin:0;font-size:clamp(26px,4vw,46px);font-weight:600;letter-spacing:-0.02em;max-width:600px">{{ s.heading }}</h2>
+          </sc-if>
+          <p style="margin:10px 0 0;font-size:clamp(17px,2vw,24px);font-weight:300;color:#E6E6E6;max-width:560px">{{ s.tagline }}</p>
+          <div style="display:flex;align-items:center;flex-wrap:wrap;gap:22px;margin-top:22px">
+            <a href="{{ s.ctaHref }}" style="display:inline-flex;align-items:center;gap:10px;padding:15px 30px;background:#F27A5E;color:#000;border-radius:2px;font-size:14px;font-weight:600;letter-spacing:0.02em;transition:transform .25s ease,filter .25s ease" style-hover="filter:brightness(1.08);transform:translateY(-2px)">{{ s.ctaLabel }} <span style="font-size:16px;display:inline-block;transition:transform .25s ease" style-hover="transform:translateX(4px)">→</span></a>
+          </div>
+        </div>
+      </div>
+    </sc-for>
+    <!-- arrows -->
+    <button onClick="{{ prev }}" style="{{ arrowLeftStyle }}" aria-label="Slide anterior">‹</button>
+    <button onClick="{{ next }}" style="{{ arrowRightStyle }}" aria-label="Próximo slide">›</button>
+    <!-- dots -->
+    <div style="position:absolute;left:{{ sidePad }};bottom:{{ dotsBottom }};z-index:10;display:flex;gap:9px">
+      <sc-for list="{{ dots }}" as="d" hint-placeholder-count="3">
+        <button onClick="{{ d.onClick }}" style="{{ d.dotStyle }}" aria-label="{{ d.label }}"></button>
+      </sc-for>
+    </div>
+  </section>
+
+  <!-- ============ EMPREENDIMENTOS ============ -->
+  <section id="empreendimentos" style="padding:{{ sectionPadV }} {{ sidePad }};border-top:1px solid rgba(255,255,255,0.08);max-width:1120px;margin:0 auto;scroll-margin-top:70px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
+      <span style="font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.22em;text-transform:uppercase;color:#9A9A9A">Empreendimentos</span>
+    </div>
+    <h2 style="margin:0 0 52px;font-size:clamp(28px,4vw,46px);font-weight:500;letter-spacing:-0.02em;max-width:720px">Descubra qual empreendimento é o melhor para você e sua família</h2>
+    <div style="display:grid;grid-template-columns:{{ cols3 }};gap:20px">
+      <sc-for list="{{ empre }}" as="e" hint-placeholder-count="3">
+        <div onMouseEnter="{{ e.onEnter }}" onMouseLeave="{{ e.onLeave }}" style="{{ e.cardStyle }}">
+          <div style="{{ e.photoBoxStyle }}">
+            <div style="{{ e.imgStyle }}"></div>
+          </div>
+          <div style="padding:26px 24px;display:flex;flex-direction:column;flex:1">
+            <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:14px">
+              <h3 style="margin:0;font-size:19px;font-weight:600;min-width:0">{{ e.name }}</h3>
+              <span style="display:inline-flex;align-items:center;padding:5px 10px;border-radius:2px;background:#1C1C1C;font-family:'Space Mono',monospace;font-size:9.5px;letter-spacing:0.06em;font-weight:700;color:{{ e.badgeColor }};white-space:nowrap;flex:none;margin-top:3px">{{ e.badge }}</span>
+            </div>
+            <p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:#9A9A9A;flex:1">{{ e.desc }}</p>
+            <sc-if value="{{ e.showProgress }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-bottom:18px">
+                <div style="display:flex;justify-content:space-between;font-family:'Space Mono',monospace;font-size:10px;letter-spacing:0.1em;color:#F27A5E;margin-bottom:7px"><span>{{ e.progressLabel }}</span><span>{{ e.progressPct }}</span></div>
+                <div style="height:3px;background:rgba(255,255,255,0.12)"><div style="{{ e.progressStyle }}"></div></div>
+              </div>
+            </sc-if>
+            <sc-if value="{{ e.showCta }}" hint-placeholder-val="{{ true }}">
+              <a href="{{ e.ctaHref }}" style="display:inline-flex;align-items:center;gap:9px;align-self:flex-start;padding:12px 22px;border:1px solid rgba(255,255,255,0.3);border-radius:2px;font-size:13px;font-weight:500;transition:background .25s ease,border-color .25s ease,transform .25s ease" style-hover="background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.55);transform:translateY(-2px)">Saiba mais <span style="font-size:15px;display:inline-block;transition:transform .25s ease" style-hover="transform:translateX(4px)">→</span></a>
+            </sc-if>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <!-- ============ NÚMEROS ============ -->
+  <section style="padding:{{ sectionPadV }} {{ sidePad }};border-top:1px solid rgba(255,255,255,0.08);background:#0A0A0A">
+    <div style="max-width:1120px;margin:0 auto;display:grid;grid-template-columns:{{ cols3 }};gap:48px">
+      <sc-for list="{{ stats }}" as="st" hint-placeholder-count="3">
+        <div>
+          <span style="font-family:'Space Mono',monospace;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:#9A9A9A">{{ st.label }}</span>
+          <div style="font-size:clamp(40px,6.5vw,86px);font-weight:600;letter-spacing:-0.03em;line-height:1;color:#F27A5E;margin:16px 0 18px;white-space:nowrap">{{ st.value }}</div>
+          <p style="margin:0;font-size:14px;line-height:1.6;color:#9A9A9A;max-width:320px">{{ st.desc }}</p>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <!-- ============ DOIS CAMINHOS ============ -->
+  <section style="padding:{{ sectionPadV }} {{ sidePad }};max-width:1120px;margin:0 auto">
+    <div style="display:grid;grid-template-columns:{{ cols2 }};gap:20px">
+        <a href="#empreendimentos" style="{{ paths.0.cardStyle }}" style-hover="transform:translateY(-6px);box-shadow:0 20px 44px rgba(0,0,0,0.5);border-color:rgba(242,122,94,0.45)">
+          <div style="{{ paths.0.imgStyle }}" style-hover="transform:scale(1.08)"></div>
+          <div style="{{ paths.0.overlayStyle }}"></div>
+          <div style="position:relative;z-index:1">
+            <span style="font-family:'Space Mono',monospace;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:{{ paths.0.tag }}">{{ paths.0.kicker }}</span>
+            <h3 style="margin:18px 0 12px;font-size:clamp(22px,3vw,34px);font-weight:600;letter-spacing:-0.02em;color:{{ paths.0.titleColor }}">{{ paths.0.title }}</h3>
+            <p style="margin:0 0 30px;font-size:15px;line-height:1.6;color:{{ paths.0.bodyColor }};max-width:420px">{{ paths.0.desc }}</p>
+            <span style="{{ paths.0.btnStyle }}">{{ paths.0.cta }} <span style="font-size:15px;display:inline-block">→</span></span>
+          </div>
+        </a>
+        <a href="#contato" style="{{ paths.1.cardStyle }}" style-hover="transform:translateY(-6px);box-shadow:0 20px 44px rgba(0,0,0,0.5);border-color:rgba(242,122,94,0.45)">
+          <div style="{{ paths.1.imgStyle }}" style-hover="transform:scale(1.08)"></div>
+          <div style="{{ paths.1.overlayStyle }}"></div>
+          <div style="position:relative;z-index:1">
+            <span style="font-family:'Space Mono',monospace;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:{{ paths.1.tag }}">{{ paths.1.kicker }}</span>
+            <h3 style="margin:18px 0 12px;font-size:clamp(22px,3vw,34px);font-weight:600;letter-spacing:-0.02em;color:{{ paths.1.titleColor }}">{{ paths.1.title }}</h3>
+            <p style="margin:0 0 30px;font-size:15px;line-height:1.6;color:{{ paths.1.bodyColor }};max-width:420px">{{ paths.1.desc }}</p>
+            <span style="{{ paths.1.btnStyle }}">{{ paths.1.cta }} <span style="font-size:15px;display:inline-block">→</span></span>
+          </div>
+        </a>
+    </div>
+  </section>
+
+  <!-- ============ CLIENTES ============ -->
+  <section style="padding:80px 0;border-top:1px solid rgba(255,255,255,0.08);background:#0A0A0A;overflow:hidden">
+    <div style="max-width:1120px;margin:0 auto 44px;padding:0 {{ sidePad }}">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+        <span style="font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.22em;text-transform:uppercase;color:#9A9A9A">Clientes Corporativos</span>
+      </div>
+      <h2 style="margin:0;font-size:clamp(20px,3vw,32px);font-weight:500;letter-spacing:-0.02em">Empresas que confiam na Trifold</h2>
+    </div>
+    <div style="display:flex;gap:64px;align-items:center;width:max-content;animation:marq 40s linear infinite;padding-left:{{ sidePad }}">
+      <sc-for list="{{ clientes }}" as="c" hint-placeholder-count="20">
+        <sc-if value="{{ c.src }}" hint-placeholder-val="{{ false }}">
+          <img src="{{ c.src }}" alt="{{ c.name }}" style="height:40px;width:auto;flex:none;opacity:0.7;filter:grayscale(1) brightness(1.6)" />
+        </sc-if>
+      </sc-for>
+    </div>
+  </section>
+
+  <!-- ============ CONTATO ============ -->
+  <section id="contato" style="padding:{{ sectionPadV }} {{ sidePad }};border-top:1px solid rgba(255,255,255,0.08);scroll-margin-top:70px">
+    <div style="max-width:1120px;margin:0 auto;display:grid;grid-template-columns:{{ contatoCols }};gap:56px;align-items:start">
+      <div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
+          <span style="font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.22em;text-transform:uppercase;color:#9A9A9A">Contato</span>
+        </div>
+        <h2 style="margin:0 0 20px;font-size:clamp(28px,4vw,48px);font-weight:500;letter-spacing:-0.02em">Vamos falar do seu projeto?</h2>
+        <p style="margin:0 0 24px;font-size:15px;line-height:1.65;color:#9A9A9A;max-width:380px">Entre em contato para saber mais ou iniciar uma parceria conosco.</p>
+        <div style="display:flex;flex-direction:column;align-items:flex-start;gap:8px;font-size:14px;color:#C9C9C9">
+          <div style="display:flex;align-items:center;gap:14px;text-align:left"><img src="assets/icon-localizacao-src.svg" alt="Endereço" style="width:18px;height:24px;flex:none" /><span style="line-height:1.3;white-space:nowrap">Av. Arquiteto Nildo Ribeiro da Rocha, 1337, Maringá / PR</span></div>
+          <div style="display:flex;align-items:center;gap:14px;text-align:left"><img src="assets/icon-telefone.svg" alt="Telefone" style="width:18px;height:18px;flex:none" /><span style="line-height:2.1">+55 (44) 3222-9698</span></div>
+          <div style="display:flex;align-items:center;gap:14px;text-align:left"><img src="assets/icon-email.svg" alt="E-mail" style="width:20px;height:14px;flex:none" /><span style="line-height:2.1">contato@trifold.eng.br</span></div>
+        </div>
+      </div>
+      <form onSubmit="{{ handleContactSubmit }}" style="display:flex;flex-direction:column;gap:14px">
+        <input name="empresa" tabIndex="-1" autoComplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0" />
+        <input name="nome" required placeholder="Nome" style="padding:16px;background:#0D0D0D;border:1px solid rgba(255,255,255,0.16);border-radius:2px;color:#fff;font-family:inherit;font-size:14px;outline:none" />
+        <div style="display:grid;grid-template-columns:{{ formRowCols }};gap:14px">
+          <input name="telefone" placeholder="Telefone" style="padding:16px;background:#0D0D0D;border:1px solid rgba(255,255,255,0.16);border-radius:2px;color:#fff;font-family:inherit;font-size:14px;outline:none" />
+          <input name="email" type="email" required placeholder="E-mail" style="padding:16px;background:#0D0D0D;border:1px solid rgba(255,255,255,0.16);border-radius:2px;color:#fff;font-family:inherit;font-size:14px;outline:none" />
+        </div>
+        <textarea name="mensagem" required placeholder="Escreva sua mensagem aqui..." rows="5" style="padding:16px;background:#0D0D0D;border:1px solid rgba(255,255,255,0.16);border-radius:2px;color:#fff;font-family:inherit;font-size:14px;outline:none;resize:vertical"></textarea>
+        <button type="submit" style="align-self:flex-start;padding:15px 34px;background:#F27A5E;color:#000;border:none;border-radius:2px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;transition:transform .25s ease,filter .25s ease" style-hover="filter:brightness(1.08);transform:translateY(-2px)">{{ contactBtnLabel }}</button>
+        <sc-if value="{{ contactSuccess }}" hint-placeholder-val="{{ false }}">
+          <p style="margin:0;font-size:14px;color:#4ADE80">Mensagem enviada! Em breve entraremos em contato.</p>
+        </sc-if>
+        <sc-if value="{{ contactError }}" hint-placeholder-val="{{ false }}">
+          <p style="margin:0;font-size:14px;color:#F87171">Não foi possível enviar agora. Tente de novo ou fale pelo WhatsApp.</p>
+        </sc-if>
+      </form>
+    </div>
+  </section>
+
+  <!-- ============ FOOTER ============ -->
+  <footer style="padding:64px {{ sidePad }} 44px;border-top:1px solid rgba(255,255,255,0.08);background:#050505">
+    <div style="max-width:1120px;margin:0 auto">
+      <div style="{{ footerRowStyle }}">
+        <div style="max-width:320px">
+          <dc-import name="Logo" tone="dark" size="{{ 30 }}" hint-size="280px,34px"></dc-import>
+        </div>
+        <div style="display:flex;flex-wrap:nowrap;gap:26px;font-size:13px;letter-spacing:0.04em;color:#9A9A9A">
+          <a href="#" style="transition:color .2s ease" style-hover="color:#fff">HOME</a><a href="Sobre Nós.dc.html" style="transition:color .2s ease" style-hover="color:#fff">SOBRE</a><a href="Empreendimentos.dc.html" style="transition:color .2s ease" style-hover="color:#fff">EMPREENDIMENTOS</a><a href="B2B.dc.html" style="transition:color .2s ease" style-hover="color:#fff">CORPORATIVAS</a><a href="Blog.dc.html" style="transition:color .2s ease" style-hover="color:#fff">BLOG</a>
+        </div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:20px;justify-content:space-between;align-items:center;padding-top:28px;font-family:'Space Mono',monospace;font-size:11px;color:#8A8A8A">
+        <span>© 2026 Trifold Engenharia. Todos os direitos reservados.</span>
+        <span style="display:inline-flex;align-items:center;gap:8px">Desenvolvido por <img src="assets/dois-logo.svg" alt="Dois" style="height:12px;width:auto;opacity:0.7" /></span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- WhatsApp float -->
+  <a href="https://wa.me/5544991089698?text=Ol%C3%A1%2C%20estava%20no%20site%20da%20Trifold%20e%20gostaria%20de%20mais%20informa%C3%A7%C3%B5es%20sobre..." target="_blank" rel="noopener" style="position:fixed;right:20px;bottom:20px;z-index:120;width:58px;height:58px;border-radius:50%;background:#111111;border:1px solid #F27A5E;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 20px rgba(0,0,0,0.4);transition:transform .25s ease,box-shadow .25s ease" style-hover="transform:scale(1.08);box-shadow:0 8px 26px rgba(0,0,0,0.5)" title="WhatsApp">
+    <svg viewBox="0 0 32 32" width="30" height="30" fill="#fff"><path fill-rule="evenodd" clip-rule="evenodd" d="M16 3C8.82 3 3 8.82 3 16c0 2.49.69 4.82 1.9 6.81L3 29l6.37-1.85A12.94 12.94 0 0 0 16 29c7.18 0 13-5.82 13-13S23.18 3 16 3zm0 23.8a10.7 10.7 0 0 1-5.46-1.49l-.39-.23-4.06 1.18 1.21-3.96-.25-.41A10.75 10.75 0 1 1 16 26.8z"/><path d="M21.6 18.9c-.32-.16-1.88-.93-2.17-1.03-.29-.11-.5-.16-.72.16-.21.32-.82 1.03-1 1.24-.19.21-.37.24-.69.08-.32-.16-1.34-.5-2.55-1.58-.94-.84-1.58-1.87-1.76-2.19-.19-.32-.02-.49.14-.65.14-.14.32-.37.48-.55.16-.19.21-.32.32-.53.11-.21.05-.4-.03-.56-.08-.16-.72-1.74-.99-2.38-.26-.62-.53-.54-.72-.55-.19-.01-.4-.01-.61-.01-.21 0-.56.08-.85.4-.29.32-1.11 1.09-1.11 2.65 0 1.56 1.14 3.07 1.29 3.28.16.21 2.24 3.42 5.42 4.8.76.33 1.35.52 1.81.67.76.24 1.45.21 2 .13.61-.09 1.88-.77 2.14-1.51.27-.75.27-1.39.19-1.52-.08-.14-.29-.21-.61-.37z"/></svg>
+  </a>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{}">
+class Component extends DCLogic {
+  state = { slide: 0, open: -1, hoverEmpre: -1, menuOpen: false, contactStatus: 'idle', vw: (typeof window !== 'undefined' ? window.innerWidth : 1280) };
+  componentDidMount() {
+    this.timer = setInterval(() => this.setState(s => ({ slide: (s.slide + 1) % (this._n || 1) })), 6500);
+    this._onResize = () => this.setState({ vw: window.innerWidth });
+    window.addEventListener('resize', this._onResize);
+    this._formLoadedAt = Date.now();
+    if (window.location.hash === '#contato') {
+      const el = document.getElementById('contato');
+      if (el) el.scrollIntoView();
+    }
+  }
+  componentWillUnmount() {
+    clearInterval(this.timer);
+    window.removeEventListener('resize', this._onResize);
+  }
+  go(i) { this.setState({ slide: i }); }
+  prev() { this.setState(s => ({ slide: (s.slide - 1 + this._n) % this._n })); }
+  next() { this.setState(s => ({ slide: (s.slide + 1) % this._n })); }
+  toggle(i) { this.setState(s => ({ open: s.open === i ? -1 : i })); }
+  toggleMenu() { this.setState(s => ({ menuOpen: !s.menuOpen })); }
+  handleContactSubmit(e) {
+    e.preventDefault();
+    if (this.state.contactStatus === 'sending') return;
+    const form = e.target;
+    const payload = {
+      nome: form.nome.value.trim(),
+      telefone: form.telefone.value.trim(),
+      email: form.email.value.trim(),
+      mensagem: form.mensagem.value.trim(),
+      empresa: form.empresa.value,
+      loadedAt: this._formLoadedAt,
+    };
+    this.setState({ contactStatus: 'sending' });
+    fetch('/api/contact', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error('request failed');
+        this.setState({ contactStatus: 'success' });
+        form.reset();
+      })
+      .catch(() => {
+        this.setState({ contactStatus: 'error' });
+      });
+  }
+  renderVals() {
+    const slide = this.state.slide, open = this.state.open;
+    const vw = this.state.vw || 1280;
+    const isMobile = vw < 900;
+    const isNarrow = vw < 520;
+    const menuOpen = this.state.menuOpen;
+
+    const sidePad = isNarrow ? '24px' : isMobile ? '34px' : '48px';
+    const sectionPadV = isMobile ? '64px' : '100px';
+    const cols3 = isMobile ? '1fr' : 'repeat(3,1fr)';
+    const cols2 = isMobile ? '1fr' : '1fr 1fr';
+    const contatoCols = isMobile ? '1fr' : '1fr 1.1fr';
+    const formRowCols = isNarrow ? '1fr' : '1fr 1fr';
+    const heroHeight = isMobile ? '82vh' : 'min(90vh,880px)';
+    const heroMinHeight = isMobile ? '540px' : '580px';
+    const dotsBottom = isMobile ? '28px' : '44px';
+
+    const navLinksStyle = {
+      display: isMobile ? 'none' : 'flex', alignItems: 'center', flexWrap: 'nowrap', gap: '26px', marginLeft: '56px', fontSize: '12.5px', letterSpacing: '0.05em',
+    };
+    const hamburgerBtnStyle = {
+      display: isMobile ? 'flex' : 'none', flexDirection: 'column', justifyContent: 'center', gap: '5px',
+      width: '38px', height: '38px', background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+    };
+    const barStyle1 = { width: '22px', height: '2px', background: '#fff', display: 'block' };
+    const barStyle2 = { width: '22px', height: '2px', background: '#fff', display: 'block' };
+    const barStyle3 = { width: '22px', height: '2px', background: '#fff', display: 'block' };
+
+    const heroContentStyle = {
+      position: 'absolute', left: 0, right: 0, bottom: 0, padding: '0 64px ' + (isMobile ? '56px' : '92px'),
+      display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
+    };
+    const arrowBase = {
+      position: 'absolute', top: '38%', transform: 'translateY(-50%)', zIndex: 10, width: isMobile ? '36px' : '42px', height: isMobile ? '36px' : '42px',
+      border: '1px solid rgba(255,255,255,0.25)', background: 'rgba(0,0,0,0.25)', color: '#fff', borderRadius: '50%', fontSize: '18px', cursor: 'pointer',
+      backdropFilter: 'blur(4px)', transition: 'background .2s ease,border-color .2s ease,transform .2s ease',
+    };
+    // keep arrows clear of the hero content column so they never overlap the eyebrow/logo
+    const arrowInset = isNarrow ? '6px' : '10px';
+    const arrowLeftStyle = { ...arrowBase, left: arrowInset };
+    const arrowRightStyle = { ...arrowBase, right: arrowInset };
+
+    const rawSlides = [
+      { name:'Vind Residence', eyebrow:'Últimas unidades', tagline:'Exclusivo. Compacto. Boutique.', loc:'Jardim Novo Horizonte · Maringá', bgImage:'url(assets/banner-vind.webp)', bgPosition:'center', logoSrc:'assets/logo-vind-branco.svg', logoRatio:122.25/49.54, ctaHref:'https://trifold.eng.br/vindresidence/', ctaLabel:'Saiba mais' },
+      { name:'Yarden', eyebrow:'Lançamento', tagline:'Sofisticação e uma natureza que inspira.', loc:'Gleba Itororó · Maringá', bgImage:'url(assets/banner-yarden.webp)', bgPosition:'center', logoSrc:'assets/logo-yarden-branco.svg', logoRatio:298/62, ctaHref:'#empreendimentos', ctaLabel:'Saiba mais' },
+      { name:'Obras Corporativas', eyebrow:'Obras Corporativas', heading:'Confie sua obra com quem sabe fazer.', tagline:'De hospitais à cemitérios, soluções com um time próprio e experiente de engenharia.', bgImage:'url(assets/banner-corporativas.webp)', bgPosition: isMobile ? '66% center' : 'center', ctaHref:'B2B.dc.html', ctaLabel:'Acesse nosso portfólio' },
+    ];
+    this._n = rawSlides.length;
+    const logoHeightByName = { 'Vind Residence': isMobile ? 54 : 76, 'Yarden': isMobile ? 38 : 52 };
+    const slides = rawSlides.map((s, i) => ({ ...s, layerStyle: { position:'absolute', inset:0, opacity: i===slide?1:0, transition:'opacity 1.1s ease', pointerEvents: i===slide?'auto':'none' }, logoStyle: { height:(logoHeightByName[s.name] || 76)+'px', width:'auto', display:'block' } }));
+    const dots = rawSlides.map((s, i) => ({ onClick: () => this.go(i), label: `Ir para slide ${i + 1}`, dotStyle: { width: i===slide?'26px':'8px', height:'8px', borderRadius:'4px', background: i===slide?'#F27A5E':'rgba(255,255,255,0.4)', border:'none', cursor:'pointer', transition:'all .35s', padding:0 } }));
+
+    const empreRaw = [
+      { name:'Vind Residence', badge:'ÚLTIMAS UNIDADES', badgeColor:'#F27A5E', desc:'No Jardim Novo Horizonte, Maringá. Apartamentos de 2 suítes com varanda gourmet e área de lazer completa.', bgImage:'url(assets/card-vind.webp)', showProgress:true, progressLabel:'OBRA EM ANDAMENTO', progressPct:'56%', progressStyle:{ width:'56%', height:'3px', background:'#F27A5E' }, showCta:true, ctaHref:'https://trifold.eng.br/vindresidence/' },
+      { name:'Yarden', badge:'LANÇAMENTO', badgeColor:'#F27A5E', desc:'Quando sofisticação e natureza se encontram, algo único acontece. Projeto biofílico na Gleba Itororó.', bgImage:'url(assets/card-yarden.webp)', showProgress:true, progressLabel:'OBRA EM ANDAMENTO', progressPct:'10%', progressStyle:{ width:'10%', height:'3px', background:'#F27A5E' }, showCta:true, ctaHref:'#contato' },
+      { name:'Rua Assaí, 153', badge:'EM BREVE', badgeColor:'#F27A5E', desc:'Um novo empreendimento em uma localização única, ao lado da Av. Cerro Azul. Em breve.', bgImage:'url(assets/card-assai.webp?v=2)', showProgress:true, progressLabel:'PROJETOS EM APROVAÇÃO', progressPct:'10%', progressStyle:{ width:'10%', height:'3px', background:'#F27A5E' }, showCta:false },
+      { name:'Avenida Paranavaí, 972', badge:'EM BREVE', badgeColor:'#F27A5E', desc:'Um novo empreendimento a poucos metros do Shopping Catuaí. Em breve.', bgImage:'url(assets/card-paranavai.webp?v=2)', showProgress:true, progressLabel:'PROJETOS EM APROVAÇÃO', progressPct:'10%', progressStyle:{ width:'10%', height:'3px', background:'#F27A5E' }, showCta:false },
+    ];
+    const hoverEmpre = this.state.hoverEmpre;
+    const empre = empreRaw.map((e, i) => {
+      const active = hoverEmpre === i;
+      return {
+        ...e,
+        onEnter: () => this.setState({ hoverEmpre: i }),
+        onLeave: () => this.setState({ hoverEmpre: -1 }),
+        cardStyle: {
+          display: 'flex', flexDirection: 'column', borderRadius: '6px', overflow: 'hidden', border: '1px solid ' + (active ? 'rgba(242,122,94,0.5)' : 'rgba(255,255,255,0.08)'), background: '#0A0A0A',
+          transform: active ? 'translateY(-6px)' : 'translateY(0)',
+          boxShadow: active ? '0 18px 40px rgba(0,0,0,0.45)' : '0 0px 0px rgba(0,0,0,0)',
+          transition: 'transform .35s ease, box-shadow .35s ease, border-color .35s ease',
+          cursor: 'pointer',
+        },
+        photoBoxStyle: { position: 'relative', aspectRatio: '4/3', overflow: 'hidden' },
+        imgStyle: {
+          position: 'absolute', inset: '-4%', backgroundImage: e.bgImage, backgroundSize: 'cover', backgroundPosition: 'center',
+          transform: active ? 'scale(1.08)' : 'scale(1)', transition: 'transform .6s ease',
+        },
+      };
+    });
+
+    const stats = [
+      { label:'Empreendimentos', value:'+28 anos', desc:'De experiência técnica acumulada, unindo a solidez de engenheiros sêniores ao dinamismo da segunda geração.' },
+      { label:'Obras Corporativas', value:'+1.200', desc:'Contratos de obras corporativas conduzidos com precisão, transparência e cumprimento de prazos.' },
+      { label:'Satisfação', value:'100%', desc:'Foco no cliente em cada projeto: qualidade, modernidade e sustentabilidade nos detalhes.' },
+    ];
+
+    const pathsRaw = [
+      { kicker:'Para morar', title:'Quero um apartamento para investir ou morar.', desc:'Empreendimentos projetados para uma experiência única: design, tecnologia e wellness.', cta:'Ver empreendimentos', img:'url(assets/path-morar.webp)' },
+      { kicker:'Para construir', title:'Preciso executar uma obra corporativa.', desc:'Planejamento, orçamentação e execução de obras comerciais, industriais e hospitalares com BIM e auditoria independente.', cta:'Solicitar orçamento', img:'url(assets/path-construir.webp?v=2)' },
+    ];
+    const paths = pathsRaw.map((p) => ({
+      ...p,
+      tag: '#F27A5E', titleColor: '#fff', bodyColor: '#E6E6E6',
+      cardStyle: {
+        position: 'relative', minHeight: isMobile ? '360px' : '440px', padding: isMobile ? '30px' : '40px', borderRadius: '6px', overflow: 'hidden',
+        display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
+        border: '1px solid rgba(255,255,255,0.08)',
+        boxShadow: '0 0px 0px rgba(0,0,0,0)',
+        transition: 'transform .4s cubic-bezier(.2,.8,.2,1), box-shadow .4s ease, border-color .4s ease',
+      },
+      imgStyle: {
+        position: 'absolute', inset: 0, backgroundImage: p.img, backgroundSize: 'cover', backgroundPosition: 'center',
+        transition: 'transform .6s cubic-bezier(.2,.8,.2,1)',
+      },
+      overlayStyle: {
+        position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.55) 55%, rgba(0,0,0,0.88) 100%)',
+        transition: 'background .4s ease',
+      },
+      btnStyle: {
+        display: 'inline-flex', alignSelf: 'flex-start', alignItems: 'center', gap: '9px', padding: '14px 26px',
+        background: '#F27A5E', color: '#000', borderRadius: '4px', fontSize: '14px', fontWeight: 600,
+        transition: 'filter .25s ease,transform .25s ease,box-shadow .25s ease',
+      },
+    }));
+
+    const clientesBase = [
+      { name:'Sicoob', src:'assets/client-1.svg' },
+      { name:'Coca-Cola FEMSA', src:'assets/client-2.svg' },
+      { name:'Fortgreen', src:'assets/client-fortgreen.svg' },
+      { name:'IPI Maringá', src:'assets/client-ipimaringa.svg' },
+      { name:'Grupo Prever Sul', src:'assets/client-preversul.svg' },
+      { name:'Notre Dame', src:'assets/client-vector.svg' },
+    ];
+    const clientes = [...clientesBase, ...clientesBase, ...clientesBase, ...clientesBase, ...clientesBase, ...clientesBase];
+
+    return {
+      footerRowStyle: {
+        display: 'flex', flexWrap: 'wrap', gap: '20px', justifyContent: 'space-between', alignItems: isNarrow ? 'flex-start' : 'center',
+        flexDirection: isNarrow ? 'column' : 'row',
+        paddingBottom: '44px', borderBottom: '1px solid rgba(255,255,255,0.08)',
+      },
+      sidePad, sectionPadV, cols3, cols2, contatoCols, formRowCols, heroHeight, heroMinHeight, dotsBottom,
+      navLinksStyle, hamburgerBtnStyle, barStyle1, barStyle2, barStyle3, menuOpen, toggleMenu: () => this.toggleMenu(),
+      heroContentStyle, arrowLeftStyle, arrowRightStyle,
+      slides, dots, prev: () => this.prev(), next: () => this.next(), empre, stats, paths, clientes,
+      handleContactSubmit: (e) => this.handleContactSubmit(e),
+      contactBtnLabel: this.state.contactStatus === 'sending' ? 'Enviando...' : 'Enviar',
+      contactSuccess: this.state.contactStatus === 'success',
+      contactError: this.state.contactStatus === 'error',
+    };
+  }
+}
+</script>
+</body>
+</html>

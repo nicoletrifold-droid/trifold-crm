@@ -7,6 +7,7 @@
 - [Concern de gate = follow-up, não AC novo](feedback_concern_gate_como_followup.md) — concern aprovado depois do gate entra no Change Log + Dev Agent Record; escopo mínimo é exigência
 - [Prova de deploy vale na Vercel, não local](feedback_prova_vale_no_deploy.md) — CI/build verdes não provam deploy; `.vercelignore` esconde `docs/`, `scripts/`, `bin/` do build
 - [Corte de escopo exige reescrever comentários](feedback_corte_de_escopo_comentarios.md) — comentário que promete garantia cortada é pior que nenhum; provar template↔gerado por bytes
+- [landing-pages/* runtime](project_landing_pages_runtime.md) — projetos Vercel standalone: sem bundler, deploy manual, um tracked e outro não, e o trap de IP via proxy
 
 ## Key Patterns
 

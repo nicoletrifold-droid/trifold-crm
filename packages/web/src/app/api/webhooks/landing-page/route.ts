@@ -1,8 +1,24 @@
-import { NextRequest, NextResponse } from "next/server"
+import { NextRequest, NextResponse, after } from "next/server"
 import { SupabaseClient } from "@supabase/supabase-js"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { triggerAutomations } from "@web/lib/email-automations"
 import { distributeLeadToNextBroker } from "@web/lib/roleta/distributor"
+import {
+  comMetaAd,
+  extrairSinais,
+  enviarEventosFormulario,
+  type EnviarEventoInput,
+  type SinaisTracking,
+} from "@web/lib/meta/form-capi"
+import {
+  eventIdValido,
+  lerTracking,
+  LANDING_VIND_CONTENT_CATEGORY,
+  LANDING_VIND_CONTENT_NAME,
+  LANDING_VIND_URL_PADRAO,
+  type TrackingLanding,
+} from "@web/lib/meta/landing-page-tracking"
+import { FORM_CAPI_EVENTS } from "@trifold/shared"
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -42,10 +58,19 @@ export async function POST(request: NextRequest) {
   const fields: Record<string, string> = {}
   const contentType = request.headers.get("content-type") ?? ""
 
+  // Story 86-11 (AC6) — bloco de tracking OPCIONAL, só da landing do Vind
+  // Residence. Lido do JSON BRUTO, nunca do mapa `fields`: `flattenIntoFields`
+  // descarta objetos aninhados de propósito, e é isso que mantém o campo novo
+  // invisível para todo o tráfego WordPress que compartilha este endpoint — e
+  // que impede IP/UA do visitante de vazarem para `webhook_logs.payload` e
+  // `leads.metadata.raw_fields`, que persistem o `fields` inteiro.
+  let tracking: TrackingLanding | undefined
+
   try {
     if (contentType.includes("application/json")) {
       const json = await request.json() as Record<string, unknown>
       flattenIntoFields(json, fields)
+      tracking = lerTracking(json.tracking)
     } else {
       // form-urlencoded — Elementor e outros plugins
       const text = await request.text()
@@ -99,6 +124,17 @@ export async function POST(request: NextRequest) {
     utmContent,
     pageName,
     logId: logEntry?.id,
+    // `confiarEmClientIpDoCorpo` dá precedência a `tracking.client_ip`/`client_ua`
+    // sobre os headers desta requisição — que aqui são os do proxy Vercel, não os
+    // do visitante (Story 86-11 AC7). É opt-in porque quem chama ESTA rota é o
+    // proxy `api/lead.js` (servidor confiável, que sobrescreve o que o browser
+    // tentar ditar); nas rotas chamadas direto pelo browser fica desligado.
+    ...(tracking
+      ? {
+          tracking,
+          sinais: extrairSinais(request, tracking, { confiarEmClientIpDoCorpo: true }),
+        }
+      : {}),
   })
 
   if (!result.ok) {
@@ -122,12 +158,18 @@ interface UtmContext {
   utmContent: string | null
   pageName: string | null
   logId?: string
+  /** Story 86-11 — presente só quando o chamador é a landing do Vind Residence. */
+  tracking?: TrackingLanding
+  /** Sinais já extraídos (corpo tem precedência sobre headers — AC7). */
+  sinais?: SinaisTracking
 }
 
 // Resultado do processamento. `ok: false` faz o handler POST responder 5xx,
 // sinalizando ao proxy consumidor que o lead NÃO foi processado com sucesso.
 interface ProcessResult {
   ok: boolean
+  /** Story 86-11 — id do lead criado/localizado, quando houve um. */
+  leadId?: string
 }
 
 async function processLandingPageLead(
@@ -183,7 +225,7 @@ async function processLandingPageLead(
     if (phone) {
       const { data: existing } = await adminSupabase
         .from("leads")
-        .select("id")
+        .select("id, metadata")
         .eq("phone", phone)
         .eq("org_id", orgId)
         .single()
@@ -199,6 +241,22 @@ async function processLandingPageLead(
           })
           .eq("id", leadId)
           .is("utm_campaign", null)
+
+        // Story 86-11 (AC6) — `metadata.meta_ad` no lead que já existia. Update
+        // próprio: o de cima é condicionado a `utm_campaign IS NULL`, e a
+        // atribuição do clique não pode depender disso. `comMetaAd` preserva as
+        // demais chaves do JSONB (mesmo merge de `buildCtwaMetadata`).
+        if (ctx.sinais) {
+          await adminSupabase
+            .from("leads")
+            .update({
+              metadata: comMetaAd(
+                existing.metadata as Record<string, unknown> | null,
+                ctx.sinais,
+              ),
+            })
+            .eq("id", leadId)
+        }
       }
     }
 
@@ -217,11 +275,16 @@ async function processLandingPageLead(
           utm_medium: ctx.utmMedium,
           utm_campaign: ctx.utmCampaign,
           utm_content: ctx.utmContent ?? formName,
-          metadata: {
-            landing_page: formName ?? ctx.pageName,
-            message: message ?? null,
-            raw_fields: fields,
-          },
+          // Story 86-11 (AC6) — `meta_ad` já no INSERT quando a landing mandou
+          // tracking; sem ele, o objeto é byte a byte o de antes desta story.
+          metadata: (() => {
+            const base = {
+              landing_page: formName ?? ctx.pageName,
+              message: message ?? null,
+              raw_fields: fields,
+            }
+            return ctx.sinais ? comMetaAd(base, ctx.sinais) : base
+          })(),
         })
         .select("id")
         .single()
@@ -282,7 +345,24 @@ async function processLandingPageLead(
       has_email: Boolean(email),
     }))
 
-    return { ok: true }
+    // ─── Story 86-11 (AC6) — `Lead` + `CompleteRegistration` para o Meta ─────
+    // Os dois saem no MESMO instante e num batch único. Não há um segundo marco
+    // temporal nesta landing (página única, POST atômico) — a ressalva está
+    // registrada na story; o que os distingue é o `event_id` próprio de cada um,
+    // gerado no browser, que é o que deduplica contra o disparo do Pixel.
+    //
+    // Quem decide se saem é o SERVIDOR, aqui, depois de o lead existir de fato:
+    // o browser dispara o par no Pixel confiando na resposta 200 desta rota.
+    dispararEventosCapi(ctx, leadId, {
+      nome: name ?? undefined,
+      email: email ?? undefined,
+      // `+55DDNNNNNNNNN`; `normalizePhoneForCapi` remove o `+` e devolve os 13
+      // dígitos canônicos. Não harmonizar com `normalizePhoneBR` aqui — trocar o
+      // normalizador deste endpoint afetaria todo o tráfego WordPress.
+      telefone: phone ?? undefined,
+    })
+
+    return { ok: true, leadId }
   } catch (error) {
     console.error("[LP-WEBHOOK] Erro no processamento:", error)
     // Registrar o erro no log só é possível se o client foi criado. Se
@@ -300,6 +380,58 @@ async function processLandingPageLead(
     }
     return { ok: false }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Story 86-11 — disparo CAPI (telemetria de marketing, nunca o caminho do lead)
+// ---------------------------------------------------------------------------
+
+/**
+ * Enfileira `Lead` + `CompleteRegistration` num batch único, dentro de `after()`.
+ *
+ * Nada aqui bloqueia a resposta: a criação do lead (síncrona, acima) é o que não
+ * pode se perder. Mas o envio TAMBÉM não pode ser um `void` solto — na Vercel a
+ * invocação congela assim que a resposta sai e o trabalho pendente morre no
+ * meio, sem erro. `after()` mantém a invocação viva até terminar.
+ *
+ * No-op silencioso quando a landing não mandou tracking — que é o caso de todo
+ * o tráfego WordPress que compartilha este endpoint (AC10).
+ */
+function dispararEventosCapi(
+  ctx: UtmContext,
+  leadId: string,
+  lead: { nome?: string; email?: string; telefone?: string },
+) {
+  const sinais = ctx.sinais
+  const tracking = ctx.tracking
+  if (!sinais || !tracking) return
+
+  const base = {
+    sinais,
+    lead: { leadId, ...lead },
+    contentName: LANDING_VIND_CONTENT_NAME,
+    contentCategory: LANDING_VIND_CONTENT_CATEGORY,
+    urlPadrao: LANDING_VIND_URL_PADRAO,
+    // `st`/`ct` estão fora do escopo da 86-11 — ver `derivarUf` em form-capi.ts.
+    derivarUf: false,
+  } as const
+
+  const eventos: EnviarEventoInput[] = []
+  if (eventIdValido(tracking.event_id)) {
+    eventos.push({ ...base, evento: FORM_CAPI_EVENTS.LEAD, eventId: tracking.event_id })
+  }
+  if (eventIdValido(tracking.complete_registration_event_id)) {
+    eventos.push({
+      ...base,
+      evento: FORM_CAPI_EVENTS.COMPLETE_REGISTRATION,
+      eventId: tracking.complete_registration_event_id,
+    })
+  }
+  if (eventos.length === 0) return
+
+  after(async () => {
+    await enviarEventosFormulario(eventos)
+  })
 }
 
 // ---------------------------------------------------------------------------

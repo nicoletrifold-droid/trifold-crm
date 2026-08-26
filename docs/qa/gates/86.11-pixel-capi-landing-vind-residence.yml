@@ -1,0 +1,549 @@
+storyId: "86-11"
+title: "Pixel Meta + CAPI na landing do Vind Residence"
+reviewer: "Quinn (@qa)"
+reviewed_at: "2026-08-25"
+# ⚠️ Metadata CORRIGIDA na iteração 2 — conferida rodando git, não lida do contexto.
+# `git branch --show-current` → main; `git log -1` → 8dbc6000. O branch
+# `feat/86-meta-capi-tracking` (@ 006d8868) EXISTE, mas é das stories 86-1..86-8
+# (outbox/cron) e NÃO está com checkout aqui. As mudanças da 86-11 estão
+# NÃO COMMITADAS sobre `main`.
+branch: "main (working tree sujo — @devops deve criar branch a partir de origin/main antes do PR)"
+commit: "sem commit — working tree sobre main @ 8dbc6000, 13 commits atrás de origin/main (conferido com git fetch em 2026-08-25)"
+
+verdict: PASS
+verdict_rationale: >
+  Re-verificação após as correções das iterações 1.1/1.2 do @dev. Os dois
+  achados `medium` que impediam o PASS na iteração 1 foram fechados e VERIFICADOS
+  no código, não na descrição:
+
+  86.11-QA-001 (RESOLVIDO): a precedência do corpo sobre os headers em
+  `extrairSinais` virou opt-in verdadeiro. Lido o diff real de `form-capi.ts` —
+  nova `OpcoesSinais.confiarEmClientIpDoCorpo` (default `false`); as linhas 135/137
+  só leem o corpo `if (confiaNoCorpo)`, senão o valor é `undefined` (NÃO é
+  fallback — é como se os campos não existissem). Os 4 call-sites conferidos por
+  grep: as duas rotas da 86-11 (`landing-page/route.ts:135`, `track/route.ts:106`)
+  passam `{ confiarEmClientIpDoCorpo: true }`; as duas rotas da 86-9
+  (`formulario/[token]/route.ts:173`, `tracking/route.ts:82`) não passam nada —
+  ficam com o default seguro, e não foram editadas. 5 testes novos de segurança
+  confirmados existentes, testando o cenário certo (corpo forjando
+  `client_ip: "1.2.3.4"`/`client_ua: "UA-forjado-pelo-visitante"` sendo IGNORADO
+  nas rotas da 86-9, com assertiva de que o valor forjado não aparece em canto
+  nenhum do que iria à CAPI) e passando; os testes das rotas da 86-11 continuam
+  verdes provando que o opt-in ainda funciona (IP legítimo do corpo vence, IP do
+  datacenter `76.76.21.21` não aparece).
+
+  86.11-QA-002 (RESOLVIDO): a seção "Convenção de deploy" da story foi atualizada
+  (entrada v1.2 no Change Log + tabela reescrita nas linhas 496-524) e agora
+  reflete a realidade: `trifold-design-system/` deixou de ser untracked (PR #501,
+  mergeado), a CSP tem diff versionado em `main`, e o alerta de rebase para o
+  @devops está presente. Só documentação, como declarado.
+
+  Restam apenas achados de baixa severidade já aceitos como dívida
+  (86.11-QA-003/005/007 OPEN, 004/006 ACCEPTED) — nenhum bloqueia o PASS. O
+  AC11/T12 continua sendo validação pós-deploy do @devops (bloqueia o "Done", não
+  o merge).
+verdict_history:
+  - iteration: 1
+    verdict: CONCERNS
+    at: "2026-08-24"
+    reason: "86.11-QA-001 (medium) — corpo passa a poder ditar IP/UA nas rotas públicas da 86-9; 86.11-QA-002 (medium) — premissa de deploy da story ficou obsoleta (PR #501)"
+  - iteration: 2
+    verdict: PASS
+    at: "2026-08-25"
+    reason: >
+      86.11-QA-001 fechado (v1.1) — precedência do corpo virou opt-in
+      (`OpcoesSinais.confiarEmClientIpDoCorpo`, default `false`); verificado no diff
+      real de `form-capi.ts` + 4 call-sites por grep; 5 testes novos de segurança
+      existem, testam o cenário certo e passam. 86.11-QA-002 fechado (v1.2) — seção
+      "Convenção de deploy" atualizada, PR #501 refletido. Suíte re-executada:
+      249 arquivos, 3051 testes passando + 6 expected fail, 0 falhas; type-check
+      8/8; lint 0 erros / 30 warnings pré-existentes. Só restam LOW aceitos como
+      dívida — não bloqueiam. AC11/T12 permanece pós-deploy (bloqueia Done, não merge).
+
+checks:
+  code_review: PASS
+  unit_tests: PASS          # re-verificado por mim: 249 arquivos / 3051 testes + 6 expected fail, 0 falhas
+  acceptance_criteria: PASS # AC1–AC10 entregues e cobertos; AC7 agora sem efeito colateral fora do escopo (QA-001 fechado); AC11 pós-deploy (não bloqueia merge)
+  no_regressions: PASS      # suíte verde, endpoint WordPress intacto; a superfície das rotas da 86-9 voltou ao comportamento anterior à story (opt-in, QA-001 fechado)
+  performance: PASS         # CAPI sempre dentro de `after()`; criação do lead segue síncrona e intocada
+  security: PASS            # QA-001 fechado (opt-in verificado + 5 testes); restam só LOW aceitos como dívida (QA-003/005)
+  documentation: PASS       # "Convenção de deploy" atualizada (QA-002 fechado, PR #501 refletido). Sobraram 2 frases da premissa antiga em outras seções — QA-008, low, cosmético
+
+reverificacao_iteracao_2: |
+  Re-verificação de 2026-08-25 — nada aceito de segunda mão. Executado por mim:
+
+  | Verificação | Comando | Resultado |
+  |---|---|---|
+  | Diff real de `form-capi.ts` | leitura do arquivo | `OpcoesSinais.confiarEmClientIpDoCorpo` (default `false`); `confiaNoCorpo = opcoes?.confiarEmClientIpDoCorpo === true`; `(confiaNoCorpo ? texto(corpo?.client_ip) : undefined) ?? ipDaRequest(request)` — opt-in verdadeiro, não fallback |
+  | 4 call-sites de `extrairSinais` | grep | 86-11 (`landing-page/route.ts:135`, `track/route.ts:106`) passam `{ confiarEmClientIpDoCorpo: true }`; 86-9 (`formulario/[token]/route.ts:173`, `tracking/route.ts:82`) não passam nada (default seguro) |
+  | 5 testes novos de segurança | leitura + execução | existem, testam o cenário certo (forja no corpo IGNORADA na 86-9, IP do header vence, valor forjado não aparece na CAPI) e passam |
+  | Opt-in ainda funciona na 86-11 | `route.test.ts:278` / `track/route.test.ts:138` | IP legítimo do corpo `187.1.2.3` vence, IP do datacenter `76.76.21.21` não aparece — verde |
+  | Suíte dos 5 arquivos afetados | `npx vitest run <5 arquivos>` | 70 testes passando |
+  | Suíte completa | `npx vitest run` | 249 arquivos, 3051 testes passando + 6 expected fail, 0 falhas |
+  | Type-check | `npx turbo type-check` | 8/8 pacotes OK |
+  | Lint | `npx turbo lint` | 8/8, 0 erros, 30 warnings pré-existentes (arquivos de teste não relacionados) |
+  | "Convenção de deploy" da story | leitura das linhas 496-524 + Change Log v1.2 | reflete PR #501 (trifold-design-system tracked), alerta de rebase presente |
+
+  **Confirmações adicionais desta passada** (coisas que a tabela acima não cobria
+  e que eu não queria deixar no plano da afirmação):
+
+  | Verificação | Comando | Resultado |
+  |---|---|---|
+  | As rotas da 86-9 realmente não foram editadas | `git diff -- '.../formulario/[token]/route.ts' '.../formulario/[token]/tracking/route.ts'` | **diff VAZIO nos dois.** `git status` lista só os dois `route.test.ts` como modificados. A alegação do @dev ("a proteção veio do default, sem tocar nas rotas antigas") é literal |
+  | Só os testes do achado | `npx vitest run -t "86.11-QA-001"` | **5 testes em 3 arquivos, 5 passed, 246 arquivos skipped** — confere com os 5 declarados, um a um |
+  | Type-check SEM cache | `npx turbo type-check --force` | 8/8 OK. Rodei com `--force` de propósito: sem ele o turbo devolvia `FULL TURBO` / 8 cached, e cache hit não é evidência de compilação |
+  | Lint SEM cache | `npx turbo lint --force` | 8/8, 0 erros, 30 warnings — os MESMOS 30 da iteração 1, em `kanban-board.tsx`, `logger.test.ts`, `alert-credencial-morta.test.ts`, `distributor.test.ts` (nenhum tocado por esta story) |
+  | AC7 não regrediu | execução verbose dos 5 arquivos | todos os testes `AC7 —` verdes dos dois lados, incluindo "o evento sai com o IP do corpo, nunca com o do datacenter Vercel" e "manda o IP e o UA do visitante, não os do datacenter Vercel" |
+  | `86.11-QA-002` — estado do repo hoje | `git fetch` + `git ls-tree origin/main` + `diff` | 13 commits atrás (não 12); `trifold-design-system/vercel.json` tracked em `origin/main` e untracked no disco; conteúdo **IDÊNTICO** (diff vazio) — nenhum trabalho de CSP pode se perder no rebase, o risco é só de resolução confusa |
+
+  **O raio do defeito era MAIOR do que o achado original registrou — e a correção
+  cobre o excedente.** Eu havia descrito o impacto do `86.11-QA-001` só sobre o
+  evento CAPI. Relendo o código: `/formulario/[token]/route.ts` também persiste o
+  MESMO objeto `sinais` em `leads.metadata.meta_ad` via `comMetaAd` (linhas 229 e
+  285). O IP forjado seria portanto **gravado no banco** e depois relido pelo
+  evento "Visitou" do cron (86-2/86-4) — a forja sobreviveria dias ao request que
+  a originou. Como as duas saídas derivam do mesmo `sinais`, o opt-in fecha as
+  duas de uma vez: a correção foi feita no ponto de estrangulamento certo, não no
+  sintoma. Conferido também que `lerTracking` (a allowlist que aceita
+  `client_ip`/`client_ua`) só tem dois chamadores, ambos da 86-11 — não há
+  caminho alternativo pelo qual o corpo alcance `SinaisTracking` nas rotas da 86-9.
+
+  **Os 5 testes não passam por vacuidade** (verifiquei, porque teste de segurança
+  que passa sem exercitar nada é pior do que teste nenhum):
+  - `form-capi.test.ts:92` e `:107` chamam `extrairSinais` DIRETO e asserem o
+    valor do header — inverter o default quebra os dois imediatamente.
+  - `formulario/[token]/route.test.ts` assere `expect(eventosCapi).toHaveLength(1)`
+    ANTES de olhar o conteúdo: se o mock de `enviarEventoFormulario` nunca fosse
+    chamado, o teste FALHA em vez de passar vazio.
+  - `tracking/route.test.ts` lê `enviados[0]?.sinais` e acessa `.clientIp` — com a
+    lista vazia, lança.
+  - Os dois testes de rota asserem `JSON.stringify(...)` **não conter** o valor
+    forjado, não só que o valor certo está presente. É a forma que pega a
+    regressão real, não só o caminho feliz.
+
+  **Superfície nova re-auditada** (só o delta desde a iteração 1, como pedido):
+  `OpcoesSinais` + 4 linhas em `extrairSinais` + 2 argumentos nos call-sites da
+  86-11 + 5 testes + as seções "Correção pós-QA" e "Convenção de deploy" da story.
+  Nenhum outro arquivo de produção mudou. Não re-auditei o que já havia passado na
+  iteração 1 (hashing, dedup, degradação graciosa, CSP, isolamento de PII).
+
+evidence_verificada_por_mim: |
+  Não aceitei nenhum número de segunda mão. Executado nesta revisão:
+
+  | Verificação | Comando | Resultado |
+  |---|---|---|
+  | Suíte completa | `npx vitest run` | 249 arquivos, 3046 testes passando + 6 expected fail, exit 0 |
+  | Type-check | `npx turbo type-check` | 8/8 pacotes OK |
+  | Lint | `npx turbo lint` | 8/8, **0 erros**, 30 warnings (todos pré-existentes, em arquivos de teste não tocados) |
+  | CSP — 4 blocos | parse do `vercel.json` | blocos 0/1/2 (`/vindresidence`, `/vindresidence/`, `/vindresidence/:path*`) com `connect.facebook.net` em `script-src`, `www.facebook.com` em `img-src`, ambos em `connect-src`; bloco 3 (`/((?!vindresidence).*)`) **byte a byte intocado** |
+  | Cadeia IP/UA ponta a ponta | leitura de `api/lead.js`, `api/track.js`, `form-capi.ts`, `landing-page/route.ts`, `track/route.ts` | correta — ver `cadeia_ip_ua` abaixo |
+  | Divergência com `origin/main` | `git fetch` + `git ls-tree` + `diff` | `landing-pages/trifold-design-system/vercel.json` já está em `origin/main` **com as três adições do facebook** |
+
+cadeia_ip_ua: |
+  Verificada lendo o código, elo por elo (o achado mais caro da story se passasse
+  despercebido). Está CORRETA:
+
+  1. Browser (`index.html:811-822`) monta `data.tracking` com `event_id`,
+     `complete_registration_event_id`, `visitor_id`, `page_url`, `fbc`/`fbp`/`fbclid`
+     — e **deliberadamente não** com `client_ip`/`client_ua`.
+  2. `api/lead.js:61-78` (`montarTracking`) copia só a allowlist `TRACKING_FIELDS`
+     (que **não inclui** `client_ip`/`client_ua`) e só DEPOIS escreve os dois a
+     partir de `req.headers['x-forwarded-for'][0]` / `req.headers['user-agent']`.
+     É este proxy que o browser chama diretamente — é o único ponto da cadeia que
+     vê o IP real. Qualquer `client_ip` que o browser tente ditar é sobrescrito
+     (teste `api-proxy.test.ts:121`).
+  3. `api/track.js:77-90` faz o mesmo para `ViewContent`/`InitiateCheckout`.
+  4. CRM: `extrairSinais` (`form-capi.ts:135-138`) dá precedência ao corpo
+     **somente com o opt-in** (correção do `86.11-QA-001`):
+     `(confiaNoCorpo ? texto(corpo?.client_ip) : undefined) ?? ipDaRequest(request)`.
+     As duas rotas da 86-11 ligam o flag porque há proxy no meio; as da 86-9 não.
+  5. `buildCapiUserData` mapeia para `client_ip_address`/`client_user_agent` em
+     TEXTO PURO (`capi-payload.ts:169-170`), nunca hasheados.
+
+  Provas de teste: `route.test.ts:273` assere que `76.76.21.21` (IP simulado do
+  datacenter Vercel) **não aparece em lugar nenhum** do payload nem das escritas
+  no banco; `track/route.test.ts:130` faz o mesmo para a rota `/track`.
+
+dedup_event_id: |
+  Os 5 eventos, conferidos um a um:
+
+  | Evento | Browser | Servidor | `event_id` |
+  |---|---|---|---|
+  | `PageView` | `index.html:186` | — (por design, AC1) | próprio, sem par |
+  | `ViewContent` | `evento('ViewContent')` (`index.html:189`) | `/landing-page/track` | MESMO id nos dois (`evento()` gera 1 id e usa nos dois disparos) |
+  | `InitiateCheckout` | `index.html:783`, 1x por carregamento (`{once:true}` + guard `disparado`) | `/landing-page/track` | idem |
+  | `Lead` | `pixelTrack('Lead', eventIdLead)` (`index.html:846`) | `tracking.event_id` | MESMO |
+  | `CompleteRegistration` | `pixelTrack(..., eventIdCadastro)` (`index.html:847`) | `tracking.complete_registration_event_id` | MESMO, e **distinto** do anterior |
+
+  Os dois ids do par `Lead`/`CompleteRegistration` são gerados no mesmo instante
+  por duas chamadas separadas de `novoId('e')` — não colidem nem se confundem, e
+  o servidor lê cada um da sua chave própria (`route.ts:413-422`). A dedup do
+  Meta usa o par `event_name` + `event_id`, então mesmo uma colisão hipotética
+  seria inócua; ids distintos deixam os Test Events auditáveis, como a story pedia.
+
+degradacao_graciosa: |
+  Os 4 cenários exigidos, verificados no código e cobertos por teste:
+
+  - **Ad-blocker** (sem `fbq`, sem `_fbp`/`_fbc`): `pixelTrack` tem `try/catch` +
+    guard `if (window.fbq)`; `atribuicao()` devolve `{}` em qualquer exceção; o
+    `fetch` de `CONFIG.leadEndpoint` é uma chamada independente do Pixel. O lead
+    nasce. `quandoFbpPronto` tem teto de 50 tentativas × 100ms e chama o callback
+    de qualquer jeito.
+  - **Sem `localStorage`**: `visitorId()` cai para `visitorMemoria` no `catch`,
+    estável dentro do carregamento.
+  - **Sem `crypto.randomUUID`**: fallback `e-<base36>-<base36>`, aceito pelo
+    `EVENT_ID_RE` do servidor (teste dedicado em `track/route.test.ts`).
+  - **`tracking` ausente/malformado no CRM**: `lerTracking` devolve `undefined`
+    para string, array, `null`, número e objeto vazio; o lead nasce e nenhum
+    evento sai (`route.test.ts:348`). Sem `event_id` válido, grava `meta_ad` mas
+    não inventa evento (`route.test.ts:361`).
+  - **`/api/track` fora do ar**: `fetch(...).catch(function(){})`, fire-and-forget.
+
+nao_regressao_wordpress: |
+  O ponto mais caro de quebrar sem perceber. Verificado:
+
+  - `git diff` do `landing-page/route.ts`: 133 inserções, 8 remoções — e as
+    únicas remoções são linhas reescritas no mesmo lugar. A única mudança que
+    toca o caminho de TODO chamador é `select("id")` → `select("id, metadata")`
+    na busca de duplicata: lê uma coluna a mais, usada só quando há `tracking`.
+  - `flattenIntoFields` **não foi tocado** (o `else if` final continua
+    descartando `typeof v === "object"`), o que mantém o isolamento estrutural:
+    `tracking` nunca chega a `fields`, logo nunca a `webhook_logs.payload` nem a
+    `leads.metadata.raw_fields`. Um teste falha se alguém "consertar" o flatten.
+  - Testes de regressão presentes e verdes: JSON sem `tracking` grava o
+    `metadata` byte a byte anterior e não chama a CAPI; `form-urlencoded`
+    (Elementor/CF7) idem; token inválido segue 401 sem tocar no banco.
+  - `/formulario/[token]` (86-9): os dois chamadores não passam `contentCategory`
+    nem `derivarUf`, então mantêm `form_qualificacao` e o `st` derivado do DDD —
+    travado por testes nomeados "NÃO-REGRESSÃO 86-9".
+
+issues:
+  - id: "86.11-QA-001"
+    severity: medium
+    category: security
+    title: "A precedência do corpo sobre os headers vazou para as rotas públicas da 86-9 — o browser passa a poder forjar `client_ip`/`client_ua`"
+    evidence: |
+      O ADAPT do AC7 acrescentou `client_ip?`/`client_ua?` a `CorpoTracking` e
+      deu a eles precedência sobre os headers em `extrairSinais`
+      (`form-capi.ts:106-107`). Correto e necessário para a 86-11, onde há um
+      proxy servidor-a-servidor no meio.
+
+      Mas `extrairSinais` é compartilhada, e os outros DOIS chamadores são
+      chamados DIRETO PELO BROWSER, sem proxy nenhum:
+
+        - `packages/web/src/app/api/formulario/[token]/route.ts:173`
+          `const sinais = extrairSinais(request, body.tracking)`
+        - `packages/web/src/app/api/formulario/[token]/tracking/route.ts:82`
+          `const sinais = extrairSinais(request, body)`
+          — e ali `body` é o JSON BRUTO da requisição, apenas *castado* para
+          `CorpoPost extends CorpoTracking` (linha 42), nunca estreitado em
+          runtime. Uma interface TypeScript não filtra chaves.
+
+      Antes desta story o corpo não tinha como influenciar IP/UA: `extrairSinais`
+      sempre lia de `ipDaRequest(request)`. Depois dela, qualquer visitante de um
+      link público de formulário pode enviar
+      `{"evento":"ViewContent","event_id":"<uuid>","client_ip":"1.2.3.4","client_ua":"..."}`
+      e o valor vai literalmente para `client_ip_address`/`client_user_agent` do
+      evento CAPI.
+
+      Impacto: forja de geografia/dispositivo no dataset do Meta do funil de
+      qualificação (integridade do dado de atribuição). NÃO é vazamento de PII,
+      não afeta a criação do lead, não afeta a 86-11. A premissa registrada pelo
+      @po ("o chamador `/formulario/[token]` continua sem enviar esses campos,
+      então seu comportamento não muda") vale para chamadores honestos apenas.
+    affects_ac: ["AC7"]
+    affects_story: "86-9 (em produção)"
+    recommendation: |
+      Tornar a precedência OPT-IN, para que ela exista só onde há um proxy no
+      meio. Duas formas, ambas pequenas:
+        a) terceiro parâmetro em `extrairSinais(request, corpo, { ipUaDoCorpo = false })`,
+           ligado explicitamente pelas duas rotas da 86-11; ou
+        b) nas duas rotas da 86-9, estreitar o corpo antes de passar
+           (`extrairSinais(request, { visitor_id, fbp, fbc, fbclid, page_url })`).
+      Acompanhar de um teste que assere que um `client_ip` no corpo de
+      `/formulario/[token]/tracking` é IGNORADO.
+    resolution: |
+      RESOLVIDO na iteração 1.1 do @dev, opção (a) da recomendação. Verificado no
+      código nesta re-revisão (2026-08-25):
+        - `form-capi.ts`: nova `OpcoesSinais.confiarEmClientIpDoCorpo` (default
+          `false`). `extrairSinais` só lê `client_ip`/`client_ua` do corpo quando
+          o flag é `true`; sem ele o valor é `undefined` — não fallback, é como se
+          os campos não existissem (linhas 127, 135, 137).
+        - As duas rotas da 86-11 passam `{ confiarEmClientIpDoCorpo: true }`
+          (proxies servidor-a-servidor no meio). As duas rotas da 86-9 NÃO foram
+          editadas — a proteção é o default, não uma linha removível.
+        - 5 testes de segurança novos (2 em `form-capi.test.ts`, 1 em
+          `formulario/[token]/tracking/route.test.ts`, 2 em
+          `formulario/[token]/route.test.ts`) enviam `client_ip: "1.2.3.4"` /
+          `client_ua: "UA-forjado-pelo-visitante"` no corpo e asserem que o IP do
+          header vence e o valor forjado não aparece em canto nenhum do que iria à
+          CAPI. Todos passam.
+        - Os testes de precedência do lado da landing (opt-in) continuam verdes.
+    status: RESOLVED
+
+  - id: "86.11-QA-002"
+    severity: medium
+    category: process
+    title: "A premissa de deploy da story ficou obsoleta hoje: o `vercel.json` da CSP já está versionado e mergeado em `main`"
+    evidence: |
+      A story afirma (Convenção de deploy, Dev Notes, Nota de auditoria) que
+      `landing-pages/trifold-design-system/` é untracked, que a CSP "não vai para
+      PR nenhum" e que existe um "ponto cego de auditoria". Verificado com
+      `git fetch` durante esta revisão — não é mais verdade:
+
+        - PR #501 ("docs: registra vercel.json do proxy trifold-design-system"),
+          MERGED em 2026-08-24T20:10:57Z, adicionou
+          `landing-pages/trifold-design-system/vercel.json` e `README.md` a `main`.
+        - `diff` entre `origin/main:.../vercel.json` e a cópia no working tree:
+          **vazio**. Ou seja, a versão em `main` JÁ contém as três adições de CSP
+          do AC8 (`connect.facebook.net` em `script-src`, `www.facebook.com` em
+          `img-src`, ambos em `connect-src`).
+        - `main` local está 12 commits atrás de `origin/main` (`e2f5219a`), e no
+          working tree o arquivo ainda aparece como **untracked**.
+
+      Riscos concretos para o @devops:
+        1. Um `git pull`/rebase vai abortar com "untracked working tree file
+           would be overwritten by merge" nesse arquivo. Uma resolução com
+           `checkout -f`/`clean` teria a aparência de estar descartando o
+           trabalho de CSP.
+        2. `origin/main` também já traz `landing-pages/vind-residence/api/lead.js`
+           e `index.html` alterados pelo PR #499 (`-teste` → domínio canônico).
+           O working tree do @dev já aplicou o mesmo valor canônico, então
+           converge — mas o rebase precisa ser feito e conferido, não presumido.
+    affects_ac: ["AC8"]
+    recommendation: |
+      Antes de commitar: `git fetch origin && git rebase origin/main` (ou branch
+      a partir de `origin/main`), resolvendo o `vercel.json` como um arquivo
+      TRACKED — o conteúdo alvo é exatamente o que já está no disco e em `main`,
+      então na prática o AC8 não gera diff novo. Restam do AC8 apenas o
+      `vercel deploy --prod` manual do projeto `trifold-design-system` e a
+      conferência de console do AC11. A "Nota de auditoria" no Dev Agent Record
+      continua útil como registro, mas o ponto cego não existe mais.
+    resolution: |
+      RESOLVIDO na iteração 1.2 do @dev — só documentação, como recomendado.
+      Verificado nesta re-revisão: a seção "Convenção de deploy" da story (linhas
+      496-524) foi reescrita para tratar `landing-pages/trifold-design-system/`
+      como versionado desde o PR #501, com a tabela "Como o código entra / Como o
+      site sobe" corrigida para os dois diretórios e o alerta de rebase em
+      `origin/main` presente para o @devops (tratar `vercel.json` como arquivo já
+      rastreado). Change Log v1.2 registra a correção. O achado permanece um
+      roteiro de deploy para o @devops (rebase + `vercel project ls`), não um
+      bloqueio de merge.
+    status: RESOLVED
+
+  - id: "86.11-QA-003"
+    severity: low
+    category: security
+    title: "A rota `/landing-page/track` não tem rate limit, ao contrário da rota-modelo da 86-9"
+    evidence: |
+      `/api/formulario/[token]/tracking` (a rota que a story mandou espelhar) usa
+      `criarRateLimit(60)`. A nova `/api/webhooks/landing-page/track` não tem
+      nenhum. A porta pública de verdade é o proxy `api/track.js`, que guarda o
+      segredo e também não limita nada — logo, um terceiro pode inflar
+      `ViewContent`/`InitiateCheckout` no dataset do Meta à vontade.
+    recommendation: >
+      Não é pior do que a exposição já existente do `api/lead.js` (que cria
+      leads) e o volume desta landing é baixo, então não bloqueia. Registrar como
+      dívida: um limite por IP no proxy, ou reusar `criarRateLimit` na rota do
+      CRM, fecha o buraco em poucas linhas.
+    status: OPEN
+
+  - id: "86.11-QA-004"
+    severity: low
+    category: reliability
+    title: "`quandoFbpPronto` atrasa o par server-side em até 5s — visitante que sai antes perde o evento de servidor"
+    evidence: |
+      `index.html:132-139` adia o POST de `ViewContent`/`InitiateCheckout` até o
+      cookie `_fbp` nascer, com teto de 50×100ms. Um visitante que fecha a página
+      em menos de 5s produz o evento no Pixel e nenhum no servidor. Não há
+      contagem dobrada (o Meta recebe 1 evento), só match quality menor para quem
+      dá bounce rápido.
+    recommendation: >
+      Trade-off correto — a decisão #6 do @dev pré-corrige o defeito
+      `86.9-QA-004` e vale mais do que o custo. Só registrar: se no futuro
+      alguém investigar "faltam ViewContent de servidor", a causa é esta, não um
+      bug. Alternativa futura: `navigator.sendBeacon` no `visibilitychange`.
+    status: ACCEPTED
+
+  - id: "86.11-QA-005"
+    severity: low
+    category: security
+    title: "Desvio literal do AC9: `console.log('[lead capturado]', data)` passa a logar `fbc`/`fbp`/`visitor_id`"
+    evidence: |
+      `index.html:853` — no ramo em que `CONFIG.leadEndpoint` está vazio, o
+      objeto `data` (que agora inclui `data.tracking`) vai inteiro para o console.
+      O AC9 diz "nenhum desses campos aparece em `console.log`/`console.error` em
+      nenhum caminho".
+    recommendation: >
+      Caminho morto em produção (`leadEndpoint` é uma constante não-vazia) e o
+      console é o do próprio visitante — cosmético. Se for corrigir, logar só
+      `{nome, whatsapp, email}` e omitir `tracking`.
+    status: OPEN
+
+  - id: "86.11-QA-006"
+    severity: low
+    category: data
+    title: "`api/lead.js` passa a anexar `tracking: {client_ip, client_ua}` MESMO quando o browser não mandou tracking nenhum"
+    evidence: |
+      `montarTracking` sempre escreve IP/UA a partir dos headers, e o bloco só é
+      omitido se ambos faltarem. O próprio teste do @dev documenta isso
+      (`api-proxy.test.ts:167` — "sem tracking no corpo, o payload é o de antes
+      da story + IP/UA"). Consequência: TODO lead desta landing passa a ter
+      `leads.metadata.meta_ad` com IP e User-Agent do visitante persistidos, mesmo
+      com o Pixel 100% bloqueado.
+    recommendation: >
+      Está conforme o AC7 ("sobrescrever/preencher"), é o que faz o evento
+      "Visitou" (86-2/86-4) sair com atribuição depois, e é o mesmo precedente já
+      aceito na 86-9. Aceito. Registrado explicitamente para ficar ao lado do
+      risco #5 da story (LGPD) em vez de implícito: é PII persistida antes de
+      qualquer aceite.
+    status: ACCEPTED
+
+  - id: "86.11-QA-007"
+    severity: low
+    category: process
+    title: "AC11/T12 não verificável antes dos 3 deploys"
+    evidence: >
+      Depende de `META_CAPI_TEST_EVENT_CODE` no projeto `trifold-crm` e de uma
+      visita real com preenchimento do formulário, com os 3 deploys no ar.
+    recommendation: >
+      Tarefa do @devops, com roteiro completo já no Dev Agent Record. Não bloqueia
+      o merge; bloqueia o "Done".
+    status: RESOLVED
+    resolution: >
+      Fechado em 2026-08-26 pelo @devops (Gage). Validação end-to-end concluída
+      com o `test_event_code` real `TEST15571` numa sessão de browser real em
+      `trifold.eng.br/vindresidence/?fbclid=TESTE123` (14:06–14:23 BRT), com
+      evidência visual em 4 fontes independentes: Events Manager (Lead e
+      CompleteRegistration marcados "Desduplicado" = pareamento por `event_id`
+      entre servidor e browser), aba Rede do DevTools (`fbevents.js` + config do
+      pixel + beacons `tr`), extensão Meta Pixel Helper (os 5 eventos "Ativo",
+      incluindo o `PageView`) e console sem violação de CSP. O `PageView` não
+      aparece no painel de Test Events por limitação da ferramenta do Meta — o
+      SDK JS não carrega `test_event_code`, logo o painel só enxerga a metade
+      servidor de cada par. Env de teste removida do `trifold-crm` (ausência
+      reconferida) + redeploy, e os 4 leads de teste apagados de produção. Ver
+      "Fechamento do T12 — 2026-08-26" no Dev Agent Record da story.
+
+  - id: "86.11-QA-008"
+    severity: low
+    category: docs
+    title: "Sobraram duas frases da premissa antiga do QA-002 em outras seções da story — contradizem a 'Convenção de deploy' já corrigida"
+    evidence: |
+      A correção do `86.11-QA-002` atualizou a seção autoritativa ("Convenção de
+      deploy", linhas 496-524), que agora está certa e traz o alerta de rebase.
+      Mas duas passagens do Dev Agent Record continuam com o texto anterior:
+
+        - Roteiro do T12, item 7 (linhas 870-872): "o diretório
+          `trifold-design-system/` é untracked e não haverá diff versionado para
+          consultar depois (ponto cego de auditoria conhecido)".
+        - Título da seção seguinte (linha 874): "Nota de auditoria — CSP aplicada
+          (o diretório é untracked)".
+
+      Ambas são falsas desde o PR #501. Achado meu na iteração 2, encontrado ao
+      re-verificar se o QA-002 estava mesmo fechado.
+    recommendation: >
+      Cosmético e não bloqueia: a seção que o @devops vai efetivamente seguir já
+      está correta, e o pior caso aqui é o @devops colar o valor da CSP num
+      comentário de PR desnecessariamente — trabalho a mais, nunca trabalho
+      errado. Corrigir junto do próximo toque na story: no item 7, trocar o
+      motivo por "para deixar o valor à mão na revisão" e ajustar o título para
+      "Nota de auditoria — CSP aplicada". Não vale um round-trip com o @dev só
+      para isto.
+    status: OPEN
+
+decisoes_do_dev_avaliadas: |
+  As seis decisões que a story não especificava, avaliadas uma a uma:
+
+  1. **`event_id` relaxado para `/^[A-Za-z0-9._-]{8,64}$/`** — ACEITO, sem
+     push-back. O `event_id` não é fronteira de autenticação: ele só precisa ser
+     o MESMO dos dois lados. Exigir UUID descartaria em silêncio os eventos do
+     fallback vanilla (`e-<base36>-<base36>`), ou seja, justamente os navegadores
+     mais frágeis. O regex recusa espaço, `/`, `<`, `..` — coberto por teste de
+     injeção. A divergência com a 86-9 está documentada no próprio módulo.
+  2. **Espera do cookie `_fbp` antes do POST** — ACEITO e elogiado. Pré-corrige
+     o `86.9-QA-004`. Custo registrado em `86.11-QA-004`.
+  3. **Honeypot com `{status:"ok", tracked:false}`** — ACEITO. O status HTTP
+     continua 200 (indistinguível para o bot, que é o que importa), e o browser
+     assume `tracked` quando o corpo é ilegível — o default seguro é o caminho
+     normal, não o silêncio.
+  4. **Testes automatizados para os proxies** — ACEITO e elogiado. Metade do AC7
+     vive em `api/lead.js`; deixá-lo com verificação só manual seria manter
+     descoberto o ponto mais frágil da story. `.vercelignore` + arquivo fora de
+     `api/` evitam que o teste vire função serverless.
+  5. **`landing-page-tracking.ts` como CREATE** — ACEITO. Justificativa válida:
+     arquivos de rota do Next.js não podem exportar símbolos arbitrários, e uma
+     allowlist duplicada é uma fronteira de segurança que diverge em silêncio.
+     Registro IDS presente na story.
+  6. **`<noscript>` no `<body>`** — ACEITO e tecnicamente correto: `<img>` dentro
+     de `<noscript>` no `<head>` encerra o parsing do head. O AC8 previa
+     registrar a decisão caso o `<noscript>` fosse OMITIDO; ele não foi.
+
+security_notes: |
+  - **Hashing (AC9) — conforme.** `em`/`ph`/`fn`/`ln`/`external_id`/`st` sempre
+    SHA-256 hex; `fbc`/`fbp`/`client_ip_address`/`client_user_agent` sempre texto
+    puro. Verificado em `buildCapiUserData` (`capi-payload.ts:123-172`) e travado
+    por teste em `capi-payload-form.test.ts:87` e `form-capi.test.ts:231`.
+  - **PII fora dos logs — conforme.** `form-capi.ts:230` loga só o nome do evento
+    e o erro, nunca o `user_data`. Os dois proxies logam `err.message`, nunca o
+    corpo. Testes de spy em `console.log/warn/error` cobrem os dois lados. Única
+    exceção: `86.11-QA-005` (caminho morto, console do próprio visitante).
+  - **PII fora do banco onde não deve — conforme e ESTRUTURAL.** `tracking` nunca
+    entra em `webhook_logs.payload` nem em `metadata.raw_fields`, porque
+    `flattenIntoFields` descarta objetos aninhados. Não é uma promessa: é uma
+    propriedade do código, com teste que quebra se alguém a remover.
+  - **A rota `/track` recusa `Lead` e `CompleteRegistration`** por design (400,
+    não descarte silencioso) — fecha o canal de conversão forjada. Coberto por
+    dois testes nomeados.
+  - **Allowlist nos dois proxies** — chaves fora da lista são descartadas; o
+    proxy não vira encaminhador cego. Teste assere o conjunto exato de chaves.
+  - **CORS**: os proxies só ecoam a origem quando ela está na allowlist; origem
+    desconhecida recebe a primeira da lista, não `*`. Coberto por teste.
+  - **Forja de IP/UA nas rotas da 86-9 (`86.11-QA-001`) — FECHADO na iteração 2.**
+    A precedência do corpo é opt-in (`confiarEmClientIpDoCorpo`, default `false`),
+    ligada só onde há proxy servidor-a-servidor. Fecha as DUAS saídas de uma vez:
+    o evento CAPI e a persistência em `leads.metadata.meta_ad` via `comMetaAd`
+    (que o achado original não tinha mapeado). 5 testes de regressão travam.
+  - Aberto, ambos LOW e aceitos como dívida: `86.11-QA-003` (sem rate limit na
+    rota nova) e `86.11-QA-005` (console.log em caminho morto).
+
+positive_notes: |
+  - A armadilha nomeada pelo @po no AC7 — a mais cara da story — foi resolvida
+    nos DOIS lados e travada por teste em ambos, inclusive com a assertiva
+    "o IP do datacenter não aparece em canto nenhum do payload nem do banco",
+    que é o tipo de teste que pega a regressão real e não só o caminho feliz.
+  - O isolamento do endpoint compartilhado é estrutural (objetos aninhados nunca
+    chegam ao `pick()`), não uma convenção — e há um teste cuja única função é
+    quebrar se alguém "consertar" o `flattenIntoFields`.
+  - O update de `metadata.meta_ad` foi deliberadamente separado do update de UTM
+    (que é condicionado a `utm_campaign IS NULL`). Pendurar um no outro faria a
+    atribuição do clique depender de o lead não ter campanha — um bug silencioso
+    de manual. O teste assere os filtros do update, não só o payload.
+  - Testar os proxies serverless, que a story declarava "manuais", foi a decisão
+    de maior retorno da implementação: é onde metade do AC7 vive.
+  - Não-regressão da 86-9 travada por testes com nome próprio ("NÃO-REGRESSÃO
+    86-9") em `content_category`, `st`, batch de 1 evento e leitura de headers.
+
+next_action: >
+  PASS — liberado para o @devops seguir com commit/PR/push. Os dois bloqueadores
+  medium da iteração 1 estão fechados e verificados (86.11-QA-001 e 86.11-QA-002).
+  ⚠️ Ponto de partida real, conferido rodando git em 2026-08-25: as mudanças estão
+  NÃO COMMITADAS sobre `main` @ `8dbc6000`, 13 commits atrás de `origin/main`. O
+  branch `feat/86-meta-capi-tracking` (@ `006d8868`) existe e é das stories
+  86-1..86-8 — NÃO é onde esta story está, não commitar em cima dele por engano.
+  Antes/durante o deploy, o @devops ainda precisa (não bloqueia o merge, mas o
+  deploy correto depende disso): (1) rebasear em `origin/main` tratando
+  `landing-pages/trifold-design-system/vercel.json` como arquivo já versionado
+  (sem isso o pull aborta com "untracked working tree file would be overwritten" e
+  uma resolução com `checkout -f` teria a aparência de descartar a CSP);
+  `origin/main` também traz `api/lead.js`/`index.html` do PR #499 (`-teste` →
+  domínio canônico) — o working tree converge, mas conferir, não presumir; (2)
+  conferir com `vercel project ls` que o projeto de produção é `vind-residence`
+  (risco #1 da story); (3) publicar os 3 deploys na ordem da story (packages/web
+  via PR/CI primeiro, depois vind-residence, depois trifold-design-system). Depois
+  dos deploys, fechar o AC11 no Test Events com `META_CAPI_TEST_EVENT_CODE` só no
+  `trifold-crm` (via `scripts/vercel-env-set.sh`, nunca `vercel env add` por
+  pipe), remover a env, redeployar o `trifold-crm` e só então marcar a story como
+  Done. Dívida técnica de baixa severidade a registrar em backlog com dono:
+  86.11-QA-003 (rate limit em `/landing-page/track`), 86.11-QA-005 (console.log no
+  caminho morto do `leadEndpoint` vazio).
