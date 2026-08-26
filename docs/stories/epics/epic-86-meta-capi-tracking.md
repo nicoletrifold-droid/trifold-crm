@@ -3,15 +3,16 @@ epic: 86
 title: Conversions API (CAPI) e Rastreamento Meta — Evento "Visitou"
 status: Draft
 created_at: 2026-08-04
-updated_at: 2026-08-04
+updated_at: 2026-08-26
 created_by: River (@sm)
 priority: High
 sub_epics:
   - 86A: Base CAPI (credenciais, outbox, dispatcher, helper de payload)
   - 86B: Atribuição de Origem (fbclid/fbc/fbp) e Migração de Landing/Forms
-stories_planned: [86-1, 86-2, 86-3, 86-4, 86-5, 86-6, 86-7, 86-8]
-stories_added: []
-stories_done: []
+stories_planned: [86-1, 86-2, 86-3, 86-4, 86-8, 86-10, 86-12]
+stories_added: [86-9, 86-10, 86-11, 86-12]
+stories_done: [86-9, 86-11]
+stories_superseded: [86-5, 86-6, 86-7]
 ---
 
 # Epic 86 — Conversions API (CAPI) e Rastreamento Meta
@@ -144,6 +145,7 @@ Enviar ao Meta dois eventos que a campanha precisa:
 | 86-9 | Pixel + eventos CAPI no formulário de qualificação (`/formulario/[token]`) | @dev | P0 | 86-3, 86-4 |
 | 86-10 | Follow-up de e-mail opcional no passo de agendamento | @dev | P2 | 86-9 |
 | 86-11 | Pixel + CAPI na landing do Vind Residence (`/vindresidence/`) | @dev | P1 | 86-1, 86-3 |
+| 86-12 | Pixel + CAPI na landing do Yarden (`/yarden/`), landing nova sem tracking nem conteúdo — inclui o discriminador multi-landing (`resolveLandingConfig`) | @dev | P2 | 86-1, 86-3, 86-11 |
 
 > **Correção de curso (registrada em 2026-08-24 pelo @po).** A tabela acima
 > parou na 86-8 por um tempo e não refletia o que de fato aconteceu:
@@ -160,7 +162,34 @@ Enviar ao Meta dois eventos que a campanha precisa:
 > - **86-10 está reservada, ainda não redigida.**
 > - **86-11 é a irmã arquitetural da 86-9**, levando o mesmo padrão para a
 >   landing estática do Vind Residence — runtime standalone, fora do workspace
->   pnpm. Validada pelo @po em 2026-08-24 (GO 9.0/10), status `Ready`.
+>   pnpm. Validada pelo @po em 2026-08-24 (GO 9.0/10) e **`Done` desde
+>   2026-08-26** (QA CONCERNS aceito na iteração 2).
+>
+> **Atualização de 2026-08-26 (@po, na validação da 86-12).** A 86-12 leva o
+> mesmo padrão para a landing nova do Yarden e é a primeira story do epic a
+> tornar os módulos server-side **multi-landing** (`LANDING_CONFIGS`/
+> `resolveLandingConfig` em `landing-page-tracking.ts`) — até aqui eles
+> hardcodavam identificadores do Vind Residence. Depois da 86-12, qualquer
+> landing nova custa apenas uma entrada no `Record` + um proxy clonado.
+> Validada pelo @po em 2026-08-26 (GO 9.5/10), status `Ready`.
+
+## Decisões de Produto — adendo de 2026-08-26 (Travadas)
+
+> Decisões tomadas pelo stakeholder (lucas@) em 2026-08-26, durante a validação
+> @po da Story 86-12. Mesmo peso das travadas de 2026-08-04 acima.
+
+4. **Uma landing nova NÃO ganha dataset/Pixel próprio.** Todas as landings do
+   CRM reusam o dataset **`1337310707164669`** (conta "TRIFOLD - VIND"). A
+   segmentação por empreendimento é feita por `content_category`
+   (`landing_vind_residence`, `landing_yarden`, …) — que é o que permite Custom
+   Conversions separadas sem multiplicar ativos no Business Manager. Stories
+   futuras de landing não devem reabrir este ponto nem propor um dataset novo.
+5. **Convenção de nome de projeto Vercel por landing = nome do
+   empreendimento.** `vind-residence` → `vind-residence.vercel.app`;
+   `yarden` → `yarden.vercel.app`. A URL pública final é
+   `trifold.eng.br/{empreendimento}/` via rewrite no
+   `landing-pages/trifold-design-system/vercel.json` (não a URL curta antiga do
+   WordPress, ex. `/y/`).
 
 ## Fora do escopo deste epic
 
@@ -180,3 +209,5 @@ Enviar ao Meta dois eventos que a campanha precisa:
 |------|---------|-------------|--------|
 | 2026-08-04 | 0.1 | Epic criado a partir da auditoria de tracking Meta (@architect Aria + @analyst Atlas). 8 stories esboçadas, sequenciadas por dependência. | @sm (River) |
 | 2026-08-24 | 0.2 | Tabela de stories reconciliada com a realidade durante a validação da 86-11: acrescentadas 86-9 (implementada, em produção, QA PASS), 86-10 (reservada) e 86-11 (`Ready`), e registrado que 86-5/86-6/86-7 foram substituídas pela 86-9 — as três apontavam para uma landing (`POST /api/public/leads`) que nunca existiu. Nenhuma mudança nas Decisões de Produto travadas nem na arquitetura recomendada. | @po (Pax) |
+| 2026-08-26 | 0.3 | Acrescentada 86-12 (`Draft`) — Pixel + CAPI na landing nova do Yarden (`/yarden/`), irmã arquitetural da 86-11 (Vind Residence), motivada pela constatação de que a landing WordPress antiga do Yarden (`/y/`) está 404 em produção. A 86-12 introduz um AC novo (discriminador multi-landing em `landing-page-tracking.ts`, ADAPT) porque os módulos server-side reusados da 86-11 hardcodavam identificadores "Vind Residence" — achado não previsto na auditoria original. Duas decisões de negócio deixadas abertas na story para @po validar com o usuário: dataset/Pixel ID do Yarden e a ausência de conteúdo definitivo da página. 86-10 permanece reservada e não redigida. | @sm (River) |
+| 2026-08-26 | 0.4 | Validação @po da 86-12 (GO 9.5/10, `Draft` → `Ready`). Duas decisões de negócio do stakeholder promovidas a **Decisões de Produto travadas** do epic (adendo, itens 4 e 5): (4) landings novas reusam o dataset `1337310707164669` e se segmentam por `content_category`, nunca por dataset próprio; (5) convenção de nome de projeto Vercel = nome do empreendimento (`yarden` → `yarden.vercel.app`). Frontmatter reconciliado com a realidade: `stories_done: [86-9, 86-11]` (estava vazio), `stories_added: [86-9, 86-10, 86-11, 86-12]`, `stories_superseded: [86-5, 86-6, 86-7]`, e `stories_planned` deixou de listar as três substituídas. 86-11 registrada como `Done` (estava como `Ready`). | @po (Pax) |
