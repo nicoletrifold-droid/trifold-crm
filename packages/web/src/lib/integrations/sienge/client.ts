@@ -4,6 +4,7 @@ import type {
   SiengeFinancialStatementsResponse,
   SiengePaymentSlipResponse,
   SiengeReceivableBill,
+  SiengeReceipt,
   FormattedInstallment,
   InstallmentStatus,
   SiengeEnterprise,
@@ -15,6 +16,17 @@ import type {
   ComputedInforme,
   InformeMonthEntry,
 } from "./types"
+import {
+  isCashReceipt,
+  getOpenBalance,
+} from "./installments"
+
+export {
+  isCashReceipt,
+  getOpenBalance,
+  collectUnknownReceiptTypes,
+  NON_CASH_RECEIPT_TYPES,
+} from "./installments"
 
 function getBaseUrl(): string {
   const subdomain = process.env.SIENGE_SUBDOMAIN
@@ -122,23 +134,31 @@ export async function getFinancialStatement(
   for (const statement of data.results) {
     for (const bill of statement.billsReceivable) {
       for (const inst of bill.installments) {
+        const byDate = (a: SiengeReceipt, b: SiengeReceipt) =>
+          a.receiptDate < b.receiptDate ? -1 : a.receiptDate > b.receiptDate ? 1 : 0
+
+        const all = [...inst.receipts].sort(byDate)
+        // Reparcelamento não é pagamento: separa antes de qualquer soma.
+        const receipts = all.filter(isCashReceipt)
+        const nonCashReceipts = all.filter((r) => !isCashReceipt(r))
+
         // Baixa parcial NÃO quita a parcela: "PAGO" exige saldo devedor zerado.
         // O currentBalance do Sienge (com correção) é a fonte da verdade do que
         // ainda se deve (Story 75-284).
         let status: InstallmentStatus
-        if (inst.receipts.length > 0 && inst.currentBalance <= 0) {
+        if (receipts.length > 0 && inst.currentBalance <= 0) {
           status = "PAGO"
-        } else if (inst.receipts.length > 0) {
+        } else if (receipts.length > 0) {
           status = "PARCIAL"
+        } else if (nonCashReceipts.length > 0 && inst.currentBalance <= 0) {
+          // Só baixa de reparcelamento: a parcela foi substituída por outras.
+          // Nem paga, nem devida.
+          status = "RENEGOCIADA"
         } else if (inst.generatedBillet) {
           status = "BOLETO_GERADO"
         } else {
           status = "EM_ABERTO"
         }
-
-        const receipts = [...inst.receipts].sort((a, b) =>
-          a.receiptDate < b.receiptDate ? -1 : a.receiptDate > b.receiptDate ? 1 : 0
-        )
 
         installments.push({
           billReceivableId: bill.billReceivableId,
@@ -153,6 +173,7 @@ export async function getFinancialStatement(
           status,
           hasBoleto: inst.generatedBillet && inst.currentBalance > 0,
           receipts,
+          nonCashReceipts,
           receiptDate: receipts[receipts.length - 1]?.receiptDate,
           receiptValue: receipts.length > 0
             ? receipts.reduce((sum, r) => sum + r.receiptValue, 0)
@@ -230,11 +251,16 @@ export function computeInformeFromStatements(
   // Soma tudo que já foi baixado, inclusive baixas parciais de parcelas em aberto.
   const accumulatedPaid = installments.reduce((sum, i) => sum + (i.receiptValue ?? 0), 0)
 
-  const remainingBalance = installments
-    .filter((i) => i.status !== "PAGO")
-    .reduce((sum, i) => sum + (i.currentBalance > 0 ? i.currentBalance : i.originalValue), 0)
+  // getOpenBalance zera parcelas quitadas E renegociadas. Sem isso a
+  // renegociada (currentBalance = 0) cairia no originalValue e recriaria uma
+  // dívida que já está representada nas parcelas novas.
+  const remainingBalance = installments.reduce((sum, i) => sum + getOpenBalance(i), 0)
 
-  const totalContractValue = installments.reduce((sum, i) => sum + i.originalValue, 0)
+  // Parcela renegociada não soma no valor do contrato: as parcelas que a
+  // substituíram já respondem por esse valor.
+  const totalContractValue = installments
+    .filter((i) => i.status !== "RENEGOCIADA")
+    .reduce((sum, i) => sum + i.originalValue, 0)
 
   const contractNumbers = [...new Set(installments.map((i) => i.documentId).filter(Boolean))]
 

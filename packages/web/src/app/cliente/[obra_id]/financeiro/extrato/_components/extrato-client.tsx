@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react"
 import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import type { FormattedInstallment } from "@web/lib/integrations/sienge/types"
+import { getOpenBalance } from "@web/lib/integrations/sienge/installments"
 
 const CONDITION_LABEL: Record<string, string> = {
   AT: "À Vista",
@@ -38,6 +39,13 @@ function StatusBadge({ status }: { status: FormattedInstallment["status"] }) {
     return (
       <span className="inline-flex items-center rounded-full bg-sky-500/15 px-2.5 py-0.5 text-xs font-semibold text-sky-400">
         Parcialmente pago
+      </span>
+    )
+  }
+  if (status === "RENEGOCIADA") {
+    return (
+      <span className="inline-flex items-center rounded-full bg-violet-500/15 px-2.5 py-0.5 text-xs font-semibold text-violet-300">
+        Renegociada
       </span>
     )
   }
@@ -101,13 +109,14 @@ export function ExtratoClient({ obraId, installments, unidadeInicial, de, ate }:
 
   const pagas = filtered.filter((i) => i.status === "PAGO")
   const parciais = filtered.filter((i) => i.status === "PARCIAL")
-  const pendentes = filtered.filter((i) => i.status !== "PAGO")
-  // Total pago = todas as baixas, inclusive as parciais de parcelas em aberto.
-  const totalPago = filtered.reduce((sum, i) => sum + (i.receiptValue ?? 0), 0)
-  const totalPendente = pendentes.reduce(
-    (sum, i) => sum + (i.currentBalance > 0 ? i.currentBalance : i.originalValue),
-    0
+  const renegociadas = filtered.filter((i) => i.status === "RENEGOCIADA")
+  const pendentes = filtered.filter(
+    (i) => i.status !== "PAGO" && i.status !== "RENEGOCIADA"
   )
+  // Total pago = baixas em dinheiro, inclusive as parciais de parcelas em
+  // aberto. Reparcelamento não entra: já foi filtrado em getFinancialStatement.
+  const totalPago = filtered.reduce((sum, i) => sum + (i.receiptValue ?? 0), 0)
+  const totalPendente = pendentes.reduce((sum, i) => sum + getOpenBalance(i), 0)
 
   return (
     <>
@@ -183,6 +192,22 @@ export function ExtratoClient({ obraId, installments, unidadeInicial, de, ate }:
         </div>
       )}
 
+      {/* Explica as parcelas renegociadas — sem isso o cliente vê parcelas sem
+          valor pago e sem saldo, e acha que sumiu dinheiro. */}
+      {renegociadas.length > 0 && (
+        <div className="mb-4 rounded-xl border border-violet-500/20 bg-violet-500/5 px-4 py-3">
+          <p className="text-xs leading-relaxed text-stone-400">
+            <span className="font-semibold text-violet-300">
+              {renegociadas.length === 1
+                ? "1 parcela renegociada."
+                : `${renegociadas.length} parcelas renegociadas.`}
+            </span>{" "}
+            Foram substituídas por novas parcelas neste mesmo contrato. Não entram no total
+            pago nem no total em aberto, para a mesma dívida não ser contada duas vezes.
+          </p>
+        </div>
+      )}
+
       {/* Lista de parcelas */}
       {filtered.length === 0 ? (
         <div className="rounded-xl border border-stone-800 bg-stone-900 px-6 py-12 text-center">
@@ -219,9 +244,9 @@ export function ExtratoClient({ obraId, installments, unidadeInicial, de, ate }:
                     {formatCurrency(
                       inst.status === "PAGO"
                         ? (inst.receiptValue ?? inst.originalValue)
-                        : inst.currentBalance > 0
-                          ? inst.currentBalance
-                          : inst.originalValue
+                        : inst.status === "RENEGOCIADA"
+                          ? inst.originalValue
+                          : getOpenBalance(inst)
                     )}
                     {inst.status === "PARCIAL" && (
                       <span className="ml-2 text-xs font-medium text-stone-400">em aberto</span>

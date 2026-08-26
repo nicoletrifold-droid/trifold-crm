@@ -28,6 +28,16 @@ export interface SiengeCustomersResponse {
 export interface SiengeReceipt {
   receiptDate: string
   receiptValue: number
+  /**
+   * Natureza da baixa. "Recebimento" = dinheiro que entrou de fato.
+   * "Reparcelamento" = baixa contábil de renegociação: o Sienge quita a parcela
+   * antiga e gera novas parcelas no lugar, sem que o cliente tenha pago nada.
+   * Ver `isCashReceipt()` em client.ts.
+   */
+  receiptType?: string | null
+  netReceiptValue?: number
+  discountValue?: number
+  interestValue?: number
 }
 
 export interface SiengeInstallment {
@@ -83,7 +93,15 @@ export interface SiengeReceivableBill {
 
 // PARCIAL = parcela com baixa(s) mas saldo devedor > 0 (Story 75-284). Nunca
 // tratar como quitada: o cliente ainda deve o currentBalance.
-export type InstallmentStatus = "PAGO" | "PARCIAL" | "BOLETO_GERADO" | "EM_ABERTO"
+// RENEGOCIADA = parcela substituída por um reparcelamento. Não foi paga nem é
+// devida: a dívida vive nas parcelas novas que o Sienge gerou no lugar dela.
+// Não entra em "pago" nem em "em aberto" — senão é contada em dobro.
+export type InstallmentStatus =
+  | "PAGO"
+  | "PARCIAL"
+  | "RENEGOCIADA"
+  | "BOLETO_GERADO"
+  | "EM_ABERTO"
 
 export interface FormattedInstallment {
   billReceivableId: number
@@ -97,11 +115,20 @@ export interface FormattedInstallment {
   generatedBillet: boolean
   status: InstallmentStatus
   hasBoleto: boolean
-  /** Todas as baixas da parcela (data + valor), em ordem cronológica. */
+  /**
+   * Baixas em dinheiro (`isCashReceipt`), em ordem cronológica. É o que pode
+   * ser mostrado ao cliente como pagamento e somado em totais.
+   */
   receipts: SiengeReceipt[]
-  /** Data da última baixa. */
+  /**
+   * Baixas que NÃO são entrada de caixa — hoje, reparcelamentos. Mantidas
+   * separadas para auditoria e para explicar a parcela na tela; nunca somar
+   * junto de `receiptValue`.
+   */
+  nonCashReceipts: SiengeReceipt[]
+  /** Data da última baixa em dinheiro. */
   receiptDate?: string
-  /** Somatório das baixas. */
+  /** Somatório das baixas em dinheiro. */
   receiptValue?: number
 }
 
