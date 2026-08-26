@@ -25,3 +25,25 @@ REUSE / ADAPT / Referência por arquivo dentro das Dev Notes. A tabela é entreg
 não do @sm — é a forma concreta do gate G3 (detectar duplicação e verificar que os artefatos
 referenciados existem). Ver [[feedback-validation-post-pm-review]] para o princípio geral de
 auditar com evidência de arquivo.
+
+## Corolário quando a story CLONA um arquivo inteiro (não só importa um módulo)
+
+Quando o padrão é "clonar o arquivo X da story-irmã e trocar N coisas", a lista de "N coisas"
+do @sm é sistematicamente incompleta em um ponto específico: **identificadores da entidade
+antiga que vivem FORA do subsistema que a story está discutindo**. O @sm audita bem o bloco
+que ele está mexendo e não vê os literais vizinhos.
+
+**Why:** Na 86-12 (clone da landing do Vind Residence para o Yarden), o AC8 dizia "com estas
+mudanças (e só estas)" e cobria `ALLOWED_ORIGINS` + o campo novo de tracking. Faltou
+`page: "vind-residence"` no payload do `api/lead.js` — um campo que **não é de tracking Meta**,
+mas que é achatado no CRM e persistido em 4 lugares (`webhook_logs.payload.page`,
+`leads.metadata.landing_page`, `leads.metadata.page`, descrição da activity). Clonar sem trocar
+faria todo lead da landing nova entrar no CRM rotulado como a landing antiga — e **nenhum teste
+de CAPI pegaria**, porque o defeito é de dado do CRM, não do Meta.
+
+**How to apply:** ler o arquivo-fonte a ser clonado **inteiro** (não `grep` pelos campos que a
+story cita) e caçar todo literal com o nome da entidade antiga. Depois checar se cada um também
+exige um teste explícito de assert positivo (`toBe("novo")`, não só `not.toBe("antigo")`).
+Segundo item do corolário: conferir os **QA issues OPEN da story-irmã** — herdar um defeito
+conhecido num arquivo novo é regressão *introduzida*, não herdada, e o AC deve proibir a
+clonagem dele nominalmente.
