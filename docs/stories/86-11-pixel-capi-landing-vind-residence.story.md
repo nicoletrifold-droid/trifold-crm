@@ -675,7 +675,7 @@ redeploy lá é necessário para isso) redeployado ao fim da validação.
 - [x] **T9 (AC5, AC7)** — criar `landing-pages/vind-residence/api/track.js` (proxy para a nova rota `/track`, mesmo padrão de CORS/honeypot/`LANDING_PAGE_WEBHOOK_SECRET` de `api/lead.js` — a env já existe nesse projeto Vercel)
 - [x] **T10 (AC8)** — atualizar CSP em `landing-pages/trifold-design-system/vercel.json` (3 blocos, não o 4º): `script-src`, `connect-src` **e `img-src`**
 - [x] **T11 (AC10)** — testes de degradação graciosa (ad-blocker, sem localStorage, tracking ausente/malformado, falha de rede no `/track`)
-- [ ] **T12 (AC11)** — validação end-to-end com `META_CAPI_TEST_EVENT_CODE` (@devops, pós-deploy) + remoção da env de teste
+- [ ] **T12 (AC11)** — validação end-to-end com `META_CAPI_TEST_EVENT_CODE` (@devops, pós-deploy) + remoção da env de teste — **PARCIAL (2026-08-26):** os 3 deploys estão confirmados em produção e a metade **server-side** do AC11 foi verificada com evidência direta (AC5/AC6/AC7/AC9, incluindo o IP real do visitante em `metadata.meta_ad` e a rejeição do IP forjado pelo browser); a CSP live cobre 100% dos recursos da página. Falta **só** a observação dos 5 eventos no painel Test Events, que exige login Meta + browser. Ver "Execução do T12 pelo @devops — 2026-08-26" no Dev Agent Record
   - _Fora do alcance do @dev: depende dos 3 deploys em produção (ver "Convenção de deploy"). Roteiro no Dev Agent Record._
 
 ## Dev Agent Record
@@ -871,6 +871,98 @@ Smoke tests manuais do JS do browser (fora da suíte, com DOM stubado):
    `trifold-design-system/` é untracked e não haverá diff versionado para
    consultar depois (ponto cego de auditoria conhecido, ver "Convenção de deploy").
 
+### Execução do T12 pelo @devops — 2026-08-26 (PARCIAL, T12 segue aberta)
+
+**Resumo: os 3 deploys estão confirmados em produção e toda a metade
+server-side do AC11 foi verificada com evidência direta. O que falta é
+exclusivamente a observação humana no painel Test Events do Events Manager
+(item 4 do roteiro) — não tenho credencial Meta nem browser nesta sessão, e
+não existe endpoint de API que leia aquele painel.**
+
+#### 1. Deploys — os 3 já estavam no ar antes desta sessão (nenhum novo deploy de conteúdo foi necessário)
+
+| Componente | Como foi confirmado | Estado |
+|---|---|---|
+| (a) `packages/web` | REST API `/v6/deployments?target=production` → deployment `dpl_ErG5rBwkp3V35dQZEgYFGjucmndF` com `githubCommitSha = 0a037103` (descendente de `3c26163e`, o merge do PR #502). Rota nova comprovada viva: `POST /api/webhooks/landing-page/track` responde **401** sem token (existe + exige auth), enquanto um path irmão inexistente responde 404 | ✅ em prod |
+| (b) `landing-pages/vind-residence/` | Deploy de produção `dpl_2GUUahYBfYETXHkN14dv48aXqcY9` em 2026-08-25 16:18 (10 min após o merge). `index.html` servido é **byte a byte idêntico** ao working tree (sha256 `cee2bd4e1515656178aae8a9c9e60c87b0bcb8252c665d23a2a2f24ac81214b7` nos dois lados). Proxies na versão nova: `api/lead.js` devolve `{"status":"ok","tracked":false}` no honeypot (mitigação do risco #4, que só existe nesta story) e `api/track.js` responde encaminhando ao CRM | ✅ em prod |
+| (c) `landing-pages/trifold-design-system/` | Header `Content-Security-Policy` servido por `https://trifold.eng.br/vindresidence/` é **idêntico ao valor final registrado na "Nota de auditoria"** abaixo, com as 3 adições do AC8 | ✅ em prod |
+
+#### 2. AC8 / item 5 do roteiro (CSP) — verificado de forma determinística, sem browser
+
+Extraídas todas as origens externas realmente referenciadas pelo `index.html` e
+conferida cada uma contra a diretiva correspondente da CSP **live**:
+`connect.facebook.net` (`script-src` ✅, `connect-src` ✅), `www.facebook.com`
+(`connect-src` ✅, `img-src` ✅ — cobre o beacon `<noscript><img src=".../tr?...">`,
+que está presente no HTML), `vind-residence.vercel.app` (`connect-src` ✅),
+`fonts.googleapis.com` (`style-src` ✅), `fonts.gstatic.com` (`font-src` ✅),
+`img.youtube.com` (`img-src` ✅), `www.youtube.com` / `www.google.com`
+(`frame-src` ✅). **Nenhum recurso da página fica fora da CSP** — não há como
+haver violação de `facebook.net`/`facebook.com` no console. Fica pendente apenas
+a confirmação visual no console de um browser real.
+
+#### 3. Smoke test server-side em produção — AC5/AC6/AC7/AC9 verificados com evidência
+
+`META_CAPI_TEST_EVENT_CODE` foi setada no projeto `trifold-crm` (só nele) via
+`scripts/vercel-env-set.sh` (REST API, valor conferido não-vazio — **nunca**
+`vercel env add` por pipe), production redeployada (`dpl_ErG5…` → `trifold-m8hz1l2eh`),
+e o fluxo do browser foi simulado com `curl` **atravessando os proxies reais de
+produção** (`vind-residence.vercel.app/api/track` e `/api/lead`), com
+`fbclid=TESTE123` e — de propósito — `client_ip: "1.2.3.4"` /
+`client_ua: "UA-FORJADO-PELO-BROWSER"` no corpo, para testar a armadilha do AC7
+pelos dois lados de uma vez.
+
+| Verificação | Resultado |
+|---|---|
+| `ViewContent` via `/api/track` | `200 {"status":"ok"}` |
+| `InitiateCheckout` via `/api/track` | `200 {"status":"ok"}` |
+| `Lead` + `CompleteRegistration` via `/api/lead` | `200 {"status":"ok","tracked":true}` (lead criado) |
+| **AC7 — IP do visitante, não do datacenter** | `leads.metadata.meta_ad.client_ip` gravado = o **IP público real do cliente que originou o `curl`** (conferido contra `api.ipify.org` na mesma sessão; valor não transcrito aqui por ser dado pessoal). Nenhum IP de datacenter Vercel em canto nenhum do registro. ✅ |
+| **AC7 — browser não dita IP/UA** | O `client_ip: "1.2.3.4"` e o `client_ua: "UA-FORJADO-PELO-BROWSER"` enviados no corpo foram **descartados**: o `client_ua` gravado é o UA real do cliente. A sobrescrita do proxy funciona em produção. ✅ |
+| **AC6 — `metadata.meta_ad`** | Gravado no formato exato da 86-9 AC5: `{fbc, fbp, fbclid, client_ip, client_ua, visitor_id, captured_at}`, com `fbc = fb.1.<ms>.TESTE123` derivado do `fbclid`. ✅ |
+| **AC9 — contenção de PII** | `metadata.raw_fields` tem só `{nome, page, email, whatsapp}` e `webhook_logs.payload` só `{fields, page, utm}` — **sem** IP, UA, `fbp`, `fbc` ou `event_id`. O `flattenIntoFields` segue descartando o `tracking` em produção. ✅ |
+| **Disparo CAPI** | Logs de runtime do deployment: os 3 POSTs em `200`, e **nenhuma linha `[form-capi] falha ao enviar …`** (o único log de erro desse caminho). Os 4 eventos server-side foram aceitos pelo Meta. ✅ |
+
+Limpeza feita: o lead de smoke test (`78cfa087-ba1c-45c7-9a5d-17d4f8e1b5e1`)
+foi **deletado**; `SELECT` de confirmação devolve 0 linhas. Efeito colateral
+registrado: a distribuição automática atribuiu o lead a um corretor antes da
+remoção, então pode ter havido uma notificação órfã. A linha correspondente em
+`webhook_logs` foi deixada intacta de propósito (log de auditoria não se
+adultera) e é inofensiva — não contém nenhum sinal de atribuição.
+
+Env de teste **removida** e `trifold-crm` redeployada sem ela
+(`dpl_8dQoXBxyqEwzg8vspA4hM6AkQq2A`, aliasada em `crm.trifold.eng.br`,
+`/api/ping` 200, rota `/track` ainda 401 sem token). `vercel env ls production`
+não lista mais `META_CAPI_TEST_EVENT_CODE`.
+
+#### 4. O que continua faltando para fechar o T12 (e por quê)
+
+O `test_event_code` usado no smoke test (`TEST8611GAGE`) foi **gerado por mim**,
+não obtido do Events Manager — a aba "Test Events" só existe na UI do
+`business.facebook.com` e não há endpoint de Graph API que a leia ou que emita o
+código. Nenhum código real está documentado no repo (a **T4 da Story 86-1**, que
+era justamente "obter o `test_event_code` do Events Manager", também segue
+`[ ]`, e a **T8 da 86-9** está no mesmo estado). Consequência: os 4 eventos do
+smoke test foram marcados como teste (logo, **fora** do reporting/otimização de
+produção — o objetivo do AC11), mas **não** apareceram em nenhum painel
+observável.
+
+Falta, portanto, uma passada **humana com browser + login Meta**, que precisa
+ser feita numa única sessão porque os passos são acoplados:
+
+1. Events Manager → dataset `1337310707164669` (conta "TRIFOLD - VIND") → aba
+   **Test Events** → copiar o código exibido.
+2. `scripts/vercel-env-set.sh META_CAPI_TEST_EVENT_CODE <código> production` +
+   `vercel redeploy` do `trifold-crm` (procedimento já validado nesta sessão).
+3. Abrir `https://trifold.eng.br/vindresidence/?fbclid=TESTE123`, focar o campo
+   nome, preencher e enviar; conferir o console (esperado: zero violação de CSP,
+   ver item 2).
+4. Conferir no painel os 5 eventos: `PageView` 1x, e `ViewContent` /
+   `InitiateCheckout` / `Lead` / `CompleteRegistration` 2x cada, marcados como
+   deduplicados. **A metade servidor de cada par já está comprovada (item 3);
+   o que essa passada acrescenta é a metade browser (`fbq`) e o pareamento por
+   `event_id`.**
+5. Remover a env e redeployar; apagar o lead de teste.
+
 ### Nota de auditoria — CSP aplicada (o diretório é untracked)
 
 Valor final do header `Content-Security-Policy` nos **3** blocos
@@ -974,6 +1066,7 @@ Diferenças em relação ao valor anterior: `+https://connect.facebook.net` em
 | 2026-08-24 | 1.0 | **Implementação concluída (`*develop`, modo interativo). Status `Ready` → `Ready for Review`.** T1–T11 entregues; T12 (AC11) é validação em produção e fica com o @devops (roteiro no Dev Agent Record). Lado CRM: `buildFormEvent` ganhou `contentCategory` opcional (default `form_qualificacao` preservado); `form-capi.ts` recebeu os 4 ADAPTs do AC6/AC7 (`client_ip`/`client_ua` no `CorpoTracking` com **precedência sobre os headers**, batch de N eventos numa só chamada a `sendCapiEvents`, `contentCategory` repassado, `derivarUf` desligável); `/api/webhooks/landing-page` lê `tracking` do JSON **bruto** (o `flattenIntoFields` segue intocado), devolve `leadId`, grava `metadata.meta_ad` via `comMetaAd` e dispara `Lead`+`CompleteRegistration` em batch dentro de `after()`; nova rota `/api/webhooks/landing-page/track` para `ViewContent`/`InitiateCheckout`, sem gravar em `leads`/`webhook_logs`. Lado landing: Pixel base code no `<head>` + `<noscript>` beacon no `<body>` (decisão #5), helpers vanilla de `visitor_id`/`fbc`/`fbp`/`fbclid`, os 5 eventos com `event_id` compartilhado, `InitiateCheckout` no primeiro `focus` em `#nome`/`#whats`, `api/lead.js` passando a repassar `tracking` (allowlist + `sanitizeField`) com IP/UA reais do visitante, e novo `api/track.js`. CSP atualizada nos 3 blocos (`script-src`, `connect-src` e `img-src`), com o valor final registrado no Dev Agent Record por ser diretório untracked. Extras não pedidos, documentados como decisões: espera pelo cookie `_fbp` antes do POST server-side (defeito `86.9-QA-004`), mitigação do risco #4 do honeypot via `tracked:false` no corpo do 200, e testes automatizados dos proxies (o AC7 vive metade ali). Validação: **3046 testes passando em 249 arquivos** (+68 novos, zero regressão sobre a baseline de 3038), `turbo type-check` 8/8 e `turbo lint` com 0 erros. Nada commitado — git é do @devops. | @dev (Dex) |
 | 2026-08-24 | 1.1 | **Correção do `86.11-QA-001` (medium, security) — fechada no mesmo PR, como o gate recomendou. Status permanece `Ready for Review`.** A precedência de `client_ip`/`client_ua` do corpo sobre os headers, introduzida em `extrairSinais` pelo ADAPT do AC7, vazava para as duas rotas da **86-9** que são chamadas direto pelo browser (`/api/formulario/[token]` e `/api/formulario/[token]/tracking`) — onde o corpo é digitado pelo próprio visitante e, na rota `/tracking`, é o JSON bruto apenas *castado* para `CorpoPost extends CorpoTracking` (interface do TS não filtra chave em runtime). Qualquer visitante podia forjar geografia/dispositivo no dataset do Meta. Aplicada a **opção (a)** da recomendação do @qa: nova interface `OpcoesSinais` com `confiarEmClientIpDoCorpo?: boolean` (default `false`), e a leitura do corpo deixou de ser *fallback* — sem o opt-in é como se `client_ip`/`client_ua` não existissem. Ligado explicitamente nas duas rotas da 86-11 (`webhooks/landing-page/route.ts` e `webhooks/landing-page/track/route.ts`), que ficam atrás dos proxies servidor-a-servidor `api/lead.js`/`api/track.js`. As duas rotas da 86-9 **não foram editadas**: ficam com o comportamento seguro por default, anterior a esta story — a proteção é o default, não uma linha que alguém possa apagar sem perceber. +5 testes de regressão de segurança em 3 arquivos (2 unitários em `form-capi.test.ts`, 1 na rota `/formulario/[token]/tracking`, 2 na rota `/formulario/[token]`), todos com POST real mandando `client_ip: "1.2.3.4"`/`client_ua: "UA-forjado-pelo-visitante"` no corpo e assertiva de que o valor forjado não aparece em canto nenhum do que iria à CAPI. O AC7 desta story não regrediu — os testes de precedência do lado da landing (incluindo "o IP do datacenter `76.76.21.21` não aparece no payload") seguem verdes. Suíte: **249 arquivos, 3051 testes passando** (+6 `expected fail`), `turbo type-check` 8/8, `turbo lint` 0 erros / 30 warnings pré-existentes. Nada commitado. | @dev (Dex) |
 | 2026-08-25 | 1.3 | **Re-QA (`*qa-gate`, iteração 2) — veredito PASS. Status `Ready for Review` → `InReview`.** Re-verificação após as correções 1.1/1.2. `86.11-QA-001` fechado: precedência do corpo virou opt-in verdadeiro (`OpcoesSinais.confiarEmClientIpDoCorpo`, default `false`) — verificado no diff real de `form-capi.ts` (linhas 127/135/137, não é fallback) e nos 4 call-sites por grep (86-11 passam `true`, 86-9 não passam nada e não foram editadas); 5 testes novos de segurança existem, testam o cenário certo (forja no corpo IGNORADA nas rotas da 86-9, IP do header vence, valor forjado não sobrevive na CAPI) e passam. `86.11-QA-002` fechado: seção "Convenção de deploy" reflete o PR #501. Suíte re-executada por mim: 249 arquivos, 3051 testes passando + 6 expected fail, 0 falhas; type-check 8/8; lint 0 erros / 30 warnings pré-existentes. Restam só achados LOW aceitos como dívida (QA-003/005 OPEN, 004/006 ACCEPTED, 007 pós-deploy) — nenhum bloqueia. Liberado para @devops seguir com commit/PR/push; AC11/T12 (validação Test Events) permanece pós-deploy e bloqueia só o `Done`. | @qa (Quinn) |
+| 2026-08-26 | 1.4 | **T12/AC11 executada pelo @devops — PARCIAL. Status permanece `InReview` (NÃO virou `Done`).** `main` local sincronizada com `origin/main` (`0a037103`) por fast-forward. `vercel project ls` confirmou os 3 projetos reais (`trifold-crm`, `trifold-design-system`, `vind-residence` — o `-teste` do risco #1 não existe mais). **Os 3 deploys já estavam no ar e foram confirmados, não presumidos:** (a) `packages/web` em `dpl_ErG5rBwkp3V35dQZEgYFGjucmndF` / commit `0a037103` ⊇ `3c26163e`, com a rota `/api/webhooks/landing-page/track` respondendo 401 sem token (existe) contra 404 num path irmão inexistente; (b) `vind-residence` em `dpl_2GUUahYBfYETXHkN14dv48aXqcY9`, com o `index.html` servido **byte a byte idêntico** ao working tree (sha256 `cee2bd4e…`) e os proxies na versão nova (honeypot devolvendo `{"status":"ok","tracked":false}`, marcador que só existe nesta story); (c) `trifold-design-system` servindo a CSP **exatamente igual** ao valor final da "Nota de auditoria". **AC8 verificado de forma determinística:** cada origem externa referenciada pelo `index.html` foi conferida contra a diretiva correspondente da CSP live — `connect.facebook.net` (`script-src`+`connect-src`), `www.facebook.com` (`connect-src`+`img-src`, cobrindo o beacon `<noscript>` que está presente), e mais 6 origens pré-existentes; nada da página fica fora da CSP. **Smoke test server-side em produção** (env `META_CAPI_TEST_EVENT_CODE` setada só no `trifold-crm` via `scripts/vercel-env-set.sh` + redeploy, fluxo simulado com `curl` atravessando os proxies reais, com `fbclid=TESTE123` e `client_ip`/`client_ua` **forjados no corpo de propósito**): os 3 endpoints em 200 (`tracked:true` = lead criado), e no banco de produção `metadata.meta_ad.client_ip` = **IP público real do cliente**, com o `1.2.3.4` e o `UA-FORJADO-PELO-BROWSER` do corpo **descartados** — a armadilha do AC7 está fechada nos dois lados **em produção**, não só em teste unitário. `metadata.raw_fields` (`{nome,page,email,whatsapp}`) e `webhook_logs.payload` (`{fields,page,utm}`) sem nenhum sinal de atribuição → AC9 confirmado em prod. Logs de runtime sem nenhuma linha `[form-capi] falha ao enviar` → os 4 eventos server-side foram aceitos pelo Meta. Lead de smoke test deletado (0 linhas na reconferência); env de teste removida e `trifold-crm` redeployada sem ela (`dpl_8dQoXBxyqEwzg8vspA4hM6AkQq2A`, `/api/ping` 200). **Por que a T12 NÃO foi marcada e o status NÃO virou `Done`:** o `test_event_code` só é obtenível na UI do Events Manager (não há endpoint de Graph API que o leia ou emita) e nenhum código real está documentado no repo — a T4 da 86-1 e a T8 da 86-9 seguem `[ ]` pelo mesmo motivo. O código usado no smoke test foi autogerado, o que manteve os eventos fora do reporting de produção (o objetivo do AC11) mas os tornou invisíveis em qualquer painel. Falta uma passada humana com login Meta + browser para observar `PageView` 1x e os outros 4 eventos 2x deduplicados — roteiro de 5 passos no Dev Agent Record. `86.11-QA-007` continua OPEN. | @devops (Gage) |
 | 2026-08-25 | 1.2 | **Correção do `86.11-QA-002` (medium, process) — atualizada a seção "Convenção de deploy". Status permanece `Ready for Review`.** A v0.3/1.0 afirmava que `landing-pages/trifold-design-system/` era untracked e que a CSP do AC8 vivia num "ponto cego de auditoria" sem diff versionado. Isso ficou obsoleto: o **PR #501** ("docs: registra vercel.json do proxy trifold-design-system"), mergeado em `main` em 2026-08-24, passou a versionar `landing-pages/trifold-design-system/vercel.json` e `README.md` — confirmado por `git ls-tree origin/main` + `diff`, o conteúdo em `main` é byte a byte idêntico ao do working tree, já com as três adições de CSP do AC8. Reescrita a tabela "Como o código entra / Como o site sobe" para os dois diretórios como versionados; adicionado alerta para o @devops sobre o `main` local estar atrás de `origin/main` (o rebase precisa tratar `vercel.json` como arquivo já rastreado, não como untracked, para não abortar com "untracked working tree file would be overwritten"). Nenhuma mudança de código — só documentação. | @dev (Dex) |
 
 ## QA Results
