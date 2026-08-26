@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
 import { canAccess } from "@web/lib/permissions"
-import { createAdminClient } from "@web/lib/supabase/admin"
+import { createOrgScopedAdminClient } from "@web/lib/supabase/org-scoped-admin"
 import { getChatUnreadCount } from "@web/lib/chat/unread-count"
 
 // Story 75-223 — contagem viva do badge "Chat" (conversas de relacionamento
@@ -18,7 +18,11 @@ export async function GET() {
   }
 
   try {
-    const count = await getChatUnreadCount(createAdminClient(), auth.appUser.org_id)
+    // Story 900-15: client escopado. `conversations` recebe o filtro de org
+    // automaticamente; `messages` não, porque não tem `org_id` (o isolamento dela é
+    // via conversation_id) — e o proxy sabe a diferença pelo schema-snapshot.
+    const db = createOrgScopedAdminClient(auth.appUser.org_id)
+    const count = await getChatUnreadCount(db, auth.appUser.org_id)
     return NextResponse.json({ count })
   } catch {
     return NextResponse.json({ error: "unread_count_failed" }, { status: 500 })

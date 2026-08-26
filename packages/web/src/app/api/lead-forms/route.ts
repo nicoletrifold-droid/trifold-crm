@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
 import { canAccess } from "@web/lib/permissions"
-import { createAdminClient } from "@web/lib/supabase/admin"
+import { createOrgScopedAdminClient } from "@web/lib/supabase/org-scoped-admin"
 import { parseFormSchema, problemasParaPublicar, FormSchemaInvalido } from "@web/lib/forms/schema"
 
 // Story 75-330 (Epic 89) — CRUD dos formulários de qualificação.
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
   const nome = body?.nome?.trim()
   if (!nome) return NextResponse.json({ error: "Informe o nome do formulário." }, { status: 400 })
 
-  const admin = createAdminClient()
+  const admin = createOrgScopedAdminClient(appUser.org_id)
   const { data, error } = await admin
     .from("lead_forms")
     .insert({ org_id: appUser.org_id, nome, created_by: appUser.id })
@@ -91,7 +91,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "Nada para salvar." }, { status: 400 })
   }
 
-  const admin = createAdminClient()
+  const admin = createOrgScopedAdminClient(appUser.org_id)
   const { error } = await admin
     .from("lead_forms")
     .update(patch)
