@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse, after } from "next/server"
 import { can } from "@web/lib/permissions"
 import { requireAuth } from "@web/lib/api-auth"
-import { createAdminClient } from "@web/lib/supabase/admin"
+import { createOrgScopedAdminClient } from "@web/lib/supabase/org-scoped-admin"
 import {
   dispatchBrokerMessage,
   resolveChannel,
@@ -38,7 +38,7 @@ export async function POST(
   const { supabase, appUser } = auth
 
   const isPrivileged = await can(appUser.id, appUser.org_id, "conversas.enviar_qualquer")
-  const db = isPrivileged ? createAdminClient() : supabase
+  const db = isPrivileged ? createOrgScopedAdminClient(appUser.org_id) : supabase
 
   const { data: lead } = await db
     .from("leads")
@@ -71,7 +71,7 @@ export async function POST(
 
   // A mensagem precisa pertencer A ESTA conversa — sem isso, um id de mensagem de
   // outro lead seria reenviado para o telefone deste (vazamento entre conversas).
-  const admin = createAdminClient()
+  const admin = createOrgScopedAdminClient(appUser.org_id)
   const { data: msg } = await admin
     .from("messages")
     .select("id, role, content, metadata, conversation_id")

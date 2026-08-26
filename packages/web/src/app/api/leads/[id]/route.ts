@@ -7,7 +7,7 @@ import { isLostReasonGrupo } from "@web/lib/constants"
 import { logAudit, getRequestIp } from "@web/lib/audit"
 import { canAccess } from "@web/lib/permissions"
 import { STAGE_IDS } from "@trifold/shared"
-import { createAdminClient } from "@web/lib/supabase/admin"
+import { createOrgScopedAdminClient } from "@web/lib/supabase/org-scoped-admin"
 import { syncFutureVisitsWithLeadOwner } from "@web/lib/appointments/sync-visit-owner"
 import { resolverNomesUtm } from "@web/lib/leads/meta-utm"
 
@@ -182,7 +182,7 @@ export async function PATCH(
   // corretor foi realmente mexido nesta requisição.
   if (typeof fields.assigned_broker_id === "string" && fields.assigned_broker_id) {
     await syncFutureVisitsWithLeadOwner({
-      admin: createAdminClient(),
+      admin: createOrgScopedAdminClient(appUser.org_id),
       orgId: appUser.org_id,
       leadId: id,
       brokerUserId: fields.assigned_broker_id,

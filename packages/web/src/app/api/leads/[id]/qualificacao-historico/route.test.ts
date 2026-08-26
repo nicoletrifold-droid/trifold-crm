@@ -53,8 +53,8 @@ const auditRows = [
   },
 ]
 
-vi.mock("@web/lib/supabase/admin", () => ({
-  createAdminClient: () => {
+vi.mock("@web/lib/supabase/org-scoped-admin", () => ({
+  createOrgScopedAdminClient: () => {
     adminClientCalls++
     const chain: Record<string, unknown> = {
       select: () => chain,

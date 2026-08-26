@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createAdminClient } from "@web/lib/supabase/admin"
+import { createOrgScopedAdminClient } from "@web/lib/supabase/org-scoped-admin"
 import { getServerUser } from "@web/lib/auth"
 import { can } from "@web/lib/permissions"
 import { distributeLeadToNextBroker } from "@web/lib/roleta/distributor"
@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const supabase = createAdminClient()
+  const supabase = createOrgScopedAdminClient(user.orgId)
   const now = new Date().toISOString()
 
   // Montar payload de atualização

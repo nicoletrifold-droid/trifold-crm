@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
 import { canAccess } from "@web/lib/permissions"
-import { createAdminClient } from "@web/lib/supabase/admin"
+import { createOrgScopedAdminClient } from "@web/lib/supabase/org-scoped-admin"
 
 /**
  * GET /api/leads/[id]/qualificacao-historico
  *
  * Story 84-2 (Epic 84) — histórico de mudanças da Qualificação Comercial, lido de
  * `audit_logs` (gravado pela Story 84-1). `audit_logs` tem RLS que restringe SELECT a
- * `role = 'admin'` (059_audit_logs.sql) — por isso usamos `createAdminClient()` (bypassa
+ * `role = 'admin'` (059_audit_logs.sql) — por isso usamos `createOrgScopedAdminClient(appUser.org_id)` (bypassa
  * RLS) com o gate de permissão feito aqui em código (`leads.qualificacao`), para liberar
  * o histórico a qualquer role com essa permissão, não só admin. O filtro por `org_id` é
  * OBRIGATÓRIO (o admin client não tem isolamento multi-tenant automático).
@@ -46,7 +46,7 @@ export async function GET(
     return NextResponse.json({ error: "Lead not found" }, { status: 404 })
   }
 
-  const admin = createAdminClient()
+  const admin = createOrgScopedAdminClient(appUser.org_id)
   const { data, error } = await admin
     .from("audit_logs")
     .select("id, user_name, created_at, metadata")

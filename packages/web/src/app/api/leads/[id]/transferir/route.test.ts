@@ -30,8 +30,8 @@ let targetRow: Record<string, unknown> | null = { id: "T1", name: "Odair", role:
 const chatRows = [{ roles: { name: "gerente-relacionamento" } }, { roles: { name: "admin" } }, { roles: { name: "supervisor" } }]
 const captures = { leadUpdate: null as unknown, convUpdate: null as unknown, activity: null as unknown }
 
-vi.mock("@web/lib/supabase/admin", () => ({
-  createAdminClient: () => ({
+vi.mock("@web/lib/supabase/org-scoped-admin", () => ({
+  createOrgScopedAdminClient: () => ({
     from: (table: string) => {
       const b: Record<string, unknown> & { _update?: unknown } = {
         select: () => b, eq: () => b,

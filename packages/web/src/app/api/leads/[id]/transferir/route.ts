@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireCapability } from "@web/lib/api-auth"
-import { createAdminClient } from "@web/lib/supabase/admin"
+import { createOrgScopedAdminClient } from "@web/lib/supabase/org-scoped-admin"
 import { syncFutureVisitsWithLeadOwner } from "@web/lib/appointments/sync-visit-owner"
 import { sendPushToUser } from "@web/lib/server/push-service"
 import { leadDeepLink } from "@web/lib/leads/lead-url"
@@ -32,7 +32,7 @@ export async function POST(
   if (!targetUserId) return NextResponse.json({ error: "target_user_id é obrigatório" }, { status: 400 })
   if (!motivo) return NextResponse.json({ error: "O motivo da transferência é obrigatório." }, { status: 400 })
 
-  const admin = createAdminClient()
+  const admin = createOrgScopedAdminClient(appUser.org_id)
 
   const { data: lead } = await admin
     .from("leads")

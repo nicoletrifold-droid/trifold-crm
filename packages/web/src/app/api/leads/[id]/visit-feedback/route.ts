@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createAdminClient } from "@web/lib/supabase/admin"
+import { createOrgScopedAdminClient } from "@web/lib/supabase/org-scoped-admin"
 import { can } from "@web/lib/permissions"
 import { requireAuth } from "@web/lib/api-auth"
 import { applyVisitFeedback } from "@web/lib/appointments/visit-feedback-core"
@@ -51,7 +51,7 @@ export async function GET(
     if (auth.error) return auth.error
     const { appUser } = auth
 
-    const supabase = createAdminClient()
+    const supabase = createOrgScopedAdminClient(appUser.org_id)
 
     // org_id no filtro: o admin client passa por cima da RLS.
     const { data: lead } = await supabase
@@ -132,7 +132,7 @@ export async function POST(
     if (auth.error) return auth.error
     const { appUser } = auth
 
-    const supabase = createAdminClient()
+    const supabase = createOrgScopedAdminClient(appUser.org_id)
     const body = await request.json()
 
     if (!body.feedback) {

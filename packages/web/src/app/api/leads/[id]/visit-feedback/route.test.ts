@@ -47,8 +47,8 @@ let tables: Tables
  *  "não consulta activities" precisa observar o acesso, não o resultado. */
 const touched: string[] = []
 
-vi.mock("@web/lib/supabase/admin", () => ({
-  createAdminClient: () => ({
+vi.mock("@web/lib/supabase/org-scoped-admin", () => ({
+  createOrgScopedAdminClient: () => ({
     from: (table: keyof Tables) => {
       touched.push(table)
       const rows = () => (table === "leads" ? [] : (tables[table] as Record<string, unknown>[]))

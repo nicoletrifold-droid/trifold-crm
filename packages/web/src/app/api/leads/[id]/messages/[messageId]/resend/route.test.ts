@@ -86,7 +86,7 @@ const fakeClient = () => ({
     return b
   },
 })
-vi.mock("@web/lib/supabase/admin", () => ({ createAdminClient: () => fakeClient() }))
+vi.mock("@web/lib/supabase/org-scoped-admin", () => ({ createOrgScopedAdminClient: () => fakeClient() }))
 
 import { POST } from "./route"
 

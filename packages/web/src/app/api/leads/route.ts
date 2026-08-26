@@ -4,7 +4,7 @@ import { buildLeadSearchOrFilter } from "@web/lib/leads/search"
 import { triggerAutomations } from "@web/lib/email-automations"
 import { logAudit, getRequestIp } from "@web/lib/audit"
 import { canAccess } from "@web/lib/permissions"
-import { createAdminClient } from "@web/lib/supabase/admin"
+import { createOrgScopedAdminClient } from "@web/lib/supabase/org-scoped-admin"
 import { normalizePhoneBR } from "@trifold/shared"
 import { getDefaultStageId } from "@web/lib/leads/default-stage"
 
@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
   // com perfil 'imob'. Usamos o admin client — autorizado pelo gate canAccess("imob") acima —
   // como já faz a tela de Leads do IMOB (dashboard/imob/leads/page.tsx).
   if (wantImob)
-    queries.push(buildQuery(createAdminClient() as typeof supabase, "imob"))
+    queries.push(buildQuery(createOrgScopedAdminClient(appUser.org_id) as typeof supabase, "imob"))
 
   const results = await Promise.all(queries)
   const failed = results.find((r) => r.error)

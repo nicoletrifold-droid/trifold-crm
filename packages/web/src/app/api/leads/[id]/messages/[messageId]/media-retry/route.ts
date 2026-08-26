@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { can } from "@web/lib/permissions"
 import { requireAuth } from "@web/lib/api-auth"
-import { createAdminClient } from "@web/lib/supabase/admin"
+import { createOrgScopedAdminClient } from "@web/lib/supabase/org-scoped-admin"
 import { uploadInboundMedia } from "@web/lib/media/inbound-media"
 import { transcribeAudio } from "@web/lib/transcription/transcribe"
 import {
@@ -42,7 +42,7 @@ export async function POST(
   const { supabase, appUser } = auth
 
   const isPrivileged = await can(appUser.id, appUser.org_id, "conversas.enviar_qualquer")
-  const db = isPrivileged ? createAdminClient() : supabase
+  const db = isPrivileged ? createOrgScopedAdminClient(appUser.org_id) : supabase
 
   const { data: lead } = await db
     .from("leads")
@@ -63,7 +63,7 @@ export async function POST(
 
   // A mensagem precisa pertencer a uma conversa DESTE lead — senão um id de mensagem
   // de outro lead teria sua mídia baixada e exposta aqui.
-  const admin = createAdminClient()
+  const admin = createOrgScopedAdminClient(appUser.org_id)
   const { data: msg } = await admin
     .from("messages")
     .select("id, role, content, media_url, media_type, metadata, conversation_id, conversations!inner(lead_id)")

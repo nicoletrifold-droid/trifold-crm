@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { can } from "@web/lib/permissions"
 import { requireAuth } from "@web/lib/api-auth"
-import { createAdminClient } from "@web/lib/supabase/admin"
+import { createOrgScopedAdminClient } from "@web/lib/supabase/org-scoped-admin"
 import {
   resolveChannel,
   isWithinWhatsAppWindow,
@@ -36,7 +36,7 @@ export async function POST(
   // p/ admin/supervisor/gerente-comercial é neutro). Corretor → client de sessão.
   // 75-310: enviar em lead de terceiros é a capability conversas.enviar_qualquer.
   const isPrivileged = await can(appUser.id, appUser.org_id, "conversas.enviar_qualquer")
-  const db = isPrivileged ? createAdminClient() : supabase
+  const db = isPrivileged ? createOrgScopedAdminClient(appUser.org_id) : supabase
 
   let formData: FormData
   try {
@@ -120,7 +120,7 @@ export async function POST(
   }
 
   // Upload para o bucket público (admin client bypassa RLS de storage)
-  const admin = createAdminClient()
+  const admin = createOrgScopedAdminClient(appUser.org_id)
   const ext = file.name.includes(".") ? file.name.split(".").pop() : ""
   const storagePath = `broker-chat/${leadId}/${crypto.randomUUID()}${ext ? `.${ext}` : ""}`
   const bytes = await file.arrayBuffer()

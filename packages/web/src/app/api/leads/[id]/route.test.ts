@@ -40,8 +40,8 @@ vi.mock("@web/lib/audit", () => ({
   getRequestIp: () => undefined,
 }))
 
-vi.mock("@web/lib/supabase/admin", () => ({
-  createAdminClient: () => fakeSupabase(),
+vi.mock("@web/lib/supabase/org-scoped-admin", () => ({
+  createOrgScopedAdminClient: () => fakeSupabase(),
 }))
 
 vi.mock("@web/lib/appointments/sync-visit-owner", () => ({

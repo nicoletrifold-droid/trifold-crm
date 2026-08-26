@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireCapability } from "@web/lib/api-auth"
-import { createAdminClient } from "@web/lib/supabase/admin"
+import { createOrgScopedAdminClient } from "@web/lib/supabase/org-scoped-admin"
 import { sendPushToUser } from "@web/lib/server/push-service"
 import { leadDeepLink } from "@web/lib/leads/lead-url"
 import { logAudit, getRequestIp } from "@web/lib/audit"
@@ -41,7 +41,7 @@ export async function GET(
   const forbidden = await requireCapability(appUser, "leads.reativar")
   if (forbidden) return forbidden
 
-  const admin = createAdminClient()
+  const admin = createOrgScopedAdminClient(appUser.org_id)
 
   const { data: lead } = await admin
     .from("leads")
@@ -118,7 +118,7 @@ export async function POST(
   if (!brokerUserId) return NextResponse.json({ error: "Selecione o corretor." }, { status: 400 })
   if (!motivo) return NextResponse.json({ error: "O motivo da reativação é obrigatório." }, { status: 400 })
 
-  const admin = createAdminClient()
+  const admin = createOrgScopedAdminClient(appUser.org_id)
 
   const { data: lead } = await admin
     .from("leads")

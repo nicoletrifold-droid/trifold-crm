@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@web/lib/api-auth"
-import { createAdminClient } from "@web/lib/supabase/admin"
+import { createOrgScopedAdminClient } from "@web/lib/supabase/org-scoped-admin"
 import { sendWhatsAppTemplate } from "@web/lib/whatsapp/send-template"
 import { toWhatsAppNumber } from "@web/lib/leads/whatsapp"
 import { logWhatsappSend } from "@web/lib/whatsapp/log-send"
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ success: false, error: "WABA_ID_MISSING", message: "Conta WhatsApp Business não configurada." }, { status: 400 })
   }
 
-  const admin = createAdminClient()
+  const admin = createOrgScopedAdminClient(appUser.org_id)
 
   // Valida contra a Meta (só template APROVADO sai) e obtém o corpo real
   // para o espelho no histórico — nada de cópia hardcoded (lição da 75-166).

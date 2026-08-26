@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse, after } from "next/server"
 import { can } from "@web/lib/permissions"
 import { requireAuth } from "@web/lib/api-auth"
-import { createAdminClient } from "@web/lib/supabase/admin"
+import { createOrgScopedAdminClient } from "@web/lib/supabase/org-scoped-admin"
 import {
   dispatchBrokerMessage,
   resolveChannel,
@@ -54,7 +54,7 @@ export async function POST(
   // admin/supervisor/gerente-comercial é neutro (já passavam). Corretor → client de sessão.
   // 75-310: enviar em lead de terceiros é a capability conversas.enviar_qualquer.
   const isPrivileged = await can(appUser.id, appUser.org_id, "conversas.enviar_qualquer")
-  const db = isPrivileged ? createAdminClient() : supabase
+  const db = isPrivileged ? createOrgScopedAdminClient(appUser.org_id) : supabase
 
   // --- Validação do payload (AC8) ---
   const body = await request.json().catch(() => null)
@@ -161,7 +161,7 @@ export async function POST(
   // --- Resolver credenciais WhatsApp (whatsapp_config por org_id; admin p/ bypass RLS de token) ---
   let waCredentials: { phoneNumberId: string; accessToken: string } | null = null
   if (channel === "whatsapp") {
-    const admin = createAdminClient()
+    const admin = createOrgScopedAdminClient(appUser.org_id)
     const { data: waConfig } = await admin
       .from("whatsapp_config")
       .select("phone_number_id, access_token")
@@ -341,7 +341,7 @@ export async function POST(
   // envio reencontrará is_ai_active=true e tentará de novo). Escopo por-conversa
   // (`.eq("id", conversation.id)`) — não afeta outras conversas/leads.
   if (conversation.is_ai_active) {
-    const admin = createAdminClient()
+    const admin = createOrgScopedAdminClient(appUser.org_id)
     const { error: handoffErr } = await admin
       .from("conversations")
       .update({

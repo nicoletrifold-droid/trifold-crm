@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, requireCapability } from "@web/lib/api-auth"
-import { createAdminClient } from "@web/lib/supabase/admin"
+import { createOrgScopedAdminClient } from "@web/lib/supabase/org-scoped-admin"
 import { syncFutureVisitsWithLeadOwner } from "@web/lib/appointments/sync-visit-owner"
 
 export async function POST(
@@ -58,7 +58,7 @@ export async function POST(
   // 31/07) deixava a visita com o corretor antigo, que receberia o lembrete do
   // dia seguinte. A visita vai para o novo responsável, tenha dono ou não.
   await syncFutureVisitsWithLeadOwner({
-    admin: createAdminClient(),
+    admin: createOrgScopedAdminClient(appUser.org_id),
     orgId: appUser.org_id,
     leadId: id,
     brokerUserId: body.broker_id,

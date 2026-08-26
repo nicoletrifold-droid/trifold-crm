@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { can } from "@web/lib/permissions"
 import { requireAuth } from "@web/lib/api-auth"
-import { createAdminClient } from "@web/lib/supabase/admin"
+import { createOrgScopedAdminClient } from "@web/lib/supabase/org-scoped-admin"
 
 /**
  * Story 63-10 (Epic 63) — Preferência "me avisar quando o lead responder".
@@ -55,7 +55,7 @@ export async function POST(
     (lead.metadata as Record<string, unknown> | null) ?? {}
   const nextMetadata = { ...currentMetadata, notify_broker_on_reply: enabled }
 
-  const admin = createAdminClient()
+  const admin = createOrgScopedAdminClient(appUser.org_id)
   const { error } = await admin
     .from("leads")
     .update({ metadata: nextMetadata })
