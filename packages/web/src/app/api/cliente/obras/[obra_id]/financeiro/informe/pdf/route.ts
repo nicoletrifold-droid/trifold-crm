@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { renderToBuffer } from "@react-pdf/renderer"
 import { createElement } from "react"
 import { requireAuth } from "@web/lib/api-auth"
+import { INFORME_RENDIMENTOS_ENABLED } from "@web/lib/portal/features"
 import { getFinancialStatement, getIncomeTax, computeInformeFromStatements } from "@web/lib/integrations/sienge/client"
 import { InformePDF } from "@web/lib/pdf/informe-pdf"
 
@@ -11,6 +12,14 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ obra_id: string }> }
 ) {
+  // Feature desligada: não gera o documento nem consulta o Sienge (ver features.ts)
+  if (!INFORME_RENDIMENTOS_ENABLED) {
+    return NextResponse.json(
+      { error: "Informe de Rendimentos ainda não está disponível" },
+      { status: 404 }
+    )
+  }
+
   const auth = await requireAuth()
   if (auth.error) return auth.error
   const { supabase, appUser } = auth
