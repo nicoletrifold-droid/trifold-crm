@@ -1,5 +1,6 @@
 import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer"
 import type { FormattedInstallment } from "@web/lib/integrations/sienge/types"
+import { getOpenBalance } from "@web/lib/integrations/sienge/installments"
 
 const BRAND = "#E8856A"
 const DARK = "#1C1917"
@@ -143,6 +144,10 @@ const s = StyleSheet.create({
   badgeBoletoText: { fontFamily: "Helvetica-Bold", fontSize: 6, color: "#D97706" },
   badgeAberto: { backgroundColor: "#F5F5F4", borderRadius: 3, paddingHorizontal: 5, paddingVertical: 2, alignSelf: "flex-start" as const },
   badgeAbertoText: { fontFamily: "Helvetica-Bold", fontSize: 6, color: GRAY },
+  badgeRenegociada: { backgroundColor: "#EDE9FE", borderRadius: 3, paddingHorizontal: 5, paddingVertical: 2, alignSelf: "flex-start" as const },
+  badgeRenegociadaText: { fontFamily: "Helvetica-Bold", fontSize: 6, color: "#6D28D9" },
+  notaBox: { marginTop: 10, padding: 8, backgroundColor: LIGHT, borderRadius: 4 },
+  notaText: { fontSize: 7, color: GRAY, lineHeight: 1.5 },
   // ── Summary
   summaryRow: {
     flexDirection: "row",
@@ -239,13 +244,15 @@ export function ExtratoPDF({
   ate,
   geradoEm,
 }: ExtratoPDFProps) {
-  // Total pago = todas as baixas, inclusive as parciais de parcelas em aberto.
+  // Total pago = baixas em dinheiro, inclusive as parciais de parcelas em
+  // aberto. Reparcelamento não entra: já foi filtrado em getFinancialStatement.
   const totalPago = installments.reduce((sum, i) => sum + (i.receiptValue ?? 0), 0)
 
-  // PARCIAL, BOLETO_GERADO e EM_ABERTO somados como "Em aberto" (total ainda devido)
-  const totalAberto = installments
-    .filter((i) => i.status !== "PAGO")
-    .reduce((sum, i) => sum + (i.currentBalance > 0 ? i.currentBalance : i.originalValue), 0)
+  // PARCIAL, BOLETO_GERADO e EM_ABERTO somados como "Em aberto" (total ainda
+  // devido). RENEGOCIADA vale 0 — a dívida está nas parcelas que a substituíram.
+  const totalAberto = installments.reduce((sum, i) => sum + getOpenBalance(i), 0)
+
+  const renegociadas = installments.filter((i) => i.status === "RENEGOCIADA").length
 
   const periodoLabel =
     de && ate
@@ -303,12 +310,7 @@ export function ExtratoPDF({
         {/* Table rows */}
         {installments.map((inst, idx) => {
           const pago = inst.receiptValue ?? 0
-          const saldo =
-            inst.status === "PAGO"
-              ? 0
-              : inst.currentBalance > 0
-                ? inst.currentBalance
-                : inst.originalValue
+          const saldo = getOpenBalance(inst)
 
           return (
             <View key={`${inst.billReceivableId}-${inst.installmentId}`}>
@@ -324,6 +326,8 @@ export function ExtratoPDF({
                     <View style={s.badgePago}><Text style={s.badgePagoText}>Pago</Text></View>
                   ) : inst.status === "PARCIAL" ? (
                     <View style={s.badgeParcial}><Text style={s.badgeParcialText}>Parcial</Text></View>
+                  ) : inst.status === "RENEGOCIADA" ? (
+                    <View style={s.badgeRenegociada}><Text style={s.badgeRenegociadaText}>Renegociada</Text></View>
                   ) : inst.status === "BOLETO_GERADO" ? (
                     <View style={s.badgeBoleto}><Text style={s.badgeBoletoText}>Boleto</Text></View>
                   ) : (
@@ -368,6 +372,19 @@ export function ExtratoPDF({
             </Text>
           </View>
         </View>
+
+        {/* Nota de renegociação — explica por que parcelas aparecem sem valor pago */}
+        {renegociadas > 0 && (
+          <View style={s.notaBox}>
+            <Text style={s.notaText}>
+              {renegociadas === 1
+                ? "1 parcela foi renegociada"
+                : `${renegociadas} parcelas foram renegociadas`}
+              : substituídas por novas parcelas neste mesmo contrato. Elas não entram
+              no total pago nem no total em aberto para não contar a mesma dívida duas vezes.
+            </Text>
+          </View>
+        )}
 
         {/* Footer (fixed on every page) */}
         <View style={s.footer} fixed>
