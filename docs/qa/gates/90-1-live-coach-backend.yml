@@ -3,12 +3,15 @@ storyId: "90-1"
 story: "90-1 — Backend: detecção de objeção + sugestão ancorada (Haiku→Sonnet) + persistência"
 title: "Quality Gate — Story 90-1 (Epic 90, Live Coach)"
 epic: 90
-gate: FAIL
-verdict: FAIL
+gate: PASS
+verdict: PASS
+previous_gate: FAIL
 reviewed_by: "Quinn (@qa)"
 reviewed_at: "2026-08-27"
+re_gated_at: "2026-08-27"
+re_gate_commit: "b3c48c7b"
 branch: "feat/90-1-live-coach-backend"
-commit: "70f5c561"
+commit: "b3c48c7b (re-gate) / 70f5c561 (gate original)"
 status_reason: >
   FAIL por UM defeito objetivo de runtime, com fix trivial — e por uma validação
   reportada como verde que na verdade não executou. O desenho da story está correto e
@@ -135,3 +138,86 @@ evidence:
   runtime_probe: "6 de 7 símbolos de @trifold/ai resolvem como function; loadMemoryContext = undefined"
 
 next_action: "@dev *apply-qa-fixes — MF-1, MF-2 e MF-3. Re-gate após correção."
+
+# ============================================================================
+# RE-GATE — 2026-08-27, commit b3c48c7b
+# ============================================================================
+re_gate:
+  verdict: PASS
+  condition: "merge bloqueado até T7 (migrations 242/243 aplicadas em prod)"
+  summary: >
+    Os três must-fix foram corrigidos e verificados de forma INDEPENDENTE (não por
+    leitura do relatório do @dev). O `status_reason` acima descreve o gate original e
+    fica preservado como histórico do defeito.
+
+  verificacoes_independentes:
+    - id: MF-1
+      status: RESOLVIDO
+      evidencia: >
+        `packages/ai/src/index.ts:19` exporta `loadMemoryContext` + `MemoryContext` por
+        export NOMEADO (não `export *`) — escolha correta: não abre a superfície interna
+        do módulo (writer, loadL1Snapshot, detectRoom seguem privados ao pipeline).
+        `tsc --noEmit` executado por mim SEM `timeout`: exit 0 em packages/ai e packages/web.
+    - id: MF-2
+      status: RESOLVIDO
+      evidencia: >
+        Tabela da story reescrita com o comando por linha, exit code individual e o
+        registro explícito do que deu errado. Re-executei tudo por conta própria: tsc ai
+        exit 0, tsc web exit 0, eslint web exit 0, suíte 256 arquivos / 3137 testes.
+        Confirmei também o que o @dev afirmou sobre o lint do packages/ai — o pacote
+        realmente não tem eslint (script `lint` = `tsc`), então o registro está honesto.
+    - id: MF-3
+      status: RESOLVIDO
+      evidencia: >
+        `barrel-contract.test.ts` não mocka nada (as 2 ocorrências de `vi.mock` estão em
+        comentário — verificado linha a linha). Testei as DUAS guardas com mutações
+        minhas, não com a verificação relatada: (A) removi o export do barrel → falha em
+        "exporta loadMemoryContext como função"; (B) adicionei `processMessage` ao import
+        do helper sem atualizar a lista → falha em "a lista de símbolos cobre o que o
+        helper realmente importa". Ambas revertidas; `git status` limpo e `git diff HEAD`
+        vazio ao final. O teste tranca a classe de bug para as próximas stories.
+    - id: "concern-medium (supersede)"
+      status: RESOLVIDO
+      evidencia: >
+        O UPDATE passou a filtrar `.eq("org_id", orgId)` e a capturar `error`, logando
+        `LIVE_COACH_SUPERSEDE_FAILED` (warn) sem abortar — decisão correta: a sugestão
+        nova vale mais que o supersede, e o erro deixa de ser silencioso. Coberto por
+        teste que injeta o erro e prova que a sugestão nova ainda é inserida.
+
+  concerns_remanescentes:
+    - severity: low
+      category: cost
+      description: >
+        2-3 queries por inbound antes do gate 3 descartar, uma repetindo o que
+        `notifyBrokerOnReply` já faz no mesmo request. Sem impacto funcional.
+      status: ACEITO
+    - severity: info
+      category: deploy
+      description: >
+        A policy da 242 depende de `has_capability` (230/241), `user_org_id` e
+        `user_broker_id` (004). Confirmar as três no schema REMOTO antes de aplicar.
+      status: "PRÉ-CONDIÇÃO DE T7"
+
+  condicoes_de_merge:
+    - "T7: aplicar 242 e depois 243 em prod por SQL Editor / Management API (db push é proibido neste repo)"
+    - "Confirmar has_capability / user_org_id / user_broker_id no schema remoto antes da 242"
+    - "Conferir que 242 está livre em prod, não só no repo (lição 75-188)"
+
+  evidence_re_gate:
+    suite: "256 arquivos / 3137 testes verdes + 6 expected-fail"
+    typecheck_ai: "exit 0 (sem timeout)"
+    typecheck_web: "exit 0 (sem timeout)"
+    lint_web: "exit 0"
+    lint_ai: "N/A — pacote sem eslint; script lint é tsc --noEmit"
+    coderabbit: "não executado — config aponta para WSL, máquina darwin, binário ausente"
+    mutation_testing: "2 mutações aplicadas e revertidas; ambas reprovaram o teste do MF-3"
+    arvore: "git status limpo, git diff HEAD vazio após as mutações"
+
+  observacao_de_processo: >
+    O CodeRabbit não rodou em nenhuma etapa desta story porque a config dos agentes
+    assume WSL e esta máquina é darwin. Não afeta o veredito — revisão manual e suíte
+    cobriram o escopo — mas é uma camada de review automatizado que o repo não tem no
+    macOS. Vale uma story de infra para tornar a config multiplataforma, em vez de cada
+    gate registrar a ausência de novo.
+
+next_action: "@devops *push (PR) — respeitando as condições de merge. T7 exige OK do Marcos."

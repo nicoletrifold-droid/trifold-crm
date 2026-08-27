@@ -456,3 +456,55 @@ FK; migration 242 espelha `messages_select` da 229 e a publicação Realtime seg
 
 **Próximo passo:** `@dev *apply-qa-fixes` (MF-1, MF-2, MF-3) → re-gate.
 | 2026-08-27 | Dex (@dev) | **apply-qa-fixes**: MF-1 (export de `loadMemoryContext` no barrel), MF-3 (teste de contrato de barrel, com prova de que reprova de verdade), MF-2 (tabela de validações re-executada sem `timeout`) e o concern do supersede (`org_id` + checagem de erro). Suíte 3137 verde, tsc limpo nos dois pacotes (exit 0 conferido), eslint limpo. |
+
+---
+
+## QA Results — RE-GATE (@qa Quinn — 2026-08-27, commit `b3c48c7b`)
+
+**Gate: PASS**, condicionado ao T7. Gate anterior: FAIL (preservado acima e no arquivo
+de gate como histórico).
+
+Verifiquei os três must-fix de forma **independente** — mutação própria, não leitura do
+relatório.
+
+| Item | Status | Como verifiquei |
+|---|---|---|
+| MF-1 | ✅ RESOLVIDO | `index.ts:19` exporta `loadMemoryContext` + `MemoryContext`; `tsc --noEmit` **sem `timeout`**: exit 0 nos dois pacotes |
+| MF-2 | ✅ RESOLVIDO | Re-executei tudo por conta própria; tabela agora tem comando por linha e exit code individual |
+| MF-3 | ✅ RESOLVIDO | Duas mutações **minhas**: removi o export → reprova; adicionei `processMessage` ao import sem atualizar a lista → reprova |
+| Concern supersede | ✅ RESOLVIDO | `org_id` + captura de `error` + `LIVE_COACH_SUPERSEDE_FAILED`, com teste que injeta o erro |
+
+**Sobre o MF-1:** o export nomeado (em vez de `export *`) foi a escolha certa — mantém
+`writer`, `loadL1Snapshot` e `detectRoom` privados ao pipeline em vez de abrir a superfície
+interna do módulo por causa de um símbolo.
+
+**Sobre o MF-3:** confirmei que as 2 ocorrências de `vi.mock` no arquivo estão em
+comentário, e que ambas as guardas reprovam sob mutação. Depois das mutações, `git status`
+limpo e `git diff HEAD` vazio — a árvore ficou íntegra. Este teste protege as próximas
+stories, não só esta.
+
+### Evidências do re-gate
+Suíte: **256 arquivos / 3137 testes verdes** (+6 expected-fail). `tsc` ai e web: exit 0
+(sem `timeout`). `eslint` web: exit 0. `packages/ai` não tem eslint — seu script `lint` é
+`tsc`, e o registro do @dev sobre isso está honesto. CodeRabbit: não executado (config WSL,
+máquina darwin).
+
+### Condições de merge (não são código — são deploy)
+1. **T7**: aplicar 242 e depois 243 em prod por SQL Editor / Management API (`db push` é
+   proibido neste repo).
+2. Confirmar `has_capability` (230/241), `user_org_id` e `user_broker_id` (004) no schema
+   **remoto** antes da 242 — a policy depende das três.
+3. Conferir que 242 está livre em prod, não só no repo (lição 75-188).
+
+### Concerns remanescentes (aceitos)
+- **low** — 2-3 queries por inbound antes do gate 3 descartar, uma repetindo o
+  `notifyBrokerOnReply`. Sem impacto funcional.
+- **info** — pré-condição de T7 acima.
+
+### Observação de processo (fora do escopo desta story)
+O CodeRabbit não rodou em **nenhuma** etapa: a config dos agentes assume WSL e esta máquina
+é darwin. Não afeta o veredito, mas é uma camada de review automatizado que o repo não tem
+no macOS. Vale uma story de infra para tornar a config multiplataforma, em vez de cada gate
+registrar a ausência de novo.
+
+**Próximo passo:** `@devops *push` (PR), respeitando as condições de merge.
