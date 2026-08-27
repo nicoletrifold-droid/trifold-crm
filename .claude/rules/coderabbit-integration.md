@@ -92,16 +92,27 @@ command -v coderabbit    # binário no PATH?
 ls ~/.local/bin/coderabbit 2>/dev/null
 
 # macOS / Linux — chamada direta (SEM wrapper wsl)
-coderabbit --prompt-only -t uncommitted
-coderabbit --prompt-only --base main
+coderabbit review --uncommitted          # staged + edições locais
+coderabbit review --committed --base main
+coderabbit review --base-commit <sha>    # diff contra commit da branch atual
+coderabbit review --agent                # findings estruturados p/ agente
 
 # Windows — via WSL
-wsl bash -c 'cd /mnt/c/<caminho-do-repo> && ~/.local/bin/coderabbit --prompt-only -t uncommitted'
+wsl bash -c "cd \"$(wslpath -a \"$(pwd)\")\" && ~/.local/bin/coderabbit review --uncommitted"
 ```
 
 **Se o binário não existir na máquina:** registrar "CodeRabbit não executado — binário
 ausente nesta plataforma" no gate/story e seguir. **Nunca** reportar como executado, e
 nunca reportar como "passou". Instalação do CLI é decisão do dono da máquina.
+
+⚠️ **Flags:** `--prompt-only` e `-t <escopo>` **não existem** no CLI (verificado no 0.7.5). Eram
+herança da config do AIOS. As flags reais estão acima; confirme com `coderabbit review --help`.
+Não combine `--committed` com `--base-commit` — resolve para diff vazio e o review nunca completa.
+
+⚠️ **Estado nesta máquina (2026-08-27):** CLI 0.7.5 instalado em `~/.local/bin/coderabbit` e
+autenticado. Um review retroativo falhou com `Connection failed: WebSocket closed` após 60 min e
+**não foi investigado** — o gatilho que vale é o App. Se o CLI falhar assim, registre "não
+executado" e siga; não gaste a sessão nisso.
 
 ⚠️ **Nota sobre `timeout`:** `timeout` NÃO existe no macOS por padrão (é do coreutils do
 GNU). `timeout 900 <cmd> | grep -c erro` retorna 0 porque o comando nem executa — falso
