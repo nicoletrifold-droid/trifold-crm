@@ -83,6 +83,104 @@ reviews:
         Validate workflow syntax.
         Ensure consistent with existing CI patterns.
 
+    # ────────────────────────────────────────────────────────────────────────
+    # Trifold CRM — paths do produto (Story 90-1: a config cobria só .aios-core/**,
+    # então o CRM inteiro passava sem instrução específica). As regras abaixo são
+    # lições reais de produção, não boas práticas genéricas.
+    # ────────────────────────────────────────────────────────────────────────
+
+    - path: "supabase/migrations/**"
+      instructions: |
+        MIGRATIONS DESTE REPO TÊM REGRAS PRÓPRIAS. Verifique:
+        - NUMERAÇÃO: conferir se o número já existe (houve colisão real em 240 —
+          dois arquivos com o mesmo prefixo). Sinalizar duplicata como bloqueante.
+        - `supabase db push` é PROIBIDO neste projeto (schema_migrations em prod está
+          congelada na 168 porque da 169 em diante aplica-se por SQL Editor/Management
+          API). Sinalizar qualquer instrução, script ou doc que sugira `db push`.
+        - APLICAR ANTES DO MERGE sempre que o código novo leia coluna/tabela nova — o
+          merge dispara deploy na Vercel e o código subiria antes do schema.
+        - RLS: tabela nova precisa de decisão EXPLÍCITA. `ENABLE ROW LEVEL SECURITY`
+          sem policy = acesso só service-role (padrão de lead_forms/fvs_*). Se a UI
+          precisa LER a tabela, falta policy de SELECT — e se a entrega for por
+          Realtime, a ausência de policy se manifesta como "realtime não funciona",
+          não como erro de permissão. Sinalizar esse caso.
+        - Policies novas devem ESPELHAR uma policy existente equivalente em vez de
+          inventar critério (ex.: `messages_select` na 229 para dados de conversa).
+        - Funções usadas em policy (`has_capability`, `user_org_id`, `user_broker_id`)
+          precisam existir no schema remoto antes da migration que as referencia.
+        - `updated_at`: função é `update_updated_at()` e o trigger se chama
+          `set_updated_at` em TODAS as tabelas do projeto. Divergir do nome é erro.
+        - Idempotência: `CREATE TABLE IF NOT EXISTS`, `DROP POLICY IF EXISTS`,
+          `ALTER PUBLICATION` dentro de guarda `IF NOT EXISTS (pg_publication_tables)`.
+        - Seeds de capability são GERADOS por `scripts/gen-capability-seed.mts`.
+          Sinalizar edição manual em arquivo marcado como gerado.
+
+    - path: "packages/web/src/app/api/webhook*/**"
+      instructions: |
+        CAMINHO CRÍTICO DE PRODUÇÃO — este webhook recebe eventos da Meta. Uma
+        exceção ou atraso aqui custa mensagens de lead perdidas.
+        - NADA de trabalho lento no caminho síncrono. Trabalho assíncrono vai em
+          `after()` (next/server), e o HTTP 200 não espera por ele.
+        - Cada `after()` deve ser INDEPENDENTE: uma falha no push, no coach ou na
+          Nicole não pode afetar os outros. Verificar isolamento.
+        - `maxDuration` da rota é compartilhado por TODOS os `after()`. Chamadas de
+          LLM precisam de `timeout` explícito; sinalizar chamada sem timeout.
+        - FAIL-OPEN é obrigatório para features acessórias, MAS fail-open esconde erro
+          de integração. Exigir que a falha seja OBSERVÁVEL (logEvent em
+          system_events, não só console.error) — um catch que só faz console.error
+          transforma bug permanente em invisível. Isso já aconteceu (Story 90-1).
+        - Reentrega da Meta: efeitos colaterais novos devem vir DEPOIS do early-return
+          de wamid duplicado (PG 23505), senão disparam repetido.
+        - Nenhuma escrita fora das tabelas declaradas na story.
+
+    - path: "packages/ai/src/**"
+      instructions: |
+        - Strings de modelo SEMPRE via constantes `ANTHROPIC_MODELS`
+          (`client/anthropic.ts`). String literal de modelo no flow é dívida — já
+          houve divergência real entre rota e cron (Story 82-1).
+        - NUNCA ler `response.content[0]`. Filtrar blocos `type === "text"` e
+          concatenar: a resposta pode vir multi-bloco, com thinking na frente
+          (lição 82-4).
+        - Parse de JSON do modelo deve ser DEFENSIVO: descascar cerca ```json, fatiar
+          do primeiro `{` ao último `}`, validar tipo campo a campo e devolver null em
+          qualquer desvio. Nunca persistir saída não validada.
+        - Campos derivados (ex.: "está ancorado em dado real?") devem ser calculados
+          no código, NUNCA confiados ao que o modelo afirma sobre si.
+        - Símbolo consumido por outro pacote precisa estar exportado no barrel
+          (`packages/ai/src/index.ts`). Import de símbolo não exportado é `undefined`
+          em runtime e some dentro de qualquer try/catch (Story 90-1, gate FAIL).
+          Preferir export NOMEADO a `export *` para não abrir superfície interna.
+        - Gate de elegibilidade antes de chamar LLM: mensagem trivial não deve custar
+          uma chamada.
+
+    - path: "packages/web/src/lib/**"
+      instructions: |
+        - Regra de negócio duplicada é o pior defeito deste repo: duas réguas divergem
+          no primeiro ajuste. Se existe helper canônico (ex.: `brokerSentRecently` /
+          `deriveBrokerActive` para "corretor assumiu", `interestLevelFromScore` para
+          calor do lead), REUSAR em vez de reimplementar. Sinalizar reimplementação.
+        - `deriveBrokerActive` (= broker recente OU !is_ai_active) e
+          `brokerSentRecently` NÃO são equivalentes: handoff manual e handoff por
+          agendamento deixam o humano no comando sem nenhuma mensagem dele.
+        - Helpers chamados de dentro de `after()` do webhook devem ter contrato
+          "NUNCA lança" e ainda assim logar a falha de forma observável.
+        - Permissão: usar `can(userId, orgId, capability)`; capabilities são a fonte
+          única em `lib/capabilities.ts` (o SQL é espelho gerado).
+
+    - path: "**/*.test.ts"
+      instructions: |
+        - `vi.mock` de um módulo INTEIRO fabrica todos os símbolos, inclusive os que
+          não existem de verdade — a suíte fica cega para import quebrado. Quando um
+          arquivo mocka um pacote do monorepo, deve existir também um teste de
+          contrato SEM mock verificando que os símbolos importados existem.
+        - Mock de query builder do Supabase deve refletir o que o banco realmente
+          devolve: colunas com DEFAULT (ex.: `created_at`) presentes, e a ORDEM do
+          `.order()` respeitada. Mock que ignora ordenação transforma teste de ordem
+          em tautologia (aconteceu na Story 90-1).
+        - Teste novo precisa ser capaz de REPROVAR. Ao revisar um teste, pergunte qual
+          mutação o faria falhar; se nenhuma óbvia, sinalize.
+        - Não afrouxar assertion para "passar": investigar a causa.
+
     - path: "**/*.js"
       instructions: |
         Check for async/await best practices.
