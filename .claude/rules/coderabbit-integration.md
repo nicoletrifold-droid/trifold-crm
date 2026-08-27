@@ -61,18 +61,52 @@ behavior:
 | MEDIUM | document_as_tech_debt | document_as_tech_debt |
 | LOW | ignore | ignore |
 
-## WSL Execution (Windows)
+## Gatilho PRIMÁRIO — GitHub App (automático, independe de máquina)
+
+**O review automatizado deste repo é o GitHub App do CodeRabbit**, não o CLI. Ele
+dispara sozinho quando um PR é aberto contra `main`, roda no servidor do CodeRabbit e
+comenta no PR — sem depender do SO de quem desenvolveu.
+
+- Config versionada: **`.coderabbit.yaml`** na raiz (`reviews.auto_review.enabled: true`,
+  `base_branches: [main]`, `drafts: false`). As `path_instructions` cobrem
+  `.aios-core/**`, `supabase/migrations/**`, os webhooks, `packages/ai/**`,
+  `packages/web/src/lib/**` e `**/*.test.ts`.
+- Requisito único: o **App instalado no repositório** (github.com/apps/coderabbitai).
+  Sem a instalação, o `.coderabbit.yaml` é inerte — nenhum yaml supre isso.
+- Como conferir se está ativo: abra um PR e veja se `coderabbitai` comenta/revisa.
+  `gh pr view <n> --json reviews,comments` mostra os autores.
+
+## CLI local (opcional, pré-commit)
+
+O CLI é complemento — feedback antes de abrir PR — e é **por máquina**. NÃO é o gatilho.
+
+⚠️ **O comando depende da plataforma.** A config histórica dos agentes assume WSL
+(`installation_mode: wsl`), o que faz o CLI simplesmente não existir no macOS/Linux —
+e, na prática, o CodeRabbit não rodou em nenhuma etapa das stories desenvolvidas em Mac
+(constatado na Story 90-1). Detecte a plataforma antes de invocar:
 
 ```bash
-# Self-healing mode (automatic in dev tasks)
-wsl bash -c 'cd /mnt/c/.../aios-core && ~/.local/bin/coderabbit --severity CRITICAL,HIGH --auto-fix'
+# Descobrir a plataforma e o binário disponível
+uname -s                 # Darwin = macOS | Linux | MINGW/MSYS = Git Bash no Windows
+command -v coderabbit    # binário no PATH?
+ls ~/.local/bin/coderabbit 2>/dev/null
 
-# Manual review
-wsl bash -c 'cd /mnt/c/.../aios-core && ~/.local/bin/coderabbit -t uncommitted'
+# macOS / Linux — chamada direta (SEM wrapper wsl)
+coderabbit --prompt-only -t uncommitted
+coderabbit --prompt-only --base main
 
-# Prompt-only mode
-wsl bash -c 'cd /mnt/c/.../aios-core && ~/.local/bin/coderabbit --prompt-only -t uncommitted'
+# Windows — via WSL
+wsl bash -c 'cd /mnt/c/<caminho-do-repo> && ~/.local/bin/coderabbit --prompt-only -t uncommitted'
 ```
+
+**Se o binário não existir na máquina:** registrar "CodeRabbit não executado — binário
+ausente nesta plataforma" no gate/story e seguir. **Nunca** reportar como executado, e
+nunca reportar como "passou". Instalação do CLI é decisão do dono da máquina.
+
+⚠️ **Nota sobre `timeout`:** `timeout` NÃO existe no macOS por padrão (é do coreutils do
+GNU). `timeout 900 <cmd> | grep -c erro` retorna 0 porque o comando nem executa — falso
+verde já registrado na Story 90-1. Confira o exit code de cada comando isoladamente em
+vez de contar linhas de saída.
 
 ## Integration Points
 
@@ -81,6 +115,7 @@ wsl bash -c 'cd /mnt/c/.../aios-core && ~/.local/bin/coderabbit --prompt-only -t
 | Story Development Cycle | 3 (Implement) | After task completion | @dev |
 | QA Loop | 1 (Review) | At review start | @qa |
 | Standalone | Any | `*coderabbit-review` command | Any |
+| **Pull Request** | **Pós-push** | **Automático via GitHub App (gatilho principal)** | **— (bot)** |
 
 ## Focus Areas by Story Type
 
@@ -98,4 +133,11 @@ CodeRabbit reports saved to: `docs/qa/coderabbit-reports/`
 
 ## Configuration Reference
 
-Full config in `.aios-core/core-config.yaml` under `coderabbit_integration` section.
+| O quê | Onde | Observação |
+|---|---|---|
+| Config do **App** (o gatilho) | `.coderabbit.yaml` (raiz) | Versionada; é o que vale para o review automático |
+| Config do **CLI** por agente | `.aios-core/development/agents/{dev,qa,devops}.md` → `coderabbit_integration` | L2 (extend-only); assume `installation_mode: wsl` |
+
+⚠️ A versão anterior desta rule apontava para `.aios-core/core-config.yaml` na seção
+`coderabbit_integration` — **essa chave não existe nesse arquivo** (verificado). A config
+do CLI vive nas definições de agente; a do App, no `.coderabbit.yaml`.
