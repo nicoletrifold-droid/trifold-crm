@@ -6,6 +6,36 @@ Tarefas operacionais, configurações e ajustes pendentes que não requerem uma 
 
 ## Pendente
 
+### [Nicole] 🟡 `freeSlotsInPeriod` sem tratamento de erro — 11 queries por oferta e uma rejeição faz o lead não receber resposta
+
+**Adicionado em:** 2026-08-27
+**Prioridade:** P2
+**Origem:** Quality gate @qa da Story 87-17, Fatia 1 (`docs/qa/gates/87-17-fatia1-oferta-de-horario-espalhada.yml`, achado `REL-1`)
+
+A Fatia 1 da `87-17` passou a conferir o período inteiro: `isSlotFree` é **uma query ao
+`appointments` por candidato**, então uma oferta de período saiu de **3** para **11** consultas
+(7 em `manha`), em `Promise.all` (profundidade sequencial 1, autorizado pela `AC4-(b)`).
+
+Nenhum dos dois chamadores (`packages/ai/src/chat/pipeline.ts:1044` e `:1123`) tem `try/catch`.
+Uma rejeição de `isSlotFree` sobe até o `catch (asyncErr)` do webhook
+(`packages/web/src/app/api/webhook/whatsapp/route.ts:1328`), vira `WEBHOOK_ASYNC_ERROR` em
+`system_events` e **o lead que pediu "amanhã à tarde" não recebe resposta nenhuma**. É o mesmo
+**modo** de falha do código anterior (o laço com `await` também abortava na primeira query que
+falhasse) — o que mudou é a **probabilidade**, ~3,7×. Não é silencioso: há evento.
+
+**Por que não foi corrigido na Fatia 1:** a correção óbvia ("falha de `isSlotFree` = trate como
+não livre") **esconderia um horário livre** sob erro transitório — uma versão branda do próprio
+defeito que a `87-17` conserta ("negar disponibilidade que existe"). A decisão precisa ser
+explícita, não um remendo.
+
+**Ação:** decidir entre (a) `Promise.allSettled` + rejeição = "não livre", respondendo com lista
+possivelmente incompleta, e (b) `try/catch` no chamador com um bloco `[SISTEMA]` honesto de "não
+consegui consultar a agenda agora". Qualquer das duas precisa de **evento próprio** em
+`system_events` (hoje só existe o `WEBHOOK_ASYNC_ERROR` genérico) para o volume ser medível.
+
+---
+
+
 ### [CI] 🔴 Nada compara o `schema-snapshot.json` commitado com o schema real do banco
 
 **Adicionado em:** 2026-08-24

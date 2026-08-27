@@ -1121,7 +1121,106 @@ Saídas brutas (sessão de 2026-08-27, fora do repo, em
 
 ## QA Results
 
-*(a preencher pelo @qa)*
+### Gate da Fatia 1 (Defeito A, `T0`-`T3`) — 2026-08-27
+
+**Review Date:** 2026-08-27 · **Reviewed By:** Quinn (@qa, Test Architect)
+**Commit revisado:** `1454d4ca` (contra `98772465`) · **Branch:** `main` (sem branch de feature)
+**Gate:** `docs/qa/gates/87-17-fatia1-oferta-de-horario-espalhada.yml`
+
+## 🟡 Gate Status: **CONCERNS** — aprovada para `@devops`, com 5 achados rastreados e **zero bloqueantes**
+
+**Escopo deste gate:** `T0`-`T3`, `AC1`-`AC4` e `AC10`. **`AC5`-`AC9` (Fatia 2) e `AC11` (janela
+pós-deploy) não foram avaliadas e não reprovam esta fatia**, por decisão de fatiamento do @po.
+
+#### Os 7 checks
+
+| # | Check | Nota |
+|---|---|---|
+| 1 | Code review | **PASS** |
+| 2 | Unit tests | **PASS** |
+| 3 | Acceptance criteria (`AC1`-`AC4`, `AC10`) | **PASS** |
+| 4 | No regressions | **PASS** |
+| 5 | Performance | **CONCERNS** (3 → 11 round-trips por oferta, medidos só no fake) |
+| 6 | Security | **PASS** |
+| 7 | Documentation | **PASS** |
+
+#### Números que eu medi (nenhum aceito por relatório)
+
+| Medição | Resultado |
+|---|---|
+| `npx vitest run` da raiz (worktree) | 256 arquivos · **3145 passed \| 6 expected fail** (3151) · **EXIT=0** |
+| Baseline, revertendo os 3 arquivos para `98772465` | 256 arquivos · **3137 passed \| 6 expected fail** (3143) · **EXIT=0** |
+| Delta | **+8**, todos em `visit-slot.test.ts` (85 → 93); `pipeline-agenda-state.test.ts` 33 → 33; nenhum removido; nenhum `it.fails` nos arquivos tocados |
+| `npx tsc --noEmit` em `packages/ai` | **EXIT=0**, saída de **0 linhas** (`wc -l`, não `grep -c`) |
+| `npm run lint` da raiz | **EXIT=0** · 34 problems (**0 errors**, 34 warnings) · 8/8 tasks · **0 warnings** nos arquivos desta fatia |
+| Contraprova (só `visit-slot.ts` no HEAD anterior) | **9 vermelhos, EXIT=1** — `AC1` recebia `12:00, 12:30, 13:00`; `AC2` recebia `8:00, 8:30, 9:00`; `AC4` `expected 3 to be 11`; golden `08:00 ou 08:30 ou 09:00` |
+| Fronteira (diff `98772465..1454d4ca`) | **0 linhas** em `pipeline.ts`, `agenda-state.ts`, `lead-memory.ts`, `haiku-enrichment.ts`, `qualification.ts` |
+| Campos reservados | `diff` das saídas de `git grep` nos dois commits = **VAZIO** (as mesmas 8 ocorrências) |
+| `detectWantsLaterSlot` | `git grep` → **rc=1**, inexistente: a Fatia 2 não começou |
+
+#### Mutações — 4, minhas, árvore restaurada e conferida por sha256
+
+| # | Mutação | Resultado |
+|---|---|---|
+| (a) | `Math.round` → `Math.floor` no índice | 🔴 2 vermelhos (`AC1` e o `:477`) |
+| (b) | reverter `visit-slot.ts` (= remover a amostragem) | 🔴 `AC1`, `AC2`, `AC4`, `:477` **e os dois goldens** |
+| (c) | remover `if (k === 1) return [xs[0]!]` | 🔴 `AC3-ii`: `expected [ undefined ] to deeply equal [ 10 ]` |
+| (d) | **minha, nova:** `Promise.all` → laço `for … await`, mantendo as 11 consultas | 🔴 `AC4`: `expected false to be true` |
+
+A **(d)** é a que importa para a `AC4`: ela prova que a asserção mede **profundidade**, não
+contagem — a forma serial morre mesmo emitindo as mesmas 11 queries. A **(b)** é a que prova que
+o golden recalibrado **volta a reprovar**: a guarda foi **datada, não apagada**.
+
+Também rodei um sweep próprio (temporário, apagado depois) sobre 24–30/08 × `manha`/`tarde` ×
+`limit` 1..12: **nenhum horário ofertado estoura o fechamento** (início + 60min ≤ seg–sex 18h /
+sáb 12h), **sábado à tarde continua `[]`** em todos os limites, sábado de manhã tem último início
+**11:00 BRT**. `EXIT=0`, e provei que o sweep reprova (mutando `- VISIT_DURATION_MIN` → `- 0`,
+3 de 4 ficam vermelhos). **Working tree devolvido idêntico** — `git diff HEAD -- packages/` = 0
+linhas, `sha256` de `visit-slot.ts` igual ao de `git show HEAD:`.
+
+#### Achados (nenhum bloqueante)
+
+| ID | Sev. | O quê | Destino |
+|---|---|---|---|
+| `REL-1` | medium | `freeSlotsInPeriod` sem `try/catch` nos dois chamadores; exposição a erro de rede sobe 3 → 11 queries. Rejeição vira `WEBHOOK_ASYNC_ERROR` e **o lead não recebe resposta**. Mesmo modo de falha do HEAD, ~3,7× mais provável — e **observável**, não silencioso | **registrado em `docs/backlog.md`** |
+| `MNT-1` | low | `espalhar` devolve `xs` **por referência** quando `xs.length <= k` (confirmado por mim com `toBe`) — superfície pública assimétrica, não documentada, não travada por teste (`AC3-i` usa `toEqual`). Zero aliasing real hoje; o @dev seguiu o §1 do Desenho e **escalou** a decisão | próxima visita a `visit-slot.ts` / Fatia 2 |
+| `TEST-1` | low | O ramo de remarcação (`pipeline.ts:1044`) mudou de comportamento com diff ZERO e só é coberto por `toContain("Horários LIVRES nesse período")` — nenhuma asserção de conteúdo. Já declarado pelo @po no `R1` | Fatia 2 |
+| `PERF-1` | low | 11 requisições concorrentes ao PostgREST por oferta, nunca medidas fora do fake | janela `AC11-(i)`: p95 de `metadata->>'ms_async'` do `whatsapp_async_done`, 24 h antes × depois |
+| `DOC-1` | low | `checkSlotAvailability` mantém `if (alternatives.length >= 3) break` — mesma geometria, semântica diferente e **explicitamente fora de escopo** | nenhuma ação |
+
+#### Decisões sobre os pontos escalados
+
+1. **`Promise.all` × `AC4`:** **CUMPRE**. A `AC4-(b)` autoriza a forma nominalmente e o §3.2 do
+   parecer do @po diz que "o `Promise.all` resolve em profundidade sequencial 1". Sob erro **não há
+   modo novo** (o laço com `await` do HEAD também abortava na primeira rejeição) e não há
+   `unhandledRejection` (o `Promise.all` anexa handler a todas). O que muda é exposição → `REL-1`.
+   Pool/rate-limit: limitado pela geometria, query indexada, sem risco material — mas pedi a medição
+   real em vez de deduzir (`PERF-1`).
+2. **`espalhar` devolvendo `xs`:** **ACEITÁVEL nesta fatia**, achado `MNT-1` (low). Não reprovo o
+   que o desenho normativo escreve e o @dev escalou em vez de esconder.
+3. **Ausência de `try/catch`:** **follow-up legítimo**, e agora **registrado em `docs/backlog.md`** —
+   inclusive com o motivo pelo qual a correção "falha = não livre" **não** é obviamente certa (ela
+   esconderia horário livre sob erro transitório, versão branda do defeito que esta story conserta).
+4. **Golden:** guarda **datada, não apagada**. A frase original de `:576-579` está intacta; as 14
+   linhas novas reafirmam que "qualquer OUTRA diferença aqui … segue sendo achado bloqueante". E a
+   prova não é o comentário: é a mutação (b), que deixa os dois goldens vermelhos.
+5. **Regressão de sentido:** confirmada segura por sweep próprio **com contraprova**.
+6. **Filtro `-t`:** **nenhuma prova deste gate depende dele.** Reproduzi o falso verde
+   (`dia+período` → `33 skipped`, **EXIT=0**; `dia\+período` → `1 passed`) e confirmei que o
+   baseline `T0` do @dev usou a forma **escapada** — a evidência dele é sã.
+
+#### Notas para o `@devops` (não são defeito desta fatia)
+
+- O commit `1454d4ca` está em **`main` local, sem branch** — criar a branch antes do PR.
+- Working tree traz artefatos **não commitados** que não são código: `.claude/agent-memory/aios-{dev,po,sm}/`
+  (4 modificados + 6 novos), `docs/qa/po-validation-87-17.md` e a edição da story `87-10`.
+  **Recomendação:** `po-validation-87-17.md` e o arquivo de gate **devem** entrar no PR (a story os
+  referencia por caminho); memórias de agente pelo critério de sempre (`chore(memory)` próprio).
+- **CodeRabbit não rodou** (config aponta para WSL, máquina é darwin) — a story já registra
+  `CodeRabbit Integration: Disabled`.
+
+**Próxima ação:** `@devops *push` (branch + PR da Fatia 1). A **Fatia 2 (`T4`-`T8`) só depois da
+Fatia 1 em produção**, com `AC11-(i)` e o p95 do `PERF-1` respondidos.
 
 ## File List
 
