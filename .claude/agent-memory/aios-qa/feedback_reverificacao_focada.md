@@ -39,6 +39,14 @@ delas mudaram o conteúdo do gate.
    registrando menos risco do que existia. Sempre perguntar "para onde MAIS vai
    esse objeto?" — grep pelo nome da variável, não só pelo campo.
 
+5. **Filtro `-t` do vitest é REGEX, e zero match sai com EXIT=0.**
+   `-t 'turno-ouro: dia+período'` (o `+` é quantificador) casa **zero** testes,
+   imprime `Tests 33 skipped (33)` e **sai 0** — falso verde perfeito. A forma
+   escapada (`dia\+período`) dá `1 passed | 32 skipped`. Medido no gate da 87-17.
+   Regra: **evidência de gate roda por arquivo ou pela suíte inteira**, nunca por
+   `-t`; se usar `-t`, conferir o `passed` e não o exit code. Mesma família de
+   `grep -c` e do `timeout` inexistente no macOS.
+
 **Metadata do gate (`branch:`/`commit:`) tem que sair de `git`, não do contexto
 da sessão.** O `gitStatus` do system prompt é um snapshot que pode estar de outra
 sessão/worktree. Na 86-11 ele dizia `feat/86-meta-capi-tracking @ 006d8868`

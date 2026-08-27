@@ -6,6 +6,7 @@
 - [Epic 52 — Agente CRM Read-Only](project_epic52.md) — 52-1/52-4 em Review (QA CONCERNS, runtime pendente); 52-2 v0.5 Ready (contrato sincronizado: funil=RPC p_days, log_pii_access 5 args, NULL spend=sem midia)
 - [Epic 75 — Cron claim/anti-duplicata](project_epic75_cron_claim.md) — padrão claim-run.ts (75-352): RUN-only vs RUN+item, fail-open do helper vs fail-closed do chamador, intervalo mínimo escalado
 - [Epic 86 — Meta CAPI/Pixel Tracking](project_epic86.md) — 86-9 (formulário qualificação, Ready for Review, QA PASS, padrão de referência); 86-11 (Draft v0.2, landing Vind Residence, runtime standalone sem workspace, Opção A: CAPI disparado do CRM, agora 5 eventos completos — CompleteRegistration sem gatilho distinto de Lead, ressalva documentada)
+- [Epic 87 — Nicole Confiabilidade de Contexto](project_epic87.md) — 87-10 (W1-2c, Ready, NÃO implementada); 87-17 (Draft 2026-08-27, oferta de horário colada no meio-dia + "mais tarde" sem lista nova, fronteira i/ii/iii posta ao @po, recomendação ii = só sítio 7)
 
 ## Project Context
 - Platform: Trifold CRM — AI-powered real estate lead management (Maringá-PR, Brazil)

@@ -1,0 +1,427 @@
+schema: 1
+storyId: "87-17"
+story: "87-17 — Fatia 1 (Defeito A): a oferta de horário cobre o período inteiro, não a borda de abertura"
+title: "Quality Gate — Story 87-17, Fatia 1 (tasks T0–T3, ACs AC1–AC4 e AC10)"
+epic: 87
+gate: CONCERNS
+verdict: CONCERNS
+reviewed_by: "Quinn (@qa)"
+reviewed_at: "2026-08-27"
+commit: "1454d4ca (fix(nicole): oferta de horário cobre o período inteiro…)"
+commit_anterior: "98772465"
+branch: "main"
+escopo_do_gate:
+  dentro: "T0–T3 · AC1, AC2, AC3, AC4, AC10"
+  fora: "AC5–AC9 (Fatia 2 / PR 2) e AC11 (janela de 24 h pós-deploy). Não avaliados, não reprovam."
+
+status_reason: >
+  Fatia 1 APROVADA para seguir ao @devops, com três follow-ups registrados e nenhum
+  bloqueante. O conserto é o certo, é mínimo, e — mais importante — eu consegui reprovar
+  os testes dele por conta própria, com quatro mutações minhas (três repetindo as do @dev,
+  uma nova que ele não fez). A oferta deixa de colar na borda de abertura: a tarde de
+  27/08 na fixture real da Ana sai de 12h/12h30/13h para 12h/14h/17h, e 17h era
+  literalmente um dos horários que a Nicole afirmou a uma lead não existirem.
+
+  TODOS OS NÚMEROS DO @dev CONFERIDOS POR EXECUÇÃO PRÓPRIA, NENHUM ACEITO POR RELATÓRIO.
+  Suíte da raiz `npx vitest run` (sem `-t`, sem `--reporter=basic`): 256 arquivos,
+  3145 passed | 6 expected fail (3151), EXIT=0. Baseline remedido por mim revertendo os
+  TRÊS arquivos para 98772465: 256 arquivos, 3137 passed | 6 expected fail (3143),
+  EXIT=0. Delta = +8, todos em `visit-slot.test.ts` (85 → 93 testes no arquivo);
+  `pipeline-agenda-state.test.ts` fica em 33 antes e depois — nenhum teste removido.
+  Nenhum `it.fails`/`test.fails` nos três arquivos tocados, logo os 6 expected-fail são
+  os mesmos de outras stories. `tsc --noEmit` em packages/ai: EXIT=0 e saída de ZERO
+  linhas (medido por `wc -l`, não por `grep -c`). `npm run lint` da raiz: EXIT=0,
+  "34 problems (0 errors, 34 warnings)", 8/8 tasks, e ZERO warnings nos arquivos desta
+  fatia (grep por `visit-slot`/`pipeline-agenda-state` na saída do lint não casa nada).
+
+  O CONSERTO É REVERSÍVEL EM TESTE — quatro mutações minhas, árvore restaurada e
+  conferida por sha256 idêntico ao `git show HEAD:` ao fim de cada uma:
+  (a) `Math.round` → `Math.floor` no índice → 2 vermelhos (AC1 e o `:477` recalibrado),
+      exatamente o previsto: com n=8 o `.5` é quem decide 14:00 vs 13:30;
+  (b) revertendo `visit-slot.ts` inteiro para 98772465 (equivale a "remover a amostragem")
+      → AC1, AC2, AC4, `:477` e OS DOIS GOLDENS vermelhos. É a prova direta de que os
+      goldens recalibrados VOLTAM A REPROVAR se alguém desfizer o conserto — a guarda foi
+      datada, não apagada;
+  (c) remover `if (k === 1) return [xs[0]!]` → 1 vermelho, `AC3-ii`, com a falha exata que
+      a AC previu: `AssertionError: expected [ undefined ] to deeply equal [ 10 ]`;
+  (d) MINHA, que o @dev não fez — trocar `Promise.all` por laço sequencial `for … await`,
+      MANTENDO as 11 consultas → 1 vermelho, `AC4`, `expected false to be true`. Isto é o
+      que prova que a AC4 não é uma tautologia de contagem: ela mede PROFUNDIDADE, e mata
+      a forma serial mesmo com o mesmo número de queries.
+
+  ANTES/DEPOIS MEDIDOS POR MIM (revertendo só `visit-slot.ts` e rodando os dois arquivos
+  de teste novos contra o código velho — 9 vermelhos, EXIT=1):
+    AC1 tarde 27/08 → recebido (HEAD) 15:00Z, 15:30Z, 16:00Z = 12:00, 12:30, 13:00 BRT
+                    → esperado (novo) 15:00Z, 17:00Z, 20:00Z = 12:00, 14:00, 17:00 BRT
+    AC2 manhã 27/08 → recebido (HEAD) 11:00Z, 11:30Z, 12:00Z = 8:00, 8:30, 9:00 BRT
+                    → esperado (novo) 11:00Z, 12:30Z, 14:00Z = 8:00, 9:30, 11:00 BRT
+    AC4             → `AssertionError: expected 3 to be 11` (o HEAD fazia 3 consultas)
+    golden          → "08:00 ou 08:30 ou 09:00" (HEAD) vs "08:00 ou 09:30 ou 11:00" (novo)
+  Os 3 vermelhos das ACs 3 caem por import indefinido nesse cenário (a `espalhar` só
+  existe depois do conserto) e NÃO contam como prova — a capacidade de reprovar deles
+  está nas mutações (c) e (a).
+
+  FRONTEIRA DA FATIA HONRADA, MEDIDA NO DIFF DO COMMIT (98772465..1454d4ca), não no
+  relatório: `pipeline.ts` = 0 linhas, `agenda-state.ts` = 0, `lead-memory.ts` = 0,
+  `haiku-enrichment.ts` = 0, `qualification.ts` = 0. `git grep` de
+  `ofertas_do_sistema|ofertasDoSistema|afirmado_pela_nicole` nos dois commits: `diff` das
+  duas saídas = VAZIO (as mesmas 8 ocorrências, todas em `agenda-state.ts` e no teste
+  dele). `git grep detectWantsLaterSlot -- packages/` → rc=1, nenhuma ocorrência: a
+  Fatia 2 realmente não começou.
+
+  REGRESSÃO DE SENTIDO, NÃO SÓ DE SUÍTE (verificação minha, fora do que a story pede):
+  escrevi um sweep temporário sobre a semana inteira (24–30/08) × manha/tarde × limit
+  1..12 assertando que fim_da_visita = início + 60min NUNCA passa do fechamento (seg–sex
+  18h, sáb 12h), que nenhum início é antes das 8h, que a saída é ordenada, sem repetição e
+  com length ≤ limit, que SÁBADO À TARDE devolve [] em todos os limites e que o último
+  início de sábado de manhã é 11:00 BRT. EXIT=0, 4/4 verdes. E provei que o sweep é capaz
+  de reprovar: mutando `lastStart = min(toMin, close*60) - VISIT_DURATION_MIN` para `- 0`,
+  3 dos 4 ficam vermelhos (`2026-08-24 tarde slot=21:00Z: expected 1140 to be less than
+  or equal to 1080`; sábado tarde passa a devolver 15:00Z; sábado manhã vai a 9
+  candidatos). O sweep e a mutação foram REVERTIDOS: o arquivo temporário foi apagado e
+  `git status` voltou idêntico ao snapshot de abertura do gate.
+
+  NENHUMA PROVA DESTE GATE USA FILTRO `-t`. Confirmei o achado de processo do @dev por
+  execução própria, porque ele é sério e vale para as próximas fatias: `-t 'turno-ouro:
+  dia+período'` (o `+` como quantificador de regex) casa ZERO testes, imprime
+  "Tests 33 skipped (33)" e sai com EXIT=0 — falso verde perfeito. A forma escapada
+  (`dia\+período`) dá "1 passed | 32 skipped". O baseline T0 do @dev usou a forma
+  ESCAPADA (a saída colada mostra `1 passed`), então a evidência dele é sã.
+
+pontos_de_atencao_do_pedido:
+  - id: PA-1
+    tema: "`Promise.all` — respeita o teto da AC4? muda o comportamento sob erro? risco de pool?"
+    veredito: "AC4 CUMPRIDA. Comportamento sob erro é o MESMO do HEAD. Pool: aceitável, com medição pedida na janela AC11."
+    analise: >
+      (1) TETO: a `AC4` oferece duas formas e a (b) é literalmente "se o @dev preferir
+      `Promise.all`: o fake registra a ordem de emissão e prova que todas as consultas
+      foram emitidas antes de a primeira resolver (profundidade sequencial = 1)". O @po
+      escreveu no parecer (§3.2) que "o `Promise.all` resolve em profundidade sequencial 1"
+      e que "o que não pode passar é a story trocar uma mentira por ~meio segundo de
+      latência". A forma escolhida é a autorizada, e a profundidade 1 está provada — por
+      mim, com a mutação (d), que é a única forma de provar que a asserção não é
+      decorativa. Em runtime real a conclusão também vale: `isSlotFree` monta a query
+      sincronamente e só suspende no `await q.limit(1).maybeSingle()`, então as 11
+      chamadas são despachadas antes de qualquer I/O de rede completar. Nuance de
+      fidelidade do fake, registrada por honestidade: o fake emite SINCRONAMENTE dentro do
+      `map`, enquanto o PostgrestBuilder real emite num microtask (thenable não-nativo).
+      A diferença não afeta a conclusão de profundidade 1 — microtasks drenam antes de
+      qualquer macrotask de rede.
+      (2) SOB ERRO: não há mudança de MODO de falha. O laço do HEAD era
+      `if (await isSlotFree(...))` dentro de `for`, ou seja, a primeira rejeição já
+      abortava a função. `Promise.all` também rejeita na primeira. Não há
+      `unhandledRejection` novo: `Promise.all` anexa handler a TODAS as promises, então uma
+      segunda rejeição não fica órfã. O que muda é a EXPOSIÇÃO (3 → 11 queries por oferta),
+      e isso é o achado REL-1 abaixo.
+      (3) POOL / RATE-LIMIT: 11 requisições concorrentes ao PostgREST por oferta de
+      período, limitadas pela GEOMETRIA do período (11 em `tarde`, 7 em `manha`) — nunca
+      por lista de tamanho aberto. Cada uma é `select id from appointments … limit 1`, com
+      `idx_appointments_org` e `idx_appointments_scheduled` existentes (006). Não vejo
+      risco material, mas também não vou declarar "sem risco" por dedução: pedi a medição
+      concreta na janela AC11 (ver `condicoes_de_merge`), usando o p95 de `ms_async` do
+      evento `whatsapp_async_done` que o webhook JÁ registra — é exatamente o teto que o
+      @po invocou (D88-3).
+  - id: PA-2
+    tema: "`espalhar` devolve `xs` por referência quando `xs.length <= k`"
+    veredito: "ACEITÁVEL nesta fatia. ACHADO de robustez, severidade low, follow-up MNT-1."
+    analise: >
+      Confirmei o aliasing empiricamente, não por leitura: `expect(espalhar(xs,3)).toBe(xs)`
+      passa e `expect(espalhar(xs,2)).not.toBe(xs)` também. Ou seja, a função tem
+      superfície ASSIMÉTRICA — devolve a própria referência num caminho e um array novo no
+      outro. Hoje isso é inofensivo: o único chamador de produção é
+      `freeSlotsInPeriod`, que passa `candidates.filter(...)`, um array local recém-criado,
+      e nada muta o retorno. Não reprovo por três motivos: (i) o §1 do Desenho, que é
+      normativo e foi validado pelo @po, escreve `return xs`; (ii) o @dev ESCALOU a decisão
+      em vez de escondê-la, que é o comportamento que eu quero premiar; (iii) o dano
+      exigiria um chamador futuro que passe array compartilhado E mute o retorno. Mas a
+      função é `export`ada, então a superfície é pública de fato, e a AC3-i asserta com
+      `toEqual` (que não distingue cópia de referência) — a assimetria não está travada por
+      teste nem documentada no docstring. Vai para follow-up, não para rework.
+  - id: PA-3
+    tema: "`freeSlotsInPeriod` sem `try/catch` no `pipeline.ts`; exposição a erro de rede sobe de 3 para 11 queries"
+    veredito: "FOLLOW-UP LEGÍTIMO, não bloqueante — e REGISTRADO (REL-1 abaixo + docs/backlog.md)."
+    analise: >
+      Confirmei a ausência de `try/catch`: os dois chamadores estão em `pipeline.ts:1044`
+      (remarcação) e `:1123` (sítio 7), e o `grep` de `try {`/`} catch` no arquivo mostra
+      que o bloco mais próximo é `:1607` — nada envolve as duas chamadas. A rejeição sobe
+      até `catch (asyncErr)` do webhook (`api/webhook/whatsapp/route.ts:1328`), que
+      registra `WEBHOOK_ASYNC_ERROR` em `system_events` e ENGOLE. Efeito para o lead: ele
+      pergunta "amanhã à tarde?" e NÃO RECEBE RESPOSTA NENHUMA. Isso é ruim, mas:
+      (i) é o modo de falha de HOJE, não um novo — o HEAD já lançava na primeira query que
+      falhasse; (ii) NÃO é silencioso, há evento em `system_events` (a diferença crucial
+      em relação aos falsos verdes que este epic combate); (iii) o que muda é a
+      probabilidade, ~3,7× (3 → 11 queries por oferta). Não bloqueio, e além disso a
+      correção proposta pelo @dev ("falha de `isSlotFree` = não livre") NÃO é obviamente
+      certa: sob erro transitório ela ESCONDERIA um horário livre, que é uma versão branda
+      do próprio defeito que esta story conserta ("negar disponibilidade que existe"). Ou
+      seja: merece desenho próprio, com a decisão explícita entre "não responder" e
+      "responder com uma lista possivelmente incompleta". Exatamente por isso não pode ficar
+      só na conversa: registrei em `docs/backlog.md`.
+  - id: PA-4
+    tema: "A justificativa dentro do golden — a guarda foi datada ou apagada?"
+    veredito: "DATADA, não apagada. E provei que uma regressão FUTURA nesse golden ainda reprova."
+    analise: >
+      A frase original ("As três strings abaixo foram CAPTURADAS do `HEAD` … Qualquer
+      diferença aqui é achado bloqueante") está INTACTA em
+      `pipeline-agenda-state.test.ts:576-579`. Abaixo dela vêm 14 linhas novas
+      (`🔧 RECALIBRAÇÃO JUSTIFICADA — Story 87-17 (Defeito A), AC10 item 2 e 3`) que
+      nomeiam a story, dizem que a mudança é DESEJADA, citam a conversa de produção
+      `02d3a064-0271-4e34-b64a-c6ecd57ddae0` como motivo, mostram a aritmética
+      (7 candidatos, índices 0, 3 e 6) e REAFIRMAM a guarda: "qualquer OUTRA diferença
+      aqui — inclusive nestas duas strings, depois desta linha — segue sendo achado
+      bloqueante. Não recalibre um golden sem escrever por quê." A prova de que a guarda
+      ainda MORDE não é a leitura do comentário, é a minha mutação (b): revertendo
+      `visit-slot.ts`, os DOIS goldens ficam vermelhos com o diff byte a byte na saída.
+      Um golden que só tivesse sido "ajustado para passar" não teria esse comportamento.
+  - id: PA-5
+    tema: "Regressão de sentido: 11:00 + 60min = 12:00; nenhum horário estoura o fechamento; sábado à tarde vazio"
+    veredito: "CONFIRMADO por sweep próprio com contraprova. Nenhum horário ofertado estoura o fechamento."
+    analise: >
+      Ver `status_reason`. Além da medição, a razão estrutural: `lastStart =
+      min(toMin, close*60) - VISIT_DURATION_MIN` e o laço é `m <= lastStart`, logo todo
+      início m satisfaz m+60 ≤ close*60 — a garantia é do laço de candidatos, e `espalhar`
+      só SELECIONA índices em [0, n-1] do que o laço produziu: ela não pode inventar
+      horário nem deslocar nenhum. Sábado à tarde: close=12 → lastStart = min(1080,720)-60
+      = 660 < fromMin=720 → zero candidatos → `[]`, em todos os limites de 1 a 12.
+      Sábado de manhã: lastStart = 660 = 11:00, e 11:00+60 = 12:00 = fechamento, no limite
+      exato e correto. `[8:00, 9:30, 11:00]` para "de manhã" num dia útil é oferta honesta,
+      não regressão.
+  - id: PA-6
+    tema: "Nenhuma prova depende de filtro `-t` que casa zero testes"
+    veredito: "CONFIRMADO, nas minhas provas e nas do @dev."
+    analise: >
+      Todas as minhas execuções foram por ARQUIVO ou pela suíte inteira, com exit code
+      explícito; nenhuma usou `-t` como prova. Reproduzi o falso verde só para confirmar o
+      achado do @dev: `-t 'turno-ouro: dia+período'` → "Tests 33 skipped (33)", EXIT=0;
+      `-t 'turno-ouro: dia\+período'` → "1 passed | 32 skipped". O baseline T0 dele usou a
+      forma escapada (a saída colada mostra `1 passed`), então nem a evidência dele está
+      contaminada. Anotado como classe de falso verde ao lado de `grep -c` e `timeout` no
+      macOS.
+
+must_fix: []
+
+concerns:
+  - id: REL-1
+    severity: medium
+    category: reliability
+    file: "packages/ai/src/flows/visit-slot.ts (freeSlotsInPeriod) · packages/ai/src/chat/pipeline.ts:1044,1123"
+    description: >
+      A exposição a erro transitório de rede por oferta de período sobe de 3 para 11
+      queries, sem `try/catch` em nenhum dos dois chamadores. Uma rejeição de `isSlotFree`
+      sobe até `catch (asyncErr)` do webhook, virando `WEBHOOK_ASYNC_ERROR` — o lead que
+      pediu "amanhã à tarde" não recebe resposta nenhuma. Mesmo MODO de falha do HEAD,
+      ~3,7× mais provável.
+    porque_nao_bloqueia: >
+      Não é regressão de modo, é de probabilidade; é OBSERVÁVEL em `system_events`, não
+      silenciosa; e a correção "falha = não livre" tem um contra-argumento sério (esconderia
+      horário livre sob erro transitório, versão branda do próprio defeito da story), então
+      merece desenho próprio em vez de um remendo dentro desta fatia.
+    recommendation: >
+      Story/backlog própria decidindo explicitamente entre (a) `Promise.allSettled` +
+      tratar rejeição como "não livre" (responde com lista possivelmente incompleta) e
+      (b) `try/catch` no chamador com uma mensagem `[SISTEMA]` honesta de "não consegui
+      consultar a agenda agora". Qualquer das duas exige um evento próprio em
+      `system_events` (hoje só existe o `WEBHOOK_ASYNC_ERROR` genérico) para o volume ser
+      medível. REGISTRADO em `docs/backlog.md`.
+  - id: MNT-1
+    severity: low
+    category: maintainability
+    file: "packages/ai/src/flows/visit-slot.ts (espalhar)"
+    description: >
+      `espalhar` devolve `xs` por referência quando `xs.length <= k` e um array novo quando
+      `xs.length > k` — superfície pública assimétrica, não documentada no docstring e não
+      travada por teste (a `AC3-i` usa `toEqual`, que não distingue cópia de referência).
+      Confirmado por mim: `espalhar([1,2,3],3) === [1,2,3]` (mesma referência).
+    porque_nao_bloqueia: >
+      Zero aliasing real hoje — o único chamador de produção passa
+      `candidates.filter(...)`, array local, e ninguém muta o retorno. E o §1 do Desenho,
+      normativo e validado pelo @po, escreve `return xs`: o @dev seguiu o desenho e
+      ESCALOU a decisão em vez de escondê-la.
+    recommendation: >
+      Na próxima vez que `espalhar` for tocada (a Fatia 2 se apoia na invariante dela):
+      `return xs.slice()`, ou uma linha no docstring dizendo que o retorno pode ser a
+      própria referência. Custo de uma linha; evita que um chamador futuro herde a
+      armadilha.
+  - id: TEST-1
+    severity: low
+    category: test-coverage
+    file: "packages/ai/src/chat/pipeline.ts:1044 (ramo de remarcação) · pipeline-agenda-state.test.ts:375-389"
+    description: >
+      O SEGUNDO chamador de `freeSlotsInPeriod` (o ramo de remarcação,
+      `nPeriod && (nDay || pendenciaDay)`) mudou de comportamento com diff ZERO de código,
+      e o único teste que passa por ele asserta apenas
+      `toContain("Horários LIVRES nesse período")` — nenhuma asserção sobre QUAIS horários.
+      O golden G6 byte-a-byte cobre o sítio `:1123` (fixture com `appointments: []`), não
+      o `:1044`.
+    porque_nao_bloqueia: >
+      Declarado pelo @po na `AC10` e no risco `R1` ("segue verde sem provar nada"), com a
+      mesma correção sendo desejável nos dois sítios. É lacuna conhecida e aceita, não
+      descoberta neste gate.
+    recommendation: >
+      Na Fatia 2, ao mexer no ramo `day && !time`, acrescentar um golden do ramo de
+      remarcação (fixture COM `appointments`, exercitando o `excludeAppointmentId`) — o
+      caminho de remarcação é o que passa `apptId` e hoje ninguém tranca a lista dele.
+  - id: PERF-1
+    severity: low
+    category: performance
+    description: >
+      11 requisições concorrentes ao PostgREST por oferta de período (7 em `manha`).
+      Limitado pela geometria, query trivial e indexada, profundidade sequencial 1 — mas o
+      número nunca foi medido em produção, só no fake.
+    porque_nao_bloqueia: "Forma explicitamente autorizada pela `AC4-(b)` e pelo §3.2 do parecer do @po."
+    recommendation: >
+      Na janela `AC11-(i)`, comparar o p95 de `metadata->>'ms_async'` do evento
+      `whatsapp_async_done` nas 24 h ANTES e nas 24 h DEPOIS do deploy. O evento já existe
+      (`api/webhook/whatsapp/route.ts:1312-1326`) e é o teto que o @po invocou (D88-3) —
+      custa um `select` e fecha a única incógnita desta fatia que o fake não podia responder.
+  - id: DOC-1
+    severity: low
+    category: scope
+    description: >
+      `checkSlotAvailability` (o caminho "o horário que você pediu está ocupado, veja
+      alternativas") mantém `if (alternatives.length >= 3) break` — a MESMA geometria de
+      "os 3 primeiros" que esta story acaba de consertar em `freeSlotsInPeriod`.
+    porque_nao_bloqueia: >
+      Explicitamente FORA do escopo pelo quadro "O que esta story NÃO faz"
+      (`evaluateSlot`, `checkSlotAvailability`, o INSERT do appointment). E ali a semântica
+      é diferente e defensável: "as 3 alternativas mais próximas DEPOIS do horário pedido"
+      é razoável, não é a borda de abertura de um período.
+    recommendation: >
+      Nenhuma ação nesta fatia. Registrado para que a próxima pessoa que ler
+      `visit-slot.ts` não conclua que o padrão "3 primeiros" foi extinto do arquivo.
+
+waived: []
+
+sete_checks:
+  - check: "1. Code review — padrões, legibilidade, manutenibilidade"
+    nota: PASS
+    evidencia: >
+      Diff de 50 linhas em 1 arquivo de produção, das quais ~30 são docstring. `espalhar`
+      é pura, determinística, com as três guardas na ordem certa (`k<=0`, `xs.length<=k`,
+      `k===1`) ANTES da divisão por `k-1`. `freeSlotsInPeriod` mantém o filtro de "já
+      passou" ANTES de qualquer query (não gasta round-trip com candidato morto) e o
+      `non-null assertion` em `xs[i]!` é seguro porque os índices vêm de
+      `round(i*(n-1)/(k-1))` com i ∈ [0,k-1] → sempre em [0,n-1]. Comentários explicam o
+      PORQUÊ (a conversa da Ana) e não o o-quê. Único ponto de estilo: MNT-1.
+  - check: "2. Unit tests — cobertura adequada, todos passando"
+    nota: PASS
+    evidencia: >
+      +8 testes, todos capazes de reprovar — não por afirmação, por medição: 4 mutações
+      minhas mataram AC1, AC2, AC3-ii, AC4 e os dois goldens. A `AC3-iii` é varredura
+      (k=2..7 × n=k+1..8) assertando extremos, ordem, unicidade e length ≤ k, direto na
+      função exportada, como a AC exigia. Fica TEST-1 (low) no sítio `:1044`.
+  - check: "3. Acceptance criteria — todas atendidas conforme a story"
+    nota: PASS
+    evidencia: >
+      AC1 ✅ [12:00, 14:00, 17:00] com o vermelho do HEAD medido por mim.
+      AC2 ✅ [8:00, 9:30, 11:00], sequência COMPLETA (a régua apertada pelo @po), e os 7
+      candidatos com último início 11:00.
+      AC3 ✅ (i) 2 e 3 candidatos saem inteiros e em ordem; (ii) k=1 → 1 elemento, k=0/-1 →
+      [], nenhum `undefined`, provado pela mutação (c); (iii) invariante de cobertura
+      assertada NA FUNÇÃO.
+      AC4 ✅ forma (b), autorizada literalmente pela AC e pelo §3.2 do @po: 11 emitidas,
+      profundidade sequencial 1, e a asserção mata a forma serial (mutação (d), minha).
+      AC10 ✅ exatamente 3 vermelhos previstos, os 3 recalibrados com justificativa, o
+      golden DATADO e ainda mordendo; suíte 3137 → 3145 (+8, nenhum removido), tsc = 0.
+      AC5–AC9 e AC11: fora deste gate por decisão de fatiamento do @po.
+  - check: "4. No regressions — funcionalidade existente preservada"
+    nota: PASS
+    evidencia: >
+      256 arquivos verdes antes e depois; 6 expected-fail idênticos e nenhum `it.fails` nos
+      arquivos tocados. Os 3 vermelhos são MUDANÇA DE COMPORTAMENTO DESEJADA, todos
+      justificados no arquivo do teste. Os outros três casos de `freeSlotsInPeriod`
+      (`:487`, `:494`, `:500` — 0, 1 e 3 livres) seguiram verdes, o que confirma a
+      invariante `AC3-iii` (o @po disse "se algum ficar vermelho, PARE"; nenhum ficou).
+      Fronteira: 0 linhas de diff nos 5 arquivos proibidos, medido no diff do commit.
+      Sweep próprio: nenhum horário ofertado estoura o fechamento em nenhum dia da semana,
+      sábado à tarde continua vazio.
+  - check: "5. Performance — dentro de limites aceitáveis"
+    nota: CONCERNS
+    evidencia: >
+      Profundidade sequencial 1 provada, e a forma foi autorizada pela AC4-(b). Mas o
+      número de round-trips por oferta triplicou (3 → 11) e só foi medido no fake.
+      PERF-1 (low) pede a medição do p95 de `ms_async` na janela AC11 — que é uma
+      confirmação pós-deploy, não uma condição de merge.
+  - check: "6. Security — OWASP básico verificado"
+    nota: PASS
+    evidencia: >
+      Nenhuma superfície nova de entrada; nada de PII em log; nenhuma query construída por
+      concatenação (tudo pelo builder do PostgREST); o filtro `.eq("org_id", orgId)` de
+      `isSlotFree` permanece intocado e o escopo multi-tenant não mudou (o diff não toca a
+      montagem da query, só QUANTAS vezes ela é executada). `espalhar` é pura, sem I/O.
+      Zero leitura ou escrita dos campos reservados `ofertas_do_sistema` /
+      `afirmado_pela_nicole` — provado por `diff` das saídas de `git grep` nos dois commits.
+  - check: "7. Documentation — atualizada quando necessário"
+    nota: PASS
+    evidencia: >
+      Docstrings do código explicam o defeito de produção e o porquê do `Promise.all`;
+      a recalibração do golden está DENTRO do arquivo do teste, datada e nomeada; a story
+      traz Dev Agent Record completo, decisões `[AUTO-DECISION]` explícitas (inclusive a
+      que ele escalou para mim) e File List correta. Lacuna única e minúscula: MNT-1 (a
+      assimetria de referência de `espalhar` não está no docstring).
+
+evidence:
+  suite_worktree: "256 arquivos · 3145 passed | 6 expected fail (3151) · EXIT=0"
+  suite_baseline_98772465: "256 arquivos · 3137 passed | 6 expected fail (3143) · EXIT=0 (medido revertendo os 3 arquivos)"
+  delta: "+8 testes, todos em visit-slot.test.ts (85 → 93). pipeline-agenda-state.test.ts: 33 → 33. Nenhum removido."
+  typecheck_ai: "npx tsc --noEmit em packages/ai · EXIT=0 · saída de 0 linhas (wc -l)"
+  lint_root: "npm run lint · EXIT=0 · 34 problems (0 errors, 34 warnings) · 8/8 tasks · 0 warnings nos arquivos desta fatia"
+  contraprova_head: "revertendo só visit-slot.ts: 9 vermelhos, EXIT=1, com os valores do HEAD colados"
+  mutation_testing: "4 mutações (round→floor; reverter o conserto; remover guarda k===1; Promise.all→laço sequencial) — todas capturadas"
+  sweep_proprio: "semana 24–30/08 × manha/tarde × limit 1..12: fim ≤ fechamento, sáb tarde vazio, sáb manhã último início 11:00 · EXIT=0 · contraprova (- VISIT_DURATION_MIN → - 0) reprova 3 de 4"
+  fronteira: "diff 98772465..1454d4ca = 0 linhas em pipeline.ts, agenda-state.ts, lead-memory.ts, haiku-enrichment.ts, qualification.ts"
+  campos_reservados: "diff das saídas de git grep nos dois commits = VAZIO (as mesmas 8 ocorrências)"
+  fatia_2_ausente: "git grep detectWantsLaterSlot -- packages/ → rc=1"
+  arvore_restaurada: "git status idêntico ao snapshot de abertura; sha256 de visit-slot.ts == git show HEAD:…; git diff HEAD -- packages/ = 0 linhas; arquivo de teste temporário do @qa apagado"
+  coderabbit: "não executado — config dos agentes aponta para WSL e esta máquina é darwin; a story registra CodeRabbit Integration: Disabled"
+  producao: "não reconferida por mim — o T0 do @dev fez a remediação por SELECT e a conversa 02d3a064… confere com o §1 da story. A verificação em produção é a AC11, fora deste gate."
+
+condicoes_de_merge:
+  - "Nenhuma condição BLOQUEANTE. A Fatia 1 pode seguir para @devops *push."
+  - >
+    O commit 1454d4ca está em `main` local, sem branch. O @devops precisa criar a branch
+    antes do PR (a REGRA ZERO manda o push/PR passar por ele; commitar em main não é
+    defeito da fatia, mas é um passo a mais para o PR).
+  - >
+    Há artefatos NÃO commitados no working tree que NÃO são código e NÃO são defeito desta
+    fatia: `.claude/agent-memory/aios-{dev,po,sm}/` (4 modificados + 6 novos),
+    `docs/qa/po-validation-87-17.md` (parecer do @po, referenciado pela story) e a edição de
+    `docs/stories/87-10-…story.md` (Change Log v0.3 do @po registrando que nada muda na
+    87-10). @devops decide o que entra no PR. Minha recomendação: `po-validation-87-17.md`
+    e este arquivo de gate DEVEM entrar (a story os referencia por caminho, e uma story que
+    aponta para arquivo inexistente no repo é dívida); as memórias de agente seguem o
+    critério de sempre (commit próprio de `chore(memory)`).
+  - >
+    Na janela AC11-(i), além do que a story já pede, medir o p95 de
+    `metadata->>'ms_async'` do `whatsapp_async_done` nas 24 h antes × 24 h depois do deploy
+    (PERF-1). É um `select`, e fecha a única incógnita que o fake não podia responder.
+  - "Follow-up REL-1 registrado em `docs/backlog.md` — não desfazer esse registro ao resolver conflito de merge."
+
+followups:
+  - id: REL-1
+    destino: "docs/backlog.md (registrado neste gate) — candidata a story própria no Epic 87 ou 88"
+    severidade: medium
+  - id: MNT-1
+    destino: "Fatia 2 da 87-17 (ela toca a invariante de `espalhar`) ou próxima visita a visit-slot.ts"
+    severidade: low
+  - id: TEST-1
+    destino: "Fatia 2 da 87-17 — golden do ramo de remarcação (`pipeline.ts:1044`, com appointments)"
+    severidade: low
+  - id: PERF-1
+    destino: "Janela de observação AC11-(i), responsável nomeado: Marcos"
+    severidade: low
+  - id: DOC-1
+    destino: "Nenhum — nota de contexto para quem ler visit-slot.ts"
+    severidade: low
+
+observacao_de_processo: >
+  Registro o que me convenceu neste gate, porque é raro: o @dev escalou para o @qa a ÚNICA
+  decisão em que preferiu o desenho literal a um endurecimento defensivo (o `return xs` de
+  `espalhar`), corrigiu por conta própria uma seção de "divergências de linha" que ele
+  mesmo tinha escrito errada — em vez de deixar a próxima story desconfiar de um mapa bom —
+  e achou uma classe de falso verde (`-t` como regex) que não estava no caminho dele. As
+  três coisas são o oposto de relatório inflado, e eu conferi as três por execução própria
+  antes de escrever isto. O que este gate NÃO cobriu: CodeRabbit (config WSL, máquina
+  darwin) e produção (é a AC11, por desenho).
+
+next_action: "@devops *push (branch + PR da Fatia 1). Fatia 2 (T4–T8) só depois da Fatia 1 em produção, com a janela AC11-(i) + o p95 do PERF-1 respondidos."

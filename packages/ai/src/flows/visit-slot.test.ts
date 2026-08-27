@@ -14,6 +14,8 @@ import {
   isAmbiguousSlotText,
   parsePeriodParts,
   freeSlotsInPeriod,
+  espalhar,
+  isSlotFree,
 } from "./visit-slot"
 import { buildAgendaState, type AgendaState } from "./agenda-state"
 import { extractCollectedData } from "./qualification"
@@ -269,21 +271,73 @@ interface FakeApptRow {
  * array de linhas — assim o teste exercita o COMPORTAMENTO (imob não bloqueia),
  * não só a presença do filtro.
  */
-function fakeSupabase(rows: FakeApptRow[]): SupabaseClient {
-  function builder(current: FakeApptRow[]) {
+/**
+ * Story 87-17 `AC4` — `hooks` instrumenta o fake para MEDIR as idas ao banco:
+ * `onEmit` marca a consulta emitida (a chamada de `.maybeSingle()`) e `onResolve`
+ * marca a resolução dela. É o que permite provar profundidade sequencial = 1
+ * (todas emitidas antes de a primeira resolver) sem inspecionar a implementação.
+ * Sem hooks o comportamento é idêntico ao de antes.
+ */
+/**
+ * Story 87-18 (`T0`) — o fake ganha o modo de INJETAR erro de consulta:
+ * `{ data: null, error }`, que é exatamente o que o PostgREST devolve em RLS
+ * negado / coluna renomeada / timeout / schema cache stale — sem REJEITAR. Sem
+ * isso nenhuma AC desta story é testável, porque o defeito original não é uma
+ * exceção: é um retorno normal mal interpretado.
+ *
+ * `index` é a ORDEM da consulta emitida na chamada (0 = primeiro candidato) e
+ * `slotUtc` é o candidato que ela está checando, recuperado do ponto médio da
+ * janela `gt`/`lt` que `isSlotFree` monta (`start ± 59min`) — permite injetar
+ * "por índice" ou "por predicado sobre `scheduled_at`", as duas formas que a
+ * `T0` pede.
+ */
+interface FalhaDeConsulta {
+  index: number
+  slotUtc: Date
+}
+
+function fakeSupabase(
+  rows: FakeApptRow[],
+  hooks?: { onEmit?: () => void; onResolve?: () => void },
+  falharSe?: (ctx: FalhaDeConsulta) => boolean
+): SupabaseClient {
+  let emitidas = 0
+  function builder(current: FakeApptRow[], janela: { gt?: string; lt?: string }) {
     const q = {
       select: () => q,
-      eq: (col: string, val: unknown) => builder(current.filter((r) => (r as unknown as Record<string, unknown>)[col] === val)),
-      neq: (col: string, val: unknown) => builder(current.filter((r) => (r as unknown as Record<string, unknown>)[col] !== val)),
-      in: (col: string, vals: unknown[]) => builder(current.filter((r) => vals.includes((r as unknown as Record<string, unknown>)[col]))),
-      gt: (col: string, val: string) => builder(current.filter((r) => String((r as unknown as Record<string, unknown>)[col]) > val)),
-      lt: (col: string, val: string) => builder(current.filter((r) => String((r as unknown as Record<string, unknown>)[col]) < val)),
+      eq: (col: string, val: unknown) => builder(current.filter((r) => (r as unknown as Record<string, unknown>)[col] === val), janela),
+      neq: (col: string, val: unknown) => builder(current.filter((r) => (r as unknown as Record<string, unknown>)[col] !== val), janela),
+      in: (col: string, vals: unknown[]) => builder(current.filter((r) => vals.includes((r as unknown as Record<string, unknown>)[col])), janela),
+      gt: (col: string, val: string) => builder(current.filter((r) => String((r as unknown as Record<string, unknown>)[col]) > val), { ...janela, gt: val }),
+      lt: (col: string, val: string) => builder(current.filter((r) => String((r as unknown as Record<string, unknown>)[col]) < val), { ...janela, lt: val }),
       limit: () => q,
-      maybeSingle: async () => ({ data: current[0] ?? null }),
+      maybeSingle: () => {
+        const index = emitidas++
+        hooks?.onEmit?.()
+        const slotUtc = new Date(
+          (new Date(janela.gt ?? 0).getTime() + new Date(janela.lt ?? 0).getTime()) / 2
+        )
+        const falhar = falharSe?.({ index, slotUtc }) ?? false
+        return Promise.resolve().then(() => {
+          hooks?.onResolve?.()
+          if (falhar) {
+            // Forma EXATA do PostgREST em erro de consulta: `data: null` + `error`,
+            // sem rejeição. É este par que o `HEAD` lia como "livre".
+            return { data: null, error: { message: 'permission denied for table "appointments"' } }
+          }
+          return { data: current[0] ?? null, error: null }
+        })
+      },
     }
     return q
   }
-  return { from: () => builder(rows) } as unknown as SupabaseClient
+  return { from: () => builder(rows, {}) } as unknown as SupabaseClient
+}
+
+/** Story 87-18 — conta as consultas ao `appointments` de UMA chamada (`AC2-ii`). */
+function contadorDeConsultas(): { hooks: { onEmit: () => void }; total: () => number } {
+  let n = 0
+  return { hooks: { onEmit: () => { n++ } }, total: () => n }
 }
 
 describe("checkSlotAvailability por equipe (Story 81-1)", () => {
@@ -474,35 +528,163 @@ describe("freeSlotsInPeriod (Story 75-245 AC5)", () => {
     scheduled_at: "2026-08-01T13:00:00.000Z",
   }
 
-  it("manhã de sábado com 10h ocupado → oferece 8h, 8h30 e 9h", async () => {
-    const slots = await freeSlotsInPeriod(fakeSupabase([ocupado10h]), "org1", SABADO, "manha", NOW_INCIDENTE)
+  /**
+   * 🔧 RECALIBRADO pela Story 87-17 (Defeito A), `AC10` item 1.
+   * Era *"oferece 8h, 8h30 e 9h"* — a borda de abertura, que é exatamente o
+   * defeito que a 87-17 fecha. Os LIVRES não mudaram (`8:00, 8:30, 9:00, 11:00`:
+   * 9:30/10:00/10:30 colidem com a visita das 10h); o que mudou é QUAIS 3 dos 4
+   * a Nicole oferece — `espalhar` amostra os índices 0, 2 e 3.
+   */
+  it("manhã de sábado com 10h ocupado → oferece 8h, 9h e 11h (espalhado nos 4 livres)", async () => {
+    const { slots } = await freeSlotsInPeriod(fakeSupabase([ocupado10h]), "org1", SABADO, "manha", NOW_INCIDENTE)
     expect(slots.map((s) => s.toISOString())).toEqual([
       "2026-08-01T11:00:00.000Z", // 8:00 BRT
-      "2026-08-01T11:30:00.000Z", // 8:30 BRT
       "2026-08-01T12:00:00.000Z", // 9:00 BRT
+      "2026-08-01T14:00:00.000Z", // 11:00 BRT
     ])
   })
 
   it("tarde de sábado é vazio — o expediente fecha ao meio-dia", async () => {
-    const slots = await freeSlotsInPeriod(fakeSupabase([]), "org1", SABADO, "tarde", NOW_INCIDENTE)
+    const { slots } = await freeSlotsInPeriod(fakeSupabase([]), "org1", SABADO, "tarde", NOW_INCIDENTE)
     expect(slots).toEqual([])
   })
 
   it("ignora horário que já passou e sobreposição com a visita ocupada", async () => {
     // Agora = sábado 09:45 BRT: 8h/8h30/9h passaram; 10h e 10h30 sobrepõem a das 10h.
     const agora = new Date("2026-08-01T12:45:00Z")
-    const slots = await freeSlotsInPeriod(fakeSupabase([ocupado10h]), "org1", SABADO, "manha", agora)
+    const { slots } = await freeSlotsInPeriod(fakeSupabase([ocupado10h]), "org1", SABADO, "manha", agora)
     expect(slots.map((s) => s.toISOString())).toEqual(["2026-08-01T14:00:00.000Z"]) // 11:00 BRT
   })
 
   it("compromisso IMOB no mesmo horário não tira o slot da Nicole (Epic 81)", async () => {
     const imob: FakeApptRow = { ...ocupado10h, id: "appt-imob", team: "imob" }
-    const slots = await freeSlotsInPeriod(fakeSupabase([imob]), "org1", SABADO, "manha", new Date("2026-08-01T12:45:00Z"))
+    const { slots } = await freeSlotsInPeriod(fakeSupabase([imob]), "org1", SABADO, "manha", new Date("2026-08-01T12:45:00Z"))
     expect(slots.map((s) => s.toISOString())).toEqual([
       "2026-08-01T13:00:00.000Z", // 10:00 BRT
       "2026-08-01T13:30:00.000Z",
       "2026-08-01T14:00:00.000Z",
     ])
+  })
+})
+
+describe("espalhar (Story 87-17 AC3)", () => {
+  const xs = [10, 20, 30, 40, 50, 60, 70, 80]
+
+  it("AC3-i — quando cabe, não amostra: 2 e 3 candidatos saem inteiros e em ordem", () => {
+    expect(espalhar([10, 20], 3)).toEqual([10, 20])
+    expect(espalhar([10, 20, 30], 3)).toEqual([10, 20, 30])
+    expect(espalhar([], 3)).toEqual([])
+  })
+
+  it("AC3-ii — k ≤ 1 não produz NaN nem undefined (a fórmula divide por k − 1)", () => {
+    expect(espalhar(xs, 1)).toEqual([10]) // exatamente 1, o primeiro
+    expect(espalhar(xs, 0)).toEqual([])
+    expect(espalhar(xs, -1)).toEqual([])
+    for (const k of [-1, 0, 1]) {
+      expect(espalhar(xs, k).every((v) => typeof v === "number" && Number.isFinite(v))).toBe(true)
+    }
+  })
+
+  it("AC3-iii — invariante de cobertura: primeiro e último sempre entram, ordenado e sem repetição", () => {
+    // É esta invariante que faz "não existe nada mais tarde do que o último que
+    // te ofereci" ser verdade (a `AC5` da Fatia 2 se apoia nela).
+    for (let k = 2; k <= xs.length; k++) {
+      for (let n = k + 1; n <= xs.length; n++) {
+        const inp = xs.slice(0, n)
+        const out = espalhar(inp, k)
+        const rotulo = `n=${n} k=${k} → ${JSON.stringify(out)}`
+        expect(out[0], rotulo).toBe(inp[0])
+        expect(out[out.length - 1], rotulo).toBe(inp[n - 1])
+        expect(out, rotulo).toEqual([...out].sort((a, b) => a - b))
+        expect(new Set(out).size, rotulo).toBe(out.length)
+        expect(out.length, rotulo).toBeLessThanOrEqual(k)
+        expect(out.every((v) => v !== undefined), rotulo).toBe(true)
+      }
+    }
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Story 87-17 — Fatia 1 / Defeito A: a oferta de período para de colar na
+// borda de abertura. O laço do `HEAD` parava nos 3 primeiros livres, então
+// "à tarde" era SEMPRE 12h/12h30/13h e "de manhã" SEMPRE 8h/8h30/9h —
+// geométrico ao algoritmo, independente de haver compromisso.
+// ═══════════════════════════════════════════════════════════════════════════
+describe("freeSlotsInPeriod — oferta espalhada (Story 87-17 AC1/AC2/AC4)", () => {
+  /**
+   * A fixture é a conversa da Ana, REMEDIDA contra produção em 27/08/2026
+   * (conversa `02d3a064-0271-4e34-b64a-c6ecd57ddae0`, org `0000…0001`, somente
+   * SELECT): no instante da mentira (22:22:33Z de 26/08) existia UM único
+   * compromisso `house` no dia 27/08 — 16:00 BRT (19:00Z), `status=scheduled`,
+   * criado em 18/08 por `admin`. O compromisso de 12:00 BRT que hoje também
+   * aparece no dia é o DESTA conversa (`created_by=nicole`, 22:42Z), criado
+   * DEPOIS da mentira — por isso está fora da fixture, de propósito.
+   */
+  const DIA_ANA = isoToDayParts("2026-08-27")! // quinta-feira
+  const AGORA_DA_MENTIRA = new Date("2026-08-26T22:22:33.815Z")
+  const ocupado16h: FakeApptRow = {
+    id: "63957a67-35ac-4a33-8796-f7152facbdc6",
+    org_id: "org1",
+    team: "house",
+    status: "scheduled",
+    scheduled_at: "2026-08-27T19:00:00.000Z", // 16:00 BRT
+  }
+
+  it("AC1 — a tarde da Ana passa a ser 12h, 14h e 17h (o HEAD dava 12h, 12h30 e 13h)", async () => {
+    const { slots } = await freeSlotsInPeriod(fakeSupabase([ocupado16h]), "org1", DIA_ANA, "tarde", AGORA_DA_MENTIRA)
+    expect(slots.map((s) => s.toISOString())).toEqual([
+      "2026-08-27T15:00:00.000Z", // 12:00 BRT
+      "2026-08-27T17:00:00.000Z", // 14:00 BRT
+      "2026-08-27T20:00:00.000Z", // 17:00 BRT — o que a Nicole negou existir
+    ])
+  })
+
+  it("AC1 — e os LIVRES da tarde são os 8 medidos em produção (a amostragem escolhe 3 DESSES 8)", async () => {
+    // `limit` alto = o período inteiro, sem amostragem: prova que a fixture
+    // reproduz exatamente a lista livre apurada no banco de produção.
+    const { slots: todos } = await freeSlotsInPeriod(fakeSupabase([ocupado16h]), "org1", DIA_ANA, "tarde", AGORA_DA_MENTIRA, undefined, 11)
+    expect(todos.map((s) => s.toISOString())).toEqual([
+      "2026-08-27T15:00:00.000Z", // 12:00 BRT
+      "2026-08-27T15:30:00.000Z", // 12:30
+      "2026-08-27T16:00:00.000Z", // 13:00
+      "2026-08-27T16:30:00.000Z", // 13:30
+      "2026-08-27T17:00:00.000Z", // 14:00
+      "2026-08-27T17:30:00.000Z", // 14:30
+      "2026-08-27T18:00:00.000Z", // 15:00
+      "2026-08-27T20:00:00.000Z", // 17:00 (15:30/16:00/16:30 colidem com a visita das 16h)
+    ])
+  })
+
+  it("AC2 — manhã sem compromisso nenhum passa a ser 8h, 9h30 e 11h (o HEAD dava 8h, 8h30 e 9h)", async () => {
+    const { slots } = await freeSlotsInPeriod(fakeSupabase([]), "org1", DIA_ANA, "manha", AGORA_DA_MENTIRA)
+    expect(slots.map((s) => s.toISOString())).toEqual([
+      "2026-08-27T11:00:00.000Z", // 8:00 BRT
+      "2026-08-27T12:30:00.000Z", // 9:30 BRT
+      "2026-08-27T14:00:00.000Z", // 11:00 BRT
+    ])
+  })
+
+  it("AC2 — os candidatos da manhã são 7, não 8: o último início é 11:00 (a visita de 60min tem de caber até 12h)", async () => {
+    const { slots: todos } = await freeSlotsInPeriod(fakeSupabase([]), "org1", DIA_ANA, "manha", AGORA_DA_MENTIRA, undefined, 20)
+    expect(todos).toHaveLength(7)
+    expect(todos[todos.length - 1]!.toISOString()).toBe("2026-08-27T14:00:00.000Z") // 11:00 BRT
+  })
+
+  it("AC4 — as 11 consultas da tarde são todas emitidas antes de a primeira resolver (profundidade sequencial = 1)", async () => {
+    // `isSlotFree` é UMA query ao `appointments` por candidato. Varrer o período
+    // inteiro sobe de 3 para 11 consultas; o que a AC4 proíbe é que elas sejam
+    // 11 round-trips EM SÉRIE no caminho da resposta ao lead.
+    const log: string[] = []
+    const sb = fakeSupabase([ocupado16h], {
+      onEmit: () => log.push("emit"),
+      onResolve: () => log.push("resolve"),
+    })
+    await freeSlotsInPeriod(sb, "org1", DIA_ANA, "tarde", AGORA_DA_MENTIRA)
+
+    const emitidas = log.filter((e) => e === "emit").length
+    expect(emitidas).toBe(11) // o período inteiro (12:00…17:00), não os 3 primeiros
+    expect(log.slice(0, emitidas).every((e) => e === "emit")).toBe(true)
+    expect(log.indexOf("resolve")).toBe(emitidas) // nenhuma resolveu antes de todas serem emitidas
   })
 })
 
@@ -790,5 +972,289 @@ describe("Story 75-279 — sufixo de hora colado ao número", () => {
     })
     expect(r.day).toEqual({ y: 2026, m: 7, d: 8 })
     expect(r.time).toEqual({ hour: 11, minute: 0 })
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Story 87-18 — erro de consulta para de virar "horário livre" em silêncio.
+//
+// O defeito: `const { data } = await q.limit(1).maybeSingle()` descartava o
+// `error`. O PostgREST não REJEITA em erro de consulta — devolve
+// `{ data: null, error }` — então `!data` dava `true`, "livre", e a Nicole
+// ofertava E GRAVAVA (`pipeline.ts:1563`) um horário possivelmente ocupado, sem
+// log, sem evento, sem rastro.
+//
+// Todos os testes abaixo usam a injeção de erro do `fakeSupabase` (`T0`), que
+// devolve a forma EXATA do PostgREST. Nenhum deles simula rejeição de rede — isso
+// é o caminho A (`REL-1`), e a `AC7` é o controle de que ele segue intacto.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("Story 87-18 AC1 — isSlotFree distingue os três estados", () => {
+  // Segunda-feira 2026-07-20 14:00 BRT = 17:00Z (dentro do expediente).
+  const SLOT = new Date("2026-07-20T17:00:00Z")
+  const ocupando: FakeApptRow = {
+    id: "appt-house-14h",
+    org_id: "org1",
+    team: "house",
+    status: "scheduled",
+    scheduled_at: "2026-07-20T17:00:00.000Z",
+  }
+
+  it('🔴 erro de consulta devolve "unknown" — o `HEAD` devolvia `true` ("livre")', async () => {
+    // MESMA fixture que no `HEAD` produzia "livre": zero linha + `error`. A
+    // mutação (a) do `T6` (voltar para `!data`) deixa este teste vermelho.
+    const sb = fakeSupabase([], undefined, () => true)
+    expect(await isSlotFree(sb, "org1", SLOT)).toBe("unknown")
+  })
+
+  it('controle — sem erro e sem linha sobrepondo é "free"', async () => {
+    expect(await isSlotFree(fakeSupabase([]), "org1", SLOT)).toBe("free")
+  })
+
+  it('controle — sem erro e com linha sobrepondo é "occupied"', async () => {
+    expect(await isSlotFree(fakeSupabase([ocupando]), "org1", SLOT)).toBe("occupied")
+  })
+
+  it('🔴 "occupied" NUNCA pode ser lido por truthiness (as três strings são truthy)', async () => {
+    // Guarda explícita da Armadilha do §6: `if (await isSlotFree(...))` compila
+    // limpo com `tsc --strict` e faria TODO horário ocupado passar por livre.
+    const status = await isSlotFree(fakeSupabase([ocupando]), "org1", SLOT)
+    expect(status).not.toBe("free")
+    expect(Boolean(status)).toBe(true) // ← é ISTO que o `tsc` deixa passar
+  })
+})
+
+describe("Story 87-18 AC2/AC3/AC6 — checkSlotAvailability sob incerteza", () => {
+  const SLOT = new Date("2026-07-20T17:00:00Z") // seg 14:00 BRT
+  const ocupado14h: FakeApptRow = {
+    id: "appt-house-14h",
+    org_id: "org1",
+    team: "house",
+    status: "scheduled",
+    scheduled_at: "2026-07-20T17:00:00.000Z",
+  }
+  /** Índices das consultas: 0 = primário (14:00), 1 = 14:30, 2 = 15:00, 3 = 15:30, … */
+  const IDX_15H = 2
+  const IDX_15H30 = 3
+
+  it("AC2-i — primário com erro devolve erroNoPedido, sem afirmar livre nem ocupado", async () => {
+    const sb = fakeSupabase([], undefined, ({ index }) => index === 0)
+    const { free, alternatives, erroNoPedido } = await checkSlotAvailability(sb, "org1", SLOT)
+    expect(erroNoPedido).toBe(true)
+    // `free === false` aqui é ausência de informação, não "ocupado" — quem
+    // consome precisa de `erroNoPedido` para saber a diferença.
+    expect(free).toBe(false)
+    expect(alternatives).toEqual([])
+  })
+
+  it("🔴 AC2-ii — CURTO-CIRCUITO: exatamente 1 consulta, não ~37, quando o banco inteiro falha", async () => {
+    // O cenário de outage é justamente o que faz o primário falhar. Sem o
+    // curto-circuito o laço de alternativas nunca alcança `length >= 3` e varre o
+    // resto do dia pedido MAIS o dia seguinte INTEIRO, em `for … await`
+    // (SEQUENCIAL), contra um banco que acabou de falhar — no caminho da resposta
+    // ao lead. É teto de latência (`R8`), não estilo.
+    const c = contadorDeConsultas()
+    const sb = fakeSupabase([], c.hooks, () => true)
+    const { alternatives, erroNoPedido } = await checkSlotAvailability(sb, "org1", SLOT)
+    // A CONTAGEM primeiro, de propósito: é ela a asserção que esta AC existe para
+    // fazer, e é ela que precisa ser a linha vermelha se o curto-circuito sair.
+    expect(c.total()).toBe(1)
+    expect(alternatives).toEqual([])
+    expect(erroNoPedido).toBe(true)
+  })
+
+  it("AC3 — candidato de alternativa com erro é OMITIDO e a busca continua nos seguintes", async () => {
+    // Primário `"occupied"` DE VERDADE (linha presente, sem erro) — a incerteza é
+    // só numa alternativa do meio. Controle negativo embutido: se a
+    // implementação abortasse a busca no primeiro `"unknown"`, `alternatives`
+    // viria com 0 ou 1 item em vez dos 3 de depois dele.
+    const sb = fakeSupabase([ocupado14h], undefined, ({ index }) => index === IDX_15H)
+    const { free, alternatives, erroNoPedido } = await checkSlotAvailability(sb, "org1", SLOT)
+    expect(free).toBe(false)
+    expect(erroNoPedido).toBe(false) // o PEDIDO foi verificado: está ocupado
+    expect(alternatives.map((a) => a.toISOString())).toEqual([
+      "2026-07-20T18:30:00.000Z", // 15:30 BRT
+      "2026-07-20T19:00:00.000Z", // 16:00 BRT
+      "2026-07-20T19:30:00.000Z", // 16:30 BRT
+    ])
+    // O candidato incerto (15:00 BRT) não aparece como livre — nem como ocupado.
+    expect(alternatives.map((a) => a.toISOString())).not.toContain("2026-07-20T18:00:00.000Z")
+  })
+
+  it("AC6-ii — pedido OCUPADO + 2 alternativas incertas → UM evento agregado, erroNoPedido false", async () => {
+    const eventos: Array<{ event_type: string; category: string; metadata?: Record<string, unknown> }> = []
+    const sb = fakeSupabase([ocupado14h], undefined, ({ index }) => index === IDX_15H || index === IDX_15H30)
+    const { free, alternatives, erroNoPedido } = await checkSlotAvailability(sb, "org1", SLOT, undefined, (e) =>
+      eventos.push({ event_type: e.event_type, category: e.category, metadata: e.metadata })
+    )
+    expect(eventos).toHaveLength(1)
+    expect(eventos[0]!.event_type).toBe("NICOLE_SLOT_QUERY_ERROR")
+    expect(eventos[0]!.category).toBe("ai")
+    expect(eventos[0]!.metadata?.candidatos_com_erro).toBe(2)
+    expect(eventos[0]!.metadata?.primario_com_erro).toBe(false)
+    // Incerteza nas ALTERNATIVAS não contamina a afirmação sobre o PEDIDO.
+    expect(erroNoPedido).toBe(false)
+    expect(free).toBe(false)
+    expect(alternatives.map((a) => a.toISOString())).toEqual([
+      "2026-07-20T19:00:00.000Z", // 16:00 BRT
+      "2026-07-20T19:30:00.000Z", // 16:30 BRT
+      "2026-07-20T20:00:00.000Z", // 17:00 BRT
+    ])
+  })
+
+  it("AC6-iii — primário incerto → UM evento, candidatos_com_erro 1, primario_com_erro true", async () => {
+    const eventos: Array<{ event_type: string; metadata?: Record<string, unknown> }> = []
+    const sb = fakeSupabase([], undefined, () => true)
+    await checkSlotAvailability(sb, "org1", SLOT, undefined, (e) =>
+      eventos.push({ event_type: e.event_type, metadata: e.metadata })
+    )
+    expect(eventos).toHaveLength(1)
+    expect(eventos[0]!.event_type).toBe("NICOLE_SLOT_QUERY_ERROR")
+    expect(eventos[0]!.metadata?.candidatos_com_erro).toBe(1)
+    expect(eventos[0]!.metadata?.primario_com_erro).toBe(true)
+  })
+
+  it("AC6 controle negativo — sem incerteza nenhuma, NENHUM evento", async () => {
+    const eventos: unknown[] = []
+    // Livre: um único caminho, sem alternativa.
+    await checkSlotAvailability(fakeSupabase([]), "org1", SLOT, undefined, (e) => eventos.push(e))
+    // Ocupado de verdade: varre alternativas, todas resolvem free/occupied.
+    await checkSlotAvailability(fakeSupabase([ocupado14h]), "org1", SLOT, undefined, (e) => eventos.push(e))
+    expect(eventos).toEqual([])
+  })
+})
+
+describe("Story 87-18 AC4/AC5/AC6 — freeSlotsInPeriod sob incerteza", () => {
+  // Mesma fixture da Ana da `87-17` (`AC1`): 11 candidatos na tarde de 27/08,
+  // 8 livres (15:30/16:00/16:30 BRT colidem com a visita das 16h).
+  const DIA_ANA = isoToDayParts("2026-08-27")!
+  const AGORA = new Date("2026-08-26T22:22:33.815Z")
+  const ocupado16h: FakeApptRow = {
+    id: "63957a67-35ac-4a33-8796-f7152facbdc6",
+    org_id: "org1",
+    team: "house",
+    status: "scheduled",
+    scheduled_at: "2026-08-27T19:00:00.000Z", // 16:00 BRT
+  }
+  /** 14:00 BRT — um dos 8 livres, nem o primeiro nem o último (`AC4`). */
+  const CANDIDATO_14H = "2026-08-27T17:00:00.000Z"
+
+  it("AC4 — 1 dos 8 candidatos incerto: os 7 restantes viram oferta, houveIncerteza true", async () => {
+    const sb = fakeSupabase([ocupado16h], undefined, ({ slotUtc }) => slotUtc.toISOString() === CANDIDATO_14H)
+    const { slots, houveIncerteza } = await freeSlotsInPeriod(sb, "org1", DIA_ANA, "tarde", AGORA)
+    expect(houveIncerteza).toBe(true)
+    // Nunca `[]` só porque UM candidato entre vários falhou.
+    expect(slots.map((s) => s.toISOString())).toEqual([
+      "2026-08-27T15:00:00.000Z", // 12:00 BRT
+      "2026-08-27T16:30:00.000Z", // 13:30 BRT
+      "2026-08-27T20:00:00.000Z", // 17:00 BRT
+    ])
+    expect(slots.map((s) => s.toISOString())).not.toContain(CANDIDATO_14H)
+  })
+
+  it("AC4 — e a lista COMPLETA dos confirmados livres são 7, não 8: o incerto saiu, os outros ficaram", async () => {
+    const sb = fakeSupabase([ocupado16h], undefined, ({ slotUtc }) => slotUtc.toISOString() === CANDIDATO_14H)
+    const { slots, houveIncerteza } = await freeSlotsInPeriod(sb, "org1", DIA_ANA, "tarde", AGORA, undefined, 11)
+    expect(houveIncerteza).toBe(true)
+    expect(slots.map((s) => s.toISOString())).toEqual([
+      "2026-08-27T15:00:00.000Z", // 12:00
+      "2026-08-27T15:30:00.000Z", // 12:30
+      "2026-08-27T16:00:00.000Z", // 13:00
+      "2026-08-27T16:30:00.000Z", // 13:30
+      "2026-08-27T17:30:00.000Z", // 14:30 (o 14:00 saiu: incerto)
+      "2026-08-27T18:00:00.000Z", // 15:00
+      "2026-08-27T20:00:00.000Z", // 17:00
+    ])
+  })
+
+  it("🔴 AC5 — TODOS os candidatos incertos: slots vazio COM houveIncerteza true", async () => {
+    // É este par que faz `slots.length === 0` deixar de ter um significado único:
+    // "não há horário livre" e "não consegui checar nada" param de colapsar.
+    const sb = fakeSupabase([], undefined, () => true)
+    const { slots, houveIncerteza } = await freeSlotsInPeriod(sb, "org1", DIA_ANA, "tarde", AGORA)
+    expect(slots).toEqual([])
+    expect(houveIncerteza).toBe(true)
+  })
+
+  it("AC5 controle — lista vazia por REGRA de expediente não é incerteza", async () => {
+    // Tarde de sábado: o expediente fecha ao meio-dia. Nenhuma consulta foi feita,
+    // logo "não há horário livre" é uma afirmação legítima.
+    const SABADO = isoToDayParts("2026-08-01")!
+    const c = contadorDeConsultas()
+    const { slots, houveIncerteza } = await freeSlotsInPeriod(
+      fakeSupabase([], c.hooks),
+      "org1",
+      SABADO,
+      "tarde",
+      new Date("2026-07-31T01:05:00Z")
+    )
+    expect(slots).toEqual([])
+    expect(houveIncerteza).toBe(false)
+    expect(c.total()).toBe(0)
+  })
+
+  it("AC6 — 3 dos 11 candidatos incertos → UMA emissão, com a contagem agregada", async () => {
+    // Teto de UM evento por CHAMADA: 11 linhas quase idênticas em `system_events`
+    // por um turno de conversa é ruído, não observabilidade (`R2`).
+    const eventos: Array<{ event_type: string; category: string; level: string; metadata?: Record<string, unknown> }> = []
+    const sb = fakeSupabase([ocupado16h], undefined, ({ index }) => index < 3)
+    const { houveIncerteza } = await freeSlotsInPeriod(sb, "org1", DIA_ANA, "tarde", AGORA, undefined, undefined, (e) =>
+      eventos.push({ event_type: e.event_type, category: e.category, level: e.level, metadata: e.metadata })
+    )
+    expect(houveIncerteza).toBe(true)
+    expect(eventos).toHaveLength(1)
+    expect(eventos[0]!.event_type).toBe("NICOLE_SLOT_QUERY_ERROR")
+    expect(eventos[0]!.category).toBe("ai")
+    expect(eventos[0]!.level).toBe("error")
+    expect(eventos[0]!.metadata?.candidatos_com_erro).toBe(3)
+    expect(eventos[0]!.metadata?.candidatos_totais).toBe(11)
+    expect(eventos[0]!.metadata?.dia).toBe("2026-08-27")
+    expect(eventos[0]!.metadata?.periodo).toBe("tarde")
+  })
+
+  it("AC6 controle negativo — período inteiro resolvido, NENHUM evento", async () => {
+    const eventos: unknown[] = []
+    const { houveIncerteza } = await freeSlotsInPeriod(
+      fakeSupabase([ocupado16h]),
+      "org1",
+      DIA_ANA,
+      "tarde",
+      AGORA,
+      undefined,
+      undefined,
+      (e) => eventos.push(e)
+    )
+    expect(houveIncerteza).toBe(false)
+    expect(eventos).toEqual([])
+  })
+})
+
+describe("Story 87-18 AC7 — fronteira com o REL-1: rejeição de rede continua subindo", () => {
+  /**
+   * Caminho A do §2: o `fetch` LANÇA (rede caiu, DNS falhou). Isso NÃO é o que
+   * esta story trata — o remédio dele é decisão do `REL-1` (`docs/backlog.md`),
+   * e mapear rejeição para "ocupado" reintroduziria, pela porta do caminho A, a
+   * mentira que esta story fecha no caminho B.
+   *
+   * Estes dois testes reprovam qualquer `try/catch` novo em volta de
+   * `isSlotFree`: se a story engolisse a rejeição, `.rejects` não aconteceria.
+   */
+  function fakeQueRejeita(): SupabaseClient {
+    const q: Record<string, unknown> = {}
+    for (const m of ["select", "eq", "neq", "in", "gt", "lt", "limit"]) q[m] = () => q
+    q.maybeSingle = () => Promise.reject(new Error("fetch failed"))
+    return { from: () => q } as unknown as SupabaseClient
+  }
+
+  it("freeSlotsInPeriod NÃO engole a rejeição (ela sobe pelo Promise.all, como no HEAD)", async () => {
+    await expect(
+      freeSlotsInPeriod(fakeQueRejeita(), "org1", isoToDayParts("2026-08-27")!, "tarde", new Date("2026-08-26T22:22:33.815Z"))
+    ).rejects.toThrow("fetch failed")
+  })
+
+  it("checkSlotAvailability NÃO engole a rejeição (ela sobe direto, como no HEAD)", async () => {
+    await expect(
+      checkSlotAvailability(fakeQueRejeita(), "org1", new Date("2026-07-20T17:00:00Z"))
+    ).rejects.toThrow("fetch failed")
   })
 })

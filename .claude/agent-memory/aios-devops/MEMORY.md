@@ -38,4 +38,6 @@
 - [Branch é segura de apagar? Compare a árvore](feedback_branch_merged_check_squash_repo.md) — `git log origin/main..branch` NUNCA sai vazio em repo squash-merge; prova é tree SHA / diff
 - [Descartar cópia já mergeada em main](feedback_discard_already_merged_copy.md) — ` M` + `git diff origin/main` vazio: `checkout HEAD --`, nunca `checkout origin/main --` (esse recommita)
 - [Edição concorrente de outro agente ao commitar](feedback_concurrent_agent_edits_during_commit.md) — story reaparece ` M` logo após o commit = @po editando agora; reportar, nunca amend nem `checkout --`
+- [Commit de outro agente direto em main local](feedback_mover_commit_de_main_local_para_branch.md) — `switch -c` + `branch -f main`; `reset --hard` apaga o gate do @qa que ainda não foi commitado
+- [Story fatiada fica InProgress](feedback_story_fatiada_status_inprogress.md) — autorização é `next_action` + `must_fix: []` do gate, não o status; diga no PR o que a fatia NÃO conserta
 - [`.agents/` + skills-lock.json](project_agents_dir_skill_installer.md) — instalador de skill de terceiro (symlink em `.claude/skills/`); não é lixo nem escopo da branch — deixar untracked
