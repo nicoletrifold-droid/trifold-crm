@@ -23,6 +23,43 @@ export interface FakeResult {
   count?: number
 }
 
+/**
+ * Story 87-18 (`T0`) — descrição da consulta que está a ponto de rodar, entregue
+ * ao `failOn` para que o teste possa injetar `{ data: null, error }` em consultas
+ * ESPECÍFICAS. Precisão importa: `pipeline.ts` faz TRÊS tipos de `select` em
+ * `appointments` no mesmo turno (o histórico do `:683`, a visita ativa do `:930`
+ * e uma por candidato do `isSlotFree`), e falhar todas mudaria o RAMO exercitado
+ * em vez de exercitar o ramo sob incerteza.
+ */
+export interface FakeQueryProbe {
+  table: string
+  mode: "select" | "insert" | "update" | "upsert"
+  maybeSingle: boolean
+  single: boolean
+  /** Filtros encadeados, na ordem — `{ op: "gt", col: "scheduled_at", val: "…" }`. */
+  filters: Array<{ op: string; col: string; val: unknown }>
+}
+
+/** Devolve o `error` a injetar, ou `null` para deixar a consulta rodar normalmente. */
+export type FakeFailOn = (probe: FakeQueryProbe) => { message: string } | null
+
+/**
+ * Story 87-18 — reconhece a consulta do `isSlotFree` (`flows/visit-slot.ts`) e
+ * devolve o candidato que ela está checando; `null` para qualquer outra consulta.
+ *
+ * A assinatura dela é única em `appointments`: a janela de sobreposição é
+ * `gt`/`lt` sobre `scheduled_at` (`start ± 59min`), enquanto a busca da visita
+ * ativa usa `gte` e o histórico não filtra data nenhuma. O candidato é o ponto
+ * médio da janela.
+ */
+export function candidatoDeIsSlotFree(probe: FakeQueryProbe): Date | null {
+  if (probe.table !== "appointments" || probe.mode !== "select") return null
+  const gt = probe.filters.find((f) => f.op === "gt" && f.col === "scheduled_at")
+  const lt = probe.filters.find((f) => f.op === "lt" && f.col === "scheduled_at")
+  if (!gt || !lt) return null
+  return new Date((new Date(String(gt.val)).getTime() + new Date(String(lt.val)).getTime()) / 2)
+}
+
 let idSeq = 0
 const nextId = () => `fake-${++idSeq}`
 
@@ -72,10 +109,14 @@ class FakeQuery implements PromiseLike<FakeResult> {
   private wantCount = false
   private headOnly = false
 
+  /** Story 87-18 — filtros aplicados, para o `failOn` distinguir uma consulta da outra. */
+  private filters: Array<{ op: string; col: string; val: unknown }> = []
+
   constructor(
     private readonly store: Map<string, Row[]>,
     private readonly table: string,
-    private readonly log: string[]
+    private readonly log: string[],
+    private readonly failOn?: FakeFailOn
   ) {}
 
   private rows(): Row[] {
@@ -90,18 +131,22 @@ class FakeQuery implements PromiseLike<FakeResult> {
     return this
   }
   eq(col: string, val: unknown) {
+    this.filters.push({ op: "eq", col, val })
     this.preds.push((r) => r[col] === val)
     return this
   }
   neq(col: string, val: unknown) {
+    this.filters.push({ op: "neq", col, val })
     this.preds.push((r) => r[col] !== val)
     return this
   }
   in(col: string, vals: unknown[]) {
+    this.filters.push({ op: "in", col, val: vals })
     this.preds.push((r) => vals.includes(r[col]))
     return this
   }
   is(col: string, val: null) {
+    this.filters.push({ op: "is", col, val })
     this.preds.push((r) => (val === null ? r[col] == null : r[col] === val))
     return this
   }
@@ -110,18 +155,22 @@ class FakeQuery implements PromiseLike<FakeResult> {
     return this
   }
   gt(col: string, val: string) {
+    this.filters.push({ op: "gt", col, val })
     this.preds.push((r) => String(r[col]) > val)
     return this
   }
   lt(col: string, val: string) {
+    this.filters.push({ op: "lt", col, val })
     this.preds.push((r) => String(r[col]) < val)
     return this
   }
   gte(col: string, val: string) {
+    this.filters.push({ op: "gte", col, val })
     this.preds.push((r) => String(r[col]) >= val)
     return this
   }
   lte(col: string, val: string) {
+    this.filters.push({ op: "lte", col, val })
     this.preds.push((r) => String(r[col]) <= val)
     return this
   }
@@ -164,6 +213,19 @@ class FakeQuery implements PromiseLike<FakeResult> {
 
   private run(): FakeResult {
     this.log.push(`${this.mode}:${this.table}`)
+
+    // Story 87-18 — erro de consulta INJETADO. O PostgREST não rejeita nesse
+    // caso: devolve `{ data: null, error }`, e era isso que `isSlotFree` lia como
+    // "livre". A rejeição (caminho A / `REL-1`) NÃO é simulada aqui de propósito
+    // — é outra fronteira, coberta pela `AC7` no nível da unidade.
+    const injetado = this.failOn?.({
+      table: this.table,
+      mode: this.mode,
+      maybeSingle: this.wantMaybe,
+      single: this.wantSingle,
+      filters: this.filters,
+    })
+    if (injetado) return { data: null, error: injetado }
 
     if (this.mode === "insert") {
       const created = this.payload.map((p) => ({ id: nextId(), ...p }))
@@ -239,13 +301,17 @@ export interface FakeSupabase {
   calls: string[]
 }
 
-export function createFakeSupabase(seed: Record<string, Row[]> = {}): FakeSupabase {
+export function createFakeSupabase(
+  seed: Record<string, Row[]> = {},
+  /** Story 87-18 — injeção de erro de consulta por predicado. Ver `FakeQueryProbe`. */
+  opts?: { failOn?: FakeFailOn }
+): FakeSupabase {
   const store = new Map<string, Row[]>()
   for (const [t, rows] of Object.entries(seed)) store.set(t, rows.map((r) => ({ ...r })))
   const calls: string[] = []
 
   return {
-    from: (table: string) => new FakeQuery(store, table, calls),
+    from: (table: string) => new FakeQuery(store, table, calls, opts?.failOn),
     rpc: async (name: string) => {
       calls.push(`rpc:${name}`)
       return { data: [], error: null }
