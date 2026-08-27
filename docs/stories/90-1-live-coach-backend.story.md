@@ -1,7 +1,7 @@
 # Story 90-1 — Backend: detecção de objeção + sugestão ancorada (Haiku→Sonnet) + persistência
 
 ## Metadata
-- **Status:** Ready for Review (T1–T6 done; T7/T8 pendentes)
+- **Status:** Done (T1–T7 aplicadas; T8 aguarda 48h de tráfego)
 - **Epic:** 90 — Live Coach (`docs/stories/epics/epic-90-live-coach-objecoes.md`)
 - **Branch:** `feat/90-1-live-coach-backend`
 - **Tipo:** Feature (backend + migration + flow LLM)
@@ -216,7 +216,7 @@ já assumiu. Esta story pendura o coach no MESMO gatilho, em `after()` próprio 
       no INSERT inbound (route.ts:634) + `after()` dedicado após o early-return de wamid duplicado.
       Nenhuma outra alteração no caminho síncrono.
 - [x] **T6 — Testes** (ver Testing abaixo).
-- [ ] **T7 — Aplicar migrations em prod**: por SQL Editor / Management API, **antes do merge**
+- [x] **T7 — Aplicar migrations em prod**: por SQL Editor / Management API, **antes do merge**
       (`supabase db push` é proibido neste projeto — `schema_migrations` está dessincronizada).
 - [ ] **T8 — Medir**: após 48h em prod, registrar nesta story taxa de detecção, % `ancorada=true`
       e custo médio por conversa.
@@ -508,3 +508,42 @@ no macOS. Vale uma story de infra para tornar a config multiplataforma, em vez d
 registrar a ausência de novo.
 
 **Próximo passo:** `@devops *push` (PR), respeitando as condições de merge.
+
+---
+
+## Registro de Deploy (@devops Gage — 2026-08-27)
+
+**T7 aplicada em produção** (`dsopqkqjkmhytudaaolv` / branch `main PRODUCTION`), via SQL
+Editor do painel — o método que a memória `project-migrations` prescreve. `supabase db push`
+não foi usado.
+
+Pré-condições conferidas ANTES de qualquer escrita:
+
+| Verificação | Resultado |
+|---|---|
+| `has_capability` + `user_org_id` + `user_broker_id` existem | **3 de 3** |
+| `coach_suggestions` já existia? | **0** (não) |
+| `leads.live_coach` já existia? | **0** (não) |
+
+Conferência DEPOIS da aplicação (242 + 243):
+
+| rls_ligada | policies | no_realtime | triggers | perfis_com_acesso | perfis_total |
+|---|---|---|---|---|---|
+| `true` | `1` | `1` | `1` | `5` | `10` |
+
+Os seis valores bateram com o esperado. A policy de SELECT presente é o item que mais
+importava: sem ela a Story 90-2 não receberia nada via Realtime, e o sintoma seria
+"realtime não funciona" em vez de erro de permissão.
+
+**Merge:** PR #513 (squash) → `4a1d400f` na `main`. CI da `main`: success. Deploy de
+produção concluído pela Vercel. A ordem foi respeitada — schema antes do código.
+
+**Estado em produção agora:** o coach gera sugestões no banco quando o lead levanta objeção
+em conversa assumida pelo corretor. **Nada é visível para o corretor** — a UI é a Story 90-2.
+Isto é escolha do épico: medir qualidade e custo com dados reais antes de expor a equipe.
+
+**T8 continua aberta** e só faz sentido com tráfego acumulado. Queries prontas em
+`docs/runbooks/aplicar-242-243-live-coach.md`. O critério de decisão para autorizar a 90-2
+está lá: `pct_ancorada` ≥ 60%, `LIVE_COACH_FAILED` ≈ 0, e a leitura crua de 20 sugestões
+reais. Se `pct_ancorada` vier baixa, o conserto é alimentar o RAG — não construir UI.
+| 2026-08-27 | Gage (@devops) | **T7 aplicada em prod** (242+243 por SQL Editor, pré-condições e conferência OK) e PR #513 mergeado (`4a1d400f`). Story para **Done**; T8 aguarda 48h de tráfego. |
