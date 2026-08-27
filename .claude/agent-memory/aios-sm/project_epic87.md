@@ -1,6 +1,6 @@
 ---
 name: project-epic87
-description: Epic 87 (Nicole — Confiabilidade de Contexto, Estado e Enforcement) — roadmap por ondas, stories filhas e a story corretiva 87-17 (oferta de horário)
+description: Epic 87 (Nicole — Confiabilidade de Contexto, Estado e Enforcement) — roadmap por ondas, stories filhas e a story corretiva 87-17 (oferta de horário; arbitragem do @po = opção (i), sem ofertas_do_sistema)
 metadata:
   type: project
 ---
@@ -33,28 +33,39 @@ campos devem sair de `AgendaState` para uma chave irmã `agenda_registro` em `co
 **isso ainda não foi feito**; hoje `ofertas_do_sistema`/`afirmado_pela_nicole` continuam declarados
 DENTRO de `AgendaState` (`agenda-state.ts:125-126`), reservados, sem leitor nem escritor.
 
-**Story 87-17 (Draft, criada 2026-08-27 por @sm a partir de evidência de produção — conversa da
-Ana, 26/08/2026):** dois defeitos numa raiz de "a Nicole nega horário que existe":
-1. **Defeito A (independente, sem gate):** `freeSlotsInPeriod` (`visit-slot.ts:633`) sempre
-   devolve os 3 primeiros horários de um período (12h/12h30/13h para "tarde", 8h/8h30/9h para
-   "manhã") — geométrico ao algoritmo, não depende de agenda ocupada. Fix: coletar todos os
-   candidatos livres do período (limitado a ~11) e amostrar espalhados (`espalhar`, índices
-   `round(i*(N-1)/(k-1))`).
-2. **Defeito B (gated pela decisão do @po):** "mais tarde" cai no ramo `day && !time`
+**Story 87-17 (Fatia 1 em PR #517 — aguardando; criada 2026-08-27 por @sm a partir de evidência de
+produção — conversa da Ana, 26/08/2026):** dois defeitos numa raiz de "a Nicole nega horário que
+existe":
+1. **Defeito A (Fatia 1, independente, sem gate):** `freeSlotsInPeriod` (`visit-slot.ts:633`)
+   sempre devolvia os 3 primeiros horários de um período (12h/12h30/13h para "tarde", 8h/8h30/9h
+   para "manhã") — geométrico ao algoritmo, não depende de agenda ocupada. **Implementado:**
+   coleta os candidatos livres do período e amostra espalhado (`espalhar`, índices
+   `round(i*(N-1)/(k-1))`), com `Promise.all` no chamador. Commit `1454d4ca`, PR #517.
+2. **Defeito B (Fatia 2, ainda não implementada):** "mais tarde" cai no ramo `day && !time`
    (`pipeline.ts:1128-1131`) que não injeta lista nenhuma — o modelo reafirma a lista velha do
    histórico. `parsePeriodParts` retorna `null` para "mais tarde" DE PROPÓSITO (não é o período
-   "tarde", é "depois"). Fix proposto implementa **apenas o sítio nº 7** (`day && period`,
-   `pipeline.ts:1120-1127`) da tabela de 7 sítios da 87-10 — escreve `ofertas_do_sistema` só ali,
-   lê no "mais tarde" para excluir o que já foi oferecido e mostrar horários novos. Decisão de
-   fronteira (i/ii/iii) posta ao @po: recomendação (ii) = implementar só o sítio 7, com as mesmas
-   proteções de vazamento em prompt que a 87-10 desenhou (AC6/AC6-b), aplicadas via
-   `omitAgendaKeys`/`omitLegacyAgendaKeys` (já existentes) nos 3 sítios de despejo cru
-   (`pipeline.ts:2088`, `lead-memory.ts:79`, `haiku-enrichment.ts:90` — nenhum dos 3 filtra
-   `agenda_state` hoje, confirmado por leitura de código em 2026-08-27).
-   **Consequência a repassar ao @po/dono da 87-10:** se 87-17 (opção ii) subir antes da 87-10, a
-   prova "zero registros com os dois campos" da AC1-(ii) da 87-10 deixa de ser verdadeira — a 87-10
-   precisará remedir antes de reusar essa prova. Mitigado pelo TTL de 48h (mesmo
-   `TTL_AGENDA_STATE_HORAS`) — sem necessidade de migração de dado, só reconferência da premissa.
+   "tarde", é "depois").
+
+**⚠️ ARBITRAGEM DO @po (2026-08-27, `docs/qa/po-validation-87-17.md`) — DECIDIDA, NÃO RELITIGAR.**
+A recomendação original do @sm era a **opção (ii)**: escrever `ofertas_do_sistema` no sítio nº 7 e
+ler no "mais tarde" para excluir o que já foi oferecido. **O @po derrubou e escolheu a opção (i):
+a 87-17 não escreve NEM LÊ `ofertas_do_sistema`.** Dois motivos, o primeiro decisivo:
+
+- **`filter(!jaOfertados)` é "ainda não oferecido", não "mais tarde".** As duas coisas só coincidem
+  enquanto o Defeito A existir. Depois do Defeito A, `espalhar` sempre inclui o último livre do
+  período, então a diferença de conjuntos vira o **MEIO**: a Nicole responderia "mais tarde não
+  tem?" com `12h30, 13h30, 15h`. E a AC5 original ficaria **verde** em cima dessa falsidade.
+- Governança: a leitura é `W3-2e`/Onda 3 por arbitragem anterior do @po, e a `AC1` da 87-10
+  **remove** o campo de `AgendaState` — a (ii) escreveria num campo marcado para deleção.
+
+**A Fatia 2 saiu sem campo novo:** `freeSlotsInPeriod` recalculada **no turno do "mais tarde"**,
+com `day` herdado (`visit-slot.ts:424`) + `agenda_state.periodo` — campo vivo da 87-4, escrito hoje
+e sem leitor. **Implicação para a 87-10: NENHUMA** — a premissa de "zero registros" da `AC1-(ii)`
+segue intacta (registrado no Change Log v0.3 da 87-10).
+
+**Lição para o @sm:** ao propor reuso de campo de outra story, verificar se o filtro proposto
+significa de fato o que a frase do lead pede — e se a AC escrita seria capaz de reprovar a versão
+errada. A AC5 original não era.
 
 **Padrão recorrente da 87-4/87-10/87-17:** "regra de corte da Onda 1" = pipeline pode computar e
 entregar dados frescos ao modelo (subtração/correção determinística), mas o MODELO nunca ganha

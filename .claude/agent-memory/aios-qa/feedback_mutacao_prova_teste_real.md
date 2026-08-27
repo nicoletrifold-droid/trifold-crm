@@ -1,6 +1,6 @@
 ---
 name: mutacao-prova-teste-real
-description: Ao revisar testes novos, rodar mutação no código (não só ler o teste) — e saber que mock síncrono NUNCA prova `await`
+description: Ao revisar testes novos, rodar mutação no código (não só ler o teste); mock síncrono NUNCA prova `await`; e "tautologia?" se responde DESMIGRANDO a chamada, não lendo a asserção
 metadata:
   type: feedback
 ---
@@ -54,3 +54,30 @@ emite num **microtask**. A conclusão de profundidade 1 não muda — microtasks
 qualquer macrotask de rede — mas dizer isso no gate é a diferença entre prova e otimismo.
 
 Relacionado: [[epic-87-qa-patterns]]
+
+## "O teste virou tautologia?" — o experimento é DESMIGRAR a chamada, não ler a asserção
+
+Quando uma função muda o **shape** do retorno (`Date[]` → `{ slots, houveIncerteza }`), o `tsc` pega
+quase todos os chamadores de teste — mas **não** os que assertam com `toEqual`/`toContain` sobre
+`unknown`-ish. Ex. real (87-18): `const slots = await f(...); expect(slots).toEqual([])` compila
+limpo com o objeto novo, porque `toEqual` aceita qualquer tipo.
+
+A tentação é chamar isso de buraco de cobertura. **Não é** — e a forma de saber não é raciocinar,
+é o experimento de 2 minutos: **desfazer a migração naquela linha** (`const { slots }` → `const
+slots`) e medir as duas coisas juntas:
+
+- `tsc --noEmit` → EXIT=0, silêncio (o compilador é a rede com buraco);
+- `vitest run` do arquivo → **1 vermelho**, e é exatamente aquele teste.
+
+Se o teste fica vermelho, ele nunca virou tautologia: o buraco é do compilador, e a rede é a suíte.
+Se ficasse verde, aí sim é achado.
+
+**Why:** no gate da 87-18 essa era a pergunta mais forte do lote e o @dev tinha sido honesto sobre o
+fato sem tirar a conclusão. Sem o experimento eu teria registrado um achado que não existe.
+
+**How to apply:** vale para toda story que muda tipo de retorno de função com muitos chamadores de
+teste. E o corolário para o gate: quando `tsc` dá EXIT=0 numa árvore mutada, **prove que a invocação
+é capaz de reprovar** (injete um erro de tipo deliberado e veja o `TS…`) antes de escrever "verde
+real" no gate.
+
+Relacionado: [[epic-87-qa-patterns]], [[reverificacao-focada]]
