@@ -542,19 +542,59 @@ export function parseRequestedSlot(message: string, now: Date): ParsedSlot {
 }
 
 /**
+ * Story 87-18 — o resultado de UMA consulta de disponibilidade tem TRÊS estados,
+ * porque a pergunta tem três respostas possíveis. `"unknown"` é ausência de
+ * informação: não é "ocupado" (seria uma afirmação sem base) e não é "livre" (a
+ * mentira que a story fecha).
+ *
+ * 🔴 As três strings são TRUTHY. `if (await isSlotFree(...))` e
+ * `filter((_, i) => resultados[i])` compilam limpos com `tsc --strict` (medido
+ * pelo @po: EXIT=0, zero linhas) e o repo não tem `strict-boolean-expressions` —
+ * a forma booleana esquecida faz TODO horário `"occupied"` ser ofertado e
+ * gravado como livre. A rede são dois testes (`visit-slot.test.ts` "compromisso
+ * HOUSE no mesmo horário bloqueia" e "manhã de sábado com 10h ocupado") + a
+ * `AC10` da story, que obriga as duas mutações que provam que eles reprovam.
+ * SEMPRE comparar explicitamente com `"free"` / `"occupied"` / `"unknown"`.
+ */
+export type SlotCheck = "free" | "occupied" | "unknown"
+
+/**
+ * Story 87-18 — callback de observabilidade para a consulta de agenda que
+ * falhou. O shape é ESTRUTURALMENTE igual ao `PipelineEvent` de
+ * `chat/pipeline.ts`, mas declarado aqui de propósito: importar o tipo de lá
+ * criaria dependência de `flows/` para `chat/` na direção errada. `pipeline.ts`
+ * passa o `emit` que já tem (o mesmo cano do `NICOLE_SLOT_MISMATCH`), sem
+ * adaptador e sem cruzar o limite `packages/ai` → `packages/web`.
+ */
+export type EmitSlotQueryError = (event: {
+  level: "error" | "warn" | "info"
+  category: string
+  event_type: string
+  message: string
+  metadata?: Record<string, unknown>
+}) => void
+
+/** Story 87-18 — `event_type` do evento agregado (um por CHAMADA, nunca por candidato). */
+const EVENT_SLOT_QUERY_ERROR = "NICOLE_SLOT_QUERY_ERROR"
+
+/**
  * Slot livre se não há appointment ativo sobrepondo [start, start+60min).
  * Story 75-163 — `excludeAppointmentId` ignora a PRÓPRIA visita do lead ao remarcar
  * (senão mover pra perto do mesmo horário conflitaria consigo mesma).
  * Story 81-1 — a Nicole é da equipe HOUSE: só compromissos `team='house'` ocupam
  * o slot dela. Compromisso IMOB (Daiana/imobiliárias) no mesmo horário NÃO
  * bloqueia — equipes independentes (Epic 81), comportamento desejado.
+ *
+ * Story 87-18 — devolve `SlotCheck` (tri-estado), não `boolean`. Exportada pelo
+ * mesmo motivo que `espalhar`: a `AC1` asserta os três estados DIRETO, em vez de
+ * inferi-los das fixtures dos dois chamadores.
  */
-async function isSlotFree(
+export async function isSlotFree(
   supabase: SupabaseClient,
   orgId: string,
   startUtc: Date,
   excludeAppointmentId?: string | null
-): Promise<boolean> {
+): Promise<SlotCheck> {
   const windowStart = new Date(startUtc.getTime() - (VISIT_DURATION_MIN - 1) * 60_000).toISOString()
   const windowEnd = new Date(startUtc.getTime() + (VISIT_DURATION_MIN - 1) * 60_000).toISOString()
 
@@ -568,23 +608,67 @@ async function isSlotFree(
     .lt("scheduled_at", windowEnd)
   if (excludeAppointmentId) q = q.neq("id", excludeAppointmentId)
 
-  const { data } = await q.limit(1).maybeSingle()
+  // Story 87-18 — o `error` NÃO pode ser descartado aqui. O PostgREST não
+  // rejeita em erro de consulta: devolve `{ data: null, error }`. O `return
+  // !data` do `HEAD` transformava RLS negado / coluna renomeada / timeout /
+  // schema cache stale no MESMO resultado que "não há compromisso sobrepondo" —
+  // `true`, "livre" — sem log, sem evento, sem rastro, e a Nicole ofertava E
+  // gravava (`pipeline.ts:1563`) um horário possivelmente ocupado.
+  const { data, error } = await q.limit(1).maybeSingle()
 
-  return !data
+  if (error) return "unknown"
+  return data ? "occupied" : "free"
 }
 
 /**
  * Checa disponibilidade do horário pedido. Se ocupado, devolve até 3 horários
  * livres (mesmo dia depois do pedido; se acabar, manhã do próximo dia útil).
+ *
+ * Story 87-18 — `erroNoPedido` significa UMA coisa só: *"a consulta do horário
+ * que o cliente PEDIU falhou"*. Ele **não** significa "algum candidato de
+ * alternativa falhou" (isso não aparece no retorno — vira o evento agregado e
+ * uma lista de alternativas possivelmente mais curta) e **não** significa
+ * "ocupado". Com `erroNoPedido === true`, `free === false` é ausência de
+ * informação, não uma afirmação: quem consome tem de dizer "não consegui
+ * confirmar", nunca "está ocupado".
+ *
+ * `emit` é o ÚLTIMO parâmetro de propósito (DECISÃO 3 do @po, `AC10-iii`):
+ * nenhum parâmetro existente muda de posição, nome ou default, porque os dois
+ * testes que seguram o tri-estado são justamente os que uma troca de assinatura
+ * mais ampla reescreveria.
  */
 export async function checkSlotAvailability(
   supabase: SupabaseClient,
   orgId: string,
   startUtc: Date,
-  excludeAppointmentId?: string | null
-): Promise<{ free: boolean; alternatives: Date[] }> {
-  if (await isSlotFree(supabase, orgId, startUtc, excludeAppointmentId)) {
-    return { free: true, alternatives: [] }
+  excludeAppointmentId?: string | null,
+  emit?: EmitSlotQueryError
+): Promise<{ free: boolean; alternatives: Date[]; erroNoPedido: boolean }> {
+  const primary = await isSlotFree(supabase, orgId, startUtc, excludeAppointmentId)
+  if (primary === "free") {
+    return { free: true, alternatives: [], erroNoPedido: false }
+  }
+
+  // Story 87-18 (`AC2-ii`) — CURTO-CIRCUITO OBRIGATÓRIO, e não é otimização: é
+  // teto de latência. Se o horário PEDIDO veio `"unknown"`, a resposta já está
+  // decidida ("não consegui confirmar") e as alternativas não são usadas por
+  // ela. Varrer os candidatos aqui gastaria até ~37 consultas SEQUENCIAIS
+  // (`for … await`, não `Promise.all`) contra um banco que acabou de falhar, no
+  // caminho da resposta ao lead — o cenário de outage é justamente o que faz o
+  // primário falhar. Sai antes.
+  if (primary === "unknown") {
+    emit?.({
+      level: "error",
+      category: "ai",
+      event_type: EVENT_SLOT_QUERY_ERROR,
+      message: `Consulta de disponibilidade falhou no horário pedido (${startUtc.toISOString()})`,
+      metadata: {
+        requested_at: startUtc.toISOString(),
+        candidatos_com_erro: 1,
+        primario_com_erro: true,
+      },
+    })
+    return { free: false, alternatives: [], erroNoPedido: true }
   }
 
   const alternatives: Date[] = []
@@ -616,12 +700,42 @@ export async function checkSlotAvailability(
     }
   }
 
+  // Story 87-18 (`AC3`) — um candidato `"unknown"` é OMITIDO e a busca CONTINUA.
+  // Nem entra em `alternatives` (seria a mentira original, "verificado e livre")
+  // nem aborta o resto (seria criar, para o caminho B, o "um candidato derruba os
+  // outros dez" que o `REL-1` já é no caminho A).
+  let candidatosComErro = 0
   for (const c of candidates) {
     if (alternatives.length >= 3) break
-    if (await isSlotFree(supabase, orgId, c, excludeAppointmentId)) alternatives.push(c)
+    const status = await isSlotFree(supabase, orgId, c, excludeAppointmentId)
+    if (status === "free") alternatives.push(c)
+    else if (status === "unknown") candidatosComErro++
   }
 
-  return { free: false, alternatives }
+  // Story 87-18 (`AC6`) — evento AGREGADO: no máximo UM por chamada, com a
+  // contagem na `metadata`. Onze linhas quase idênticas em `system_events` por
+  // um turno de conversa é ruído, não observabilidade.
+  if (candidatosComErro > 0) {
+    emit?.({
+      level: "error",
+      category: "ai",
+      event_type: EVENT_SLOT_QUERY_ERROR,
+      message: `Consulta de disponibilidade falhou em ${candidatosComErro} candidato(s) de alternativa ao checar ${startUtc.toISOString()}`,
+      metadata: {
+        requested_at: startUtc.toISOString(),
+        candidatos_com_erro: candidatosComErro,
+        // O primário aqui é `"occupied"` de verdade — o `"unknown"` saiu no
+        // curto-circuito acima e nunca alcança este ponto.
+        primario_com_erro: false,
+      },
+    })
+  }
+
+  // `erroNoPedido` é FALSE aqui de propósito: o horário pedido foi CONFIRMADO
+  // ocupado. A incerteza ficou só nas alternativas → a mensagem existente ("já
+  // existe uma visita nesse horário") continua verdadeira, com a lista
+  // possivelmente mais curta (`AC6-ii`).
+  return { free: false, alternatives, erroNoPedido: false }
 }
 
 /**
@@ -667,6 +781,20 @@ export function espalhar<T>(xs: T[], k: number): T[] {
  * `Promise.all`: profundidade sequencial 1 (um único round-trip de espera), em
  * vez de 11 em série no caminho da resposta ao lead. O paralelismo é limitado
  * pela geometria do período, não por uma lista de tamanho aberto.
+ *
+ * Story 87-18 — `houveIncerteza` significa UMA coisa só: *"ALGUM candidato deste
+ * período não pôde ser verificado"*. Ele **não** significa "o período não tem
+ * horário livre", **não** significa "a oferta é ruim" e **não** é motivo para
+ * descartar `slots`: quem consome testa `slots.length` PRIMEIRO e só olha
+ * `houveIncerteza` quando a lista veio vazia (`AC4-ii`). Com `slots` não vazio a
+ * oferta é boa — ela é uma amostra por construção (`espalhar`), e um candidato a
+ * menos não muda a categoria da resposta.
+ *
+ * 🔴 `slots: []` deixou de ter um significado único: pode ser "não há horário
+ * livre nesse período" (`houveIncerteza === false`) ou "não consegui checar
+ * nenhum candidato" (`houveIncerteza === true`). Qualquer refatoração que volte a
+ * tratar lista vazia como a primeira coisa sem olhar a segunda reabre o defeito
+ * desta story num lugar novo (`AC5`).
  */
 export async function freeSlotsInPeriod(
   supabase: SupabaseClient,
@@ -675,11 +803,14 @@ export async function freeSlotsInPeriod(
   period: DayPeriod,
   now: Date,
   excludeAppointmentId?: string | null,
-  limit = 3
-): Promise<Date[]> {
+  limit = 3,
+  emit?: EmitSlotQueryError
+): Promise<{ slots: Date[]; houveIncerteza: boolean }> {
   const weekday = brtParts(brtToUtc(day.y, day.m, day.d, 12)).weekday
   const close = closeHourFor(weekday)
-  if (close === null) return []
+  // Dia fechado: nenhuma consulta foi feita, logo nenhuma incerteza — é um
+  // "não há horário" com base em regra de expediente, não em ignorância.
+  if (close === null) return { slots: [], houveIncerteza: false }
 
   const { fromMin, toMin } = PERIOD_BOUNDS[period]
   const lastStart = Math.min(toMin, close * 60) - VISIT_DURATION_MIN
@@ -690,9 +821,31 @@ export async function freeSlotsInPeriod(
     candidates.push(candidate)
   }
 
-  const livre = await Promise.all(
+  const resultados = await Promise.all(
     candidates.map((c) => isSlotFree(supabase, orgId, c, excludeAppointmentId))
   )
-  const free = candidates.filter((_, i) => livre[i])
-  return espalhar(free, limit)
+  // 🔴 Story 87-18 — a comparação com `"free"` é EXPLÍCITA de propósito. O
+  // predicado de `Array.prototype.filter` é tipado como `=> unknown`, então
+  // `filter((_, i) => resultados[i])` compila limpo e passa TODO candidato
+  // `"occupied"` como livre (as três strings são truthy). Ver `AC10-ii`.
+  const free = candidates.filter((_, i) => resultados[i] === "free")
+  const comErro = resultados.filter((r) => r === "unknown").length
+
+  // Story 87-18 (`AC6`) — um evento por CHAMADA, não por candidato.
+  if (comErro > 0) {
+    emit?.({
+      level: "error",
+      category: "ai",
+      event_type: EVENT_SLOT_QUERY_ERROR,
+      message: `Consulta de disponibilidade falhou em ${comErro}/${candidates.length} candidato(s) do período`,
+      metadata: {
+        dia: dayPartsToIso(day),
+        periodo: period,
+        candidatos_totais: candidates.length,
+        candidatos_com_erro: comErro,
+      },
+    })
+  }
+
+  return { slots: espalhar(free, limit), houveIncerteza: comErro > 0 }
 }
