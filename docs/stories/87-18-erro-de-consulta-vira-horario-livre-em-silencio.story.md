@@ -1200,3 +1200,113 @@ Story **Ready for Review**. O @qa emite o **segundo** gate do PR `#517` (o da `8
 | 2026-08-27 | v0.3 | **Implementada por @dev (Dex), modo YOLO, em cima de `cdf4411e` na branch da `87-17` (DECISÃO 1).** `Ready` → `Ready for Review`. `T0`-`T6` fechadas: `isSlotFree` tri-estado (e exportada, como `espalhar`), `erroNoPedido`/`houveIncerteza` + `emit` no fim, curto-circuito do primário, ordem normativa `slots.length` → `houveIncerteza` nos dois sítios de período. Suíte `3145 | 6` → `3177 | 6` (`+32` testes, `+1` arquivo), `tsc` 0, `lint` EXIT=0 sem achado nos arquivos tocados, **zero golden recalibrado**. As TRÊS mutações do `T6` coladas com a saída bruta e a árvore restaurada byte a byte — inclusive as duas da `AC10`, que confirmaram o diagnóstico do @po: `tsc --noEmit` dá **0 linhas / EXIT=0** nas duas formas booleanas, e a rede são os dois testes pré-existentes. `AC2-ii`, `AC4-ii` e `AC5` também tiveram a falsificabilidade medida por mutação. Cinco divergências de FORMA registradas (a maior: das 14 chamadas de teste, só **9** mudaram de tipo e só **8** precisaram de diff — as 5 de `checkSlotAvailability` GANHARAM um campo, não mudaram de forma) | @dev (Dex) |
 | 2026-08-27 | v0.2 | **`[@po]` Validação (`8,0/10`, GO) — `Draft` → `Ready`.** Três decisões arbitradas: **(1)** as duas stories no MESMO PR `#517`, commits desta em cima de `cdf4411e` (o desenho desta story não existe em `main`); **(2)** os dois sítios de `packages/web` viram **`87-19`, P1** — raio de alcance MAIOR que o do `isSlotFree`, remédio OPOSTO (falhar fechado), fora deste deploy; **(3)** forma do `emit` travada como `AC10-iii` (novo parâmetro no fim; nada de objeto de opções), porque a refatoração reescreveria justamente os dois testes que são a única rede do tri-estado. Seis correções: §6/R1/Testing (o `tsc` **não** pega a forma booleana — medido, EXIT=0 com contraprova, e `"occupied"` truthy é pior que o defeito original) → `AC10` nova; curto-circuito do primário `"unknown"` (~37 consultas sequenciais no outage) → `AC2-ii`; controle da mensagem na incerteza PARCIAL → `AC4-ii`; controle da `AC6` trocado (o antigo ficou inalcançável); baseline da suíte corrigido para a branch (`AC9`); `erro` renomeado para `erroNoPedido`/`houveIncerteza` (um nome, duas semânticas); `AC7` com `grep` portável; `R7`/`R8` novos (precondição criada para a Fatia 2 da `87-17`; latência do caminho de erro); §1 com a cadeia até o `INSERT` e o `authorizedSlotUtc`; §2 com o estreitamento do `REL-1`; §3 com a auditoria corrigida | @po (Pax) |
 | 2026-08-27 | v0.1 | Draft inicial — defeito verificado por leitura de código na revisão do PR `#517`; auditoria do padrão em `packages/ai`/`packages/web`; desenho de `isSlotFree` tri-estado + `erro` agregado + `emit` reaproveitando o padrão de `PipelineEvent`; fronteira explícita com o `REL-1` | @sm (River) |
+
+---
+
+## QA Results
+
+**Gate:** 🟡 **CONCERNS** — aprovada, **nenhum bloqueante**, 4 follow-ups (1 medium, 3 low).
+**Revisor:** Quinn (@qa) · **Data:** 2026-08-27 · **Arquivo do gate:**
+`docs/qa/gates/87-18-erro-de-consulta-vira-horario-livre-em-silencio.yml`
+**Escopo:** `cdf4411e..HEAD` (`77566360` + `17b6e5f0`). Este é o **SEGUNDO** gate do PR `#517`; o da
+`87-17` Fatia 1 (`docs/qa/gates/87-17-fatia1-oferta-de-horario-espalhada.yml`, `CONCERNS`)
+**continua válido e não foi refeito**. CodeRabbit **não** executado (decisão do Marcos, 27/08).
+
+### Veredito
+
+O conserto é o certo e é mínimo. `error` deixa de ser descartado, `"unknown"` nunca vira afirmação,
+e o caminho que levava ao `INSERT` (`bookableSlotUtc` + `authorizedSlotUtc`) fica provadamente
+cortado — medido no nível do `processMessage`, não só no retorno da função. **PR `#517` liberado
+para o @devops com as duas stories.**
+
+### Números que EU medi (nenhum aceito por relatório)
+
+| medição | resultado |
+|---|---|
+| `npx vitest run` da raiz | **257 arquivos · 3177 passed \| 6 expected fail (3183) · EXIT=0** (duas execuções) |
+| baseline da branch (`cdf4411e`) | 256 · 3145 \| 6 — número que eu medi no gate da `87-17`; delta **+1 arquivo / +32 testes** fechado por `diff` (+32 `it(`, **0** testes removidos, **0** `it.fails`/`skip` novos) |
+| `tsc --noEmit` em `packages/ai` | EXIT=0, **0 linhas** (`wc -l`), com **contraprova** (`TS2322` ao injetar erro de tipo) |
+| `npm run lint` | EXIT=0 — a 1ª execução veio **`8 cached, FULL TURBO` e foi descartada**; remedido com `npx turbo run lint --force` (0 cached, 40,3s), **0 achados** nos arquivos tocados |
+| `AC9` — zero golden recalibrado | **CONFIRMADO**: nenhuma linha `-` do diff de `packages/ai` é uma linha `expect(`; 8 pares `-`/`+` com lista de **argumentos idêntica**; os 7 goldens de `pipeline-agenda-state.test.ts` intocados |
+
+### Mutações que eu rodei (4) — árvore restaurada e conferida por `sha256` após cada uma
+
+| mutação | resultado medido |
+|---|---|
+| `AC10-i` — `if (primary)` | `tsc` EXIT=0 (o compilador **não** é a rede) e **8 failed \| 103 passed**, com o teste pré-existente *"compromisso HOUSE no mesmo horário bloqueia"* em `expected true to be false` — **verbatim** |
+| `AC10-ii` — `filter((_, i) => resultados[i])` | `tsc` EXIT=0 e **7 failed \| 104 passed**, sábado de manhã acusando **`12:30Z`** onde esperava **`12:00Z`** — **verbatim** |
+| `AC2-ii` — sem o `return` do ramo `unknown` | **`expected 26 to be 1`** — as 26 consultas sequenciais estão medidas por mim; o curto-circuito derruba para **1** |
+| `AC4-ii` — ordem invertida nos 2 sítios | **2 failed \| 12 passed**, e os dois vermelhos são exatamente os dois testes `AC4-ii`, um por sítio |
+
+**Prova extra, minha, que não estava no plano:** sweep de propriedades (arquivo temporário, apagado)
+— semana 24–30/08 × `manha`/`tarde` × `limit` 1..12 com injeção de erro 1-em-N: **nenhum** horário
+com erro é ofertado em nenhuma combinação, nenhum início estoura o fechamento, sábado à tarde **e
+domingo** (o ramo `close === null`) saem vazios com `houveIncerteza false` e **0 consultas**, e
+`isSlotFree` em 200 amostras nunca devolve `"free"` sob `error`. 5/5 verde, **com contraprova** (o
+filtro truthy reprova a invariante central).
+
+### Os 7 checks
+
+| # | check | nota |
+|---|---|---|
+| 1 | Requirements — `AC1`–`AC10` implementados | ✅ PASS |
+| 2 | Code Quality | ✅ PASS |
+| 3 | Testing | ✅ PASS |
+| 4 | Documentation | 🟡 CONCERNS (`DOC-1`, `TEST-1` — imprecisões de registro, zero código) |
+| 5 | Performance | ✅ PASS (melhora medida: 26 → 1 no caminho de erro) |
+| 6 | Security | ✅ PASS (o `INSERT` sob incerteza deixa de acontecer; zero PII no evento; a mensagem do `error` do PostgREST não vaza para o lead) |
+| 7 | Observabilidade / efeitos de 2ª ordem | 🟡 CONCERNS (`OBS-1`) |
+
+### Achados
+
+**Bloqueantes: nenhum.**
+
+- 🟡 **`OBS-1` (medium)** — a frase nova cita o horário pedido e o guard *fail-open* do `:1316`
+  emite **`NICOLE_SLOT_UNAUTHORIZED`** por cima do `NICOLE_SLOT_QUERY_ERROR` correto. **Medido, não
+  deduzido:** em 3 respostas plausíveis da Nicole sob incerteza, **2** resolvem dia+hora em
+  `detectAffirmedSlot` (que não exige verbo de afirmação), e `authorizedSlotUtc` é nulo nesse ramo
+  por desenho. Sem dano: só loga, nada é gravado, e o evento certo sai no mesmo turno. A classe
+  **pré-existe** (o ramo "ocupado" sem alternativas tem a mesma forma) — esta story a alarga.
+  **Destino:** `docs/backlog.md`, decisão de @po.
+- 🔵 **`COPY-1` (low)** — a frase de incerteza do `:1015` não avisa que a visita atual segue
+  mantida, e todos os outros ramos daquele sítio avisam. **O @dev fez certo em não inventar copy**
+  (Artigo IV) e registrou a sugestão: o literal é **compartilhado** com o `:1107`, onde não existe
+  visita ativa e a oração seria **falsa**. Não é um append — é escolha de copy, do @po.
+- 🔵 **`TEST-1` (low)** — o ramo `close === null` (domingo) não tem teste na suíte. O teste citado
+  pela divergência nº 3 exercita **sábado à tarde** (zero candidatos, `return` final), não o `return`
+  precoce. Eu medi o domingo no meu sweep e o `tsc` protege a **forma** do retorno.
+- 🔵 **`DOC-1` (low)** — `slots: []` é afirmação legítima em **quatro** caminhos, não um. A
+  invariante correta, e que o código garante, é `houveIncerteza === false` ⟺ lista vazia é
+  afirmação legítima.
+
+### Os pontos julgados (detalhe completo no gate)
+
+1. **Divergência nº 2 (`tsc` × `:511`/`:512`)** — **não** é buraco de cobertura e o teste **não**
+   virou tautologia. Provado por experimento: desmigrei a linha, o `tsc` ficou **silencioso** e o
+   teste ficou **vermelho**. O buraco é do compilador; a rede é a suíte.
+2. **Curto-circuito** — 26 medido por mim, 1 com o curto-circuito. **Nenhuma** perda nova: no `HEAD`
+   esse caminho já não oferecia alternativa (afirmava "LIVRE" e gravava).
+3. **Ordem normativa `slots.length` → `houveIncerteza`** — respeitada nos dois sítios e **travada
+   por teste** (a inversão reprova exatamente os dois `AC4-ii`).
+4. **`AC5`** — as 4 frases lidas no código; **nenhuma** afirma disponibilidade ou indisponibilidade
+   a partir de incerteza, e os 4 sítios têm teste de **conteúdo** com asserção negativa nas frases
+   antigas **e** controle sem-erro por sítio. Nenhuma AC fica verde sobre uma falsidade.
+5. **`emit` posicional** — nenhum parâmetro existente mudou de posição, nome ou default
+   (`limit = 3` preservado); evento **agregado**, teto de 1 por chamada **estrutural** (os dois
+   `emit` de `checkSlotAvailability` são mutuamente exclusivos pelo curto-circuito).
+6. **`return` precoce** — comportamento correto; cobertura imprecisa (`TEST-1`/`DOC-1`).
+7. **Regressão de sentido** — confirmada ausente por três vias: os testes da `87-17` seguem
+   mordendo (aparecem nos vermelhos da mutação `c`), a razão estrutural (o laço de candidatos e
+   `espalhar` não foram tocados) e o meu sweep.
+
+### Condições (nenhuma bloqueante)
+
+1. **PR `#517` liberado para o @devops com as DUAS stories.** Um PR = um deploy (DECISÃO 1).
+2. **`OBS-1` já registrado** por mim em `docs/backlog.md` (P2, aditivo, sem tocar a edição
+   concorrente do @po/@sm). Não desfazer esse registro ao resolver conflito de merge.
+3. As condições do gate da `87-17` Fatia 1 seguem de pé (em especial o `PERF-1`; esta story
+   **alivia** o caminho de erro, não responde o caminho feliz).
+4. Este gate e `docs/qa/po-validation-87-18.md` devem entrar no PR — a story os referencia por
+   caminho.
+
+— Quinn, guardião da qualidade 🛡️

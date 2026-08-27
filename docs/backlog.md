@@ -6,6 +6,50 @@ Tarefas operacionais, configurações e ajustes pendentes que não requerem uma 
 
 ## Pendente
 
+### [Agendamento público] 🔴 Erro de consulta zera a lista de OCUPADOS e abre o portão antes do `INSERT` — story `87-19`
+
+**Adicionado em:** 2026-08-27
+**Prioridade:** **P1**
+**Origem:** Auditoria do §3 da Story `87-18` (@sm) + verificação e arbitragem do @po
+(`docs/qa/po-validation-87-18.md`, DECISÃO 2). Procedência: **leitura de código**, não achado de bot.
+**Ação:** `@sm *draft` da story **`87-19`**. É a **próxima da fila** depois do deploy do `#517`
+(`87-17` Fatia 1 + `87-18`) e vem **antes da Fatia 2 da `87-17`**.
+
+Dois helpers descartam o `error` de uma consulta de LISTA ao `appointments` e devolvem `data ?? []`:
+
+- `packages/web/src/lib/appointments/team-slots.ts:36` — `ocupadosDaEquipe`
+- `packages/web/src/app/api/agendar/[token]/route.ts:48` — `imobBusyBetween` (cópia privada paralela)
+
+**Erro de consulta → lista de ocupados VAZIA → "o dia inteiro está livre".** Consumidores medidos em
+27/08: `gradeDaEquipe` (`team-slots.ts:53-73`, monta a grade e é chamada por
+`/api/formulario/[token]/agenda:67` e `/api/appointments/slots:37`),
+`/api/formulario/[token]/agenda:155` e `/api/agendar/[token]:84,145`.
+
+🔴 **O que torna isto P1 (e não uma nota de higiene): nos DOIS `POST` públicos o helper é o ÚLTIMO
+PORTÃO antes da escrita.** `agendar/[token]/route.ts:145-160` → `taken = busy.some(overlaps)` (`:150`) →
+`if (taken) 409` (`:155`) → senão `.from("appointments").insert()` em `:208-209`.
+`formulario/[token]/agenda/route.ts:155-171` → `tomado` (`:162`) → `409` (`:166`) → senão
+`.insert()` em `:192-193`. Lista vazia = portão aberto = **linha gravada por
+cima de um compromisso existente**, em link **público por token**, sem sessão, sem Nicole e sem
+corretor no meio para estranhar. Consequência física: duas pessoas no mesmo horário, com confirmação
+enviada às duas.
+
+**Raio de alcance MAIOR que o do `isSlotFree` da `87-18`:** lá é uma consulta **por candidato** (um
+erro contamina um horário); aqui é **uma consulta pela janela toda** (um erro apaga o dia inteiro).
+Os dois helpers usam o **admin client** (`createAdminClient`, service-role), então o gatilho "RLS
+surpresa" não se aplica — sobram `timeout`, cache de schema e `5xx` do PostgREST.
+
+**Por que NÃO entrou na `87-18`:** o remédio é **oposto**. Na `87-18`, `unknown` → *omitir o
+candidato e seguir* (a oferta é amostra por natureza). Aqui uma lista parcial é indistinguível de uma
+lista completa, então o único remédio honesto é **falhar FECHADO**: propagar o erro e **recusar a
+gravação** (`503` "não consegui confirmar agora"), nunca gravar sob incerteza. Juntar duas
+invariantes opostas no mesmo PR é exatamente o que a `AC7` da `87-18` existe para impedir.
+
+**Não medido em produção** (é silencioso por construção, como o da `87-18`). Prioridade vem do raio e
+do fato de o erro cair no portão de escrita, não de incidente contado.
+
+---
+
 ### [Nicole] 🟡 `freeSlotsInPeriod` sem tratamento de erro — 11 queries por oferta e uma rejeição faz o lead não receber resposta
 
 **Adicionado em:** 2026-08-27
@@ -33,8 +77,58 @@ possivelmente incompleta, e (b) `try/catch` no chamador com um bloco `[SISTEMA]`
 consegui consultar a agenda agora". Qualquer das duas precisa de **evento próprio** em
 `system_events` (hoje só existe o `WEBHOOK_ASYNC_ERROR` genérico) para o volume ser medível.
 
+**`[@po 27/08]` ATUALIZAÇÃO — a Story `87-18` ESTREITA este item (não o absorve).** A `87-18`
+(validada hoje, no PR `#517`) conserta o caminho **B** — o PostgREST devolvendo `{ data: null, error }`
+sem lançar — introduzindo a invariante *"`unknown` nunca é afirmação: nem livre nem ocupado"*, o
+terceiro estado de `isSlotFree`, a mensagem honesta de "não consegui confirmar" nos 4 sítios de
+`pipeline.ts` e o evento `NICOLE_SLOT_QUERY_ERROR`. Consequências para este item:
+1. **A opção (a) morre.** Mapear rejeição de rede para "não livre" contradiz a invariante da `87-18`:
+   uma rejeição é a MESMA ignorância que um `error`, e chamá-la de "ocupado" reintroduziria pela porta
+   do caminho A a mentira fechada no caminho B.
+2. **A opção (b) fica quase de graça** depois da `87-18`: a mensagem honesta e o evento já existirão —
+   falta mapear a rejeição para `"unknown"` e deixar o resto do caminho fazer o trabalho.
+3. **A fronteira segue de pé:** a `AC7` da `87-18` é o controle negativo que prova que ela **não**
+   toca o caminho da rejeição (uma rejeição continua subindo como sobe hoje). Este item continua
+   aberto, com o mesmo escopo — só com o espaço de decisão menor.
+
 ---
 
+
+### [NICOLE] 🟡 `NICOLE_SLOT_UNAUTHORIZED` dispara junto com o evento correto no caminho de incerteza da `87-18`
+
+**Adicionado em:** 2026-08-27
+**Prioridade:** P2
+**Origem:** Quality gate @qa da Story `87-18` (`docs/qa/gates/87-18-erro-de-consulta-vira-horario-livre-em-silencio.yml`, achado `OBS-1`). Procedência: **medição própria do @qa no código**, não achado de bot.
+
+A `87-18` criou dois ramos em `packages/ai/src/chat/pipeline.ts` (`:1015` remarcar e `:1107` agendar)
+que, sob erro de consulta da agenda, **citam o horário pedido** na frase do `[SISTEMA]` e
+deliberadamente **não setam `authorizedSlotUtc`** (é exatamente isso que corta o `INSERT`).
+
+O guard anti-alucinação (`pipeline.ts:1289-1326`) usa `detectAffirmedSlot`, que **não exige verbo de
+afirmação** — ele só faz parse de dia+hora não ambíguos na resposta da Nicole (`isAmbiguousSlotText`
+só se cala quando há múltiplas opções). Com `authorizedSlotUtc` nulo, o ramo do `:1310` emite
+**`NICOLE_SLOT_UNAUTHORIZED`** — *"Nicole afirmou X sem o sistema ter autorizado horário algum"* —
+que descreve algo **mais grave** do que aconteceu: ela não afirmou nada, ela repetiu o horário que o
+cliente pediu para dizer que não conseguiu checar.
+
+**Medido no gate:** em 3 respostas plausíveis da Nicole sob incerteza, **2** resolvem para
+`2026-08-15T13:00:00.000Z` em `detectAffirmedSlot`. Ou seja: cada turno de outage tende a produzir
+**dois** eventos — o `NICOLE_SLOT_QUERY_ERROR` correto e este por cima.
+
+**Não é bloqueante e não houve dano:** o guard é *fail-open* (só emite, nunca bloqueia o envio),
+nada é gravado em `appointments`, e o evento certo sai no mesmo turno, na mesma conversa — a
+correlação é trivial para quem souber. A classe **pré-existe** no ramo "horário ocupado sem
+alternativas" (que também cita `whenStr` com `authorizedSlotUtc` nulo); a `87-18` a **alarga**.
+
+**Por que registrar:** o Epic 87 é sobre confiar nos instrumentos. Um evento que erra na direção
+alarmista manda o investigador futuro pelo caminho errado — é o espelho do falso verde que o epic
+combate.
+
+**Opções (decisão de @po, não de @dev):** (a) omitir o horário da frase nova — ela fica menos útil
+para o modelo; (b) o guard se calar no turno em que houve `NICOLE_SLOT_QUERY_ERROR`; (c) não fazer
+nada e documentar a co-ocorrência como leitura esperada do evento.
+
+---
 
 ### [CI] 🔴 Nada compara o `schema-snapshot.json` commitado com o schema real do banco
 

@@ -1,0 +1,467 @@
+schema: 1
+storyId: "87-18"
+story: "87-18 — Erro na consulta da agenda para de virar \"horário livre\" em silêncio"
+title: "Quality Gate — Story 87-18 (T0–T6, ACs AC1–AC10) · SEGUNDO gate do PR #517"
+epic: 87
+gate: CONCERNS
+verdict: CONCERNS
+reviewed_by: "Quinn (@qa)"
+reviewed_at: "2026-08-27"
+commits:
+  producao: "77566360 (fix(nicole): erro de consulta da agenda para de virar \"horário livre\" em silêncio)"
+  testes: "17b6e5f0 (test(nicole): injeção de erro de consulta nos dois fakes + 32 testes do tri-estado)"
+  docs: "c44ec1f0 (story + parecer do @po)"
+  memoria: "36c7d190 (chore(memory))"
+base: "cdf4411e (topo da Fatia 1 da 87-17, DECISÃO 1 do @po)"
+branch: "fix/87-17-fatia1-oferta-de-horario-espalhada"
+
+gate_anterior_deste_PR:
+  arquivo: "docs/qa/gates/87-17-fatia1-oferta-de-horario-espalhada.yml"
+  gate: CONCERNS
+  status: >
+    CONTINUA VÁLIDO E NÃO FOI REFEITO. A fronteira dele foi medida no diff
+    98772465..1454d4ca; os commits desta story vêm depois. Este gate cobre
+    EXCLUSIVAMENTE cdf4411e..HEAD.
+
+escopo_do_gate:
+  dentro: "T0–T6 · AC1 a AC10 · os 4 sítios de pipeline.ts · os 2 fakes"
+  fora: >
+    Story 87-19 (auto-agendamento público, P1 no backlog) e Fatia 2 da 87-17
+    (detectWantsLaterSlot) — fora por arbitragem do @po, NÃO reprovam esta story.
+    REL-1 (rejeição de rede) permanece aberto no backlog, por desenho da AC7.
+    CodeRabbit NÃO executado (decisão do Marcos, 27/08) — nenhum achado de bot
+    entrou neste gate.
+
+status_reason: >
+  APROVADA. Nenhum bloqueante. Todos os números declarados pelo @dev foram
+  CONFERIDOS POR EXECUÇÃO PRÓPRIA e nenhum foi aceito por relatório — e as duas
+  mutações obrigatórias da AC10 reproduziram VERBATIM, contagem de vermelhos e
+  mensagem de erro incluídas. O conserto é o certo e é mínimo: o error do
+  maybeSingle() deixa de ser descartado, "unknown" nunca vira afirmação, e o
+  caminho que levava ao INSERT (bookableSlotUtc + authorizedSlotUtc) fica
+  provadamente cortado — medido no nível do processMessage, não só no retorno da
+  função.
+
+  NÚMEROS QUE EU MEDI (não os que me contaram):
+    npx vitest run da RAIZ, sem -t e sem --reporter: 257 arquivos ·
+      3177 passed | 6 expected fail (3183) · EXIT=0 (rodada duas vezes).
+    Baseline da BRANCH em cdf4411e: 256 · 3145 | 6 (3151) · EXIT=0 — número que EU
+      medi no gate da 87-17 Fatia 1, portanto o delta +1 arquivo / +32 testes é
+      aritmética verificável, não declaração. Fechei o delta por diff:
+      +32 linhas `it(` adicionadas, ZERO linhas `it(`/`test(`/`describe(` removidas,
+      ZERO it.fails/skip/todo novos. visit-slot.test.ts 93 → 111 (+18);
+      pipeline-slot-query-error.test.ts = 14. 3145 + 32 = 3177. ✅
+    tsc --noEmit em packages/ai: EXIT=0 com saída de 0 linhas (wc -l, não grep -c).
+      CONTRAPROVA de que a invocação reprova: troquei `return "unknown"` por
+      `return "unkown_TYPO_QA"` → TS2322, EXIT≠0. O verde é real.
+    npm run lint: EXIT=0 — mas a primeira execução veio "8 cached, FULL TURBO",
+      e cache hit NÃO é evidência. Remedi com `npx turbo run lint --force`:
+      EXIT=0, "0 cached, 8 total", 40,3s reais, e ZERO achados nos arquivos
+      tocados (grep -c por visit-slot|pipeline|__fixtures__ na saída = 0). As 34
+      warnings de @trifold/web são pré-existentes e em arquivos que a story não toca.
+    AC9 — ZERO golden recalibrado e ZERO teste pré-existente vermelho: CONFIRMADO,
+      e é o oposto da 87-17. Prova: no diff cdf4411e..HEAD de packages/ai nenhuma
+      linha `-` é uma linha de `expect(`. As 8 linhas `-` de chamada têm cada uma a
+      sua `+` com lista de ARGUMENTOS idêntica — só a desestruturação do lado
+      esquerdo mudou (AC10-iii). Os 7 goldens byte a byte de
+      pipeline-agenda-state.test.ts seguem intocados e verdes.
+
+  MUTAÇÕES QUE EU MESMO RODEI — quatro, com a árvore restaurada e conferida por
+  sha256 idêntico ao snapshot limpo ao fim de CADA uma:
+    (b) AC10-i, `if (primary)` no lugar de `if (primary === "free")`:
+        tsc EXIT=0 (o compilador NÃO é a rede — diagnóstico do @po confirmado nesta
+        árvore) e 8 failed | 103 passed, com o teste PRÉ-EXISTENTE "compromisso HOUSE
+        no mesmo horário bloqueia" acusando `expected true to be false`. VERBATIM.
+    (c) AC10-ii, `filter((_, i) => resultados[i])`: tsc EXIT=0 e 7 failed | 104
+        passed, com o sábado de manhã acusando `12:30Z` recebido onde esperava
+        `12:00Z`. VERBATIM, inclusive o par de horários.
+    (AC2-ii) removendo o `return` do ramo `primary === "unknown"`:
+        `AssertionError: expected 26 to be 1`. As 26 consultas SEQUENCIAIS estão
+        MEDIDAS por mim — a estimativa de ~37 da story era teto, o número real
+        depende do dia da fixture, e o curto-circuito derruba para 1.
+    (AC4-ii) invertendo a ordem para `houveIncerteza ? novo : slots.length ? …` nos
+        DOIS sítios de período: exatamente 2 failed | 12 passed, e os dois vermelhos
+        são os dois testes AC4-ii, um por sítio. A ordem normativa está travada por
+        teste, não por comentário.
+
+  E UMA PROVA MINHA QUE NÃO ESTAVA NO PLANO — sweep de propriedades, arquivo
+  temporário meu, apagado ao fim: semana 24–30/08 × manha/tarde × limit 1,2,3,5,8,12,
+  com o banco falhando 1 em cada N candidatos. Invariante central: NENHUM horário com
+  erro de consulta é ofertado, em nenhuma combinação; nenhum início estoura o
+  fechamento; sábado à tarde e DOMINGO (o ramo `close === null`) saem vazios com
+  houveIncerteza false e ZERO consultas; isSlotFree em 200 amostras de horário nunca
+  devolve "free" sob error. 5/5 verde, e com CONTRAPROVA: restaurando o filtro
+  truthy, a invariante central fica vermelha ("24/08 manha passo=1 ofertou
+  2026-08-24T11:00:00.000Z com erro").
+
+  O QUE ME FEZ NÃO DAR PASS: um efeito de segunda ordem que nenhuma AC cobre e que eu
+  medi (OBS-1) — a frase nova de incerteza cita o horário pedido, o guard fail-open do
+  :1316 lê dia+hora numa resposta plausível da Nicole e, com authorizedSlotUtc nulo,
+  emite NICOLE_SLOT_UNAUTHORIZED junto com o NICOLE_SLOT_QUERY_ERROR correto. Não há
+  dano ao lead nem escrita no banco; é ruído no instrumento do próprio epic, e é a
+  mesma régua com que eu dei CONCERNS ao REL-1 na Fatia 1. Segue para o backlog, NÃO
+  para rework.
+
+pontos_julgados:
+  - id: PJ-1
+    tema: "A divergência nº 2 do @dev: o tsc pega 8 das 9 chamadas; visit-slot.test.ts:511/:512 (\"tarde de sábado é vazio\") passa batido"
+    veredito: "NÃO é buraco de cobertura, e o teste NÃO virou tautologia. Provado por experimento. Sem achado."
+    analise: >
+      O @dev foi honesto e a leitura dele do FATO está certa — mas a conclusão que
+      importa é a oposta da que a pergunta sugere. Fiz o experimento decisivo:
+      DESMIGREI a linha :548 de volta para `const slots = await freeSlotsInPeriod(...)`
+      (a forma do HEAD) e medi as duas coisas ao mesmo tempo:
+        npx tsc --noEmit em packages/ai → EXIT=0, silêncio total;
+        npx vitest run do arquivo → 1 failed | 110 passed, e o vermelho é
+          exatamente "tarde de sábado é vazio — o expediente fecha ao meio-dia".
+      Ou seja: `expect(slots).toEqual([])` DEPOIS da migração continua capaz de
+      reprovar, porque `{ slots: [], houveIncerteza: false }` não é `toEqual([])`.
+      O buraco é do COMPILADOR, não da cobertura — a rede é o teste em execução, que é
+      precisamente a lição do §6 que a AC10 transformou em obrigação. A divergência do
+      @dev é uma observação de segurança correta registrada no lugar certo, não uma
+      dívida. Árvore restaurada e conferida.
+  - id: PJ-2
+    tema: "O curto-circuito da AC2-ii — a medição de 26 e o risco de perder uma alternativa boa"
+    veredito: "MEDIÇÃO CONFIRMADA POR MIM (26 → 1). Nenhum caminho novo de perda. Trade-off arbitrado pelo @po, registrado, não achado."
+    analise: >
+      A medição é minha: removi o `return` do ramo `primary === "unknown"` e o teste
+      cuspiu `expected 26 to be 1`. As 26 são SEQUENCIAIS (`for … await`, não
+      Promise.all) contra um banco que acabou de falhar, no caminho da resposta ao
+      lead — o teto de latência do D88-3 é real e o curto-circuito o resolve com 1.
+      Sobre "deixar de oferecer alternativa boa": NÃO há regressão possível, e a razão
+      é estrutural. No HEAD, primário com error produzia free===true e alternatives:[]
+      — o sistema já NÃO oferecia alternativa nenhuma nesse caminho, ele afirmava
+      "LIVRE" e gravava. O curto-circuito não retira nada que existisse; ele deixa de
+      GANHAR uma melhoria hipotética (varrer alternativas sob incerteza do primário),
+      que o @po recusou explicitamente na AC2-ii por latência. Registro por honestidade
+      que num outage PARCIAL — só o candidato pedido falhando, ex. timeout pontual — a
+      Nicole perde a chance de oferecer alternativas que estariam verificáveis. É uma
+      escolha de produto, está escrita na AC, e a resposta que ela dá ("não consegui
+      confirmar, tente em alguns minutos ou eu chamo um corretor") continua honesta.
+  - id: PJ-3
+    tema: "houveIncerteza × slots.length — a ordem normativa da AC4-ii"
+    veredito: "RESPEITADA nos dois sítios, e TRAVADA POR TESTE. Confirmado por mutação minha."
+    analise: >
+      Código: `slots.length ? oferta : houveIncerteza ? frase_nova : sem_horario`,
+      idêntico em :1057 e :1146, com o comentário normativo em cima dos dois. A prova
+      não é o comentário: invertei para `houveIncerteza ? novo : slots.length ? …`
+      nos DOIS sítios e rodei pipeline-slot-query-error.test.ts → 2 failed | 12 passed,
+      e os dois vermelhos são precisamente os dois testes AC4-ii (um por sítio),
+      nenhum outro. É o cenário que o @po previu: 1 incerto entre 7 (ou 11) jogando
+      fora uma oferta boa e inteira. A implementação mantém a oferta, remove o
+      candidato incerto da amostra (o teste asserta `not.toContain("às 09:30")`) e
+      emite o evento de todo jeito — oferta boa E problema observável, as duas coisas.
+  - id: PJ-4
+    tema: "AC5 — a frase, quando TODOS os candidatos falham, não pode afirmar indisponibilidade"
+    veredito: "CONFIRMADO nos QUATRO sítios, por leitura das frases reais e por teste de conteúdo. É o coração da story e está sólido."
+    analise: >
+      Li as quatro frases injetadas, não a descrição delas. Nenhuma afirma
+      disponibilidade nem indisponibilidade a partir de incerteza:
+        :1015 e :1107 (mesmo literal) — "Não consegui confirmar agora se {whenStr}
+          está livre ou ocupado — a consulta da agenda falhou. NÃO diga que está livre
+          nem que está ocupado. …tentar de novo em alguns minutos, ou ofereça chamar um
+          corretor humano."
+        :1044 e :1123 (mesmo literal) — "Não consegui confirmar a agenda desse período
+          agora — a consulta falhou. NÃO diga que não há horário livre. …ofereça tentar
+          de novo em breve, ou outro período/dia."
+      As duas frases instruem o modelo NEGATIVAMENTE, o que é o padrão do arquivo e é o
+      que fecha o buraco que o @po usou para derrubar a opção (ii) na 87-17. E as ACs
+      não ficam verdes em cima de uma falsidade: cada um dos 4 sítios tem teste de
+      CONTEÚDO (não de presença de bloco), com asserção positiva na frase nova E
+      negativa na frase antiga ("está LIVRE", "JÁ existe uma visita nesse horário",
+      "esse horário está ocupado", "não há horário livre nesse período"), MAIS um
+      controle sem-erro por sítio que exige a frase antiga de volta byte a byte —
+      inclusive a linha completa "Horários LIVRES nesse período: sábado, 15 de agosto
+      às 08:00 ou … às 09:30 ou … às 11:00." Nenhuma das negativas é trivial: o
+      controle prova que a frase antiga aparece quando deve.
+      Um detalhe que verifiquei porque poderia ser tautologia: a frase nova de :1015
+      contém "está livre ou ocupado" (minúsculo) e a asserção negativa é sobre "está
+      LIVRE" (o literal do ramo free, maiúsculo). Discrimina de verdade — se o código
+      caísse no ramo free, a asserção quebraria.
+  - id: PJ-5
+    tema: "emit posicional (DECISÃO 3) e evento agregado (AC6)"
+    veredito: "CONFORME. Nenhum parâmetro existente mudou de posição, nome ou default; o evento é agregado, no máximo um por chamada."
+    analise: >
+      checkSlotAvailability(supabase, orgId, startUtc, excludeAppointmentId?, emit?)
+      e freeSlotsInPeriod(supabase, orgId, day, period, now, excludeAppointmentId?,
+      limit = 3, emit?) — emit é o ÚLTIMO em ambas, `limit = 3` preservado com o mesmo
+      nome e o mesmo default. Prova independente da leitura: as 8 linhas migradas de
+      teste têm lista de argumentos IDÊNTICA no par -/+ (AC10-iii), e os 4 `undefined`
+      posicionais de produção conferem (:1015 → 0, :1044 → 1, :1107 → 1, :1123 → 2).
+      O mesmo cuidado apareceu no fake compartilhado: createFakeSupabase(seed, opts?)
+      — segundo parâmetro opcional, nenhum chamador pré-existente tocado.
+      Agregação: em freeSlotsInPeriod há UM emit, guardado por `comErro > 0`. Em
+      checkSlotAvailability há DOIS sítios de emit, mas são mutuamente exclusivos pelo
+      curto-circuito (o ramo unknown emite e RETORNA), então o teto de 1 por chamada é
+      estrutural, não convencional. Medido nos 4 sítios de pipeline: exatamente 1
+      evento por turno, com candidatos_com_erro agregado (2, 3, 7 conforme a fixture) e
+      controle negativo de 0 evento quando não houve incerteza. `primario_com_erro`
+      literal `false` no ramo das alternativas é decisão registrada e correta — naquele
+      ponto o primário é provadamente "occupied".
+  - id: PJ-6
+    tema: "O return precoce `if (close === null) return []` → `{ slots: [], houveIncerteza: false }`"
+    veredito: "CORRETO no comportamento. A afirmação de cobertura do Dev Agent Record é IMPRECISA — corrijo aqui e cubro a lacuna eu mesmo. Follow-up TEST-1 (low)."
+    analise: >
+      O conserto está certo: dia fechado → nenhuma consulta feita → lista vazia é
+      afirmação legítima de REGRA, não ignorância. Mas duas imprecisões, ambas de
+      registro, nenhuma de código:
+      (1) O teste que a divergência nº 3 cita ("AC5 controle — lista vazia por REGRA de
+          expediente não é incerteza") usa SÁBADO À TARDE, e sábado tem close = 12,
+          não null. Ele exercita o caminho de ZERO CANDIDATOS (lastStart 660 < fromMin
+          720) e sai pelo return FINAL, não pelo return precoce. O ramo `close === null`
+          (domingo) não tem teste dedicado na suíte. Risco baixo: `return []` naquele
+          ponto é um dos poucos erros que o tsc PEGA (Date[] não é atribuível ao objeto).
+          E eu fechei a lacuna por medição própria no meu sweep: domingo 30/08, banco
+          falhando tudo → slots [], houveIncerteza false, ZERO consultas. Vai para
+          follow-up TEST-1 para que a suíte, e não o meu scratchpad, guarde isso.
+      (2) "o único caminho em que slots: [] é afirmação legítima" não é exato: há
+          `close === null`, há zero candidatos por fechamento, há zero candidatos porque
+          todos já passaram, e há todos "occupied". A invariante que a story de fato
+          garante — e que é a que importa — é `houveIncerteza === false` ⟺ a lista vazia
+          é uma afirmação legítima. Está garantida por construção (comErro > 0) e medida
+          nos 4 casos pelo meu sweep. Registro como DOC-1.
+      O teste com 0 consultas MEDIDAS existe e é honesto (contadorDeConsultas,
+      `expect(c.total()).toBe(0)`) — só cobre o segundo caminho, não o primeiro.
+  - id: PJ-7
+    tema: "Regressão de sentido: a Fatia 1 continua correta com o tri-estado no meio"
+    veredito: "CONFIRMADO por três vias independentes. Sem regressão."
+    analise: >
+      (i) Os testes da 87-17 que definem a Fatia 1 seguem verdes e seguem MORDENDO:
+          "AC1 — a tarde da Ana passa a ser 12h, 14h e 17h" e "AC1 — e os LIVRES da
+          tarde são os 8 medidos em produção" aparecem entre os 7 vermelhos da minha
+          mutação (c), o que prova que não são tautologia depois da migração de
+          assinatura. Os 7 goldens byte a byte de pipeline-agenda-state.test.ts:
+          intocados no diff e verdes.
+      (ii) Razão estrutural: o diff NÃO toca o laço de geração de candidatos
+          (`lastStart = min(toMin, close*60) - VISIT_DURATION_MIN`, `m <= lastStart`)
+          nem `espalhar`. O tri-estado mudou QUEM entra no filtro, não a grade. A
+          garantia "início + 60 ≤ fechamento" continua sendo do laço.
+      (iii) Sweep próprio (ver status_reason): semana inteira × 2 períodos × 6 limites,
+          nenhum início estoura o fechamento, nenhum início antes das 8h, len ≤ limit,
+          sábado à tarde e domingo vazios. Com contraprova que reprova.
+  - id: PJ-8
+    tema: "A sugestão de copy que o @dev registrou e NÃO implementou (\"a visita atual segue mantida\" no sítio :1015)"
+    veredito: "ELE FEZ CERTO em não inventar copy. A lacuna é real mas é decisão do @po, não dívida do @dev. Follow-up COPY-1 (low)."
+    analise: >
+      Conferi o entorno do :1015 e a observação dele é factualmente correta: naquele
+      ramo, TODAS as saídas que não remarcam avisam que a visita atual segue de pé — o
+      ramo ocupado ("mantenha a visita atual (…) até ele escolher"), o de horário fora
+      do atendimento, os dois de período e o de dia-sem-hora. A frase nova de incerteza
+      é a única que não avisa, e o lead pode ficar em dúvida se perdeu a visita que já
+      tinha. MAS: (a) o Artigo IV proíbe inventar copy não medida, e a AC8 só exige que
+      a frase apareça nos dois sítios; (b) o detalhe que transforma isso de "gosto" em
+      decisão de produto — a frase é um literal COMPARTILHADO entre :1015 e :1107, e no
+      :1107 não existe visita ativa, então acrescentar a oração ali seria dizer algo
+      FALSO. Não é um append: é escolher entre duplicar o literal com duas variantes ou
+      manter uma. Isso é do @po. Dano hoje: zero no banco — provado, o teste do sítio
+      asserta que scheduled_at continua 2026-08-14T13:00:00.000Z e que appointments
+      segue com 1 linha. É só ambiguidade conversacional.
+
+checks:
+  - check: "1. Requirements — todos os ACs implementados"
+    nota: PASS
+    evidencia: >
+      AC1 tri-estado: 4 testes de unidade em isSlotFree (unknown/free/occupied + a
+      guarda de truthiness). AC2-i/ii: erroNoPedido + curto-circuito com 1 consulta
+      medida (26 sob mutação). AC3: candidato do meio omitido e a busca continua —
+      alternatives sai [15:30, 16:00, 16:30] e não contém o 15:00 incerto. AC4/AC4-ii:
+      7 de 8 viram oferta, e a MENSAGEM continua sendo a existente nos dois sítios de
+      período. AC5: outage total → slots [] + houveIncerteza true, e a frase é a nova
+      nos dois sítios. AC6/ii/iii + controle negativo: 1 evento agregado por chamada,
+      com contagem, nos dois níveis. AC7: rejeição continua subindo (.rejects.toThrow
+      nos dois) e zero `try {` antes e depois — conferido por mim nos dois commits.
+      AC8: teste dedicado por sítio (4), de conteúdo, com controle sem-erro por sítio.
+      AC9: zero recalibração. AC10 i/ii/iii/iv: as duas mutações reproduzidas por mim,
+      argumentos intocados, e os nomes erroNoPedido/houveIncerteza com docstring que
+      diz o que NÃO significam.
+  - check: "2. Code Quality — padrões seguidos, sem code smells"
+    nota: PASS
+    evidencia: >
+      Comparações explícitas com "free"/"occupied"/"unknown" em todos os pontos de
+      decisão, com o motivo escrito ao lado (as três strings são truthy). Nenhum
+      try/catch novo (a fronteira do REL-1 é deliberada). Nenhum parâmetro reordenado.
+      Os dois fakes ganharam injeção OPCIONAL — nenhum chamador pré-existente mudou.
+      candidatoDeIsSlotFree é preciso e eu verifiquei que não há over-match: nenhuma
+      outra consulta a appointments em pipeline.ts usa gt+lt sobre scheduled_at (a da
+      visita ativa usa gte, o histórico não filtra data), então a injeção seletiva
+      exercita o ramo pretendido e não muda o RAMO por acidente. lint --force: 0 achados
+      nos arquivos tocados. tsc: 0 linhas, com contraprova.
+  - check: "3. Testing — cobertura adequada, testes passando"
+    nota: PASS
+    evidencia: >
+      257 · 3177 | 6 · EXIT=0, medido duas vezes, sempre por arquivo ou pela suíte
+      inteira — NENHUMA prova minha usou `-t` (o falso verde de regex que eu mesmo
+      reproduzi no gate anterior). +32 testes, 0 removidos, 0 it.fails novos.
+      Falsificabilidade: 4 mutações minhas, todas capturadas, e o @dev já havia medido
+      as 3 dele. O sweep de propriedades que eu escrevi (5 casos, com contraprova) é
+      cobertura adicional que a story não pedia e que confirma a invariante central em
+      ~150 combinações. Única lacuna: o ramo close === null sem teste na suíte (TEST-1,
+      low) — coberto pela minha medição, não pela suíte.
+  - check: "4. Documentation — atualizada quando necessário"
+    nota: CONCERNS
+    evidencia: >
+      Os docstrings são exemplares: dizem o que os campos novos NÃO significam, marcam
+      a ordem normativa, e registram a precondição herdada para a Fatia 2 da 87-17
+      (houveIncerteza invalida o teto "o último horário livre do período") no próprio
+      arquivo, onde quem implementar vai ler. O Dev Agent Record é completo e honesto —
+      inclusive na divergência nº 2, que é a mais desconfortável do lote. CONCERNS por
+      duas imprecisões de registro que corrijo neste gate: a divergência nº 3 atribui a
+      um teste de sábado-à-tarde a cobertura do ramo close === null (caminhos
+      diferentes), e "único caminho em que lista vazia é legítima" não é exato (DOC-1,
+      TEST-1). Nenhuma delas altera código nem conclusão.
+  - check: "5. Performance — sem degradação"
+    nota: PASS
+    evidencia: >
+      MELHORA medida no caminho de erro: 26 consultas sequenciais → 1 (medido por mim
+      nas duas direções). No caminho feliz, sem mudança nenhuma de custo: freeSlotsInPeriod
+      segue com um único Promise.all sobre a mesma lista de candidatos (o diff não toca
+      a geração nem a forma do despacho — só o predicado do filter e o retorno), e
+      checkSlotAvailability segue com o mesmo laço. O emit é síncrono e opcional, e é
+      chamado no máximo uma vez por chamada. Nenhuma consulta nova.
+  - check: "6. Security — OWASP básico verificado"
+    nota: PASS
+    evidencia: >
+      Nenhuma superfície nova de entrada. O .eq("org_id", orgId) de isSlotFree está
+      intocado — o escopo multi-tenant não mudou (o diff não toca a montagem da query).
+      Nenhuma query por concatenação. A metadata do evento novo carrega horário, dia,
+      período e contagens — ZERO PII: nenhum nome, telefone, lead_id ou mensagem. O
+      `message` do error do PostgREST NÃO é propagado para a metadata nem para a frase
+      do lead (a frase diz apenas "a consulta da agenda falhou"), então nem nome de
+      tabela nem detalhe de RLS vaza para o cliente. Efeito de SEGURANÇA POSITIVO e
+      central: o INSERT sob incerteza deixa de acontecer, e a autorização
+      (authorizedSlotUtc) deixa de ser concedida sem base — provado por teste no nível
+      do processMessage (appointments com 0 linhas; scheduled_at inalterado no
+      remarcar). Zero leitura/escrita de ofertas_do_sistema / afirmado_pela_nicole.
+  - check: "7. Observabilidade / efeitos de 2ª ordem"
+    nota: CONCERNS
+    evidencia: >
+      O lado bom é real e medido: NICOLE_SLOT_QUERY_ERROR é agregado, chega ao onEvent
+      do processMessage (não só ao emit interno) e um outage silencioso passa a ter
+      rastro em system_events — que é o objetivo da story. O CONCERNS é o OBS-1: a
+      frase nova cita o horário pedido, e o guard fail-open do :1316 emite
+      NICOLE_SLOT_UNAUTHORIZED por cima. MEDIDO, não deduzido: em 3 respostas plausíveis
+      da Nicole sob incerteza, 2 resolvem para 2026-08-15T13:00:00.000Z em
+      detectAffirmedSlot (que não exige verbo de afirmação — só dia+hora não ambíguos),
+      e com authorizedSlotUtc nulo o ramo do :1310 dispara. Sem dano: fail-open, só
+      loga, nada é gravado, e o evento correto sai no mesmo turno (correlação trivial).
+      A classe PRÉ-EXISTE (o ramo "ocupado" sem alternativas também cita whenStr com
+      authorizedSlotUtc nulo) — esta story a alarga, não a cria.
+
+achados:
+  bloqueantes: []
+  followups:
+    - id: OBS-1
+      severidade: medium
+      titulo: "NICOLE_SLOT_UNAUTHORIZED dispara junto com NICOLE_SLOT_QUERY_ERROR no caminho de incerteza"
+      medido: >
+        detectAffirmedSlot resolve dia+hora em 2 de 3 respostas plausíveis da Nicole
+        sob incerteza (medido por mim com o relógio de 12/08); authorizedSlotUtc é nulo
+        nesse ramo por desenho; o guard do :1310 é fail-open e emite.
+      por_que_importa: >
+        O epic 87 é sobre confiar nos instrumentos. Um evento que diz "Nicole afirmou
+        X sem o sistema ter autorizado horário algum" durante um outage descreve algo
+        mais grave do que aconteceu e pode mandar um investigador futuro pelo caminho
+        errado. Não é dano ao lead nem ao banco.
+      opcoes: >
+        (a) omitir {whenStr} da frase nova — mas ela fica menos útil para o modelo;
+        (b) o guard se calar no turno em que houve NICOLE_SLOT_QUERY_ERROR;
+        (c) não fazer nada e documentar a co-ocorrência como leitura esperada.
+        É decisão de produto/observabilidade — @po, não @dev.
+      destino: "docs/backlog.md, e candidato natural ao mesmo lote da 87-19"
+    - id: COPY-1
+      severidade: low
+      titulo: "A frase de incerteza do sítio :1015 não avisa que a visita atual segue mantida"
+      detalhe: >
+        Todos os outros ramos daquele sítio avisam. O @dev fez CERTO em não inventar
+        copy (Artigo IV) e registrou a sugestão. Não é um append trivial: o literal é
+        compartilhado com :1107, onde não existe visita ativa e a oração seria falsa.
+      destino: "@po — decisão de copy (duplicar o literal em duas variantes, ou manter uma)"
+    - id: TEST-1
+      severidade: low
+      titulo: "O ramo `close === null` (domingo) de freeSlotsInPeriod não tem teste na suíte"
+      detalhe: >
+        O teste citado pela divergência nº 3 exercita sábado à tarde (zero candidatos,
+        return final), não o return precoce. Eu medi o domingo no meu sweep (vazio,
+        houveIncerteza false, 0 consultas) e o tsc protege a FORMA do retorno, mas a
+        suíte não guarda esse caso.
+      destino: "próxima visita a visit-slot.ts (Fatia 2 da 87-17 é a candidata natural)"
+    - id: DOC-1
+      severidade: low
+      titulo: "Precisão do Dev Agent Record: caminhos em que `slots: []` é legítimo"
+      detalhe: >
+        São quatro (close === null; zero candidatos por fechamento; zero candidatos
+        porque todos já passaram; todos occupied), não um. A invariante correta e que o
+        código garante é `houveIncerteza === false` ⟺ a lista vazia é afirmação legítima.
+      destino: "nota deste gate — nenhuma ação de código"
+
+evidence:
+  suite_depois: "257 arquivos · 3177 passed | 6 expected fail (3183) · EXIT=0 (duas execuções independentes)"
+  suite_baseline_branch: "256 · 3145 | 6 (3151) · EXIT=0 em cdf4411e — medido por mim no gate da 87-17 Fatia 1"
+  delta: "+1 arquivo · +32 testes. Fechado por diff: +32 linhas `it(`, 0 testes removidos, 0 it.fails/skip/todo novos. visit-slot.test.ts 93 → 111; pipeline-slot-query-error.test.ts = 14. 3145 + 32 = 3177"
+  typecheck_ai: "npx tsc --noEmit em packages/ai · EXIT=0 · 0 linhas (wc -l)"
+  typecheck_contraprova: "`return \"unkown_TYPO_QA\"` → TS2322, EXIT≠0 — a invocação é capaz de reprovar"
+  lint_root: "npx turbo run lint --force · EXIT=0 · 0 cached / 8 total · 40,3s · 0 achados nos arquivos tocados (a 1ª execução foi FULL TURBO e foi descartada como evidência)"
+  ac9_zero_recalibracao: "nenhuma linha `-` do diff de packages/ai é uma linha `expect(`; 8 pares -/+ de chamada com lista de ARGUMENTOS idêntica; 7 goldens de pipeline-agenda-state.test.ts intocados"
+  mutacao_b_AC10i: "if (primary) → tsc EXIT=0 e 8 failed | 103 passed, 'compromisso HOUSE no mesmo horário bloqueia' com `expected true to be false` — VERBATIM"
+  mutacao_c_AC10ii: "filter((_, i) => resultados[i]) → tsc EXIT=0 e 7 failed | 104 passed, sábado de manhã recebendo 12:30Z onde esperava 12:00Z — VERBATIM"
+  mutacao_AC2ii: "sem o return do ramo unknown → `AssertionError: expected 26 to be 1` (26 consultas SEQUENCIAIS medidas por mim; curto-circuito = 1)"
+  mutacao_AC4ii: "ordem invertida nos 2 sítios de período → 2 failed | 12 passed, e os 2 vermelhos são os 2 testes AC4-ii (um por sítio)"
+  sweep_proprio: "semana 24–30/08 × manha/tarde × limit 1..12 + injeção de erro 1-em-N: nenhum horário com erro ofertado, nenhum início estoura o fechamento, sáb tarde e DOMINGO vazios com 0 consultas, isSlotFree em 200 amostras nunca 'free' sob error · 5/5 EXIT=0 · contraprova (filtro truthy) reprova a invariante central"
+  ac7_fronteira: "grep -nE \"try[[:space:]]*\\{\" em cdf4411e e no HEAD → rc=1 nos dois; zero `catch` no arquivo; os 2 testes .rejects.toThrow('fetch failed') verdes"
+  fidelidade_dos_fakes: "os dois fakes devolvem `{ data: null, error }` SEM rejeitar (forma exata do PostgREST); injeção opcional, nenhum chamador pré-existente alterado; candidatoDeIsSlotFree sem over-match (nenhuma outra consulta a appointments usa gt+lt sobre scheduled_at)"
+  emit_posicional: "emit é o último parâmetro nas duas funções; `limit = 3` com nome e default preservados; os 4 undefined posicionais de produção conferem (:1015→0, :1044→1, :1107→1, :1123→2)"
+  frases_reais: "as 4 frases lidas no código; nenhuma afirma disponibilidade ou indisponibilidade a partir de incerteza; teste de CONTEÚDO nos 4 sítios com asserção negativa nas 4 frases antigas + controle sem-erro por sítio"
+  enforcement: "guard do :1289-1326 é fail-open (só emite, nunca bloqueia) — o caminho novo não interfere no envio. Efeito de 2ª ordem em OBS-1"
+  obs1_medicao: "detectAffirmedSlot em 3 respostas plausíveis sob incerteza → ['2026-08-15T13:00:00.000Z', '2026-08-15T13:00:00.000Z', 'null']"
+  fronteiras_respeitadas: "packages/web não tocado (git diff cdf4411e..HEAD -- packages/web = vazio); detectWantsLaterSlot ausente; 87-19 (P1) e REL-1 (P2) registrados em docs/backlog.md e NÃO absorvidos"
+  arvore_restaurada: "sha256 de visit-slot.ts e pipeline.ts idênticos ao snapshot limpo após CADA mutação; git diff HEAD -- packages/ = 0 linhas; nenhum arquivo temporário do @qa sobrou (git ls-files --others packages/ = vazio); suíte final 257 · 3177 | 6 · EXIT=0"
+  coderabbit: "NÃO executado — decisão do Marcos, 27/08. Nenhum achado de bot entrou neste gate; tudo aqui foi verificado por mim no código."
+  producao: "não reconferida — o defeito é silencioso por construção (sem evento, sem log), então não há o que medir em produção ANTES do deploy. Depois do deploy, NICOLE_SLOT_QUERY_ERROR em system_events passa a ser o instrumento."
+
+condicoes_de_merge:
+  - "Nenhuma condição BLOQUEANTE. O PR #517 está LIBERADO para o @devops com as DUAS stories (87-17 Fatia 1 + 87-18)."
+  - >
+    O gate da 87-17 Fatia 1 (CONCERNS, 87-17-fatia1-oferta-de-horario-espalhada.yml)
+    continua valendo para as ACs dele e NÃO foi refeito. As condições de merge DELE
+    seguem de pé — em especial: registrar o REL-1 no backlog (feito, e conferido por mim
+    neste gate) e medir o p95 de ms_async na janela pós-deploy (PERF-1). Esta story
+    ALIVIA o PERF-1 no caminho de erro (26 → 1), mas não o responde no caminho feliz.
+  - >
+    OBS-1 JÁ REGISTRADO por mim em docs/backlog.md (P2, seção Pendente, +36 linhas
+    puramente aditivas — nada da edição concorrente do @po/@sm foi tocada). A lição da
+    87-17 é que achado que fica só na conversa se perde no merge. NÃO desfazer esse
+    registro ao resolver conflito.
+  - >
+    Os arquivos que a story referencia por caminho DEVEM entrar no PR:
+    docs/qa/po-validation-87-18.md (já commitado em c44ec1f0) e este gate. Story que
+    aponta para arquivo inexistente no repo é dívida.
+  - >
+    Há artefatos NÃO commitados no working tree que não são código e não são desta
+    story: .claude/agent-memory/aios-po/ (1 modificado + 2 novos),
+    .claude/agent-memory/aios-sm/project_epic87.md e docs/backlog.md. @devops decide;
+    minha recomendação é a de sempre — memórias em chore(memory) próprio, e
+    docs/backlog.md junto com o merge (ele carrega o registro do 87-19 e do REL-1).
+  - "Ordem de deploy: um PR = um deploy, conforme a DECISÃO 1 do @po. Nenhuma das duas stories sobe sozinha."
+  - "Depois do deploy: a Fatia 2 da 87-17 herda a precondição de houveIncerteza (o teto 'último horário livre do período' deixa de ser confiável sob incerteza). Está escrita no docstring, no arquivo. Não apagar ao resolver conflito de merge."
+
+observacao_de_processo: >
+  Registro três coisas que pesaram a favor e que eu conferi por execução, não por
+  leitura. Primeira: o @dev colou a divergência que mais o expõe — o tsc não pega o
+  sítio :511/:512 — em vez de omitir; eu fui atrás, desmigrei a linha e o resultado foi
+  o melhor possível (compilador quieto, TESTE VERMELHO). É o oposto de relatório
+  inflado, e a conclusão certa é que a rede da story é a suíte, exatamente como a AC10
+  previu. Segunda: ele mediu 26 onde a story dizia ~37 e escreveu o número menor, com o
+  motivo; eu reproduzi e confirmei os 26. Terceira: ele NÃO inventou copy quando teve a
+  ideia, registrou como sugestão e seguiu o Artigo IV — e a lacuna que sobrou é
+  genuinamente do @po, porque o literal é compartilhado entre dois sítios com
+  precondições diferentes.
+  E registro uma armadilha que eu quase pisei neste gate: `npm run lint` me deu EXIT=0
+  com "8 cached, FULL TURBO". Cache hit não é evidência. Remedi com `--force` (0 cached,
+  40s) e só então o verde valeu. Vai para a memória junto com `-t` como regex e
+  `grep -c`.
+
+next_action: >
+  @devops *push — PR #517 com as DUAS stories no título e no corpo. Nada de
+  CodeRabbit (decisão do Marcos, 27/08). Depois do deploy: janela de observação com
+  NICOLE_SLOT_QUERY_ERROR + o p95 de ms_async (PERF-1 do gate anterior), e então
+  @sm *draft da 87-19 (P1), que vem ANTES da Fatia 2 da 87-17.
