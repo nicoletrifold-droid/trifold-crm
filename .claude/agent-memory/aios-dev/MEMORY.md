@@ -7,6 +7,8 @@
 - [Concern de gate = follow-up, não AC novo](feedback_concern_gate_como_followup.md) — concern aprovado depois do gate entra no Change Log + Dev Agent Record; escopo mínimo é exigência
 - [Prova de deploy vale na Vercel, não local](feedback_prova_vale_no_deploy.md) — CI/build verdes não provam deploy; `.vercelignore` esconde `docs/`, `scripts/`, `bin/` do build
 - [Corte de escopo exige reescrever comentários](feedback_corte_de_escopo_comentarios.md) — comentário que promete garantia cortada é pior que nenhum; provar template↔gerado por bytes
+- [Epic 87 — oferta de horário da Nicole](project_epic87_oferta_de_horario.md) — 87-17 em 2 fatias; a Fatia 2 recalcula no turno e não toca os campos reservados da 87-10
+- [Filtro `-t` do vitest é regex](feedback_vitest_filtro_t_regex.md) — nome com `+` casa zero testes e dá falso verde com exit 0; confira `N passed`
 - [landing-pages/* runtime](project_landing_pages_runtime.md) — projetos Vercel standalone: sem bundler, deploy manual, um tracked e outro não, e o trap de IP via proxy
 
 ## Key Patterns

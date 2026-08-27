@@ -66,13 +66,14 @@
 - [project_story_31_2_gate_passed.md](project_story_31_2_gate_passed.md) — Story 31.2 (migration 043 CHECK constraint) PASS — 9 patterns para validar DDL JSON CHECK em produção (Management API + convalidated + post-rollback verify)
 - [project_epic_35_qa_patterns.md](project_epic_35_qa_patterns.md) — Epic 35 (Roles & Permissions) QA patterns: 17 módulos canônicos, fallback hardcoded espelhado, grep patterns p/ validar migração completa de guards
 - [project_epic_52_qa_patterns.md](project_epic_52_qa_patterns.md) — Epic 52 (agente CRM read-only) QA: 52-1/52-4 PASS validado em runtime DEV; user_role() (NÃO JWT app_metadata); REVOKE deterministico p/ append-only no Supabase (TRUNCATE não passa RLS); admin-only testado c/ non-admin da MESMA org; SEC-002 forward-gate da 52-2
-- [Mutação prova teste real](feedback_mutacao_prova_teste_real.md) — mutar guarda/ordem/`await`; mock síncrono de `logEventOnce` NUNCA prova `await`
+- [Mutação prova teste real](feedback_mutacao_prova_teste_real.md) — mutar guarda/ordem/`await`; em AC de custo, mutar a FORMA (Promise.all→laço) e não a contagem; mock síncrono nunca prova `await`
 - [Trava de cron: recibo vs evento](project_cron_lock_recibo_vs_evento.md) — migration 234 mede pelo `started_at`; recibo é descartável, evento em `system_events` não
 - [Armadilha do .vercelignore](project_vercelignore_trap_qa.md) — import de packages/web p/ docs|scripts|bin passa local+CI e quebra SÓ na Vercel; como reproduzir com contraprova
 - [Artefato gerado vs template](project_artefato_gerado_vs_template_qa.md) — provar .generated ≡ render(fonte) por sha256 + determinismo + estabilidade à reordenação, sem credencial
+- [project_epic_87_qa_patterns.md](project_epic_87_qa_patterns.md) — Epic 87 (Nicole): oferta de horário = 1 query POR candidato (11 na tarde); erro engolido em WEBHOOK_ASYNC_ERROR deixa o lead sem resposta; campos reservados se provam por diff de grep
 - [project_epic_86_qa_patterns.md](project_epic_86_qa_patterns.md) — Epic 86 (Pixel+CAPI) QA: 5 checks de tracking silencioso (cadeia de IP, ADAPT que muda superfície dos outros chamadores, hashing, PII em webhook_logs, dedup) + gotcha de rebase do trifold-design-system
 - [Baseline do trifold-design-system](project_trifold_design_system_baseline.md) — `.dc.html` untracked de propósito: baseline é a produção via `curl`, não o git; sem lint/typecheck; falso positivo de `{{ }}`
 
 ## Método de QA
 
-- [feedback_reverificacao_focada.md](feedback_reverificacao_focada.md) — re-verificação de gate: `turbo --force` (cache hit não é evidência), `git diff` vazio prova "não tocado", teste de segurança vacuoso, metadata do gate vem do `git` e não do contexto
+- [feedback_reverificacao_focada.md](feedback_reverificacao_focada.md) — re-verificação de gate: `turbo --force` (cache hit não é evidência), `git diff` vazio prova "não tocado", teste vacuoso, `-t` do vitest é regex e zero match sai EXIT=0, metadata vem do `git`

@@ -6,3 +6,6 @@
 - [Epic 900 — numeração e o trap do .vercelignore](project_epic900_numbering_vercel_trap.md) — 900-15 é da migração das rotas; import de packages/web para docs/ falha só na Vercel
 - [Sibling-story reuse audit](feedback_validate_sibling_story_reuse_audit.md) — Story portada de outra: listar módulos da irmã + caçar literais da entidade antiga em arquivos clonados
 - [landing-pages deploy asymmetry](project_landing_pages_deploy_asymmetry.md) — vind-residence is git-tracked and goes via PR; trifold-design-system is untracked, deploy-only
+- [Epic 87 — campos reservados da 87-10](project_epic87_campos_reservados.md) — ofertas_do_sistema é cercado: nada escreve, nada lê; recalcular antes de pedir o campo
+- [Epic 87 — fila de deploy parada](project_epic87_fila_parada.md) — 87-11/87-12 existem como PR aberto, não como arquivo em main; conferir `gh pr list`
+- [Validar o conserto no mundo pós-fix](feedback_validar_conserto_no_mundo_pos_fix.md) — story com 2 consertos: rodar a fixture no papel com o conserto A já aplicado

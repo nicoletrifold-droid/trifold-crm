@@ -34,3 +34,23 @@ Fecha em ~3 linhas: o mock empurra dentro de uma continuação diferida
 (`await Promise.resolve()` antes do `push`).
 
 Relacionado: [[cron-lock-recibo-vs-evento]]
+
+## AC de concorrência/latência: mutar a FORMA, não a contagem
+
+Quando a AC mede custo ("≤ N idas ao banco", "profundidade sequencial = 1"), a asserção de
+**contagem** é quase sempre tautológica — ela repete o número que o código produz. A mutação que
+vale é a que **troca a forma mantendo a contagem**: `Promise.all(xs.map(f))` → `for (const x of xs)
+{ await f(x) }`. Mesmas N queries, profundidade N. Se o teste continuar verde, ele nunca mediu
+profundidade.
+
+No gate da 87-17 essa mutação foi a única das quatro que o @dev não tinha feito, e foi ela que
+provou que a `AC4` não era decorativa (`expected false to be true`). O padrão do teste que
+sobrevive: instrumentar o fake com `onEmit`/`onResolve` e assertar
+`log.indexOf("resolve") === totalDeEmissoes`.
+
+Nuance de fidelidade que vale registrar no gate: um fake que chama `onEmit()` dentro de
+`maybeSingle()` emite **sincronamente**, enquanto o `PostgrestBuilder` real (thenable não-nativo)
+emite num **microtask**. A conclusão de profundidade 1 não muda — microtasks drenam antes de
+qualquer macrotask de rede — mas dizer isso no gate é a diferença entre prova e otimismo.
+
+Relacionado: [[epic-87-qa-patterns]]
