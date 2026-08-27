@@ -67,6 +67,8 @@ interface State {
 let state: State
 const inserted: Record<string, unknown>[] = []
 const superseded: { calls: number } = { calls: 0 }
+/** Injeta falha no UPDATE de supersede (concern medium do @qa). */
+let supersedeError: { message: string } | null = null
 
 function makeSupabase() {
   const api = {
@@ -100,7 +102,8 @@ function makeSupabase() {
           },
           eq: () => b,
           is: () => b,
-          then: (res: (v: unknown) => unknown) => res({ data: null, error: null }),
+          then: (res: (v: unknown) => unknown) =>
+            res({ data: null, error: supersedeError }),
           insert: async (row: Record<string, unknown>) => {
             inserted.push(row)
             return { error: null }
@@ -172,6 +175,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   inserted.length = 0
   superseded.calls = 0
+  supersedeError = null
   canMock.mockResolvedValue(true)
   detectMock.mockResolvedValue(DETECCAO)
   draftMock.mockResolvedValue(DRAFT)
@@ -223,6 +227,7 @@ describe("generateCoachSuggestion — caminho felizardo", () => {
   it("supersede a sugestão ativa anterior antes de inserir a nova", async () => {
     await generateCoachSuggestion(PARAMS())
     expect(superseded.calls).toBe(1)
+    expect(inserted).toHaveLength(1)
   })
 })
 
@@ -303,6 +308,14 @@ describe("generateCoachSuggestion — fail-open", () => {
     draftMock.mockResolvedValue(null)
     await expect(generateCoachSuggestion(PARAMS())).resolves.toBeUndefined()
     expect(inserted).toHaveLength(0)
+  })
+
+  it("supersede falhando: LOGA e ainda insere a sugestão nova", async () => {
+    supersedeError = { message: "deadlock detected" }
+    await generateCoachSuggestion(PARAMS())
+    // A sugestão nova vale mais que o supersede — mas o erro não passa em silêncio.
+    expect(inserted).toHaveLength(1)
+    expect(eventTypes()).toContain("LIVE_COACH_SUPERSEDE_FAILED")
   })
 
   it("RAG falhando não impede a sugestão", async () => {

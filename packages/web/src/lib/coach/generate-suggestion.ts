@@ -287,12 +287,32 @@ export async function generateCoachSuggestion(
 
     // ---- Persistência ----------------------------------------------------
     // Uma sugestão ativa por conversa: a anterior é superseded, não empilhada.
-    await supabase
+    // O erro é LOGADO e não aborta (a sugestão nova vale mais que o supersede),
+    // mas não pode passar em silêncio: se este UPDATE falhar, ficam duas ativas e
+    // a 90-2 renderiza dois cards — AC8 violada sem ninguém notar (concern do @qa).
+    const { error: supersedeError } = await supabase
       .from("coach_suggestions")
       .update({ dismissed_at: new Date().toISOString() })
+      .eq("org_id", orgId)
       .eq("conversation_id", conversationId)
       .is("used_at", null)
       .is("dismissed_at", null)
+
+    if (supersedeError) {
+      logEvent({
+        level: "warn",
+        category: "ai",
+        event_type: "LIVE_COACH_SUPERSEDE_FAILED",
+        message: `Live Coach não conseguiu descartar a sugestão anterior: ${supersedeError.message}`,
+        metadata: {
+          lead_id: leadId,
+          conversation_id: conversationId,
+          error: supersedeError.message,
+        },
+        source: "lib/coach/generate-suggestion",
+        org_id: orgId,
+      })
+    }
 
     const { error: insertError } = await supabase.from("coach_suggestions").insert({
       org_id: orgId,

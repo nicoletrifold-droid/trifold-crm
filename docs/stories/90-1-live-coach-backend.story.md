@@ -291,6 +291,8 @@ já assumiu. Esta story pendura o coach no MESMO gatilho, em `after()` próprio 
 - `packages/web/src/lib/capabilities.test.ts` (lista trancada de `enforced` — invariante do repo)
 - `packages/ai/src/flows/live-coach.ts` (novo) + `live-coach.test.ts` (novo, 21 testes)
 - `packages/ai/src/flows/index.ts` (exports)
+- `packages/ai/src/index.ts` (**MF-1**: export nomeado de `loadMemoryContext`)
+- `packages/web/src/lib/coach/barrel-contract.test.ts` (**MF-3**: novo, sem `vi.mock`)
 - `packages/web/src/lib/coach/generate-suggestion.ts` (novo) + `generate-suggestion.test.ts` (novo, 16 testes)
 - `packages/web/src/app/api/webhook/whatsapp/route.ts` (`.select("id, created_at")` + `after()` do coach)
 - `packages/web/src/app/api/webhook/whatsapp/__tests__/route.test.ts` (2 testes novos + `created_at` no mock)
@@ -301,13 +303,22 @@ já assumiu. Esta story pendura o coach no MESMO gatilho, em `after()` próprio 
 **Branch:** `feat/90-1-live-coach-backend` (local; push é do @devops)
 
 ### Validações executadas
-| Validação | Resultado |
-|---|---|
-| `vitest run` (monorepo inteiro) | **255 arquivos, 3128 testes verdes** + 6 expected-fail |
-| `tsc --noEmit` (packages/ai) | limpo |
-| `tsc --noEmit` (packages/web) | limpo (0 erros) |
-| `eslint` (arquivos tocados) | limpo |
-| CodeRabbit | **não executado** — a config do agente aponta para WSL (`~/.local/bin/coderabbit`) e esta máquina é darwin; binário ausente. Coerente com o N/A do @po. |
+
+> ⚠️ **A primeira versão desta tabela estava ERRADA** e o @qa pegou (MF-2). Eu havia
+> reportado "tsc packages/web: limpo (0 erros)" usando
+> `timeout 600 npx tsc --noEmit 2>&1 | grep -c "error TS"`. **`timeout` não existe no
+> macOS**: o comando abortou, o pipe recebeu zero linhas e o `grep -c` contou 0. Contagem
+> de erros de um comando que não executou é sempre 0 — e ela esconderia o MF-1.
+> Tabela abaixo re-executada sem `timeout`, cada comando conferido pelo exit code.
+
+| Validação | Comando | Resultado |
+|---|---|---|
+| Suíte completa | `npx vitest run` | **256 arquivos, 3137 testes verdes** + 6 expected-fail |
+| Type-check ai | `npx tsc --noEmit` (packages/ai) | exit 0, limpo |
+| Type-check web | `npx tsc --noEmit` (packages/web) | exit 0, limpo |
+| Lint web | `npx eslint` (arquivos tocados) | exit 0, limpo |
+| Lint ai | — | `packages/ai` **não tem eslint**; seu script `lint` é `tsc --noEmit` (acima) |
+| CodeRabbit | — | **não executado**: config aponta para WSL (`~/.local/bin/coderabbit`), esta máquina é darwin, binário ausente. Coerente com o N/A do @po. |
 
 ### Notas de implementação (divergências e descobertas)
 
@@ -356,9 +367,92 @@ já assumiu. Esta story pendura o coach no MESMO gatilho, em `after()` próprio 
 - **T8 — medir em prod** (taxa de detecção, % `ancorada=true`, custo/conversa) — só faz sentido
   após T7 e ~48h de tráfego real.
 
+### Correções do gate FAIL (@qa Quinn, 2026-08-27)
+
+**MF-1 (critical) — `loadMemoryContext` não exportado.** `packages/ai/src/index.ts` não
+expunha `./memory`. Corrigido com export **nomeado** (não `export *`): só
+`loadMemoryContext` + `MemoryContext`, mantendo o resto do módulo interno ao pipeline.
+O diagnóstico do @qa estava certo: em runtime o símbolo era `undefined`, o TypeError caía
+no try/catch da memória e o coach rodaria permanentemente sem perfil do lead, em silêncio.
+
+**MF-3 (medium) — `barrel-contract.test.ts`.** Único teste da suíte que olha o módulo REAL
+de `@trifold/ai`, sem `vi.mock`. Assere `typeof` de cada símbolo que o helper importa, e
+tem uma segunda guarda que lê o próprio fonte do helper e confere que a lista não
+envelheceu (símbolo novo no import sem entrar na lista = teste vermelho).
+**Verifiquei que o teste não é teatro:** revertendo o export do MF-1, ele falha em
+`loadMemoryContext`; restaurando, passa. Sem essa checagem eu teria entregado um teste
+que nunca reprova nada.
+
+**MF-2 (high) — tabela de validações.** Corrigida acima, com o comando de cada linha e o
+exit code conferido individualmente em vez de contagem por pipe. Lição registrada:
+`grep -c` sobre a saída de um comando que falhou devolve 0, o que é indistinguível de
+"passou" — nunca usar contagem sem confirmar que o comando rodou.
+
+**Concern medium (supersede) — também corrigido**, embora o @qa o tenha marcado como não
+bloqueante: o UPDATE agora filtra `org_id` e checa `error`, logando
+`LIVE_COACH_SUPERSEDE_FAILED`. Sem isso, uma falha ali deixaria duas sugestões ativas e a
+90-2 renderizaria dois cards — AC8 violada sem sinal nenhum. Coberto por teste que injeta
+o erro e prova que a sugestão nova ainda é inserida.
+
+Concerns **low** (queries duplicadas com o 63-12) e **info** (funções SQL em prod antes de
+T7) permanecem abertos: o primeiro é otimização sem impacto funcional, o segundo é
+pré-condição de T7 e está no gate.
+
 ## Change Log
 | Data | Autor | Mudança |
 |---|---|---|
 | 2026-08-27 | River (@sm) | Story criada a partir do Epic 90 (handoff do @pm) |
 | 2026-08-27 | Pax (@po) | **Validação: GO.** 2 correções críticas aplicadas: (1) gate trocado de `brokerSentRecently` para `deriveBrokerActive` + guarda de reativação — a versão original divergia da decisão do épico (`is_ai_active = false`) e perdia o handoff recém-feito; (2) `.select("id, created_at")` no INSERT inbound, sem o qual a FK `message_id` não tem o id. Mais: timeout explícito no passo Sonnet, `loadMemoryContext` nomeada, AC 2b/2c novas, orçamento dos 60s documentado. |
 | 2026-08-27 | Dex (@dev) | T1–T6 implementadas: migrations 242/243, capability, flow `live-coach.ts`, helper `generate-suggestion.ts`, disparo no webhook e 39 testes novos. Suíte completa verde (3128), type-check e lint limpos. T7/T8 pendentes (prod). |
+
+## QA Results (@qa Quinn — 2026-08-27)
+
+**Gate: FAIL** — `docs/qa/gates/90-1-live-coach-backend.yml`
+
+Um defeito objetivo, fix trivial. O desenho está correto e a implementação é fiel à
+story; o problema é um import que não existe.
+
+### MF-1 (critical) — `loadMemoryContext` não é exportado por `@trifold/ai`
+`generate-suggestion.ts:11` importa o símbolo, mas `packages/ai/src/index.ts` não exporta
+`./memory` e nenhum barrel o reexporta (`flows/index.ts` exporta `lead-memory`/
+`updateLeadMemory` — outro módulo). Em produção o símbolo é `undefined`, a chamada lança
+TypeError e o try/catch do bloco de memória engole: **o coach rodaria permanentemente sem
+o perfil do lead** — metade da ancoragem prometida pelo épico — sem sinal em
+`system_events`. Falha silenciosa e permanente.
+
+### MF-2 (high) — o type-check do packages/web nunca rodou
+A story reporta "tsc --noEmit (packages/web): limpo (0 erros)". O comando foi
+`timeout 600 npx tsc --noEmit 2>&1 | grep -c "error TS"`, e **`timeout` não existe no
+macOS**: o comando abortou, o pipe recebeu zero linhas e o `grep -c` contou 0. Reproduzido
+lado a lado — com `timeout` → 0; sem → 1. Contagem de erro de um comando que falhou é
+sempre 0.
+
+### MF-3 (medium) — a suíte é cega para esta classe de bug
+`vi.mock("@trifold/ai", ...)` fabrica o módulo inteiro, inclusive `loadMemoryContext`. Por
+isso 39 testes verdes conviveram com o import quebrado. Falta um teste de contrato de
+barrel (sem mock) que assere `typeof` dos símbolos que o helper importa.
+
+### Por que FAIL e não CONCERNS
+Três camadas de silêncio em cascata: ferramenta ausente engolida pelo pipe → mock que
+fabrica o símbolo → fail-open que esconde o TypeError. Nenhuma é errada isoladamente;
+juntas deixam passar um defeito permanente em produção.
+
+### Verificado e correto (não presumido)
+Gate de takeover conforme a correção do @po, com testes para handoff-sem-msg e para
+Nicole-vai-reassumir; `ancorada` derivada (teste prova que `true` com lista vazia é
+rebaixado); `confianca:"baixa"` nunca persiste; nenhuma escrita fora de
+`coach_suggestions` (grep); `after()` independente e após o early-return de wamid;
+`.select("id, created_at")` como única mudança no caminho síncrono, com teste trancando a
+FK; migration 242 espelha `messages_select` da 229 e a publicação Realtime segue a 102;
+243 é 100% do gerador. Suíte 3128 verde, `tsc` do ai limpo, eslint limpo.
+
+### Concerns não bloqueantes
+- **medium** — o UPDATE do supersede não checa `error` nem filtra `org_id`: se falhar,
+  ficam duas sugestões ativas e a 90-2 renderiza dois cards (AC8 violada em silêncio).
+- **low** — 2-3 queries por inbound antes do gate 3 descartar, uma delas repetindo o que
+  `notifyBrokerOnReply` já faz no mesmo request.
+- **info** — a policy da 242 depende de `has_capability` (230/241), `user_org_id` e
+  `user_broker_id` (004): confirmar as três em prod antes de T7, e aplicar 242 antes da 243.
+
+**Próximo passo:** `@dev *apply-qa-fixes` (MF-1, MF-2, MF-3) → re-gate.
+| 2026-08-27 | Dex (@dev) | **apply-qa-fixes**: MF-1 (export de `loadMemoryContext` no barrel), MF-3 (teste de contrato de barrel, com prova de que reprova de verdade), MF-2 (tabela de validações re-executada sem `timeout`) e o concern do supersede (`org_id` + checagem de erro). Suíte 3137 verde, tsc limpo nos dois pacotes (exit 0 conferido), eslint limpo. |

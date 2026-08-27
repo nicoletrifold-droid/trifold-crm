@@ -1,0 +1,137 @@
+schema: 1
+storyId: "90-1"
+story: "90-1 — Backend: detecção de objeção + sugestão ancorada (Haiku→Sonnet) + persistência"
+title: "Quality Gate — Story 90-1 (Epic 90, Live Coach)"
+epic: 90
+gate: FAIL
+verdict: FAIL
+reviewed_by: "Quinn (@qa)"
+reviewed_at: "2026-08-27"
+branch: "feat/90-1-live-coach-backend"
+commit: "70f5c561"
+status_reason: >
+  FAIL por UM defeito objetivo de runtime, com fix trivial — e por uma validação
+  reportada como verde que na verdade não executou. O desenho da story está correto e
+  a implementação é fiel a ela; o problema é um import que não existe.
+
+  DEFEITO: `packages/web/src/lib/coach/generate-suggestion.ts:11` importa
+  `loadMemoryContext` de `@trifold/ai`, mas `packages/ai/src/index.ts` NÃO exporta
+  `./memory` e nenhum barrel reexporta esse símbolo (`flows/index.ts` exporta
+  `lead-memory`/`updateLeadMemory`, que é outro módulo). Provado de duas formas:
+  `tsc --noEmit` no packages/web devolve
+  `error TS2305: Module '"@trifold/ai"' has no exported member 'loadMemoryContext'`,
+  e um probe de runtime (`typeof` sobre o namespace importado) confirma `undefined`
+  para esse símbolo e `function` para os outros 6.
+
+  IMPACTO: em produção, `loadMemoryContext` é `undefined`, a chamada lança TypeError e
+  o try/catch dedicado do bloco de memória engole. Efeito: o coach funcionaria
+  PERMANENTEMENTE sem o perfil/memória do lead — metade da ancoragem prometida pelo
+  épico — sem nenhum sinal em `system_events` (apenas um `console.error` nos logs da
+  Vercel). Falha silenciosa e permanente, não intermitente.
+
+  CAUSA DO FALSO VERDE (o achado mais importante deste gate): a story reporta
+  "tsc --noEmit (packages/web): limpo (0 erros)". O comando executado foi
+  `timeout 600 npx tsc --noEmit 2>&1 | grep -c "error TS"`. `timeout` NÃO existe no
+  macOS — o comando abortou com "command not found", o pipe recebeu zero linhas e o
+  `grep -c` contou 0. Reproduzido lado a lado: com `timeout` → 0; sem `timeout` → 1.
+  O type-check do packages/web nunca rodou nesta story.
+
+  TRÊS CAMADAS DE SILÊNCIO em cascata, e é por isso que o gate é FAIL e não CONCERNS:
+  (1) `timeout` ausente + pipe para grep engoliu o erro da ferramenta;
+  (2) `vi.mock("@trifold/ai", ...)` no teste do helper fabrica um módulo completo,
+      inclusive `loadMemoryContext` — então 39 testes verdes conviveram com o import
+      quebrado, porque nenhum teste valida que os símbolos importados existem de fato;
+  (3) o fail-open do helper esconderia o TypeError em produção.
+  Nenhuma das três é errada isoladamente; juntas, deixam passar um defeito permanente.
+
+  O QUE ESTÁ CORRETO (verificado, não presumido): gate de takeover usa
+  `deriveBrokerActive` + `resolveTakeoverAnchor`/`shouldReactivateAi` conforme a
+  correção do @po, com testes para handoff-sem-msg-do-corretor e para
+  Nicole-vai-reassumir; `ancorada` é derivada das âncoras e há teste provando que
+  `ancorada:true` do modelo com lista vazia é rebaixado para false; `confianca:"baixa"`
+  nunca persiste; nenhuma escrita fora de `coach_suggestions` (grep confirmado);
+  `after()` do coach é independente do push 63-12 e do bloco da Nicole, vem após o
+  early-return de wamid duplicado, e o `.catch()` no call site cobre falha anterior ao
+  try/catch; `.select("id, created_at")` é a única mudança no caminho síncrono e tem
+  teste que tranca a FK; migration 242 espelha `messages_select` da 229 sem inventar
+  critério, RLS habilitada com SELECT apenas (escrita só service-role), publicação
+  Realtime idempotente no padrão da 102; migration 243 é 100% do gerador (diff vs 241 =
+  104→105 capabilities + 10 linhas). Suíte: 255 arquivos / 3128 testes verdes.
+  `tsc` do packages/ai: limpo (este rodou de verdade). eslint: limpo.
+
+must_fix:
+  - id: MF-1
+    severity: critical
+    category: correctness
+    file: "packages/web/src/lib/coach/generate-suggestion.ts:11"
+    description: >
+      `loadMemoryContext` não é exportado por `@trifold/ai`. Em runtime é `undefined`;
+      o coach roda permanentemente sem perfil do lead, silenciado pelo try/catch.
+    recommendation: >
+      Exportar o módulo de memória no barrel (`export * from "./memory/loader"` em
+      packages/ai/src/index.ts) OU importar pelo caminho profundo. Preferir o barrel,
+      que é o padrão dos outros consumidores. Depois rodar `tsc --noEmit` SEM `timeout`
+      nos dois pacotes e confirmar zero erros.
+  - id: MF-2
+    severity: high
+    category: process
+    description: >
+      A tabela de validações da story afirma type-check limpo no packages/web, o que não
+      aconteceu. Enquanto o registro estiver assim, o próximo agente confia num verde
+      que não existe.
+    recommendation: >
+      Reexecutar as validações sem `timeout` (indisponível no macOS) e corrigir a tabela
+      com o resultado real. Nunca contar erros com `grep -c` sem antes confirmar que o
+      comando executou — a contagem de um comando que falhou é sempre 0.
+  - id: MF-3
+    severity: medium
+    category: test-coverage
+    description: >
+      Nenhum teste garante que os símbolos importados de `@trifold/ai` existem de fato:
+      o `vi.mock` do módulo inteiro os fabrica. Este defeito é invisível para a suíte.
+    recommendation: >
+      Adicionar um teste de contrato de barrel (sem `vi.mock`) que importe
+      `* as ai from "@trifold/ai"` e assere `typeof` de cada símbolo que o helper usa.
+      Barato, roda em milissegundos e tranca esta classe de bug para as próximas stories.
+
+concerns:
+  - severity: medium
+    category: correctness
+    file: "packages/web/src/lib/coach/generate-suggestion.ts (supersede)"
+    description: >
+      O UPDATE que supersede a sugestão ativa não checa `error` e não filtra `org_id`.
+      Se falhar, ficam duas sugestões ativas na mesma conversa — AC8 violada
+      silenciosamente, e a 90-2 renderizaria dois cards.
+    recommendation: >
+      Capturar o error e logar (não precisa abortar); adicionar `.eq("org_id", orgId)`
+      por consistência com o resto do helper, mesmo com admin client.
+  - severity: low
+    category: cost
+    description: >
+      Em conversa conduzida pela Nicole, cada mensagem inbound elegível paga 2-3 queries
+      (conversations + messages) antes do gate 3 descartar. Uma delas repete a query que
+      `notifyBrokerOnReply` já faz no mesmo request.
+    recommendation: >
+      Se o volume incomodar, passar o `is_ai_active` que o webhook já leu por parâmetro,
+      ou consolidar a leitura de takeover num helper compartilhado com o 63-12.
+  - severity: info
+    category: deploy
+    description: >
+      A policy da 242 depende de `has_capability` (criada na 230, recriada na 241/243),
+      `user_org_id` e `user_broker_id` (004). Se a 230/241 não estiverem aplicadas no
+      schema remoto, a 242 falha na criação da policy.
+    recommendation: >
+      Confirmar as três funções em prod antes de aplicar 242 (T7), e aplicar 242 antes
+      da 243.
+
+waived: []
+
+evidence:
+  suite: "255 arquivos / 3128 testes verdes + 6 expected-fail"
+  typecheck_ai: "limpo (executado)"
+  typecheck_web: "1 erro — TS2305 loadMemoryContext (o 'limpo' anterior era falso verde)"
+  lint: "limpo nos arquivos tocados"
+  coderabbit: "não executado — config aponta para WSL, máquina darwin, binário ausente"
+  runtime_probe: "6 de 7 símbolos de @trifold/ai resolvem como function; loadMemoryContext = undefined"
+
+next_action: "@dev *apply-qa-fixes — MF-1, MF-2 e MF-3. Re-gate após correção."
