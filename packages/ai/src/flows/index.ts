@@ -81,3 +81,11 @@ export type {
 } from "./marketing-suggestions"
 export { interestLevelFromScore, type InterestLevel } from "./interest-level"
 export { lerRespostasDoFormulario, validarLeitura, type RespostaAberta, type LeituraDoFormulario } from "./form-reading"
+export {
+  isCoachEligible,
+  detectObjection,
+  draftCoachReply,
+  parseObjectionDetection,
+  parseCoachDraft,
+} from "./live-coach"
+export type { ObjecaoTipo, Confianca, ObjectionDetection, CoachDraft } from "./live-coach"
