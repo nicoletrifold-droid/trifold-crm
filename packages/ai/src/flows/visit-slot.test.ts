@@ -14,6 +14,7 @@ import {
   isAmbiguousSlotText,
   parsePeriodParts,
   freeSlotsInPeriod,
+  espalhar,
 } from "./visit-slot"
 import { buildAgendaState, type AgendaState } from "./agenda-state"
 import { extractCollectedData } from "./qualification"
@@ -269,7 +270,17 @@ interface FakeApptRow {
  * array de linhas — assim o teste exercita o COMPORTAMENTO (imob não bloqueia),
  * não só a presença do filtro.
  */
-function fakeSupabase(rows: FakeApptRow[]): SupabaseClient {
+/**
+ * Story 87-17 `AC4` — `hooks` instrumenta o fake para MEDIR as idas ao banco:
+ * `onEmit` marca a consulta emitida (a chamada de `.maybeSingle()`) e `onResolve`
+ * marca a resolução dela. É o que permite provar profundidade sequencial = 1
+ * (todas emitidas antes de a primeira resolver) sem inspecionar a implementação.
+ * Sem hooks o comportamento é idêntico ao de antes.
+ */
+function fakeSupabase(
+  rows: FakeApptRow[],
+  hooks?: { onEmit?: () => void; onResolve?: () => void }
+): SupabaseClient {
   function builder(current: FakeApptRow[]) {
     const q = {
       select: () => q,
@@ -279,7 +290,13 @@ function fakeSupabase(rows: FakeApptRow[]): SupabaseClient {
       gt: (col: string, val: string) => builder(current.filter((r) => String((r as unknown as Record<string, unknown>)[col]) > val)),
       lt: (col: string, val: string) => builder(current.filter((r) => String((r as unknown as Record<string, unknown>)[col]) < val)),
       limit: () => q,
-      maybeSingle: async () => ({ data: current[0] ?? null }),
+      maybeSingle: () => {
+        hooks?.onEmit?.()
+        return Promise.resolve().then(() => {
+          hooks?.onResolve?.()
+          return { data: current[0] ?? null }
+        })
+      },
     }
     return q
   }
@@ -474,12 +491,19 @@ describe("freeSlotsInPeriod (Story 75-245 AC5)", () => {
     scheduled_at: "2026-08-01T13:00:00.000Z",
   }
 
-  it("manhã de sábado com 10h ocupado → oferece 8h, 8h30 e 9h", async () => {
+  /**
+   * 🔧 RECALIBRADO pela Story 87-17 (Defeito A), `AC10` item 1.
+   * Era *"oferece 8h, 8h30 e 9h"* — a borda de abertura, que é exatamente o
+   * defeito que a 87-17 fecha. Os LIVRES não mudaram (`8:00, 8:30, 9:00, 11:00`:
+   * 9:30/10:00/10:30 colidem com a visita das 10h); o que mudou é QUAIS 3 dos 4
+   * a Nicole oferece — `espalhar` amostra os índices 0, 2 e 3.
+   */
+  it("manhã de sábado com 10h ocupado → oferece 8h, 9h e 11h (espalhado nos 4 livres)", async () => {
     const slots = await freeSlotsInPeriod(fakeSupabase([ocupado10h]), "org1", SABADO, "manha", NOW_INCIDENTE)
     expect(slots.map((s) => s.toISOString())).toEqual([
       "2026-08-01T11:00:00.000Z", // 8:00 BRT
-      "2026-08-01T11:30:00.000Z", // 8:30 BRT
       "2026-08-01T12:00:00.000Z", // 9:00 BRT
+      "2026-08-01T14:00:00.000Z", // 11:00 BRT
     ])
   })
 
@@ -503,6 +527,127 @@ describe("freeSlotsInPeriod (Story 75-245 AC5)", () => {
       "2026-08-01T13:30:00.000Z",
       "2026-08-01T14:00:00.000Z",
     ])
+  })
+})
+
+describe("espalhar (Story 87-17 AC3)", () => {
+  const xs = [10, 20, 30, 40, 50, 60, 70, 80]
+
+  it("AC3-i — quando cabe, não amostra: 2 e 3 candidatos saem inteiros e em ordem", () => {
+    expect(espalhar([10, 20], 3)).toEqual([10, 20])
+    expect(espalhar([10, 20, 30], 3)).toEqual([10, 20, 30])
+    expect(espalhar([], 3)).toEqual([])
+  })
+
+  it("AC3-ii — k ≤ 1 não produz NaN nem undefined (a fórmula divide por k − 1)", () => {
+    expect(espalhar(xs, 1)).toEqual([10]) // exatamente 1, o primeiro
+    expect(espalhar(xs, 0)).toEqual([])
+    expect(espalhar(xs, -1)).toEqual([])
+    for (const k of [-1, 0, 1]) {
+      expect(espalhar(xs, k).every((v) => typeof v === "number" && Number.isFinite(v))).toBe(true)
+    }
+  })
+
+  it("AC3-iii — invariante de cobertura: primeiro e último sempre entram, ordenado e sem repetição", () => {
+    // É esta invariante que faz "não existe nada mais tarde do que o último que
+    // te ofereci" ser verdade (a `AC5` da Fatia 2 se apoia nela).
+    for (let k = 2; k <= xs.length; k++) {
+      for (let n = k + 1; n <= xs.length; n++) {
+        const inp = xs.slice(0, n)
+        const out = espalhar(inp, k)
+        const rotulo = `n=${n} k=${k} → ${JSON.stringify(out)}`
+        expect(out[0], rotulo).toBe(inp[0])
+        expect(out[out.length - 1], rotulo).toBe(inp[n - 1])
+        expect(out, rotulo).toEqual([...out].sort((a, b) => a - b))
+        expect(new Set(out).size, rotulo).toBe(out.length)
+        expect(out.length, rotulo).toBeLessThanOrEqual(k)
+        expect(out.every((v) => v !== undefined), rotulo).toBe(true)
+      }
+    }
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Story 87-17 — Fatia 1 / Defeito A: a oferta de período para de colar na
+// borda de abertura. O laço do `HEAD` parava nos 3 primeiros livres, então
+// "à tarde" era SEMPRE 12h/12h30/13h e "de manhã" SEMPRE 8h/8h30/9h —
+// geométrico ao algoritmo, independente de haver compromisso.
+// ═══════════════════════════════════════════════════════════════════════════
+describe("freeSlotsInPeriod — oferta espalhada (Story 87-17 AC1/AC2/AC4)", () => {
+  /**
+   * A fixture é a conversa da Ana, REMEDIDA contra produção em 27/08/2026
+   * (conversa `02d3a064-0271-4e34-b64a-c6ecd57ddae0`, org `0000…0001`, somente
+   * SELECT): no instante da mentira (22:22:33Z de 26/08) existia UM único
+   * compromisso `house` no dia 27/08 — 16:00 BRT (19:00Z), `status=scheduled`,
+   * criado em 18/08 por `admin`. O compromisso de 12:00 BRT que hoje também
+   * aparece no dia é o DESTA conversa (`created_by=nicole`, 22:42Z), criado
+   * DEPOIS da mentira — por isso está fora da fixture, de propósito.
+   */
+  const DIA_ANA = isoToDayParts("2026-08-27")! // quinta-feira
+  const AGORA_DA_MENTIRA = new Date("2026-08-26T22:22:33.815Z")
+  const ocupado16h: FakeApptRow = {
+    id: "63957a67-35ac-4a33-8796-f7152facbdc6",
+    org_id: "org1",
+    team: "house",
+    status: "scheduled",
+    scheduled_at: "2026-08-27T19:00:00.000Z", // 16:00 BRT
+  }
+
+  it("AC1 — a tarde da Ana passa a ser 12h, 14h e 17h (o HEAD dava 12h, 12h30 e 13h)", async () => {
+    const slots = await freeSlotsInPeriod(fakeSupabase([ocupado16h]), "org1", DIA_ANA, "tarde", AGORA_DA_MENTIRA)
+    expect(slots.map((s) => s.toISOString())).toEqual([
+      "2026-08-27T15:00:00.000Z", // 12:00 BRT
+      "2026-08-27T17:00:00.000Z", // 14:00 BRT
+      "2026-08-27T20:00:00.000Z", // 17:00 BRT — o que a Nicole negou existir
+    ])
+  })
+
+  it("AC1 — e os LIVRES da tarde são os 8 medidos em produção (a amostragem escolhe 3 DESSES 8)", async () => {
+    // `limit` alto = o período inteiro, sem amostragem: prova que a fixture
+    // reproduz exatamente a lista livre apurada no banco de produção.
+    const todos = await freeSlotsInPeriod(fakeSupabase([ocupado16h]), "org1", DIA_ANA, "tarde", AGORA_DA_MENTIRA, undefined, 11)
+    expect(todos.map((s) => s.toISOString())).toEqual([
+      "2026-08-27T15:00:00.000Z", // 12:00 BRT
+      "2026-08-27T15:30:00.000Z", // 12:30
+      "2026-08-27T16:00:00.000Z", // 13:00
+      "2026-08-27T16:30:00.000Z", // 13:30
+      "2026-08-27T17:00:00.000Z", // 14:00
+      "2026-08-27T17:30:00.000Z", // 14:30
+      "2026-08-27T18:00:00.000Z", // 15:00
+      "2026-08-27T20:00:00.000Z", // 17:00 (15:30/16:00/16:30 colidem com a visita das 16h)
+    ])
+  })
+
+  it("AC2 — manhã sem compromisso nenhum passa a ser 8h, 9h30 e 11h (o HEAD dava 8h, 8h30 e 9h)", async () => {
+    const slots = await freeSlotsInPeriod(fakeSupabase([]), "org1", DIA_ANA, "manha", AGORA_DA_MENTIRA)
+    expect(slots.map((s) => s.toISOString())).toEqual([
+      "2026-08-27T11:00:00.000Z", // 8:00 BRT
+      "2026-08-27T12:30:00.000Z", // 9:30 BRT
+      "2026-08-27T14:00:00.000Z", // 11:00 BRT
+    ])
+  })
+
+  it("AC2 — os candidatos da manhã são 7, não 8: o último início é 11:00 (a visita de 60min tem de caber até 12h)", async () => {
+    const todos = await freeSlotsInPeriod(fakeSupabase([]), "org1", DIA_ANA, "manha", AGORA_DA_MENTIRA, undefined, 20)
+    expect(todos).toHaveLength(7)
+    expect(todos[todos.length - 1]!.toISOString()).toBe("2026-08-27T14:00:00.000Z") // 11:00 BRT
+  })
+
+  it("AC4 — as 11 consultas da tarde são todas emitidas antes de a primeira resolver (profundidade sequencial = 1)", async () => {
+    // `isSlotFree` é UMA query ao `appointments` por candidato. Varrer o período
+    // inteiro sobe de 3 para 11 consultas; o que a AC4 proíbe é que elas sejam
+    // 11 round-trips EM SÉRIE no caminho da resposta ao lead.
+    const log: string[] = []
+    const sb = fakeSupabase([ocupado16h], {
+      onEmit: () => log.push("emit"),
+      onResolve: () => log.push("resolve"),
+    })
+    await freeSlotsInPeriod(sb, "org1", DIA_ANA, "tarde", AGORA_DA_MENTIRA)
+
+    const emitidas = log.filter((e) => e === "emit").length
+    expect(emitidas).toBe(11) // o período inteiro (12:00…17:00), não os 3 primeiros
+    expect(log.slice(0, emitidas).every((e) => e === "emit")).toBe(true)
+    expect(log.indexOf("resolve")).toBe(emitidas) // nenhuma resolveu antes de todas serem emitidas
   })
 })
 

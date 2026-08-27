@@ -625,10 +625,48 @@ export async function checkSlotAvailability(
 }
 
 /**
+ * Story 87-17 (`AC3`) — amostra até `k` elementos de `xs` ESPALHADOS do início
+ * ao fim, em vez dos `k` primeiros. Determinística e, para `k >= 2`, sempre
+ * inclui `xs[0]` e `xs[xs.length - 1]` (invariante da `AC3-iii`: é ela que faz
+ * "não existe nada mais tarde do que o último que te ofereci" ser verdade).
+ *
+ * O `Set` pode colapsar dois índices arredondados no mesmo valor — a saída pode
+ * ter MENOS de `k` elementos, e isso é aceitável; o que nunca pode faltar são os
+ * extremos. Exportada só para a `AC3` poder assertar a invariante direto, em vez
+ * de inferi-la das fixtures de `freeSlotsInPeriod`.
+ *
+ * `k <= 1` é guarda obrigatória, não zelo: `limit` é parâmetro público com
+ * default e a fórmula divide por `k - 1` (em `k = 1` isso seria `NaN` e o `map`
+ * devolveria `undefined` dentro do array).
+ */
+export function espalhar<T>(xs: T[], k: number): T[] {
+  if (k <= 0) return []
+  if (xs.length <= k) return xs
+  if (k === 1) return [xs[0]!]
+  const idx = new Set<number>()
+  for (let i = 0; i < k; i++) idx.add(Math.round((i * (xs.length - 1)) / (k - 1)))
+  return [...idx].sort((a, b) => a - b).map((i) => xs[i]!)
+}
+
+/**
  * Story 75-245 — horários LIVRES de um período ("de manhã") num dia, para a
  * Nicole oferecer em vez de inventar. Respeita o expediente do dia (sábado
  * fecha ao meio-dia → período "tarde" devolve vazio), exige a visita de 60min
  * cabendo inteira e ignora horário que já passou.
+ *
+ * Story 87-17 (Defeito A) — antes o laço PARAVA nos `limit` primeiros livres, e
+ * por isso a oferta era sempre a borda de abertura do período: "à tarde" nunca
+ * passava de 12h/12h30/13h e "de manhã" era sempre 8h/8h30/9h, com ou sem
+ * compromisso na agenda (a conversa da Ana, 26/08/2026, negou 15h e 17h que
+ * estavam livres). Agora o período inteiro é conferido — no máximo 11
+ * candidatos em `tarde` e 7 em `manha` — e a oferta é uma amostra ESPALHADA
+ * desses livres.
+ *
+ * `AC4` — `isSlotFree` é UMA query ao `appointments` por candidato. Conferir o
+ * período inteiro sobe de 3 para até 11 consultas, então elas vão em
+ * `Promise.all`: profundidade sequencial 1 (um único round-trip de espera), em
+ * vez de 11 em série no caminho da resposta ao lead. O paralelismo é limitado
+ * pela geometria do período, não por uma lista de tamanho aberto.
  */
 export async function freeSlotsInPeriod(
   supabase: SupabaseClient,
@@ -645,12 +683,16 @@ export async function freeSlotsInPeriod(
 
   const { fromMin, toMin } = PERIOD_BOUNDS[period]
   const lastStart = Math.min(toMin, close * 60) - VISIT_DURATION_MIN
-  const free: Date[] = []
+  const candidates: Date[] = []
   for (let m = Math.max(fromMin, OPEN_HOUR * 60); m <= lastStart; m += SLOT_STEP_MIN) {
-    if (free.length >= limit) break
     const candidate = brtToUtc(day.y, day.m, day.d, Math.floor(m / 60), m % 60)
     if (candidate.getTime() <= now.getTime()) continue
-    if (await isSlotFree(supabase, orgId, candidate, excludeAppointmentId)) free.push(candidate)
+    candidates.push(candidate)
   }
-  return free
+
+  const livre = await Promise.all(
+    candidates.map((c) => isSlotFree(supabase, orgId, c, excludeAppointmentId))
+  )
+  const free = candidates.filter((_, i) => livre[i])
+  return espalhar(free, limit)
 }
