@@ -49,11 +49,22 @@ registrado na Story 90-1. Use o parâmetro `timeout` do Bash tool e confira o ex
 
 Parse `$ARGUMENTS` to determine review scope:
 
-| Argument | Command | Use Case |
-|----------|---------|----------|
-| `uncommitted` (default) | `--prompt-only -t uncommitted` | Pre-commit review |
-| `committed` | `--prompt-only -t committed --base main` | QA story review |
-| `base {branch}` | `--prompt-only --base {branch}` | Pre-PR review against specific base |
+> ⚠️ **Flags verificadas contra o binário 0.7.5** (instalado e autenticado em 2026-08-27).
+> A versão anterior desta skill usava `--prompt-only` e `-t <escopo>`, que **não existem** —
+> vieram da config herdada do AIOS e nunca foram validadas contra o CLI real. Confira com
+> `coderabbit review --help` antes de mudar qualquer coisa aqui.
+
+| Escopo | Comando | Uso |
+|---|---|---|
+| `uncommitted` (default) | `coderabbit review --uncommitted` | Review pré-commit (staged + edições) |
+| `committed` | `coderabbit review --committed --base main` | Review de story no @qa |
+| `base {branch}` | `coderabbit review --base {branch}` | Pré-PR contra base específica |
+| commit específico | `coderabbit review --base-commit <sha>` | Diff contra um commit da branch atual |
+| saída p/ agente | acrescentar `--agent` | Findings estruturados (JSON) |
+
+**Não combine `--committed` com `--base-commit`.** Testado em 2026-08-27: o CLI resolveu
+`Compare: main → main` (diff vazio) e ficou 60 min em "Connecting to CodeRabbit" antes de cair
+com `WebSocket closed`. Use uma ou outra.
 
 ### 2. Montar o comando conforme o Passo 0
 

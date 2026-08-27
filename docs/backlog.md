@@ -250,6 +250,60 @@ Smokes menores pendentes (confirmam o que já foi medido por privilégio): `/bro
 
 ---
 
+### [DB] ⚪ Colisão de numeração na migration `240` — DECIDIDO: não renomear
+
+**Adicionado em:** 2026-08-27
+**Prioridade:** — (fechado como *não fazer*)
+**Origem:** Story 90-1 (Epic 90), levantado ao conferir a numeração livre para a 242
+
+Existem dois arquivos com o mesmo prefixo:
+
+```
+supabase/migrations/240_followup_nicole_por_lead.sql
+supabase/migrations/240_provision_org.sql
+```
+
+**✅ DECIDIDO (Marcos, 2026-08-27) — não renomear.** Ganho × risco:
+
+- **Ganho ≈ zero.** As duas já estão aplicadas em produção. Renomear no repositório não altera
+  nada no banco; só muda o nome do arquivo no histórico.
+- **Risco não-zero.** Se alguém reaplicar o diretório em ambiente novo, a ordem relativa entre as
+  duas muda conforme o nome — e hoje a ordem que produção viu está congelada no que já foi aplicado.
+- Nenhuma ferramenta do fluxo atual quebra por causa disso (a aplicação é manual, arquivo por
+  arquivo, via SQL Editor / Management API).
+
+**O que fica no lugar da correção:** este registro. Quem for criar migration nova deve conferir a
+numeração livre **no repo e no schema remoto** — a colisão do 240 existe justamente porque isso não
+foi feito na época.
+
+**Reabrir se:** o projeto passar a aplicar migrations por ferramenta que ordene por nome de arquivo.
+
+---
+
+### [COACH] 🔵 Live Coach — 2-3 queries por inbound antes do gate descartar
+
+**Adicionado em:** 2026-08-27
+**Prioridade:** P3 (baixa — otimização, sem impacto funcional)
+**Origem:** Gate da Story 90-1 (`docs/qa/gates/90-1-live-coach-backend.yml`), concern *low* aceito
+
+`lib/coach/generate-suggestion.ts` consulta `conversations` e `messages` para decidir se o humano
+está no atendimento. Uma dessas queries repete o que `notifyBrokerOnReply` (Story 63-12) já faz no
+**mesmo request** do webhook.
+
+**Por que não foi corrigido:** o ganho é ~1 query por mensagem inbound em conversa assumida —
+irrelevante para o Postgres neste volume. O risco é mexer no caminho crítico do webhook da Meta,
+onde exceção ou atraso custa mensagem de lead perdida. Ganho baixo × risco médio-alto.
+
+**Nota de honestidade:** este item **não** foi validado por review automatizado. O review retroativo
+do CodeRabbit sobre o diff da 90-1 falhou por erro de conexão e foi encerrado — então ninguém além
+da revisão manual olhou essas queries. Fica como backlog, **não como fechado**.
+
+**Ação, se um dia valer:** passar o `is_ai_active` que o webhook já leu por parâmetro, ou consolidar
+a leitura de takeover num helper compartilhado com o 63-12. Só encostar nisso quando houver outro
+motivo para editar o arquivo.
+
+---
+
 ### [DB] ⛔ `supabase db push` proibido contra produção — registro 52 versões atrasado
 
 **Adicionado em:** 2026-08-03
@@ -261,6 +315,28 @@ Smokes menores pendentes (confirmam o que já foi medido por privilégio): `/bro
 Aplicação em produção deve ser sempre pela **Management API, arquivo inteiro num único POST** (roda em transação implícita: erro aborta tudo sem deixar estado parcial). Procedimento em `docs/runbooks/aplicar-209-210.md`.
 
 **Decisão pendente:** ou registrar as ~52 versões faltantes de uma vez, ou assumir formalmente que `db push` não vale para este projeto e documentar. Registrar só as últimas mascararia o drift sem tornar o push seguro.
+
+**✅ DECIDIDO (Marcos, 2026-08-27) — assumir formalmente que `db push` não vale aqui. NÃO
+ressincronizar `schema_migrations`.**
+
+O critério foi ganho × risco, não conveniência:
+
+- **Ganho de ressincronizar ≈ zero.** O único benefício seria destravar `supabase db push` — um
+  comando que a decisão do projeto proíbe. Ferramenta que ninguém vai usar não paga risco nenhum.
+- **Risco alto.** `supabase_migrations.schema_migrations` é a tabela de controle de migrations de
+  **produção**. Errar o registro pode fazer uma ferramenta futura concluir que migrations aplicadas
+  estão pendentes (ou o contrário).
+- **O fluxo real já funciona e está documentado:** SQL Editor / Management API, arquivo inteiro num
+  POST, sempre antes do merge. Exercitado de novo hoje nas migrations 242/243 (Story 90-1), com
+  pré-condições verificadas antes e conferência depois — ver
+  `docs/runbooks/aplicar-242-243-live-coach.md`.
+
+**Consequência aceita:** o painel do Supabase continuará mostrando "LAST MIGRATION: 168". Isso é
+cosmético e já está documentado na memória do projeto e no `CLAUDE.md`. Quem olhar o painel e
+concluir que produção está atrasada está lendo errado — a fonte de verdade é o schema, não a tabela.
+
+**Reabrir se:** o projeto passar a depender do CLI para migrations (ex.: pipeline de CI que aplique
+schema), aí a ressincronização deixa de ser desperdício e vira pré-requisito.
 
 ---
 
@@ -487,7 +563,35 @@ cobre um caso que este item não cobre (lead sem conversa nenhuma). Os dois são
 
 **Aguarda decisão do Marcos.**
 
-## [@devops 24/08/2026] CodeRabbit está inativo, mas os artefatos dizem que é gate obrigatório
+## ✅ [@devops 24/08/2026] CodeRabbit está inativo, mas os artefatos dizem que é gate obrigatório
+
+> **RESOLVIDO em 2026-08-27** (Story 90-1, PR #514). O diagnóstico registrado abaixo estava
+> **inteiramente correto** e foi confirmado item por item — vale ler como exemplo de investigação que
+> não precisou ser repetida.
+>
+> **O que mudou:**
+> - **GitHub App instalado** no repositório (autorizado pelo Marcos). Verificação objetiva: o PR #514
+>   recebeu review do autor `coderabbitai` e o check `CodeRabbit — Review completed` passou a aparecer.
+>   O bot confirma no comentário que está lendo `.coderabbit.yaml`.
+> - **`.coderabbit.yaml` deixou de cobrir só `.aios-core/**`.** Ganhou `path_instructions` para
+>   `supabase/migrations/**`, `webhook*/**`, `packages/ai/**`, `packages/web/src/lib/**` e
+>   `**/*.test.ts` — regras derivadas de incidentes reais, não de boas práticas genéricas.
+> - **A rule e a skill deixaram de assumir WSL.** A skill tinha um caminho absoluto de **outra
+>   máquina e outro projeto** (`/mnt/c/Users/AllFluence-User/.../aios-core`), o que a fazia falhar em
+>   qualquer ambiente. Agora há detecção de plataforma obrigatória.
+> - **A rule declara o App como gatilho primário** (roda no servidor, independe do SO) e o CLI como
+>   complemento local.
+>
+> **A "mentira documentada" que este item denunciava está desfeita:** binário ausente agora se
+> registra como "não executado", nunca como "passou". Foi exatamente assim que a Story 90-1 procedeu
+> nos três gates antes da instalação.
+>
+> **O que NÃO ficou resolvido:** o CLI local foi instalado e autenticado nesta máquina
+> (`~/.local/bin/coderabbit` 0.7.5), mas um review retroativo falhou com
+> `Connection failed: WebSocket closed` após 60 min. Não investigado — o gatilho que importa (App)
+> funciona, e o CLI é complemento opcional. As 124 stories com seção "CodeRabbit Integration"
+> preenchida retroativamente **não** foram revisitadas: seguem afirmando um gate que não rodou na
+> época. Corrigir 124 documentos históricos não foi julgado como ganho que pague o esforço.
 
 **Origem:** Story 75-368 (o `@dev` reportou que não conseguiu rodar). **Prioridade sugerida:** média —
 não é o que está falhando hoje, mas é uma mentira documentada. **Complexidade:** XS para acertar os
