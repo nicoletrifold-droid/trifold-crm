@@ -24,7 +24,9 @@ import {
 export {
   isCashReceipt,
   getOpenBalance,
+  getNonCashLabel,
   collectUnknownReceiptTypes,
+  CASH_RECEIPT_TYPES,
   NON_CASH_RECEIPT_TYPES,
 } from "./installments"
 
@@ -138,7 +140,8 @@ export async function getFinancialStatement(
           a.receiptDate < b.receiptDate ? -1 : a.receiptDate > b.receiptDate ? 1 : 0
 
         const all = [...inst.receipts].sort(byDate)
-        // Reparcelamento não é pagamento: separa antes de qualquer soma.
+        // Só Recebimento e Abatimento de Adiantamento são pagamento: separa
+        // antes de qualquer soma.
         const receipts = all.filter(isCashReceipt)
         const nonCashReceipts = all.filter((r) => !isCashReceipt(r))
 
@@ -151,8 +154,8 @@ export async function getFinancialStatement(
         } else if (receipts.length > 0) {
           status = "PARCIAL"
         } else if (nonCashReceipts.length > 0 && inst.currentBalance <= 0) {
-          // Só baixa de reparcelamento: a parcela foi substituída por outras.
-          // Nem paga, nem devida.
+          // Só baixa que não é pagamento (reparcelamento, distrato,
+          // cancelamento…): nem paga, nem devida.
           status = "RENEGOCIADA"
         } else if (inst.generatedBillet) {
           status = "BOLETO_GERADO"
