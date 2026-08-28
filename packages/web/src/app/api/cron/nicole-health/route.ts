@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
-import { logEvent, logEventOnce } from "@web/lib/logger"
+import { logEventOnce } from "@web/lib/logger"
 import { classificarErroIA, deveAlertar, type TipoErroIA } from "@web/lib/alerts/erro-ia"
 import {
   alertarAdminWhatsApp,
@@ -116,7 +116,7 @@ export async function GET(request: NextRequest) {
   // aconteceu seria um segundo silêncio.
   const config = await carregarConfigWhatsApp(admin, DEFAULT_ORG_ID)
   if (!config) {
-    logEvent({
+    await logEventOnce({
       level: "warn",
       category: "cron",
       event_type: "NICOLE_HEALTH_SEM_CANAL",
@@ -136,6 +136,8 @@ export async function GET(request: NextRequest) {
 
   let alertasEnviados = 0
   let dedupPulados = 0
+  /** Tipos cujo marcador foi desfeito por falha total de entrega (retenta em 10 min). */
+  let entregasFalhas = 0
 
   for (const [tipo, ag] of aAlertar) {
     if (dryRun) continue
@@ -168,6 +170,27 @@ export async function GET(request: NextRequest) {
       desdeIso: ag.primeiraOcorrencia,
       ocorrencias: ag.ocorrencias,
     })
+
+    if (enviados === 0) {
+      // COMPENSAÇÃO — mesma regra do AC14, agora para o envio que falhou.
+      //
+      // O marcador é gravado ANTES do envio de propósito: é ele que dá o dedup
+      // atômico contra duas execuções concorrentes. Mas se NINGUÉM recebeu, manter
+      // o marcador transforma a falha de entrega em silêncio pela hora inteira —
+      // o defeito que esta story existe para matar. Então desfazemos, e o próximo
+      // ciclo (10 min) tenta de novo.
+      //
+      // Não é hipotético: enquanto o template `alerta_sistema_admin` estiver
+      // `PENDING` na Meta, TODO envio devolve 400 e cai exatamente aqui.
+      await admin
+        .from("system_events")
+        .delete()
+        .eq("event_type", "NICOLE_HEALTH_ALERTA")
+        .eq("metadata->>dedupe_key", `nicole-health:${tipo}:${horaAtual}`)
+      entregasFalhas += 1
+      continue
+    }
+
     alertasEnviados += enviados
   }
 
@@ -177,5 +200,6 @@ export async function GET(request: NextRequest) {
     tiposAlertaveis: aAlertar.map(([t]) => t),
     alertasEnviados,
     dedupPulados,
+    entregasFalhas,
   })
 }

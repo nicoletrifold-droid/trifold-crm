@@ -32,12 +32,32 @@ vi.mock("@web/lib/supabase/admin", () => ({
         }
       }
       // system_events: select().eq().gte().order()
+      // O fake HONRA o .order(): sem isso, o teste da "primeira ocorrência" passaria
+      // mesmo que a rota não ordenasse — bastaria o array de entrada já vir ordenado.
       return {
         select: () => ({
           eq: () => ({
             gte: () => ({
-              order: async () => ({ data: eventos, error: null }),
+              order: async (_col: string, opts?: { ascending?: boolean }) => {
+                const asc = opts?.ascending !== false
+                const ordenado = [...eventos].sort((a, b) =>
+                  asc
+                    ? a.created_at.localeCompare(b.created_at)
+                    : b.created_at.localeCompare(a.created_at)
+                )
+                return { data: ordenado, error: null }
+              },
             }),
+          }),
+        }),
+        // Compensação do dedup quando a entrega falha 100%.
+        delete: () => ({
+          eq: (_c1: string, v1: string) => ({
+            eq: (_c2: string, v2: string) => {
+              chavesGravadas.delete(v2)
+              deletesCompensatorios.push(`${v1}|${v2}`)
+              return Promise.resolve({ error: null })
+            },
           }),
         }),
       }
@@ -45,9 +65,11 @@ vi.mock("@web/lib/supabase/admin", () => ({
   }),
 }))
 
+/** Chaves removidas pela compensação de entrega falha. */
+let deletesCompensatorios: string[] = []
 /** Chaves de dedup já "no banco" — a 2ª tentativa da mesma chave leva 23505. */
 let chavesGravadas = new Set<string>()
-const logEventOnceMock = vi.fn(async (p: { dedupe_key?: string }) => {
+const logEventOnceMock = vi.fn(async (p: { dedupe_key?: string; event_type?: string }) => {
   const k = p.dedupe_key ?? ""
   if (chavesGravadas.has(k)) return { inserted: false }
   chavesGravadas.add(k)
@@ -56,7 +78,7 @@ const logEventOnceMock = vi.fn(async (p: { dedupe_key?: string }) => {
 const logEventMock = vi.fn()
 vi.mock("@web/lib/logger", () => ({
   logEvent: (...a: unknown[]) => logEventMock(...a),
-  logEventOnce: (p: { dedupe_key?: string }) => logEventOnceMock(p),
+  logEventOnce: (p: { dedupe_key?: string; event_type?: string }) => logEventOnceMock(p),
 }))
 
 /** Args que realmente interessam do envio — o resto do payload é do canal, não da rota. */
@@ -111,6 +133,8 @@ beforeEach(() => {
   delete process.env.ALERTA_SISTEMA_OFF
   eventos = []
   chavesGravadas = new Set()
+  deletesCompensatorios = []
+  alertarMock.mockImplementation(async () => ({ enviados: 1, falhas: 0 }))
   waConfigRow = { phone_number_id: "1", access_token: "t", status: "active" }
   alertarMock.mockClear()
   logEventOnceMock.mockClear()
@@ -237,12 +261,55 @@ describe("canal indisponível (AC14)", () => {
 
     expect(body.skipped).toBe("whatsapp indisponível")
     expect(alertarMock).not.toHaveBeenCalled()
-    // O ponto do AC14: o marcador NÃO pode ter sido gravado, senão o alerta some
-    // para sempre naquela hora mesmo sem ninguém ter sido avisado.
-    expect(logEventOnceMock).not.toHaveBeenCalled()
-    expect(logEventMock).toHaveBeenCalledWith(
+    // O ponto do AC14 é preciso: nenhum MARCADOR de alerta pode ter sido gravado,
+    // senão o alerta some pela hora inteira sem ninguém ter sido avisado. O log de
+    // diagnóstico `NICOLE_HEALTH_SEM_CANAL` pode (e deve) ser gravado.
+    const marcadores = logEventOnceMock.mock.calls.filter(
+      (c) => c[0].event_type === "NICOLE_HEALTH_ALERTA"
+    )
+    expect(marcadores).toHaveLength(0)
+    expect(logEventOnceMock).toHaveBeenCalledWith(
       expect.objectContaining({ event_type: "NICOLE_HEALTH_SEM_CANAL" })
     )
+  })
+})
+
+describe("entrega falha desfaz o dedup (achado do CodeRabbit no PR #519)", () => {
+  it("quando NINGUÉM recebe, o marcador é removido para retentar em 10 min", async () => {
+    eventos = [evento(ERRO_CREDITO)]
+    // É o cenário real enquanto o template estiver PENDING na Meta: 400 em todo envio.
+    alertarMock.mockImplementation(async () => ({ enviados: 0, falhas: 1 }))
+
+    const body = await (await GET(req() as never)).json()
+
+    expect(body.entregasFalhas).toBe(1)
+    expect(body.alertasEnviados).toBe(0)
+    expect(deletesCompensatorios).toHaveLength(1)
+    expect(deletesCompensatorios[0]).toContain("nicole-health:credito:")
+  })
+
+  it("o ciclo seguinte volta a tentar — o silêncio não persiste", async () => {
+    eventos = [evento(ERRO_CREDITO)]
+    alertarMock.mockImplementation(async () => ({ enviados: 0, falhas: 1 }))
+    await GET(req() as never) // 1º ciclo: falha e compensa
+
+    // Template aprovado no meio do caminho: o 2º ciclo TEM de conseguir alertar.
+    alertarMock.mockImplementation(async () => ({ enviados: 1, falhas: 0 }))
+    const body = await (await GET(req() as never)).json()
+
+    expect(body.alertasEnviados).toBe(1)
+    expect(body.dedupPulados).toBe(0)
+  })
+
+  it("entrega parcial (1 de 2) NÃO desfaz o dedup", async () => {
+    eventos = [evento(ERRO_CREDITO)]
+    alertarMock.mockImplementation(async () => ({ enviados: 1, falhas: 1 }))
+
+    const body = await (await GET(req() as never)).json()
+
+    expect(body.alertasEnviados).toBe(1)
+    expect(body.entregasFalhas).toBe(0)
+    expect(deletesCompensatorios).toHaveLength(0)
   })
 })
 

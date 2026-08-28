@@ -118,6 +118,8 @@ A 78-13 alerta quando o **coletor de custo** falha 3 dias seguidos (`service_cos
 
 - [x] **AC13 — Sem migration:** Nenhuma tabela, coluna ou índice novo. Confirmado: `ux_system_events_dedupe_key` já existe em produção; a última migration do repo é a `243`.
 
+- [x] **AC15 — Entrega falha não consome o dedup (achado do CodeRabbit no PR #519, 28/08):** Dado que o marcador de dedup foi gravado e **nenhum** destinatário recebeu (`enviados === 0`): o marcador é **removido** (`DELETE` por `event_type` + `metadata->>dedupe_key`) e `entregasFalhas` é incrementado, de modo que o ciclo seguinte (10 min) tente de novo. Entrega **parcial** (≥1 recebeu) **não** desfaz o dedup — alguém foi avisado. Não é hipotético: enquanto o template estiver `PENDING` na Meta, todo envio devolve 400 e cai exatamente aqui; sem a compensação, o alerta sumiria pela hora inteira — o defeito que esta story existe para matar.
+
 - [x] **AC14 — Config de WhatsApp ausente não derruba o cron (@po, 28/08):** Dado que `whatsapp_config` não retorna linha para a org, ou retorna com `status != 'active'`, ou sem `access_token`/`phone_number_id`: o cron responde `{ skipped: "whatsapp indisponível" }` **sem lançar** e **sem gravar o marcador de dedup** — o alerta não pode ser consumido por um envio que nunca aconteceu. O caso é logado (`logEvent`, `category:"cron"`, `level:"warn"`) para não virar um segundo silêncio.
 
 ---
@@ -256,6 +258,7 @@ Review automático roda pelo GitHub App no PR. Achado do bot **não bloqueia mer
 | Data | Versão | Descrição | Autor |
 |------|--------|-----------|-------|
 | 2026-08-28 | 1.0 | Story criada a partir do incidente real de 27-28/08/2026 (saldo Anthropic esgotado, 22h sem detecção, 3 leads sem resposta). Canal WhatsApp escolhido pelo usuário. | @sm (River) |
+| 2026-08-28 | 1.3 | **AC15 (novo)** — correção de defeito real apontado pelo CodeRabbit no PR #519: o marcador de dedup era gravado ANTES do envio e não era desfeito quando a entrega falhava para todos, o que transformaria falha de entrega em silêncio pela hora inteira. Compensação implementada + 3 testes (mutação: remover a compensação derruba 2). Também: fake do Supabase passou a honrar `.order()` (o teste da "primeira ocorrência" não podia reprovar antes) e o log de "sem canal" passou a aguardar a escrita. Suíte: 3222 verdes. | @dev (Dex) |
 | 2026-08-28 | 1.2 | Implementação (YOLO): classificador + canal + cron + 42 testes (3 arquivos), mutação executada nos 3 pontos críticos, suíte completa verde (3219). T3 (template Meta) e T5.3 (env) bloqueados por Q1/Q2. Status → `Ready for Review`. | @dev (Dex) |
 | 2026-08-28 | 1.1 | Validação: **GO condicional 8.5/10**. Fixes aplicados: (F1) renumerada `78-16` → `87-19` e movida do Epic 78 para o Epic 87 — nenhum FR do 78 cobre runtime; (F2) seção **Riscos & Mitigação** criada (R1-R6); (F3) **AC14** — config de WhatsApp ausente não pode consumir o dedup; (F4) **Questões Abertas** Q1/Q2 registradas. Status `Draft` → `Ready`. | @po (Pax) |
 
