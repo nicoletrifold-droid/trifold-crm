@@ -3,7 +3,7 @@ epic: 86
 title: Conversions API (CAPI) e Rastreamento Meta — Evento "Visitou"
 status: Draft
 created_at: 2026-08-04
-updated_at: 2026-08-26
+updated_at: 2026-08-28
 created_by: River (@sm)
 priority: High
 sub_epics:
@@ -172,6 +172,23 @@ Enviar ao Meta dois eventos que a campanha precisa:
 > hardcodavam identificadores do Vind Residence. Depois da 86-12, qualquer
 > landing nova custa apenas uma entrada no `Record` + um proxy clonado.
 > Validada pelo @po em 2026-08-26 (GO 9.5/10), status `Ready`.
+>
+> **Atualização de 2026-08-28 (@devops, no merge da 86-12).** A 86-12 está com o
+> **código mergeado em `main`** (PR #512, squash `0c2b4eb8`) mas **NÃO está
+> `Done`** — e a distinção é material neste epic, não burocracia. O merge
+> publica automaticamente **só** a parte `packages/web` (o discriminador
+> multi-landing `LANDING_CONFIGS`/`resolveLandingConfig`), porque é o único
+> pedaço da story que vive no projeto Vercel git-linkado. As outras duas partes
+> são projetos Vercel **separados, sem git link, de publicação manual**: o
+> projeto `yarden` **ainda não existe** (T12) e a CSP/rewrites do
+> `trifold-design-system` (AC9) só valem após um `vercel deploy --prod` de
+> dentro do seu diretório. Portanto `trifold.eng.br/yarden/` **não está no ar** e
+> o AC13 (Test Events com `content_category: "landing_yarden"` + não-regressão do
+> Vind Residence em produção) segue **não validado**. Por isso a 86-12 **não
+> entrou em `stories_done`** no frontmatter: nesta convenção `Done` significa
+> "verificado em produção", não "mergeado". Consequência para o epic: o
+> multi-landing (`resolveLandingConfig`) já está em produção e disponível para
+> stories futuras de landing, mesmo com a landing do Yarden ainda offline.
 
 ## Decisões de Produto — adendo de 2026-08-26 (Travadas)
 
@@ -211,4 +228,4 @@ Enviar ao Meta dois eventos que a campanha precisa:
 | 2026-08-24 | 0.2 | Tabela de stories reconciliada com a realidade durante a validação da 86-11: acrescentadas 86-9 (implementada, em produção, QA PASS), 86-10 (reservada) e 86-11 (`Ready`), e registrado que 86-5/86-6/86-7 foram substituídas pela 86-9 — as três apontavam para uma landing (`POST /api/public/leads`) que nunca existiu. Nenhuma mudança nas Decisões de Produto travadas nem na arquitetura recomendada. | @po (Pax) |
 | 2026-08-26 | 0.3 | Acrescentada 86-12 (`Draft`) — Pixel + CAPI na landing nova do Yarden (`/yarden/`), irmã arquitetural da 86-11 (Vind Residence), motivada pela constatação de que a landing WordPress antiga do Yarden (`/y/`) está 404 em produção. A 86-12 introduz um AC novo (discriminador multi-landing em `landing-page-tracking.ts`, ADAPT) porque os módulos server-side reusados da 86-11 hardcodavam identificadores "Vind Residence" — achado não previsto na auditoria original. Duas decisões de negócio deixadas abertas na story para @po validar com o usuário: dataset/Pixel ID do Yarden e a ausência de conteúdo definitivo da página. 86-10 permanece reservada e não redigida. | @sm (River) |
 | 2026-08-26 | 0.4 | Validação @po da 86-12 (GO 9.5/10, `Draft` → `Ready`). Duas decisões de negócio do stakeholder promovidas a **Decisões de Produto travadas** do epic (adendo, itens 4 e 5): (4) landings novas reusam o dataset `1337310707164669` e se segmentam por `content_category`, nunca por dataset próprio; (5) convenção de nome de projeto Vercel = nome do empreendimento (`yarden` → `yarden.vercel.app`). Frontmatter reconciliado com a realidade: `stories_done: [86-9, 86-11]` (estava vazio), `stories_added: [86-9, 86-10, 86-11, 86-12]`, `stories_superseded: [86-5, 86-6, 86-7]`, e `stories_planned` deixou de listar as três substituídas. 86-11 registrada como `Done` (estava como `Ready`). | @po (Pax) |
-| 2026-08-28 | 0.5 | **Código da 86-12 mergeado em `main` (PR #512, merge commit `0c2b4eb8`), story ainda NÃO `Done`.** Squash merge em 2026-08-28T13:55:46Z; branch remoto deletado pelo GitHub; commit confirmado como ancestral de `origin/main` por `git merge-base --is-ancestor`. **`stories_done` mantido em `[86-9, 86-11]` de propósito** — o merge integra código, não entrega funcionalidade, e a 86-12 tem duas tasks de @devops abertas que bloqueiam o AC13: T12 (criar o projeto Vercel `yarden` e replicar `LANDING_PAGE_WEBHOOK_SECRET`) e T13 (validação end-to-end com `META_CAPI_TEST_EVENT_CODE` + não-regressão do Vind Residence + remoção da env de teste). T12 foi re-verificada contra a Vercel real e **não** contra o relato da story: `vercel project ls` em `trifold-s-projects` lista só `trifold-crm`, `trifold-design-system` e `vind-residence` — o projeto `yarden` não existe, então `yarden.vercel.app` não resolve. **Efeito colateral do merge a rastrear:** os rewrites/redirect de `/yarden*` que a story acrescentou ao `trifold-design-system/vercel.json` já estão em `main` e apontam para esse destino inexistente; no próximo deploy do design system `trifold.eng.br/yarden/` passa a devolver erro de upstream em vez de 404, sem afetar `/vindresidence/` (blocos e catch-all provados intactos no QA gate da 86-12). A 86-12 volta a `Done` no epic e no frontmatter só quando T12/T13 fecharem. 86-10 continua reservada e não redigida. | @devops (Gage) |
+| 2026-08-28 | 0.5 | **86-12 mergeada em `main` (PR #512, squash `0c2b4eb8`) e deliberadamente NÃO promovida a `Done`.** `stories_done` segue `[86-9, 86-11]` — nesta convenção `Done` é "verificado em produção", e o merge cobre apenas a fatia `packages/web` da story (o discriminador multi-landing `LANDING_CONFIGS`/`resolveLandingConfig`), que é a única a viver no projeto Vercel git-linkado e portanto a única que sobe sozinha. O projeto Vercel `yarden` **não existe** (T12 aberta) e a CSP/rewrites do `trifold-design-system` (AC9) exigem `vercel deploy --prod` manual — logo `trifold.eng.br/yarden/` está offline e o AC13 não foi validado (T13 aberta). Registrado no bloco de "Correção de curso" o porquê da distinção merge≠Done neste epic: as landings são **projetos Vercel separados e sem git link**, então o merge de uma story de landing nunca é evidência de que a landing está no ar — armadilha que vale para toda story futura de landing deste epic. Ganho já efetivo para o epic: o multi-landing está em produção, então a próxima landing custa uma entrada no `Record` + um proxy clonado. Nenhuma decisão de produto alterada. | @devops (Gage) |
