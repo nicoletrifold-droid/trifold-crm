@@ -1,6 +1,6 @@
 # Story 90-6 — URLs limpas (`/sobre-nos`, `/empreendimentos`, `/corporativas`, `/blog`) + redirect 301
 
-**Status:** Ready for Review (implementada por @dev em 2026-08-28 — aguardando `@qa *qa-gate` e deploy manual por @devops)
+**Status:** InReview (deployada em produção por @devops em 2026-08-28 — `dpl_7AWyj2cgKsEFXU2fBcbpXNseZSDv`, smoke test em `trifold.eng.br` 100% PASS; promoção a `Done` após merge do PR #523)
 **Epic:** 90 — SEO Técnico do site institucional trifold.eng.br
 **Executor:** @dev (Dex)
 **Quality Gate:** @qa (Quinn) — `*qa-gate` ao fim da implementação
@@ -620,3 +620,126 @@ confirma que a suíte local não serve de gate em nenhuma das duas direções.
    - `/vindresidence/` e `/yarden/` → 200 (QA-3)
 5. **Status recomendado: `InReview`, não `Done`.** As AC1/AC3/AC5 nomeiam produção; só após o smoke
    acima a story pode ir para `Done` — transição do @devops, conforme `story-lifecycle.md`.
+
+---
+
+## DevOps Record — @devops (Gage), 2026-08-28
+
+### Branch, commit e PR
+
+- Branch `feat/90-6-urls-limpas`, criada **a partir de `origin/main`** (`563e639f`) em worktree
+  isolado — a working tree principal estava em `feat/86-12-pixel-capi-landing-yarden` com arquivos
+  pendentes de outros agentes, que não podiam entrar nesta story.
+- Commit `4650e92a` — 10 arquivos: os 8 de `landing-pages/trifold-design-system/` (rename `R100`
+  preservado) + esta story + o gate. Staging seletivo, sem `git add -A`. Scan de segredos no diff
+  staged: limpo.
+- Conferência de integridade antes do commit: sha256 dos 8 arquivos no worktree == sha256 na pasta
+  de deploy local; `vercel.json` validado como JSON.
+- PR **#523** → https://github.com/nicoletrifold-droid/trifold-crm/pull/523
+
+### Deploy de produção (manual — este site não é git-based)
+
+- Projeto Vercel `trifold-design-system` (`prj_1SRBOXwTclTFwGDz3zjIO6uM0pMG`), scope
+  `trifold-s-projects`, domínio `trifold.eng.br`. Sem link com o GitHub: **mergear o PR não publica
+  nada**; a publicação é o `vercel deploy --prod` abaixo.
+- **Checagem anti-concorrência pré-deploy:** sha256 de `Home`, `Sobre Nós`, `Empreendimentos`,
+  `B2B`, `Blog`, `Artigo.dc.html` e `support.js` servidos por `trifold.eng.br` == baseline
+  `origin/main` em **7/7**. Nenhuma deriva; o delta publicado é exatamente o diff desta story.
+- Deploy: `vercel deploy --prod --yes --scope trifold-s-projects`
+  → `dpl_7AWyj2cgKsEFXU2fBcbpXNseZSDv`, `target=production`, `readyState=READY`,
+  `2026-08-28 17:15:03 -03`.
+- `vercel ls` pós-smoke: o deployment de produção mais recente é este (o anterior tem 2 dias) —
+  ninguém publicou por cima durante a validação.
+
+### Smoke test em produção (`https://trifold.eng.br`) — 100% PASS
+
+**AC1 — URLs limpas (esperado 200, 0 hops)**
+
+| URL | 1ª resposta | hops | conteúdo servido (sha256 vs arquivo local) | `<title>` |
+|---|---|---|---|---|
+| `/` | 200 | 0 | == `Home.dc.html` | Trifold Engenharia — Construtora e Incorporadora em Maringá |
+| `/sobre-nos` | 200 | 0 | == `sobre-nos.dc.html` | Sobre Nós — Trifold Engenharia |
+| `/empreendimentos` | 200 | 0 | == `Empreendimentos.dc.html` | Empreendimentos — Trifold Engenharia |
+| `/corporativas` | 200 | 0 | == `B2B.dc.html` | Corporativas — Trifold Engenharia |
+| `/blog` | 200 | 0 | == `Blog.dc.html` | Blog — Trifold Engenharia |
+
+**AC3 — URLs antigas (esperado 301 em 1 hop)**
+
+| URL antiga | status | hops | `Location` | destino final |
+|---|---|---|---|---|
+| `/Sobre%20N%C3%B3s.dc.html` | 301 | 1 | `/sobre-nos` | 200 |
+| `/Empreendimentos.dc.html` | 301 | 1 | `/empreendimentos` | 200 |
+| `/B2B.dc.html` | 301 | 1 | `/corporativas` | 200 |
+| `/Blog.dc.html` | 301 | 1 | `/blog` | 200 |
+| `/Home.dc.html` | 301 | 1 | `/` (sem fragmento) | 200 |
+| `/sobre-nos.dc.html` (11ª regra) | 301 | 1 | `/sobre-nos` | 200 |
+
+**AC2 — trailing slash (esperado 301 em 1 hop):** `/sobre-nos/` → `/sobre-nos`,
+`/empreendimentos/` → `/empreendimentos`, `/corporativas/` → `/corporativas`, `/blog/` → `/blog`.
+4/4 em 301, 1 hop, final 200.
+
+**QA-2 RESOLVIDO — query string preservada em produção.** Era o ponto que o @qa não conseguia
+medir localmente (`vercel dev` descarta a query em 301). Medido no ar, agora:
+
+```
+$ curl -sI 'https://trifold.eng.br/B2B.dc.html?utm_source=qa&fbclid=X'
+HTTP/2 301
+location: /corporativas?utm_source=qa&fbclid=X
+```
+
+Confirmado nas outras 5 regras também — `/Sobre%20N%C3%B3s.dc.html`, `/Empreendimentos.dc.html`,
+`/Blog.dc.html`, `/Home.dc.html`, `/sobre-nos.dc.html` e `/blog/` devolvem todas
+`?utm_source=qa&fbclid=X` no `Location`. **Nenhuma perda de atribuição** (`utm_*`, `fbclid`,
+`gclid`) nas URLs antigas. Nada volta para o @dev.
+
+**AC5 — fragmento, render headless em produção (Playwright, Chromium 1440x900 + iPhone 13):**
+
+| origem | URL final | scrollY desktop | scrollY iPhone 13 |
+|---|---|---|---|
+| `/Home.dc.html` | `/` | **0** | **0** |
+| `/Home.dc.html#contato` | `/#contato` | 3557 | 4707 |
+| `/` (controle) | `/` | 0 | 0 |
+
+O caso negativo que motivou a 3ª rodada do @po está confirmado **em produção**: quem chega em
+`/Home.dc.html` sem fragmento termina no topo da home, não é arrastado para `#contato`.
+
+**AC4/AC6 — links internos pós-render em produção.** Coletados do DOM das 6 páginas: só
+`/`, `/#contato`, `/sobre-nos`, `/empreendimentos`, `/corporativas`, `/blog`, `#`-âncoras,
+`Artigo.dc.html?slug=…` (relativo, fora de escopo) e os externos WhatsApp/`/vindresidence/`.
+**Zero ocorrência das URLs antigas.** 12/12 URLs testadas responderam 200 em 0 hops.
+
+**QA-3 — regressões do acoplamento com a 86-12 (este deploy publicou junto o roteamento dela):**
+
+| URL | resultado |
+|---|---|
+| `/yarden` → `/yarden/` | 307 (1 hop) → **200** — a 86-12 saiu do 404 e entrou no ar |
+| `/vindresidence` → `/vindresidence/` | 307 (1 hop) → 200 |
+| `/Logo.dc.html` | 200 |
+| `/Design%20System.dc.html` | 200 |
+| `/Artigo.dc.html?slug=…` | 200 (4 slugs testados) |
+| `/support.js` | 200 |
+| `/api/contact` | 405 em GET/HEAD (esperado: função é POST-only) |
+| `/.claude/agent-memory/…/MEMORY.md` | **404** — `.vercelignore` seguiu valendo, sem exposição |
+
+**Headers de segurança em `/sobre-nos`** (URL nova, servida via rewrite): CSP, `X-Frame-Options:
+DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`,
+`Permissions-Policy` e HSTS todos presentes — o rewrite não escapa do bloco `headers`.
+
+**Segunda passada** (cache de edge dos PoPs) nas 5 URLs limpas e nas 5 antigas: resultados
+idênticos aos da primeira.
+
+### Concerns do gate — encaminhamento
+
+- **QA-1 e QA-2: encerrados** pela evidência de produção acima.
+- **QA-3: aceito e verificado.** A 86-12 (gate PASS próprio, PR #512 mergeado) foi publicada junto,
+  de forma consciente, e passou no smoke.
+- **QA-4 (@sm/@po):** 6 stories do épico ainda citam `Sobre Nós.dc.html` — 90-1, 90-2, 90-3, 90-3a,
+  90-4 e 90-7 precisam apontar para `sobre-nos.dc.html` **antes de a 90-1 começar**. A 90-3a é a
+  crítica (linha 76 manda editar o arquivo pelo nome antigo).
+- **QA-5 e QA-7:** backlog do épico 90, não bloqueiam.
+- **QA-6:** cosmético no README (resíduo da 86-12), corrigir na próxima edição do arquivo.
+
+### Por que `InReview` e não `Done`
+
+Toda a evidência de produção está fechada, mas a promoção para `Done` segue a convenção do repo:
+sai por branch `docs/90-6-done` + PR, depois do PR #523 mergeado e com o site estável em observação.
