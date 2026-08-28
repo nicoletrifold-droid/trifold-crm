@@ -1,11 +1,13 @@
 storyId: "75-369"
 title: "Extrato: só Recebimento e Abatimento de Adiantamento contam como pagamento"
-verdict: CONCERNS
-readiness: 8/10
+verdict: PASS
+readiness: 10/10
 reviewer: "@qa (Quinn)"
 date: 2026-08-28
 branch: fix/portal-tipos-baixa-pagamento
 commit: ee7b2ae4
+merge_commit: ba6291b6 (PR #520)
+producao: deploy concluído em 28/08/2026
 
 checks:
   code_review: PASS         # allowlist substitui blacklist na fonte única (installments.ts); consumidores herdam a regra
@@ -16,6 +18,7 @@ checks:
   performance: PASS         # nenhuma chamada nova ao Sienge; filtro em memória
   security: PASS            # n/a — sem input externo novo, sem query, sem credencial
   documentation: PASS       # story + gate + comentários de código explicando a decisão do financeiro
+  dados_reais: PASS         # conciliado com os extratos oficiais do Vind e do Yarden — ver abaixo
 
 acceptance_criteria_trace:
   AC1: "Só recebimento e abatimento de adiantamento em receipts — it.each com os 2 tipos, esperando PAGO + receiptValue."
@@ -34,6 +37,7 @@ regression_sweep:
 
 concerns:
   - id: C1
+    status: RESOLVIDO em 28/08/2026
     severity: MEDIUM
     title: "Nenhuma validação com dados reais ainda"
     detail: >
@@ -43,6 +47,13 @@ concerns:
       A conciliação combinada com o financeiro (extrato do Sienge por contrato × tela) é o
       que fecha esta lacuna.
     mitigation: "Aguardar o extrato do Sienge e conciliar antes de considerar a regra validada."
+    resolucao: >
+      Feita no mesmo dia. 89 títulos (36 Vind + 53 Yarden), 71 clientes, 89 de 89 encontrados nos
+      dois lados. Saldo devedor idêntico ao centavo em 89/89 (R$ 47.125.810,35). Total pago a
+      R$ 721,78 do extrato oficial em R$ 14,5 milhões — contra R$ 10,8 milhões de excesso antes da
+      correção. A regra está confirmada pela própria fonte: o Sienge deixa a coluna "Recto líquido"
+      em branco nas baixas que não são pagamento e escreve o motivo na linha
+      ("*** Substituição - Título 10638 - CR ***"). Detalhamento na story.
   - id: C2
     severity: MEDIUM
     title: "Default restritivo pode esconder pagamento de um tipo novo"
@@ -62,6 +73,9 @@ concerns:
       ver 'Distratada', 'Cancelada' ou 'Adiantamento'. Vale o financeiro saber antes de o
       deploy ir ao ar, para não ser pego de surpresa por ligação de cliente.
     mitigation: "Avisar o financeiro na entrega. O rótulo por tipo real já evita o pior (chamar distrato de 'renegociada')."
+    status: >
+      ACEITO. Deploy feito em 28/08/2026 com o dono do produto ciente do efeito. Sem risco de
+      contato de cliente no fim de semana (confirmado pelo Marcos).
 
 coderabbit:
   cli: "não executado — o gatilho deste repo é o GitHub App, que revisa no PR"
@@ -72,10 +86,23 @@ build:
   lint: "eslint exit 0 — 0 errors; 38 warnings pré-existentes, nenhum nos arquivos tocados"
 
 verdict_rationale: >
-  CONCERNS, não FAIL: o código está correto, coberto e sem regressão, e o gate não bloqueia o
-  merge. O que impede um PASS limpo é que a regra ainda não foi conferida contra dados reais
-  (C1) — e essa conferência já está combinada com o financeiro, é o próximo passo do fluxo,
-  não uma pendência esquecida.
+  PASS. O gate abriu CONCERNS por um único motivo — a regra não tinha sido conferida contra dados
+  reais (C1) — e essa conferência foi feita no mesmo dia, contra os extratos oficiais do Vind e do
+  Yarden: 89 de 89 títulos no saldo devedor e R$ 721,78 de diferença no total pago. C2 segue como
+  débito registrado em docs/backlog.md e C3 foi aceito com o deploy. Nada pendente que dependa de
+  código.
+
+questoes_abertas_fora_de_escopo:
+  - titulo: "Juros de atraso e desconto entram no total pago?"
+    origem: "conciliação de 28/08/2026 — explica os R$ 721,78 restantes"
+    dados: "R$ 4.706,22 de acréscimo e R$ 1.608,34 de desconto em 31 dos 89 títulos"
+    impacto_se_aprovado: "trocar receiptValue por netReceiptValue — mudança nova, não desta story"
+    status: "aguardando decisão do financeiro"
+  - titulo: "Adiantamento conta na entrada ou no uso?"
+    origem: "conciliação de 28/08/2026 — CT.VIND-904"
+    dados: "o Sienge conta na entrada (título 10609, R$ 2.358,38); a decisão do financeiro foi contar no uso (título 10578, R$ 2.376,10)"
+    impacto_se_alterado: "muda o contrato em que o valor aparece; o total do cliente é praticamente o mesmo"
+    status: "aguardando confirmação do financeiro"
 
 files:
   - packages/web/src/lib/integrations/sienge/installments.ts

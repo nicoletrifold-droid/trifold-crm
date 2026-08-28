@@ -1,7 +1,7 @@
 # Story 75-369 — Extrato: só Recebimento e Abatimento de Adiantamento contam como pagamento
 
 **Story ID:** 75-369
-**Epic:** 75 (CRM Trifold) · **Status:** Ready for Review · **Estimativa:** S (~3 pts)
+**Epic:** 75 (CRM Trifold) · **Status:** Done · **Estimativa:** S (~3 pts)
 
 - **executor:** @dev · **quality_gate:** @qa · **quality_gate_tools:** [vitest, typecheck, lint]
 - **Dependências:** continuação direta da correção de Reparcelamento (PR #508, commit `10c377f3`).
@@ -169,6 +169,8 @@ claude-opus-5[1m] (@dev / Dex)
 |---|---|---|
 | 2026-08-28 | @dev | Story criada a partir da decisão do financeiro (WhatsApp 28/08) |
 | 2026-08-28 | @dev | T1–T5 implementadas; testes, typecheck e lint verdes → Ready for Review |
+| 2026-08-28 | @devops | PR #520 mergeado (`ba6291b6`), deploy de produção concluído |
+| 2026-08-28 | @qa | Conciliação com os extratos oficiais do Vind e do Yarden: 89/89 no saldo, R$ 721,78 no total pago. C1 encerrado → gate PASS → Done |
 
 ---
 
@@ -215,3 +217,84 @@ claude-opus-5[1m] (@dev / Dex)
 
 O `getNonCashLabel` foi a decisão certa e não era escopo óbvio: sem ele a tela chamaria um distrato
 de "Renegociada" — trocaria um número errado por uma palavra errada.
+
+---
+
+## Conciliação com os extratos oficiais (28/08/2026)
+
+Fecha o **C1** do gate. O financeiro enviou os extratos "Extrato Cliente Histórico" do Vind e do
+Yarden, emitidos em 28/08/2026 14:55. Os dois PDFs foram lidos contrato a contrato e comparados
+com o número que o portal calcula para o mesmo cliente, chamando `getFinancialStatement()` — o
+mesmo código que roda em produção. Casamento pelo número do título (`billReceivableId`).
+
+**89 títulos · 71 clientes · 89 de 89 encontrados nos dois lados.**
+
+### Resultado
+
+| | Sienge | Portal | Diferença |
+|---|---:|---:|---:|
+| **Saldo devedor** | R$ 47.125.810,35 | R$ 47.125.810,35 | **R$ 0,00 — 89/89 ao centavo** |
+| **Total pago (depois)** | R$ 14.522.414,77 | R$ 14.521.692,99 | **− R$ 721,78** (0,005%) |
+| **Total pago (antes)** | R$ 14.522.414,77 | R$ 25.350.576,78 | + R$ 10.828.162,01 |
+
+### A coluna que vale é "Recto líquido", não "Valor baixa"
+
+Descoberta que decidiu a conciliação e vale para qualquer conferência futura:
+
+- **Valor baixa** = tudo que foi baixado, inclusive baixa contábil. Somar essa coluna faz o
+  distrato parecer pagamento.
+- **Recto líquido** = valor + acréscimo (juros/multa) − desconto. É o que entrou.
+
+Quando a baixa **não** é pagamento, o Sienge deixa o Recto líquido **em branco** e escreve o
+motivo na própria linha:
+
+```
+1  Ato   60.000,00  15/05/2024  60.000,00  *** Substituição - Título 10638 - CR ***
+6  Parc   1.168,75  02/05/2024   1.188,05  *** Abatimento de Adiantamento ***
+```
+
+Ou seja: a regra desta story está confirmada **pela própria fonte oficial**, não só pela nossa
+conta. Nos 16 títulos com distrato ou substituição, o Recto líquido do Sienge bate exatamente com
+o portal — CT.YAR-1501 → R$ 1.570,29 nos dois; CT.YAR-1201 → R$ 0,00 nos dois; CT.YAR-1104 →
+R$ 42.526,25 nos dois.
+
+Outro detalhe do formato: **parcelas reparceladas somem do extrato** (a numeração pula), mas as
+distratadas continuam listadas. Por isso o "Total título" pode conter distrato e não conter
+reparcelamento.
+
+### O que a correção consertou, medido
+
+Sete títulos com reparcelamento voltaram ao número oficial — R$ 1.081.324,00 de excesso eliminado
+só neles:
+
+| Contrato | Portal antes | Portal agora | Sienge | Reparcelamento indevido |
+|---|---:|---:|---:|---:|
+| CT.YAR-101 | 632.172,71 | 115.342,49 | 115.433,89 | 516.830,22 |
+| CT.YAR-1301 | 542.148,48 | 118.831,20 | 118.902,21 | 423.317,28 |
+| CT.YAR-1104 | 1.006.926,97 | 42.526,25 | 42.526,25 | 50.668,00 |
+| CT.YAR-501 | 128.840,13 | 78.735,13 | 78.854,50 | 50.105,00 |
+| CT.VIND-1003 | 151.560,66 | 103.587,18 | 103.629,38 | 47.973,48 |
+| CT.YAR-404 | 144.185,90 | 111.087,88 | 111.455,35 | 33.098,02 |
+| CT.VIND-302 | 162.024,49 | 152.024,49 | 152.051,52 | 10.000,00 |
+
+O CT.YAR-1301 é o contrato que abriu a investigação no PR #508. O extrato de hoje mostra
+R$ 118.831,20 — os R$ 115.786,94 daquela apuração mais a parcela 90C baixada em 27/08 por
+R$ 3.044,26.
+
+### Duas questões novas — fora do escopo desta story
+
+Nenhuma é da lista de tipos de baixa. Ambas foram devolvidas ao financeiro em 28/08/2026 e
+**aguardam decisão**; nenhuma bloqueia o que está em produção.
+
+1. **Juros de atraso e desconto no "total pago"** — o portal soma `receiptValue` (valor da baixa);
+   o Sienge soma o recebido líquido. Nos 89 títulos: R$ 4.706,22 de acréscimo e R$ 1.608,34 de
+   desconto, afetando 31 títulos. É toda a diferença de R$ 721,78. Se o financeiro optar pelo
+   Recto líquido, vira uma mudança nova (`netReceiptValue` em vez de `receiptValue`).
+2. **Adiantamento × Abatimento** — o Sienge conta o dinheiro na **entrada** do adiantamento e
+   deixa o abatimento sem Recto líquido; a decisão do financeiro foi o inverso. Um caso nos 89
+   (CT.VIND-904: título 10609 com R$ 2.358,38 na entrada × título 10578 com R$ 2.376,10 no uso;
+   R$ 17,72 de correção do período). O total do cliente é praticamente o mesmo — muda o contrato
+   em que o dinheiro aparece.
+
+Documento entregue ao financeiro: `conciliacao-portal-sienge-vind-yarden.pdf` (4 páginas), com as
+duas questões em formato de decisão.
