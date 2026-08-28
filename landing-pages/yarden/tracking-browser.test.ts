@@ -88,6 +88,26 @@ describe("index.html — contrato estático (AC1, AC10, AC12)", () => {
     expect(HTML).toMatch(/id="empresa"[^>]*aria-hidden="true"/)
   })
 
+  it("o resultado do envio é anunciado por leitor de tela (live region)", () => {
+    // A mensagem só muda via `textContent`, sem recarregar a página nem mover o
+    // foco. Sem live region, quem usa leitor de tela não recebe nada — nem o
+    // sucesso, nem o erro.
+    expect(HTML).toMatch(/id="formMsg"[^>]*role="status"/)
+    expect(HTML).toMatch(/id="formMsg"[^>]*aria-live="polite"/)
+  })
+
+  it("o envio é protegido contra duplo submit", () => {
+    // Um duplo-clique sem guarda cria DOIS leads no CRM e dispara um segundo par
+    // `Lead`/`CompleteRegistration` com event_id novos — que o Meta não
+    // deduplica, porque ids distintos são eventos distintos por definição.
+    expect(CODIGO_FORM).toMatch(/if\s*\(enviando\)\s*return/)
+    expect(CODIGO_FORM).toContain("enviando = true")
+    expect(CODIGO_FORM).toMatch(/botaoEnviar\.disabled\s*=\s*true/)
+    // `liberar()` nos DOIS desfechos: só no sucesso deixaria o formulário morto
+    // depois de um erro de rede, sem nenhuma forma de reenviar.
+    expect(CODIGO_FORM.match(/liberar\(\);/g) ?? []).toHaveLength(2)
+  })
+
   it("o browser não escreve `landing`, `client_ip` nem `client_ua` (AC5, AC8)", () => {
     // A fonte confiável desses três é o proxy. Se o HTML passar a mandá-los, a
     // garantia do AC5 vira teatro — o proxy sobrescreve, mas a intenção do

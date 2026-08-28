@@ -224,6 +224,10 @@ describe("AC6 — tracking presente: meta_ad + Lead + CompleteRegistration", () 
     await flush()
 
     expect(batches).toHaveLength(1)
+    // Length explícito: sem ele, uma regressão que descartasse um dos dois
+    // eventos (ou acrescentasse um terceiro) passaria batido — a destruturação
+    // abaixo só olha as duas primeiras posições.
+    expect(batches[0]).toHaveLength(2)
     const [lead, cadastro] = batches[0]!
     expect(lead?.event_name).toBe("Lead")
     expect(lead?.event_id).toBe(TRACKING_COMPLETO.event_id)
@@ -237,6 +241,11 @@ describe("AC6 — tracking presente: meta_ad + Lead + CompleteRegistration", () 
     expect((lead?.custom_data as Record<string, unknown>).content_category).toBe(
       "landing_vind_residence",
     )
+    // Os DOIS eventos, não só o primeiro: a categoria é o que separa este
+    // empreendimento do Yarden no Meta, e ela vale por evento.
+    expect((cadastro?.custom_data as Record<string, unknown>).content_category).toBe(
+      "landing_vind_residence",
+    )
     expect((lead?.custom_data as Record<string, unknown>).value).toBe(0)
   })
 
@@ -248,6 +257,10 @@ describe("AC6 — tracking presente: meta_ad + Lead + CompleteRegistration", () 
     await flush()
 
     expect(batches).toHaveLength(1)
+    // Length antes do loop: um `for` sobre um array vazio (ou de um só evento)
+    // não falha nenhuma assertion — o teste passaria justamente na regressão
+    // que ele existe para pegar.
+    expect(batches[0]).toHaveLength(2)
     for (const evento of batches[0]!) {
       const custom = evento.custom_data as Record<string, unknown>
       expect(custom.content_category).toBe("landing_yarden")
@@ -262,9 +275,13 @@ describe("AC6 — tracking presente: meta_ad + Lead + CompleteRegistration", () 
     await flush()
 
     expect(res.status).toBe(200)
-    expect((batches[0]![0]!.custom_data as Record<string, unknown>).content_category).toBe(
-      "landing_vind_residence",
-    )
+    expect(batches).toHaveLength(1)
+    expect(batches[0]).toHaveLength(2)
+    for (const evento of batches[0]!) {
+      expect((evento.custom_data as Record<string, unknown>).content_category).toBe(
+        "landing_vind_residence",
+      )
+    }
   })
 
   it("`landing` não vaza para webhook_logs nem para metadata.raw_fields", async () => {

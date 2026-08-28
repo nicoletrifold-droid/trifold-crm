@@ -165,9 +165,17 @@ module.exports = async function handler(req, res) {
     // devolve pelo menos `{ landing }`, então o `if` seria código morto.
     payload.tracking = montarTracking(req, rawBody)
 
-    const upstream = await fetch(`${CRM_WEBHOOK_URL}?token=${encodeURIComponent(secret)}`, {
+    // Token no header `Authorization`, nunca em `?token=`: query string é
+    // gravada em texto puro nos logs de plataforma/proxy (Vercel, CDN,
+    // observabilidade), o que vazaria o LANDING_PAGE_WEBHOOK_SECRET para quem
+    // tiver acesso a log. O CRM aceita as duas formas (Bearer tem precedência
+    // sobre `?token=`), então a troca é unilateral — nada muda do outro lado.
+    const upstream = await fetch(CRM_WEBHOOK_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${secret}`,
+      },
       body: JSON.stringify(payload),
     })
 

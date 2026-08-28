@@ -322,7 +322,10 @@
             <span>Estou de acordo em receber comunicações e ser contatado para possível atendimento.</span>
           </label>
           <button type="submit" class="btn">CADASTRE-SE AGORA!</button>
-          <div class="form-msg" id="formMsg"></div>
+          <!-- role/aria-live: o resultado do envio só muda via textContent, sem
+               recarregar a página nem mover o foco. Sem live region o leitor de
+               tela não anuncia nada e o usuário fica sem saber se deu certo. -->
+          <div class="form-msg" id="formMsg" role="status" aria-live="polite"></div>
         </form>
       </div>
     </div>
@@ -346,6 +349,13 @@
 
     var form = document.getElementById('leadForm');
     var msg = document.getElementById('formMsg');
+    var botaoEnviar = form.querySelector('button[type="submit"]');
+
+    // Guarda de duplo envio. Sem ela, um duplo-clique (ou Enter repetido) cria
+    // DOIS leads no CRM e dispara um segundo par `Lead`/`CompleteRegistration`
+    // com event_id novos — que o Meta não deduplica, porque ids distintos são
+    // eventos distintos por definição. Inflaria conversão e sujaria o dataset.
+    var enviando = false;
 
     // Story 86-12 (AC4) — InitiateCheckout no PRIMEIRO foco em nome ou WhatsApp.
     // A landing não tem passos sequenciais como o formulário de qualificação; o
@@ -368,6 +378,10 @@
 
     form.addEventListener('submit', function(e){
       e.preventDefault();
+      // Reentrância: barra antes de qualquer efeito colateral. Fica ANTES do
+      // checkValidity porque um form inválido não liga a flag — logo, não há
+      // estado a destravar nesse caminho.
+      if (enviando) return;
       if(!form.checkValidity()){ form.reportValidity(); return; }
       var data = {
         nome: form.nome.value.trim(),
@@ -401,14 +415,26 @@
         // o `landing` a partir de uma constante do próprio arquivo (AC5/AC8).
       }
 
+      // Trava a partir daqui: a request está de fato a caminho. `liberar()` roda
+      // nos DOIS desfechos (ok e fail) — se ficasse só no sucesso, um erro de
+      // rede deixaria o formulário morto, sem nenhuma forma de reenviar.
+      enviando = true;
+      if (botaoEnviar) botaoEnviar.disabled = true;
+      function liberar(){
+        enviando = false;
+        if (botaoEnviar) botaoEnviar.disabled = false;
+      }
+
       function ok(){
         msg.className = 'form-msg ok';
         msg.textContent = 'Cadastro enviado! Em breve entraremos em contato.';
         form.reset();
+        liberar();
       }
       function fail(){
         msg.className = 'form-msg err';
         msg.textContent = 'Não foi possível enviar agora. Tente novamente em instantes.';
+        liberar();
       }
 
       fetch(CONFIG.leadEndpoint, {

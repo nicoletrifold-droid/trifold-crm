@@ -16,10 +16,11 @@ Esta é uma landing nova, não uma migração.
 
 ```
 yarden/
-├── index.html          # página completa (CSS + JS inline)
-├── api/lead.js         # proxy do lead → POST /api/webhooks/landing-page do CRM
-├── api/track.js        # proxy dos eventos de topo de funil → .../landing-page/track
-├── api-proxy.test.ts   # testes dos dois proxies (fora de api/ de propósito)
+├── index.html               # página completa (CSS + JS inline)
+├── api/lead.js              # proxy do lead → POST /api/webhooks/landing-page do CRM
+├── api/track.js             # proxy dos eventos de topo de funil → .../landing-page/track
+├── api-proxy.test.ts        # testes dos dois proxies (fora de api/ de propósito)
+├── tracking-browser.test.ts # testes do tracking do browser + contrato do index.html
 └── README.md
 ```
 
@@ -82,17 +83,29 @@ Pontos que não podem regredir:
   headers.
 - **`TRACK_ENDPOINT` (no `<head>`) e `CONFIG.leadEndpoint` (no fim) apontam para
   o mesmo projeto Vercel.** Ao trocar o domínio, atualizar os dois.
+- **O token do CRM vai no header `Authorization: Bearer`, nunca em `?token=`.**
+  Query string é gravada em texto puro nos logs de plataforma/proxy (Vercel, CDN,
+  observabilidade), o que vazaria o `LANDING_PAGE_WEBHOOK_SECRET` para quem tiver
+  acesso a log. As duas rotas do CRM aceitam as duas formas, com precedência do
+  Bearer — o `?token=` só existe por compatibilidade com o tráfego WordPress.
 - **A CSP vive em outro projeto** (`landing-pages/trifold-design-system/vercel.json`,
   que serve `trifold.eng.br/yarden/`). Sem `connect.facebook.net` em
   `script-src`, `www.facebook.com` em `img-src` e ambos em `connect-src`, o Pixel
   é bloqueado em silêncio — inclusive pelo bloco catch-all, que precisa excluir
-  `yarden` do regex.
+  `yarden` do regex. O Pixel **não** precisa de `'unsafe-eval'`: os blocos
+  `/yarden*` não o concedem, e reintroduzi-lo só amplia a superfície de XSS.
 - Nada de tracking pode derrubar o formulário: bloqueador de anúncios,
   `localStorage` bloqueado ou `/api/track` fora do ar são estados normais.
 
-Testes: `landing-pages/yarden/api-proxy.test.ts` (roda com `pnpm vitest run` na
-raiz). O arquivo fica fora de `api/` de propósito — tudo dentro de `api/` vira
-função serverless.
+Testes (rodam com `pnpm vitest run` na raiz do repo):
+
+| Arquivo | Cobre |
+|---|---|
+| `api-proxy.test.ts` | os dois proxies serverless: identidade da landing (`page`/`landing`), repasse de `client_ip`/`client_ua`, honeypot, CORS, autenticação no CRM |
+| `tracking-browser.test.ts` | contrato estático do `index.html` (ids dos campos, endpoints, live region, guarda de duplo submit) + helpers do browser: `visitor_id`, `fbc`/`fbp`/`fbclid`, degradação graciosa |
+
+Os dois ficam fora de `api/` de propósito — tudo dentro de `api/` vira função
+serverless no deploy.
 
 ## Integrar o conteúdo definitivo
 

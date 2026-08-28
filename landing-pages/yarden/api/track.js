@@ -107,9 +107,14 @@ module.exports = async function handler(req, res) {
   payload.landing = LANDING_SLUG
 
   try {
-    const upstream = await fetch(`${CRM_TRACK_URL}?token=${encodeURIComponent(secret)}`, {
+    // Token no header `Authorization`, nunca em `?token=` — ver a justificativa
+    // em `lead.js`. Query string vaza o segredo para os logs de plataforma.
+    const upstream = await fetch(CRM_TRACK_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${secret}`,
+      },
       body: JSON.stringify(payload),
     })
 

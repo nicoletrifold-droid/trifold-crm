@@ -32,8 +32,12 @@ const trackHandler = require_("./api/track.js") as (req: any, res: any) => Promi
 
 const SECRET = "segredo-do-webhook"
 
-/** Corpos enviados ao CRM, já desserializados. */
-let enviadosAoCrm: { url: string; body: Record<string, unknown> }[] = []
+/** Corpos enviados ao CRM, já desserializados, com a URL e os headers do repasse. */
+let enviadosAoCrm: {
+  url: string
+  body: Record<string, unknown>
+  headers: Record<string, string>
+}[] = []
 let respostaDoCrm = { ok: true, status: 200 }
 
 function fakeRes() {
@@ -87,10 +91,13 @@ beforeEach(() => {
   enviadosAoCrm = []
   respostaDoCrm = { ok: true, status: 200 }
   process.env.LANDING_PAGE_WEBHOOK_SECRET = SECRET
-  vi.stubGlobal("fetch", async (url: string, init: { body: string }) => {
-    enviadosAoCrm.push({ url, body: JSON.parse(init.body) })
-    return respostaDoCrm as unknown as Response
-  })
+  vi.stubGlobal(
+    "fetch",
+    async (url: string, init: { body: string; headers?: Record<string, string> }) => {
+      enviadosAoCrm.push({ url, body: JSON.parse(init.body), headers: init.headers ?? {} })
+      return respostaDoCrm as unknown as Response
+    },
+  )
 })
 
 afterEach(() => {
@@ -235,6 +242,19 @@ describe("api/lead.js — repasse de tracking (AC8, herdado da 86-11)", () => {
     })
   })
 
+  it("autentica no CRM por header Authorization, nunca por query string", async () => {
+    // Query string aparece em texto puro em log de plataforma/proxy (Vercel, CDN,
+    // observabilidade). Um `?token=` aqui vazaria o LANDING_PAGE_WEBHOOK_SECRET
+    // para todo mundo com acesso a log — e o CRM aceita Bearer, então não há
+    // motivo para a query string existir.
+    const { res } = fakeRes()
+    await leadHandler(fakeReq({ ...LEAD, tracking: TRACKING_DO_BROWSER }, HEADERS_DO_VISITANTE), res)
+
+    expect(enviadosAoCrm[0]?.headers.Authorization).toBe(`Bearer ${SECRET}`)
+    expect(enviadosAoCrm[0]?.url).not.toContain("token=")
+    expect(JSON.stringify(enviadosAoCrm[0]?.body)).not.toContain(SECRET)
+  })
+
   it("honeypot devolve 200 com tracked:false — bot não gera evento de browser", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
     const { res, estado } = fakeRes()
@@ -313,8 +333,11 @@ describe("api/track.js — AC5, AC8", () => {
     expect(body.landing).toBe("yarden")
     expect(body.client_ip).toBe("187.1.2.3")
     expect(body.client_ua).toBe("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0)")
-    // O token vai na query string, nunca no corpo.
-    expect(enviadosAoCrm[0]?.url).toContain(`token=${SECRET}`)
+    // O token vai no header Authorization, nunca no corpo NEM na query string:
+    // query string é gravada em texto puro nos logs de plataforma/proxy.
+    expect(enviadosAoCrm[0]?.headers.Authorization).toBe(`Bearer ${SECRET}`)
+    expect(enviadosAoCrm[0]?.url).not.toContain("token=")
+    expect(JSON.stringify(body)).not.toContain(SECRET)
     // `page` é exclusivo do lead.js: a rota /track não grava nada no CRM.
     expect(body.page).toBeUndefined()
   })
