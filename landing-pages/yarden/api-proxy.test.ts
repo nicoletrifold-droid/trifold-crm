@@ -103,6 +103,9 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
+  // Os testes de teto de tempo ligam fake timers; sem isto, um `setTimeout`
+  // congelado vazaria para os arquivos seguintes da suíte.
+  vi.useRealTimers()
 })
 
 describe("api/lead.js — identidade da landing (AC8)", () => {
@@ -403,5 +406,141 @@ describe("api/track.js — AC5, AC8", () => {
     await trackHandler({ method: "OPTIONS", headers: { origin: "https://trifold.eng.br" } }, res)
     expect(estado.status).toBe(204)
     expect(estado.headers["Access-Control-Allow-Methods"]).toContain("POST")
+  })
+})
+
+/**
+ * Teto de tempo próprio da chamada ao CRM (2ª rodada de review do PR #512).
+ *
+ * O modo de falha coberto aqui NÃO é "o CRM devolveu erro" (isso já é o 502): é
+ * "o CRM aceitou a conexão e nunca respondeu" — deploy no meio, pool esgotado,
+ * Supabase lento. Sem teto próprio, a função serverless fica pendurada até o
+ * `maxDuration` da plataforma matá-la, e o browser recebe o erro genérico da
+ * Vercel em vez do 504 tratado.
+ *
+ * Os 8000ms estão escritos à mão aqui de propósito. As constantes não são
+ * exportadas dos proxies, mas mesmo se fossem, importá-las faria o teste seguir
+ * qualquer mutação do valor — e o valor é o ponto: um teto >= `maxDuration`
+ * default da plataforma (10s, já que este projeto não tem `vercel.json`) nunca
+ * dispararia primeiro e o fix seria decorativo.
+ */
+describe("proxies — teto de tempo da chamada ao CRM", () => {
+  const TIMEOUT_ESPERADO_MS = 8000
+
+  /**
+   * `fetch` que só termina quando o `signal` aborta — é assim que o fetch real
+   * se comporta. Se o proxy não passar `signal`, rejeita na hora com um erro
+   * distinguível: o teste falha rápido no status (500, não 504) em vez de
+   * pendurar até o timeout do vitest.
+   */
+  function fetchQueNuncaResponde() {
+    vi.stubGlobal("fetch", (_url: string, init: { signal?: AbortSignal }) => {
+      if (!init || !init.signal) {
+        return Promise.reject(new Error("proxy chamou o CRM SEM AbortSignal"))
+      }
+      return new Promise((_resolve, reject) => {
+        init.signal!.addEventListener("abort", () => {
+          const err = new Error("The operation was aborted")
+          err.name = "AbortError"
+          reject(err)
+        })
+      })
+    })
+  }
+
+  const EVENTO_TRACK = {
+    event_name: "ViewContent",
+    event_id: "44444444-4444-4444-8444-444444444444",
+  }
+
+  it("lead.js: aborta e responde 504 quando o CRM não responde em 8s", async () => {
+    vi.useFakeTimers()
+    const erro = vi.spyOn(console, "error").mockImplementation(() => {})
+    fetchQueNuncaResponde()
+
+    const { res, estado } = fakeRes()
+    const pendente = leadHandler(
+      fakeReq({ ...LEAD, tracking: TRACKING_DO_BROWSER }, HEADERS_DO_VISITANTE),
+      res,
+    )
+
+    // 1ms antes do teto ainda está esperando: prova que o abort vem do timer de
+    // 8s e não de um abort imediato que passaria no assert final por acidente.
+    await vi.advanceTimersByTimeAsync(TIMEOUT_ESPERADO_MS - 1)
+    expect(estado.status).toBe(0)
+
+    await vi.advanceTimersByTimeAsync(1)
+    await pendente
+
+    expect(estado.status).toBe(504)
+    expect(estado.body).toEqual({ error: "Upstream timeout" })
+
+    // AC10 continua valendo no caminho de timeout: o log do abort não pode
+    // carregar PII, sinais de atribuição nem o segredo do webhook.
+    const logado = erro.mock.calls.map((c) => JSON.stringify(c)).join(" ")
+    for (const segredo of [
+      "Maria",
+      "exemplo.com",
+      "187.1.2.3",
+      TRACKING_DO_BROWSER.fbp,
+      TRACKING_DO_BROWSER.fbc,
+      SECRET,
+    ]) {
+      expect(logado).not.toContain(segredo)
+    }
+    erro.mockRestore()
+  })
+
+  it("track.js: aborta e responde 504 quando o CRM não responde em 8s", async () => {
+    vi.useFakeTimers()
+    const erro = vi.spyOn(console, "error").mockImplementation(() => {})
+    fetchQueNuncaResponde()
+
+    const { res, estado } = fakeRes()
+    const pendente = trackHandler(fakeReq(EVENTO_TRACK, HEADERS_DO_VISITANTE), res)
+
+    await vi.advanceTimersByTimeAsync(TIMEOUT_ESPERADO_MS - 1)
+    expect(estado.status).toBe(0)
+
+    await vi.advanceTimersByTimeAsync(1)
+    await pendente
+
+    expect(estado.status).toBe(504)
+    expect(estado.body).toEqual({ error: "Upstream timeout" })
+    erro.mockRestore()
+  })
+
+  it("lead.js: caminho de sucesso não deixa timer pendurado", async () => {
+    vi.useFakeTimers()
+    const { res, estado } = fakeRes()
+    await leadHandler(fakeReq(LEAD, HEADERS_DO_VISITANTE), res)
+
+    expect(estado.status).toBe(200)
+    // Sem o `clearTimeout` no `finally`, sobra 1 timer de 8s armado depois da
+    // resposta — a invocação serverless não encerra (ou segue sendo cobrada)
+    // enquanto ele não disparar. Este assert é o que trava esse esquecimento.
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it("track.js: caminho de sucesso não deixa timer pendurado", async () => {
+    vi.useFakeTimers()
+    const { res, estado } = fakeRes()
+    await trackHandler(fakeReq(EVENTO_TRACK, HEADERS_DO_VISITANTE), res)
+
+    expect(estado.status).toBe(200)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it("502 do CRM também limpa o timer — o `finally` cobre os dois desfechos", async () => {
+    vi.useFakeTimers()
+    respostaDoCrm = { ok: false, status: 500 }
+    const erro = vi.spyOn(console, "error").mockImplementation(() => {})
+
+    const { res, estado } = fakeRes()
+    await leadHandler(fakeReq(LEAD, HEADERS_DO_VISITANTE), res)
+
+    expect(estado.status).toBe(502)
+    expect(vi.getTimerCount()).toBe(0)
+    erro.mockRestore()
   })
 })

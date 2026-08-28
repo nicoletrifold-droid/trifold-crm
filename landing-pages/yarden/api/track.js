@@ -32,6 +32,18 @@ const LANDING_SLUG = "yarden"
 const MAX_FIELD_LENGTH = 300
 const MAX_UA_LENGTH = 512
 
+/**
+ * Teto próprio para a chamada ao CRM — ver a justificativa completa em
+ * `lead.js`. 8s fica abaixo do `maxDuration` default da Vercel (10s), que é o
+ * que vale aqui: este projeto não tem `vercel.json`.
+ *
+ * Vale ainda mais nesta rota que na do lead: o browser dispara `ViewContent` e
+ * `InitiateCheckout` com `keepalive: true` e ignora o resultado
+ * (`.catch(function(){})`), então um CRM travado não daria sinal nenhum na
+ * página — só invocações penduradas acumulando no lado da Vercel.
+ */
+const CRM_TIMEOUT_MS = 8000
+
 // Allowlist: só o que o browser tem de fato para contar. `event_name` e
 // `event_id` são validados no CRM contra a lista fixa de eventos aceitos —
 // `Lead` e `CompleteRegistration` NÃO passam por aqui, eles só nascem quando o
@@ -106,16 +118,25 @@ module.exports = async function handler(req, res) {
   // Sempre da constante, nunca do corpo — sobrescreve o que o browser mandar.
   payload.landing = LANDING_SLUG
 
+  // Flag em vez de `err.name === "AbortError"` — ver a justificativa em `lead.js`.
+  const controller = new AbortController()
+  let expirou = false
+  const timer = setTimeout(() => {
+    expirou = true
+    controller.abort()
+  }, CRM_TIMEOUT_MS)
+
   try {
     // Token no header `Authorization`, nunca em `?token=` — ver a justificativa
     // em `lead.js`. Query string vaza o segredo para os logs de plataforma.
     const upstream = await fetch(CRM_TRACK_URL, {
-      method: "POST",
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
         Authorization: `Bearer ${secret}`,
       },
       body: JSON.stringify(payload),
+      signal: controller.signal,
     })
 
     if (!upstream.ok) {
@@ -125,8 +146,18 @@ module.exports = async function handler(req, res) {
 
     return res.status(200).json({ status: "ok" })
   } catch (err) {
+    // 504: o CRM não respondeu a tempo. O browser ignora o resultado desta rota,
+    // então o valor do status é ser distinguível no log da Vercel — 500 mandaria
+    // quem investiga procurar bug neste proxy.
+    if (expirou) {
+      console.error("[track-proxy] CRM não respondeu em", CRM_TIMEOUT_MS, "ms — abortado")
+      return res.status(504).json({ error: "Upstream timeout" })
+    }
     // Só a mensagem — nunca o corpo, que carrega os sinais de atribuição (AC10).
     console.error("[track-proxy] erro:", err && err.message ? err.message : err)
     return res.status(500).json({ error: "Internal error" })
+  } finally {
+    // Sem isto, o caminho de sucesso deixa um timer de 8s armado — ver `lead.js`.
+    clearTimeout(timer)
   }
 }

@@ -42,6 +42,22 @@ const MAX_FIELD_LENGTH = 300
 // string que não casa com nada no Meta. Os demais campos de tracking são curtos.
 const MAX_UA_LENGTH = 512
 
+/**
+ * Teto próprio para a chamada ao CRM.
+ *
+ * Sem ele, um CRM que aceite a conexão e não responda (deploy no meio, pool de
+ * conexões esgotado, Supabase lento) segura esta função até o `maxDuration` da
+ * Vercel matá-la — e aí o browser recebe o erro genérico da plataforma, não o
+ * 504 tratado daqui, com o `fail()` do formulário reabilitando o botão.
+ *
+ * 8s e não 10s de propósito: este projeto não tem `vercel.json`, então vale o
+ * `maxDuration` default da plataforma (10s). Um teto igual ao da infra nunca
+ * dispararia primeiro — o número TEM de ficar abaixo, com folga para serializar
+ * a resposta. Os módulos CAPI do CRM usam 10s (`AbortSignal.timeout(10_000)` em
+ * `packages/web/src/lib/meta/`), mas lá quem impõe o limite externo é outro.
+ */
+const CRM_TIMEOUT_MS = 8000
+
 // Story 86-11 (AC7) — o único bloco extra que este proxy repassa ao CRM. Tudo
 // que não estiver aqui é descartado: o proxy não é um encaminhador cego de corpo
 // arbitrário. `client_ip`/`client_ua`/`landing` NÃO entram — o browser não os
@@ -158,6 +174,16 @@ module.exports = async function handler(req, res) {
     return res.status(400).json({ error: "Missing required fields" })
   }
 
+  // `expirou` em vez de checar `err.name === "AbortError"`: o nome do erro de
+  // abort varia entre versões de Node/undici, e um abort vindo de outro lugar
+  // seria confundido com timeout. A flag é a única fonte que sabe o motivo.
+  const controller = new AbortController()
+  let expirou = false
+  const timer = setTimeout(() => {
+    expirou = true
+    controller.abort()
+  }, CRM_TIMEOUT_MS)
+
   try {
     const payload = { nome, whatsapp, email, page: PAGE_NAME }
     // Diferença deliberada do proxy do Vind Residence (que faz
@@ -171,12 +197,13 @@ module.exports = async function handler(req, res) {
     // tiver acesso a log. O CRM aceita as duas formas (Bearer tem precedência
     // sobre `?token=`), então a troca é unilateral — nada muda do outro lado.
     const upstream = await fetch(CRM_WEBHOOK_URL, {
-      method: "POST",
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
         Authorization: `Bearer ${secret}`,
       },
       body: JSON.stringify(payload),
+      signal: controller.signal,
     })
 
     if (!upstream.ok) {
@@ -186,9 +213,23 @@ module.exports = async function handler(req, res) {
 
     return res.status(200).json({ status: "ok", tracked: true })
   } catch (err) {
+    // 504 e não 500: o CRM não respondeu a tempo, não houve erro deste proxy. O
+    // `if(!r.ok)` do formulário trata os dois igual (mostra o erro, reabilita o
+    // botão e NÃO dispara Lead/CompleteRegistration no Pixel — sem contraparte
+    // de servidor, o evento sairia sem deduplicação), mas o status honesto é o
+    // que aparece no log da Vercel para quem for investigar.
+    if (expirou) {
+      console.error("[lead-proxy] CRM não respondeu em", CRM_TIMEOUT_MS, "ms — abortado")
+      return res.status(504).json({ error: "Upstream timeout" })
+    }
     // Só a mensagem do erro — nunca o corpo da requisição, que carrega PII e os
     // sinais de atribuição em texto puro (AC10).
     console.error("[lead-proxy] erro:", err && err.message ? err.message : err)
     return res.status(500).json({ error: "Internal error" })
+  } finally {
+    // Sem isto, o caminho de SUCESSO deixa um timer de 8s armado: a função
+    // serverless não encerra enquanto ele não disparar (ou é cobrada por esse
+    // tempo, em runtime que reaproveita o processo).
+    clearTimeout(timer)
   }
 }
