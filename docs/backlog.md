@@ -6,6 +6,130 @@ Tarefas operacionais, configurações e ajustes pendentes que não requerem uma 
 
 ## Pendente
 
+### [Epic 900] 🟡 `900-16` (`platform_admins` + `platform_audit_log`/`platform_audit()`) é dependência declarada de `900-21`/`900-22` e não foi entregue
+
+**Adicionado em:** 2026-08-28
+**Prioridade:** P1 — a dívida cresce a cada story que adiciona rota mutante em `/platform` sem trilha
+**Origem:** Validação @po da Story `900-22b` (`docs/qa/po-validation-900-22b.md`, §5 e SF-9)
+
+O épico declara `900-16` como dependência de `900-21` (`Dep: 900-19, 900-16`) e de `900-22` (`Dep:
+900-16, 900-21`), e cita a tabela `platform_admins` e a função `platform_audit()` como já
+"implementadas em 900-16" (linhas 297, 556, 753-758). Medido em 2026-08-28: nenhuma das duas existe
+em `supabase/migrations/`, e não há `docs/stories/900-16-*.story.md`. O PR #498 (`900-21`/`900-22`)
+já entrou em produção com essa dependência violada — dívida herdada, não introduzida por ele.
+
+A `900-22b` **amplia** essa dívida, deliberadamente e por decisão registrada (ver a própria story,
+Contexto e Scope OUT): adiciona `POST /api/platform/orgs/[id]/resend-admin-invite` (dispara e-mail e
+cria conta Auth para um admin de cliente) e `UPDATE organizations SET admin_invite_email`, nenhum
+dos dois com entrada em `platform_audit_log` — porque a tabela não existe. Sob D14 (sem
+impersonation), toda ação mutante da Trifold sobre dado de cliente que não passa por auditoria é uma
+lacuna de accountability, não só de estilo.
+
+**Ação:** draftar `900-16` (`platform_admins` com níveis `owner/operator/support`,
+`platform_audit_log` append-only, `platform_audit()`, `requirePlatformAdmin` evoluindo para
+consultar a tabela) antes de mais rotas de `/platform` acumularem em cima do buraco.
+
+---
+
+
+### [Epic 900] 🟠 `SEC-001` — a recusa de `"*"` de `platformQuery()` não cobre embedding do PostgREST
+
+**Adicionado em:** 2026-08-28
+**Prioridade:** P1 — vale enquanto `/platform` for o único acesso da Trifold ao dado do cliente (D14)
+**Origem:** Gate @qa da Story `900-22b` (`docs/qa/gates/900.22b-convite-do-admin-e-platformquery.yml`)
+**Dona:** `900-42a` (a story que endurece `platformQuery` e fecha `PLATFORM_READABLE_TABLES`)
+
+`platformQuery(table, columns)` quebra `columns` por vírgula e recusa o token `"*"` exato. Medido
+com controles positivos, para provar que a régua não está morta:
+
+| Entrada | Resultado |
+|---|---|
+| `platformQuery("organizations", "*")` | lança ✔ (controle positivo) |
+| `platformQuery("organizations", "id, *")` | lança ✔ (controle positivo) |
+| `platformQuery("organizations", "id, users(*)")` | **passa** ✘ |
+| `platformQuery("organizations", "id, leads(name, phone)")` | **passa** ✘ |
+
+Como todo o schema tem `org_id uuid REFERENCES organizations(id)`, o PostgREST resolve a tabela
+aninhada a partir de `organizations` e devolve linhas de uma tabela **fora** da lista fechada — sem
+emitir `.from()` cru, logo sem acender o scanner da AC-B4. As duas redes da `900-22b` passam por
+baixo do mesmo furo. Embedding não é exótico aqui: 84 arquivos de `packages/web/src` já usam o
+idioma (medido 2026-08-28).
+
+**Ação (900-42a):** parsear `columns` e validar cada tabela aninhada contra
+`PLATFORM_READABLE_TABLES`, não só o token `"*"`. Limitação já documentada no topo de
+`packages/web/src/lib/tenancy/platform-query.ts`.
+
+---
+
+### [Epic 900] 🟡 `TEST-001` — pontos cegos medidos de `detectRawTableReads()`
+
+**Adicionado em:** 2026-08-28
+**Prioridade:** P2 — hoje nenhuma das duas formas ocorre nos diretórios varridos
+**Origem:** Gate @qa da Story `900-22b`
+**Dona:** `900-42a` (junto de SEC-001 e do débito de tipagem)
+
+O detector ancora em `.from(<literal entre aspas>)`. Medido:
+
+| Forma | Saída |
+|---|---|
+| `db.from("leads")` | `["leads"]` (controle positivo) |
+| `` db.from(`leads`) `` (template literal) | `[]` — **cego** |
+| `db.from(TABELA)` (variável) | `[]` — **cego** |
+
+A segunda forma é a mais provável de aparecer sem má-fé (Prettier/refactor). A terceira é o mesmo
+shape que o próprio `platformQuery()` usa internamente, então cobri-la exige distinguir o caminho
+sancionado do não sancionado — não é um ajuste de regex.
+
+Adjacente: a guarda de vivacidade do teste de varredura assere apenas `total > 0`. Ela impede o
+caso degenerado "o walker parou de achar arquivos e `[]` virou trivial", mas não fixa QUAIS arquivos
+entram na população — um walker que achasse 1 arquivo de 5 continuaria verde.
+
+**Ação (900-42a):** decidir se o detector passa a usar AST (`ts-morph`/`typescript`) em vez de regex,
+e se a guarda de vivacidade passa a assertar a lista de arquivos varridos, não a contagem.
+
+---
+
+### [Epic 900] 🟡 `MNT-002` — falta critério fixado para "se a régua acender, mova para `lib/tenancy/`"
+
+**Adicionado em:** 2026-08-28
+**Prioridade:** P2 — é dívida de convenção, não de comportamento
+**Origem:** Gate @qa da Story `900-22b`
+**Dona:** `900-42a`
+
+A `900-22b` estabeleceu na prática um precedente: escrita que precisa de `.from(<literal>)` e cairia
+dentro de `app/platform/**` ou `app/api/platform/**` vai morar em `lib/tenancy/`
+(`persistAdminInviteEmail` foi movida por isso). O precedente está certo e o @qa confirmou que não
+esvaziou a régua — injetar uma leitura crua de verdade na rota de reenvio deixa a varredura
+vermelha.
+
+O que falta é o **critério escrito**: sem ele, o próximo dev pode ler o precedente como "mova
+qualquer coisa que acenda", o que transformaria `lib/tenancy/` num depósito de fuga da régua — e o
+efeito prático seria idêntico a afrouxar as exclusões, só que por outro caminho.
+
+**Ação (900-42a):** fixar em `.claude/rules/` ou no topo de `platform-query-scan.ts` quando mover é
+correto (a chamada é ESCRITA, ou é o próprio mecanismo sancionado) e quando é fuga (a chamada é
+LEITURA de plataforma e deveria virar `platformQuery`).
+
+---
+
+### [Epic 900] 🟢 2 arquivos de `/platform` herdados do PR #498 seguem fora da allowlist de `createAdminClient`
+
+**Adicionado em:** 2026-08-28
+**Prioridade:** P3 — são warnings, `npm run lint` passa com 0 erros
+**Origem:** Gate @qa da Story `900-22b` (MNT-001, escopo deliberadamente limitado)
+
+A `900-22b` acrescentou a `docs/audits/admin-client-allowlist.json` apenas os 2 arquivos que ela
+mesma criou (`src/lib/tenancy/platform-query.ts` e `src/lib/tenancy/admin-invite.ts`), com motivo
+por arquivo. `src/app/api/platform/orgs/route.ts` continua emitindo 2 warnings de
+`aios/no-unscoped-admin-client` — ele veio do PR #498 e usa o client cru para chamar
+`db.rpc("provision_org", …)`, que é RPC cross-org por desenho.
+
+**Ação:** decidir se entra em `legitimos` com o motivo "RPC de provisionamento cross-org: o platform
+admin nunca pertence à org que está criando" ou se a chamada migra para um helper. Não é urgente:
+falha alto (warning visível), nunca silencioso.
+
+---
+
 ### [CI] 🔴 Nada compara o `schema-snapshot.json` commitado com o schema real do banco
 
 **Adicionado em:** 2026-08-24
