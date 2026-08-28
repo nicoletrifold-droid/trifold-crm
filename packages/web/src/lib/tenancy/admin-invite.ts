@@ -37,7 +37,22 @@ import { renderPasswordActionEmail } from "@web/lib/email-layout"
  */
 export async function persistAdminInviteEmail(orgId: string, email: string): Promise<void> {
   const db = createAdminClient()
-  await db.from("organizations").update({ admin_invite_email: email.trim() }).eq("id", orgId)
+  const { error } = await db
+    .from("organizations")
+    .update({ admin_invite_email: email.trim() })
+    .eq("id", orgId)
+
+  if (error) {
+    // Engolir este erro anularia a própria razão de a função existir: se o UPDATE falha e nada
+    // é registrado, o endereço some e não sobra rastro nenhum para o operador nem para o log —
+    // exatamente o cenário que a AC-A2 existe para impedir. Não relança: a org já foi criada e
+    // o convite ainda pode dar certo; o que não pode é a perda ser silenciosa.
+    console.error("[900-22b] falha ao persistir admin_invite_email", {
+      orgId,
+      adminEmail: email.trim(),
+      dbError: error.message,
+    })
+  }
 }
 
 /** Estado do convite do admin de uma org, do ponto de vista do painel. */
@@ -166,6 +181,39 @@ export async function ensureAdminInvited(
     admin = novo as AdminRow
   }
 
+  // 3.5 E-MAIL DIVERGENTE. A linha pendente pode ter sido criada com um endereço e o convite
+  //     estar sendo disparado para outro (o operador corrigiu um typo e reprovisionou, ou o
+  //     reenvio pegou `organizations.admin_invite_email`, que vence o da linha). Criar a conta
+  //     Auth com o endereço novo e gravar o `auth_id` numa linha que guarda o antigo deixaria
+  //     `users.email` e o Auth apontando para pessoas diferentes — a tela de Usuários mostraria
+  //     um endereço que não loga, e qualquer rotina que mande e-mail lendo `users.email`
+  //     escreveria para o lugar errado.
+  //
+  //     Reconciliar (em vez de recusar com conflito) é o que corresponde à intenção do
+  //     operador: a linha ainda está PENDENTE — não há identidade estabelecida para proteger,
+  //     porque ninguém nunca logou nela. O endereço que o operador acabou de informar é a
+  //     declaração mais recente de quem deve administrar a empresa. Feito ANTES do `createUser`
+  //     de propósito: se a criação da conta falhar, a linha já reflete o endereço que o
+  //     "Reenviar" vai usar na próxima tentativa.
+  if (admin.email && admin.email !== emailLimpo) {
+    const { error: emailErro } = await db
+      .from("users")
+      .update({ email: emailLimpo, name: nomeDerivado })
+      .eq("id", admin.id)
+
+    if (emailErro) {
+      const message = `Não foi possível atualizar o e-mail do administrador pendente: ${emailErro.message}`
+      console.error("[900-22b] falha ao reconciliar e-mail do admin pendente", {
+        orgId,
+        adminEmail: emailLimpo,
+        emailAnterior: admin.email,
+        dbError: emailErro.message,
+      })
+      return { status: "failed", message }
+    }
+    admin = { ...admin, email: emailLimpo, name: nomeDerivado }
+  }
+
   // 4. Conta no Supabase Auth. `app_metadata.role` desde a criação (Story 75-205): sem ele o
   //    admin novo cai no fallback de `middleware.ts` `getUserRole`, uma query extra por request.
   // Senha temporária por CSPRNG (`crypto.randomUUID`), como em
@@ -194,38 +242,88 @@ export async function ensureAdminInvited(
     return { status: "failed", message }
   }
 
-  await db.from("users").update({ auth_id: authData.user.id }).eq("id", admin.id)
+  // DAQUI PARA BAIXO A CONTA AUTH JÁ EXISTE. Cada passo restante pode falhar sozinho, e
+  // devolver `"invited"` sem conferi-los seria mentir para a UI: o wizard redireciona em
+  // `"invited"` e a lista mostra badge verde. Um status que não corresponde ao que aconteceu
+  // é a mesma classe de defeito que o Bloco A desta story existe para fechar.
+  // `admin_invite_email` só é limpo no caminho totalmente bem-sucedido — enquanto ele estiver
+  // preenchido, o "Reenviar" continua disponível.
+  const { error: vinculoErro } = await db
+    .from("users")
+    .update({ auth_id: authData.user.id })
+    .eq("id", admin.id)
+
+  if (vinculoErro) {
+    // O pior dos parciais: a conta existe no Auth, mas `users.auth_id` continua nulo. A tela
+    // mostraria "convite pendente" e um reenvio chamaria `createUser` de novo com o MESMO
+    // endereço, batendo na unicidade global ("already registered") — um beco sem saída que só
+    // sai com intervenção manual. Precisa aparecer para o operador agora, não depois.
+    const message = `Conta de acesso criada, mas não foi possível vinculá-la ao usuário: ${vinculoErro.message}`
+    console.error("[900-22b] convite do admin falhou ao vincular auth_id", {
+      orgId,
+      adminEmail: emailLimpo,
+      authUserId: authData.user.id,
+      dbError: vinculoErro.message,
+    })
+    return { status: "failed", message }
+  }
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://crm.trifold.eng.br"
-  const { data: linkData } = await db.auth.admin.generateLink({
+  const { data: linkData, error: linkErro } = await db.auth.admin.generateLink({
     type: "recovery",
     email: emailLimpo,
     options: { redirectTo: `${siteUrl}/reset-senha` },
   })
 
-  if (linkData?.properties?.hashed_token) {
-    // `action_link` usa /auth/v1/verify (verify + fragment) e não chega em /reset-senha.
-    // Link direto para /auth/callback com `hashed_token` (verifyOtp). [Story 75-139]
-    const actionLink = `${siteUrl}/auth/callback?token_hash=${linkData.properties.hashed_token}&type=recovery&next=/reset-senha`
-    const { subject, html } = renderPasswordActionEmail({
-      userName: admin.name ?? nomeDerivado,
-      actionLink,
-      siteUrl,
-      mode: "create",
-    })
-
-    await sendEmail({
-      to: emailLimpo,
-      subject,
-      html,
-      // Tag própria, diferente de `broker_invite`: conflar as duas origens estragaria qualquer
-      // métrica ou auditoria de e-mail que separe convite de plataforma de convite de corretor.
-      tags: [{ name: "type", value: "platform_admin_invite" }],
+  if (linkErro || !linkData?.properties?.hashed_token) {
+    // Conta criada e vinculada, mas sem link não há e-mail — o admin existe e não sabe disso.
+    // Não é um beco sem saída (ele consegue entrar por "esqueci minha senha"), mas chamar isso
+    // de `"invited"` faria a UI afirmar um envio que não houve.
+    const message =
+      linkErro?.message ??
+      "Conta de acesso criada, mas o link de definição de senha não pôde ser gerado. O administrador pode usar \u201cesqueci minha senha\u201d."
+    console.error("[900-22b] convite do admin sem link de acesso", {
       orgId,
+      adminEmail: emailLimpo,
+      authError: message,
     })
+    return { status: "failed", message }
   }
 
-  // Convite concluído: o campo deixa de significar "pendente".
+  // `action_link` usa /auth/v1/verify (verify + fragment) e não chega em /reset-senha.
+  // Link direto para /auth/callback com `hashed_token` (verifyOtp). [Story 75-139]
+  const actionLink = `${siteUrl}/auth/callback?token_hash=${linkData.properties.hashed_token}&type=recovery&next=/reset-senha`
+  const { subject, html } = renderPasswordActionEmail({
+    userName: admin.name ?? nomeDerivado,
+    actionLink,
+    siteUrl,
+    mode: "create",
+  })
+
+  // `sendEmail` NUNCA lança: devolve `{ id, error }`. Ignorar o `error` era o último ponto em
+  // que `"invited"` podia ser falso.
+  const { error: envioErro } = await sendEmail({
+    to: emailLimpo,
+    subject,
+    html,
+    // Tag própria, diferente de `broker_invite`: conflar as duas origens estragaria qualquer
+    // métrica ou auditoria de e-mail que separe convite de plataforma de convite de corretor.
+    tags: [{ name: "type", value: "platform_admin_invite" }],
+    orgId,
+  })
+
+  if (envioErro) {
+    const message = `Conta de acesso criada, mas o e-mail de convite não pôde ser enviado: ${envioErro}`
+    console.error("[900-22b] convite do admin sem envio de e-mail", {
+      orgId,
+      adminEmail: emailLimpo,
+      emailError: envioErro,
+    })
+    return { status: "failed", message }
+  }
+
+  // Convite concluído DE VERDADE: conta criada, vinculada, link gerado e e-mail aceito pelo
+  // provedor. Só agora o campo deixa de significar "pendente".
   await db.from("organizations").update({ admin_invite_email: null }).eq("id", orgId)
 
   return { status: "invited" }

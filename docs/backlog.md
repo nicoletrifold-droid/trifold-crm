@@ -112,11 +112,37 @@ LEITURA de plataforma e deveria virar `platformQuery`).
 
 ---
 
-### [Epic 900] 🟢 2 arquivos de `/platform` herdados do PR #498 seguem fora da allowlist de `createAdminClient`
+### [Epic 900] 🟡 Contagem de usuários por org em `/platform/orgs` sofre o corte de 1000 linhas do PostgREST
+
+**Adicionado em:** 2026-08-28
+**Prioridade:** P2 — hoje nenhuma org do sistema chega perto de 1000 usuários
+**Origem:** CodeRabbit no PR #522; já declarado como item adjacente na própria Story `900-22b`
+(AC-B3, "Nota de escopo, não corrigida aqui")
+
+`platformQuery("users", "org_id")` em `packages/web/src/app/platform/orgs/page.tsx` lê TODAS as
+linhas de `users` sem `range` e conta em memória. Ao passar do `max-rows` do PostgREST, a coluna
+"Usuários" mostra número truncado **em silêncio** — e a página transfere uma linha por usuário a
+cada render.
+
+É defeito **herdado** da `900-22` (PR #498), não introduzido pela `900-22b`. A `900-22b` corrigiu
+essa classe na consulta que ela criou (o estado do admin usa `.eq("role","admin")`, que limita as
+linhas ao número de orgs) e documentou no código que a contagem total continuava com o problema —
+justamente para não alargar escopo em silêncio nem esconder o defeito.
+
+**Ação:** trocar por um `count` agregado por org (`head: true` devolve o número exato sem
+transferir linhas) ou paginar explicitamente. Mesma classe corrigida na Story 75-198 com
+`get_brokers_active_lead_counts`.
+
+---
+
+### [Epic 900] 🟢 1 arquivo de `/platform` (2 warnings) herdado do PR #498 segue fora da allowlist de `createAdminClient`
 
 **Adicionado em:** 2026-08-28
 **Prioridade:** P3 — são warnings, `npm run lint` passa com 0 erros
 **Origem:** Gate @qa da Story `900-22b` (MNT-001, escopo deliberadamente limitado)
+**Escopo remedido em 2026-08-28:** é **1 arquivo com 2 warnings**, não 2 arquivos. O gate contava
+`orgs/page.tsx` como o segundo — mas essa página foi migrada para `platformQuery()` por esta mesma
+story e parou de avisar. Medido com `npx eslint`: `orgs/route.ts` linhas 21 e 65.
 
 A `900-22b` acrescentou a `docs/audits/admin-client-allowlist.json` apenas os 2 arquivos que ela
 mesma criou (`src/lib/tenancy/platform-query.ts` e `src/lib/tenancy/admin-invite.ts`), com motivo

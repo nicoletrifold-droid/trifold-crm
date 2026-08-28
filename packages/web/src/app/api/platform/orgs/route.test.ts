@@ -182,6 +182,27 @@ describe("POST /api/platform/orgs — e-mail do admin obrigatório (AC-A1)", () 
     expect(await res.json()).toEqual({ error: "ADMIN_EMAIL_REQUIRED" })
   })
 
+  it("e-mail malformado devolve 400 ADMIN_EMAIL_INVALID (CodeRabbit #522)", async () => {
+    for (const ruim of ["admin@", "@acme.com", "admin acme.com", "admin@acme", "admin"]) {
+      const res = await POST(requisicao({ name: "Acme", adminEmail: ruim }))
+      expect(res.status, `esperava 400 para ${ruim}`).toBe(400)
+      expect(await res.json()).toEqual({ error: "ADMIN_EMAIL_INVALID" })
+    }
+  })
+
+  it("e-mail malformado é recusado ANTES de provisionar — sem org com admin fantasma", async () => {
+    await POST(requisicao({ name: "Acme", adminEmail: "admin@" }))
+    expect(chamadas.some((c) => c.metodo === "rpc")).toBe(false)
+    expect(chamadas.some((c) => c.metodo === "insert" && c.tabela === "users")).toBe(false)
+  })
+
+  it("aceita endereços válidos comuns", async () => {
+    for (const bom of ["admin@acme.com", "a.b+tag@sub.acme.com.br"]) {
+      const res = await POST(requisicao({ name: "Acme", adminEmail: bom }))
+      expect(res.status, `esperava 201 para ${bom}`).toBe(201)
+    }
+  })
+
   it("recusa ANTES de provisionar — nenhuma org é criada por engano", async () => {
     await POST(requisicao({ name: "Acme" }))
     expect(chamadas.some((c) => c.metodo === "rpc")).toBe(false)

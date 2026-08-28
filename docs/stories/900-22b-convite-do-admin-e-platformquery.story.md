@@ -676,6 +676,7 @@ não é empurrado para validação manual.
 | 2026-08-28 | 0.3 | Correções obrigatórias da revalidação @po (NO-GO 8/10, seção "Revalidação — v0.2" de `docs/qa/po-validation-900-22b.md`): MF-A — regex de `detectRawTableReads` trocado de receiver-adjacente (`(\w+)\.from\(`) para receiver-por-exclusão, cobrindo a forma dominante do repositório (receiver em linha anterior, 1.511 ocorrências) e receiver-chamada (`createAdminClient().from(...)`); fixtures inline ampliadas de 3 para 5 formas; a fixture commitada pré-story agora fecha a asserção `["organizations","users"]` sem editar a fixture, e a mutação nomeada da AC-B3 volta a ficar vermelha; MF-B — 5º caso de `deriveAdminInviteStatus` (`admin` preenchido sem `authId` e sem `adminInviteEmail`) mais Mutação 3, provando que o campo `admin` é load-bearing e não redundante com `adminInviteEmail`; SF-A — path de `platform-query-scan.test.ts` fixado em `lib/tenancy/`, fora dos diretórios varridos; SF-B — varredura real restrita a `.ts`/`.tsx`; SF-C — contradição entre aviso não bloqueante e `router.push` na AC-A7 resolvida (wizard não redireciona automaticamente quando `adminInvite.status === "failed"`, só quando o operador confirma) | @sm (River) |
 | 2026-08-28 | 1.0 | Implementação (@dev, YOLO). Bloco A: migration `244` (`organizations.admin_invite_email`, aditiva, rollback documentado), campo obrigatório no wizard, `ensureAdminInvited`/`deriveAdminInviteStatus`/`persistAdminInviteEmail` em `lib/tenancy/admin-invite.ts`, endpoint `POST /api/platform/orgs/[id]/resend-admin-invite`, coluna "Admin" com badge e botão "Reenviar". Bloco B: `PLATFORM_READABLE_TABLES` + `platformQuery()` (recusa tabela fora da lista e `"*"` em `columns`), `detectRawTableReads()`, varredura dos dois diretórios de plataforma e fixture pré-story commitada; `orgs/page.tsx` migrado. Régua estática medida **vermelha** (1 falha, 2 hits em `orgs/page.tsx`) antes da T9 e **verde** (12/12) depois, no mesmo PR. 19 mutações executadas e revertidas, todas com vermelho pelo motivo previsto — a tabela MUT1/MUT2/MUT3 do @po foi reproduzida exatamente. Desvios registrados nas Completion Notes: `UPDATE admin_invite_email` movido para `admin-invite.ts` (a rota está dentro do diretório varrido), coluna `id` acrescentada à consulta da AC-B3, `201` explícito na criação (era `200`), redirect do wizard suprimido também em `already_active`. | @dev (Dex) |
 | 2026-08-28 | 1.1 | Correções do gate @qa (CONCERNS, merge liberado): **MNT-001** — `platform-query.ts` e `admin-invite.ts` entram em `admin-client-allowlist.json` → `legitimos` com motivo por arquivo (warnings 7→2; os 2 herdados do PR #498 foram para o backlog, não para a allowlist); **REL-001** — `.order("created_at", { ascending: true })` na consulta de admin de `orgs/page.tsx`, alinhando o desempate da LEITURA ao da escrita; **SEC-002** — senha temporária passa de `Math.random()` para `crypto.randomUUID()`; **SEC-001** — comentário de topo de `platform-query.ts` documenta que a recusa de `"*"` não cobre embedding do PostgREST, com dona nomeada (`900-42a`). REL-001 e SEC-002 chegaram sem carrasco (apagá-las deixava 12/12 e 22/22 verdes): acrescentei régua estática para o `.order` e teste de spy duplo para a senha, e confirmei o vermelho de ambas por mutação. Débito para `docs/backlog.md`: SEC-001, TEST-001 (pontos cegos do detector medidos), MNT-002 (critério do precedente `lib/tenancy/`) e os 2 arquivos do #498. Suíte completa reexecutada: 257 arquivos, 3.146 verdes. | @dev (Dex) |
+| 2026-08-28 | 1.2 | Correções do CodeRabbit (PR #522, CHANGES_REQUESTED). **3 achados novos:** (a) os fakes de Supabase das duas suítes passaram a honrar `.eq`/`.order`/`.limit` — antes, apagar o filtro de org ficava VERDE, ou seja, o teste era cego à invariante de isolamento de tenant; 7 mutações confirmam, uma por cláusula e por arquivo; (b) `ensureAdminInvited` deixou de devolver `"invited"` quando o vínculo do `auth_id`, o `generateLink` ou o `sendEmail` falham — agora devolve `failed` com mensagem e NÃO limpa `admin_invite_email`, mantendo o "Reenviar" disponível; (c) e-mail divergente entre a linha pendente e o convite passa a ser reconciliado em `users.email`/`name` ANTES do `createUser`. **Minors aceitos:** `persistAdminInviteEmail` loga o erro do UPDATE em vez de engoli-lo; `adminEmail` ganha validação de formato (`400 ADMIN_EMAIL_INVALID`) para não provisionar org com admin fantasma; `module-contract.test.ts` novo, sem `vi.mock`, fecha o buraco de mocks de módulo inteiro fabricarem símbolos renomeados. **Minors descartados com motivo:** corte de 1000 linhas da contagem de usuários (herdado da `900-22`, a AC-B3 manda registrar como item adjacente — foi para o backlog) e o gate `.yml` do @qa (artefato alheio). **SEC-001 e TEST-001 não tocados** — dona `900-42a`. Backlog: escopo do item da allowlist remedido para **1 arquivo / 2 warnings** (a `orgs/page.tsx` parou de avisar ao ser migrada) e item novo do corte de 1000 linhas. | @dev (Dex) |
 
 ---
 
@@ -804,6 +805,62 @@ herdados do #498 fora da allowlist.
 suíte completa 257 arquivos, 3.146 verdes, 6 `expected fail` (idêntica à de antes das correções) ·
 testes da story 5 arquivos, 72 verdes (eram 70; +2 dos carrascos novos).
 
+### Correções do CodeRabbit (PR #522, CHANGES_REQUESTED → aplicadas em 2026-08-28)
+
+13 comentários. **2 não foram tocados por terem dona declarada**: `platform-query.ts` (SEC-001,
+embedding — o CodeRabbit confirmou por consulta à doc do `supabase-js` 2.49.0) e
+`platform-query-scan.ts` (TEST-001, template literal), ambos de `900-42a`. **1 é operacional**
+(aplicar a migration `244` antes do deploy do código) e é precondição do @devops, não mudança de
+código.
+
+| # | Achado | O que mudou | Mutação que ficou vermelha |
+|---|---|---|---|
+| **1** | fakes de Supabase ignoravam `.eq`/`.order`/`.limit` — apagar o filtro de org ficava VERDE | os dois fakes (`admin-invite.test.ts` e `resend-admin-invite/route.test.ts`) passaram a filtrar, ordenar e limitar de verdade sobre linhas reais | 7 mutações, uma por cláusula e por arquivo — ver tabela abaixo |
+| **2** | `ensureAdminInvited` devolvia `"invited"` mesmo com falha depois do `createUser` | 3 pontos passam a devolver `{status:"failed", message}` e a **não** limpar `admin_invite_email`: vínculo do `auth_id`, `generateLink` (erro ou sem `hashed_token`) e `sendEmail` (que devolve `{error}` e nunca lança) | `if (vinculoErro)`→`if(false)` cai 1; `if (linkErro \|\| !hashed_token)`→`if(false)` cai 2; `if (envioErro)`→`if(false)` cai 1 |
+| **3** | e-mail divergente: Auth criado com o endereço novo, `auth_id` gravado na linha com o antigo | `ensureAdminInvited` reconcilia `users.email`/`name` **antes** do `createUser` quando a linha PENDENTE tem outro endereço | remover o `if` de reconciliação cai 3 |
+| Minor | `persistAdminInviteEmail` engolia o erro do `UPDATE` | passa a logar estruturado (não relança: a org existe e o convite ainda pode dar certo) | `if (error)`→`if(false)` cai 1 |
+| Minor | `adminEmail` só era checado como "não vazio" (`admin@` passava) | `400 ADMIN_EMAIL_INVALID` antes de `provision_org` | remover a regex cai 2 |
+| Minor/Major | mocks de módulo inteiro fabricam símbolos: renomear um export deixa tudo verde | `module-contract.test.ts` novo, **sem nenhum `vi.mock`**, assere existência e aridade de 6 módulos | n/a (é a rede que não existia) |
+
+**As 7 mutações do achado #1 — cada uma matou exatamente o seu próprio teste:**
+
+| Mutação | Arquivo mutado | Teste que caiu |
+|---|---|---|
+| remove `.eq("org_id")` | `admin-invite.ts` | "não enxerga o admin de OUTRA org" |
+| remove `.eq("role","admin")` | `admin-invite.ts` | "não confunde admin com usuário de outro papel" |
+| remove `.order("created_at")` | `admin-invite.ts` | "desempata pegando o MAIS ANTIGO" |
+| remove `.eq("org_id")` | `resend-admin-invite/route.ts` | "não enxerga o admin de OUTRA org" |
+| remove `.eq("role")` | `resend-admin-invite/route.ts` | "não confunde admin com outro papel" |
+| remove `.order("created_at")` | `resend-admin-invite/route.ts` | "desempata pegando o MAIS ANTIGO" |
+| remove `.eq("id", orgId)` | `resend-admin-invite/route.ts` | "[id] inexistente é 404 mesmo com outra org no banco" |
+
+**O fake honesto já cobrou um teste na hora de entrar.** `"passa o [id] da rota para
+ensureAdminInvited"` passava **por engano**: ele chamava com `org-da-rota` enquanto o banco falso
+só tinha `org-1`, e o duplo cego devolvia a org fixa ignorando o `.eq("id", …)`. Com o filtro
+honrado virou `404`. Corrigi a fixture (a org agora existe com esse id) — é a demonstração, dentro
+da própria suíte, do que o achado #1 dizia.
+
+**Onde cada `.order("created_at")` é medido — três call sites, três réguas, sem sobreposição e sem
+buraco** (a pergunta explícita do gate):
+
+| Call site | Régua | Tipo |
+|---|---|---|
+| `orgs/page.tsx` (lista, server component sem harness) | `platform-query-scan.test.ts` → "a consulta dedicada de admin desempata pelo mesmo critério da escrita" | estática (texto do arquivo) |
+| `admin-invite.ts` → `ensureAdminInvited` | `admin-invite.test.ts` → "desempata múltiplos admins pegando o MAIS ANTIGO" | comportamental (fake ordena de verdade) |
+| `resend-admin-invite/route.ts` | `resend-admin-invite/route.test.ts` → "desempata pegando o admin MAIS ANTIGO" | comportamental |
+
+A régua estática é usada **só** onde não há como executar o código (server component); os outros
+dois são comportamentais. Nenhuma cobre o mesmo call site duas vezes.
+
+**Minors descartados, com motivo:**
+- **contagem de usuários por org sofre o corte de 1000 linhas** (`orgs/page.tsx`) — real, mas
+  **herdado da `900-22`** e declarado fora de escopo pela própria AC-B3 ("Nota de escopo, não
+  corrigida aqui... registrar como item adjacente, não widen scope em silêncio"). Fiz o que a AC
+  manda: registrei em `docs/backlog.md` em vez de corrigir aqui.
+- **`docs/qa/gates/900.22b-*.yml` descreve MNT-001 como pendente** — o arquivo de gate é artefato
+  do @qa; não edito parecer alheio. O que era meu nessa observação era a Completion Note nº 4 da
+  v1.0, que ficou obsoleta quando o gate autorizou a edição da allowlist: marcada como SUPERADA.
+
 ### Completion Notes List
 
 1. **`persistAdminInviteEmail()` mora em `admin-invite.ts`, não na rota — e isso não é
@@ -827,7 +884,10 @@ testes da story 5 arquivos, 72 verdes (eram 70; +2 dos carrascos novos).
    apareceram e foram corrigidos. Registrado em comentário no topo de `platform-query.ts` para
    que a `900-42a`, ao endurecer, saiba que recuperar a tipagem exige trocar `string` por um
    genérico de literal.
-4. **7 warnings de `aios/no-unscoped-admin-client` (baseline eram 4) — não bloqueiam, mas
+4. ~~**7 warnings de `aios/no-unscoped-admin-client`...**~~ **SUPERADO na v1.1** — o gate @qa
+   tomou a decisão de governança (MNT-001) e a allowlist foi editada; warnings hoje: **2**, todos
+   herdados do PR #498. O texto original fica abaixo como registro do que foi decidido e por quem.
+   4. **7 warnings de `aios/no-unscoped-admin-client` (baseline eram 4) — não bloqueiam, mas
    merecem decisão de quem tem autoridade.** A regra manda allowlistar casos legitimamente
    cross-org em `docs/audits/admin-client-allowlist.json`. `platform-query.ts` é *o* caminho
    cross-org sancionado desta story, e `admin-invite.ts` também é cross-org por natureza
@@ -877,6 +937,7 @@ testes da story 5 arquivos, 72 verdes (eram 70; +2 dos carrascos novos).
 - `packages/web/src/lib/tenancy/__fixtures__/orgs-page-pre-900-22b.txt`
 - `packages/web/src/lib/tenancy/admin-invite.ts`
 - `packages/web/src/lib/tenancy/admin-invite.test.ts`
+- `packages/web/src/lib/tenancy/module-contract.test.ts` (CodeRabbit #522 — contrato de exportação, sem `vi.mock`)
 - `packages/web/src/app/api/platform/orgs/[id]/resend-admin-invite/route.ts`
 - `packages/web/src/app/api/platform/orgs/[id]/resend-admin-invite/route.test.ts`
 - `packages/web/src/app/platform/orgs/_components/reenviar-convite.tsx`

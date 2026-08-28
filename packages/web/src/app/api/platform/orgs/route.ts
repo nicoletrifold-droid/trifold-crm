@@ -61,6 +61,16 @@ export async function POST(req: Request) {
   if (!adminEmail) {
     return NextResponse.json({ error: "ADMIN_EMAIL_REQUIRED" }, { status: 400 })
   }
+  // Formato, não só "não vazio". Sem isto, `admin@` (ou qualquer digitação truncada) provisiona
+  // a org E grava uma linha em `users` com um endereço inutilizável — só o `createUser`, lá na
+  // frente, recusaria, e aí a empresa já existe com um admin fantasma que o operador precisa
+  // corrigir à mão. O `type="email"` do wizard cobre o caminho da UI; esta é a mesma regra do
+  // lado do servidor, que é o único que vale para quem chama a API direto.
+  // Checagem mínima de propósito: um `local@dominio.tld` sem espaços. Validar e-mail por regex
+  // "completo" é folclore — quem decide se o endereço existe é o provedor.
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adminEmail)) {
+    return NextResponse.json({ error: "ADMIN_EMAIL_INVALID" }, { status: 400 })
+  }
 
   const db = createAdminClient()
   const { data, error } = await db.rpc("provision_org", { p_name: name, p_slug: slug })
