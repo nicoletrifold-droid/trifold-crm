@@ -1012,9 +1012,16 @@ export async function processMessageWithMetadata(
       if (newStartUtc && differs) {
         // REMARCAR — novo dia+hora concreto e diferente do atual.
         clearPending()
-        const { free, alternatives } = await checkSlotAvailability(supabase, orgId, newStartUtc, apptId)
+        const { free, alternatives, erroNoPedido } = await checkSlotAvailability(supabase, orgId, newStartUtc, apptId, emit)
         const whenStr = formatBrtDateTime(newStartUtc)
-        if (free) {
+        // Story 87-18 — a frase de INCERTEZA vem ANTES da bifurcação livre/ocupado
+        // e não troca nenhuma das duas: com `erroNoPedido`, `free === false` é
+        // ausência de informação, não "ocupado". Nem `rescheduleSlotUtc` nem
+        // `authorizedSlotUtc` são setados aqui — é o que impede o UPDATE do `:1673`
+        // e a autorização que o enforcement do epic leria como legítima.
+        if (erroNoPedido) {
+          messageWithContext = sistema(`Não consegui confirmar agora se ${whenStr} está livre ou ocupado — a consulta da agenda falhou. NÃO diga que está livre nem que está ocupado. Avise com simpatia que não conseguiu checar nesse instante e peça para o cliente tentar de novo em alguns minutos, ou ofereça chamar um corretor humano.`)
+        } else if (free) {
           rescheduleSlotUtc = newStartUtc
           authorizedSlotUtc = newStartUtc
           apptToReschedule = { id: apptId, googleEventId: (activeAppointment.google_event_id as string | null) ?? null, fromWhen: existingWhenStr, brokerId: (activeAppointment.broker_id as string | null) ?? null }
@@ -1041,11 +1048,17 @@ export async function processMessageWithMetadata(
         // continua barrada pela guarda de período, agora dentro do resolver.
         const targetDay = (nDay ?? pendenciaDay)!
         guardarAgenda({ dataAbsoluta: dayPartsToIso(targetDay), periodo: nPeriod })
-        const slots = await freeSlotsInPeriod(supabase, orgId, targetDay, nPeriod, nowA, apptId)
+        const { slots, houveIncerteza } = await freeSlotsInPeriod(supabase, orgId, targetDay, nPeriod, nowA, apptId, undefined, emit)
         const periodo = nPeriod === "manha" ? "manhã" : "tarde"
+        // 🔴 Story 87-18 (`AC4-ii`) — A ORDEM É NORMATIVA: `slots.length` PRIMEIRO,
+        // `houveIncerteza` DEPOIS. Inverter faria UMA incerteza entre onze candidatos
+        // jogar no lixo uma oferta boa e inteira — a opção (b) que o §5 da story
+        // rejeitou na camada da função, entrando pela camada da mensagem.
         messageWithContext = slots.length
           ? sistema(`O cliente quer a visita de ${periodo} em ${formatBrtDay(targetDay)}. Horários LIVRES nesse período: ${listSlots(slots)}. NÃO confirme nenhum ainda: ofereça exatamente esses e pergunte qual ele prefere. A visita atual (${existingWhenStr}) segue mantida até ele escolher.`)
-          : sistema(`O cliente quer a visita de ${periodo} em ${formatBrtDay(targetDay)}, mas não há horário livre nesse período. NÃO confirme. Avise com simpatia e ofereça outro período ou outro dia (seg–sex 8h–18h, sáb 8h–12h). A visita atual (${existingWhenStr}) segue mantida.`)
+          : houveIncerteza
+            ? sistema(`Não consegui confirmar a agenda desse período agora — a consulta falhou. NÃO diga que não há horário livre. Avise com simpatia que não conseguiu checar nesse instante e ofereça tentar de novo em breve, ou outro período/dia.`)
+            : sistema(`O cliente quer a visita de ${periodo} em ${formatBrtDay(targetDay)}, mas não há horário livre nesse período. NÃO confirme. Avise com simpatia e ofereça outro período ou outro dia (seg–sex 8h–18h, sáb 8h–12h). A visita atual (${existingWhenStr}) segue mantida.`)
       } else if (nDay && !nTime && (rescheduleIntent || dayDiffers)) {
         // Story 75-245 — dia novo sem horário (com ou sem palavra-chave de remarcar).
         guardarAgenda({ dataAbsoluta: dayPartsToIso(nDay) })
@@ -1104,9 +1117,14 @@ export async function processMessageWithMetadata(
         agendaState = null
         const { startUtc, outsideHours } = evaluateSlot(day, time, now)
         if (startUtc) {
-          const { free, alternatives } = await checkSlotAvailability(supabase, orgId, startUtc)
+          const { free, alternatives, erroNoPedido } = await checkSlotAvailability(supabase, orgId, startUtc, undefined, emit)
           const whenStr = formatBrtDateTime(startUtc)
-          if (free) {
+          // Story 87-18 — idem `:1015`: `bookableSlotUtc`/`authorizedSlotUtc` NÃO
+          // são setados sob incerteza, o que corta o `.insert()` do `:1563` de um
+          // horário que ninguém conseguiu conferir.
+          if (erroNoPedido) {
+            messageWithContext = sistema(`Não consegui confirmar agora se ${whenStr} está livre ou ocupado — a consulta da agenda falhou. NÃO diga que está livre nem que está ocupado. Avise com simpatia que não conseguiu checar nesse instante e peça para o cliente tentar de novo em alguns minutos, ou ofereça chamar um corretor humano.`)
+          } else if (free) {
             bookableSlotUtc = startUtc
             authorizedSlotUtc = startUtc
             messageWithContext = sistema(`O cliente quer a visita em ${whenStr}. Esse horário está LIVRE. Confirme a visita reafirmando o dia e o horário (${whenStr}) e diga que vai deixar o café preparado.`)
@@ -1120,11 +1138,14 @@ export async function processMessageWithMetadata(
       } else if (day && period) {
         // Story 75-245 — dia + período: oferece os horários LIVRES daquele período.
         guardarAgenda({ dataAbsoluta: dayPartsToIso(day), periodo: period })
-        const slots = await freeSlotsInPeriod(supabase, orgId, day, period, now)
+        const { slots, houveIncerteza } = await freeSlotsInPeriod(supabase, orgId, day, period, now, undefined, undefined, emit)
         const periodo = period === "manha" ? "manhã" : "tarde"
+        // 🔴 Story 87-18 (`AC4-ii`) — ordem normativa, mesma do `:1044`.
         messageWithContext = slots.length
           ? sistema(`O cliente quer a visita de ${periodo} em ${formatBrtDay(day)}. Horários LIVRES nesse período: ${listSlots(slots)}. Ofereça exatamente esses e pergunte qual ele prefere — NÃO confirme nenhum antes de ele escolher.`)
-          : sistema(`O cliente quer a visita de ${periodo} em ${formatBrtDay(day)}, mas não há horário livre nesse período. NÃO confirme nada. Avise com simpatia e ofereça outro período ou outro dia (seg–sex 8h–18h, sáb 8h–12h).`)
+          : houveIncerteza
+            ? sistema(`Não consegui confirmar a agenda desse período agora — a consulta falhou. NÃO diga que não há horário livre. Avise com simpatia que não conseguiu checar nesse instante e ofereça tentar de novo em breve, ou outro período/dia.`)
+            : sistema(`O cliente quer a visita de ${periodo} em ${formatBrtDay(day)}, mas não há horário livre nesse período. NÃO confirme nada. Avise com simpatia e ofereça outro período ou outro dia (seg–sex 8h–18h, sáb 8h–12h).`)
       } else if (day && !time) {
         // Só o dia → guarda o dia e pergunta o horário.
         guardarAgenda({ dataAbsoluta: dayPartsToIso(day) })

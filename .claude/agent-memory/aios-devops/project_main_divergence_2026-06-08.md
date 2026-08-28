@@ -19,4 +19,12 @@ Durante merge dos PRs #5 (migration 075) e #6 (Story 50-3 CTWA), descobri que `m
 - PR #5 precisou rebase manual: conflito em `dashboard/pipeline/page.tsx` (totalVisible vs totalPipeline) resolvido combinando ambos — creative lookup do PR + totalPipeline com totalCount do main
 - Remote real: `freelans-dev/trifold-crm.git` mas GitHub está redirecionando para `nicoletrifold-droid/trifold-crm.git` (repo moved)
 
+**Recorrência 2026-07-29 (padrão confirmado):** main local estava ~6 PRs atrás (#295-#300 já mergeados no remoto) ao mergear #299. `gh pr merge 299 --squash --delete-branch` fez o merge no remoto e o hook local fast-forwardou main de `e3b002ec` para `013e3a7e` sem conflito. Padrão de trabalho aqui: workflow correto é **stash seletivo dos arquivos da story → merge do PR aberto → checkout/pull main → nova branch a partir da main atualizada → stash pop**. O stash pop faz auto-merge limpo quando as mudanças da nova story são aditivas sobre o que o PR anterior trouxe (JSDoc/labels). `mergeStateStatus` vem UNKNOWN logo após abrir; re-consultar após ~3s retorna CLEAN/MERGEABLE.
+
+**Recorrência 2026-08-20 (main local cronicamente obsoleta):** `main` local estava **177 commits atrás** de `origin/main` (0 à frente). Trate `main` local como lixo: crie branch sempre de `origin/main` após `git fetch`, nunca de `main`.
+
+**Padrão para commitar trabalho untracked quando a branch atual está suja com trabalho não relacionado:** `git worktree add -b nova-branch <path-no-scratchpad> origin/main` → copiar (`rsync -a`) só a pasta desejada pra dentro do worktree → `git add` seletivo + commit + `git push -u origin HEAD:refs/heads/nova-branch` → `git worktree remove`. Zero risco de stash/checkout mexer na branch original (ela nem é tocada). Cuidado: worktree criado de `origin/main` nasce **trackeando `origin/main`**, então `git push` sem refspec explícito tentaria empurrar pra main — sempre use `HEAD:refs/heads/<branch>`.
+
+**Sincronizar `main` local estando em outra branch suja (2026-08-26):** `git fetch origin main:main` fast-forwarda o ref local de `main` **sem checkout** — working tree e branch atual ficam intactos. Prefira isso a `git checkout main && git pull` quando há arquivos modificados/untracked, porque o checkout é exatamente o passo que dispara as colisões descritas em [[feedback_untracked_collision_arquivo_a_arquivo]]. Se o fetch recusar (não-fast-forward), aí sim main local divergiu e precisa investigação — o erro é o sinal, não um obstáculo a contornar com `-f`.
+
 Veja [[project_meta_subscription]] para contexto do Epic 50/51.

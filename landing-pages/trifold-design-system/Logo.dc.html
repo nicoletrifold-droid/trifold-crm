@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trifold Engenharia</title>
+<meta name="description" content="Componente de logo da Trifold Engenharia.">
+<script src="./support.js" defer></script>
+</head>
+<body>
+<x-dc>
+<img src="{{ src }}" alt="Trifold" style="{{ imgStyle }}" />
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:240,&quot;height&quot;:56},&quot;tone&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dark&quot;,&quot;light&quot;,&quot;monoLight&quot;,&quot;monoDark&quot;,&quot;onOrange&quot;,&quot;orange&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;eng&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;size&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:22,&quot;min&quot;:14,&quot;max&quot;:120,&quot;unit&quot;:&quot;px&quot;,&quot;tsType&quot;:&quot;number&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const tone = this.props.tone ?? 'dark';
+    const eng = this.props.eng ?? false;
+    const size = this.props.size ?? 22; // logo HEIGHT in px
+    const colorByTone = {
+      dark:'white', light:'black', monoLight:'white', monoDark:'black', onOrange:'white', orange:'orange'
+    };
+    const color = colorByTone[tone] || 'white';
+    const kind = eng ? 'eng' : 'inst';
+    return {
+      src: 'assets/' + kind + '-' + color + '.svg',
+      imgStyle: { display:'block', height:size + 'px', width:'auto' },
+    };
+  }
+}
+</script>
+</body>
+</html>

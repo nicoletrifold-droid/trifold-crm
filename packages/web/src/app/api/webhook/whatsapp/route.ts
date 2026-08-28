@@ -7,6 +7,7 @@ import { logEvent } from "@web/lib/logger"
 import { triggerAutomations } from "@web/lib/email-automations"
 import { notifyBrokerOfAppointment } from "@web/lib/broker/notify-appointment"
 import { notifyBrokerOnReply } from "@web/lib/broker/notify-on-reply"
+import { generateCoachSuggestion } from "@web/lib/coach/generate-suggestion"
 import { notifyBrokerOfPriceEscalation } from "@web/lib/broker/notify-price-escalation"
 import {
   shouldReactivateAi,
@@ -607,6 +608,10 @@ export async function POST(request: NextRequest) {
   // Fica fora do `if` porque a guarda anti-rajada, dentro do `after()`, precisa dela.
   let inboundCreatedAt: string | null = null
 
+  // Story 90-1 — `messages.id` do inbound desta invocação, para a FK da sugestão
+  // do Live Coach. Fica fora do `if` pelo mesmo motivo do `inboundCreatedAt`.
+  let inboundMessageId: string | null = null
+
   // ---- INSERT inbound message (sync) ------------------------------------
   // Even for image/document we insert a placeholder row now. The async path
   // will enrich the row's metadata if media is downloaded. Worst case: text
@@ -631,8 +636,12 @@ export async function POST(request: NextRequest) {
       // anti-rajada no `after()` abaixo: quem responde é a execução da mensagem
       // MAIS NOVA do lead. O carimbo sai do BANCO, não do relógio da lambda —
       // duas invocações concorrentes não compartilham relógio.
-      .select("created_at")
+      // Story 90-1: o `id` entra aqui porque o Live Coach precisa dele como FK
+      // (`coach_suggestions.message_id`). Sem isso seria um segundo SELECT por
+      // wamid dentro do `after()` — query extra sobre um dado que já temos.
+      .select("id, created_at")
     inboundCreatedAt = (inseridas?.[0]?.created_at as string | undefined) ?? null
+    inboundMessageId = (inseridas?.[0]?.id as string | undefined) ?? null
 
     // Unique constraint violation (PG 23505) = duplicate wamid that slipped
     // past the application-level check due to a race condition. Discard
@@ -665,6 +674,35 @@ export async function POST(request: NextRequest) {
         messageExcerpt: text ?? "",
       })
     })
+
+    // Story 90-1 (Epic 90) — Live Coach: sugestão de resposta à objeção do lead
+    // quando o CORRETOR conduz a conversa. `after()` dedicado e independente do
+    // push (63-12) e do bloco da Nicole: uma falha aqui não afeta nenhum dos
+    // dois, e vice-versa. Todos os gates (elegibilidade, humano no atendimento,
+    // capability, anti-ruído) vivem dentro do helper, que NUNCA lança.
+    // Vem APÓS o early-return de wamid duplicado (23505): reentrega da Meta não
+    // gera sugestão repetida. Fire-and-forget: não bloqueia o HTTP 200.
+    if (inboundMessageId && inboundCreatedAt) {
+      const coachMessageId = inboundMessageId
+      const coachCreatedAt = inboundCreatedAt
+      after(async () => {
+        // O helper já é fail-open por dentro. Este `.catch()` é a segunda linha:
+        // cobre falha ANTES do try/catch dele (import quebrado, getSupabaseAdmin
+        // lançando) — nada relacionado ao coach pode virar unhandled rejection
+        // nesta invocação.
+        await generateCoachSuggestion({
+          supabase: getSupabaseAdmin(),
+          leadId: lead.id,
+          conversationId: conversation.id,
+          orgId,
+          messageId: coachMessageId,
+          messageCreatedAt: coachCreatedAt,
+          text: text ?? "",
+        }).catch((err) => {
+          console.error("[webhook] live coach falhou fora do helper:", err)
+        })
+      })
+    }
   }
 
   // ---- ASYNC: media download, Nicole, outbound, automations -------------

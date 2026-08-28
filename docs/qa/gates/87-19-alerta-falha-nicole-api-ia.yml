@@ -1,0 +1,108 @@
+schema: 1
+story: "87-19"
+story_title: "Alerta por WhatsApp quando a Nicole para por erro da API de IA"
+gate: CONCERNS
+status_reason: >
+  Implementação sólida e verificada: suíte completa verde por exit code, ACs cobertos por
+  testes com dente comprovado (mutação), sem migration e sem regressão. Não é PASS por dois
+  motivos operacionais — o template da Meta ainda não existe (a story não funciona ponta a
+  ponta sem ele) e responder ao alerta faz a Nicole atender o próprio admin como lead.
+reviewer: "Quinn (@qa)"
+updated: "2026-08-28"
+
+verificacoes:
+  - nome: "Suíte completa (regressão)"
+    resultado: PASS
+    evidencia: "npx vitest run → EXIT=0, 260 arquivos, 3219 passed, 0 falhas. Verificado por exit code, não por grep."
+  - nome: "Typecheck e lint"
+    resultado: PASS
+    evidencia: "tsc --noEmit EXIT=0; npm run lint EXIT=0 (warnings remanescentes são pré-existentes do repo)."
+  - nome: "Testes têm capacidade de reprovar"
+    resultado: PASS
+    evidencia: >
+      Mutação re-executada no gate: classificador genérico derruba 7 testes; dedup neutralizado
+      derruba o teste do AC5; limiar ignorado derruba o do AC3. Não são testes de fachada.
+  - nome: "Guards não são teatro"
+    resultado: PASS
+    evidencia: >
+      `process.env.CRON_SECRET` é lido DENTRO do handler (route.ts:46), não em module scope —
+      o teste de 503 exercita o caminho real. Padrão contrário ao de `webhook-health`.
+  - nome: "Performance da query"
+    resultado: PASS
+    evidencia: >
+      `idx_system_events_level ON system_events(level, created_at DESC)` (migration 009) casa
+      exatamente com o filtro `level='error' AND created_at >= janela`. 144 execuções/dia sem custo relevante.
+  - nome: "Sem realimentação (o alerta não pode se auto-disparar)"
+    resultado: PASS
+    evidencia: >
+      Nenhum `level:"error"` é gravado no caminho do alerta — `NICOLE_HEALTH_ALERTA` e
+      `NICOLE_HEALTH_SEM_CANAL` são `warn`. Um alerta não entra na janela do próximo ciclo.
+  - nome: "Segurança"
+    resultado: PASS
+    evidencia: >
+      Nenhum segredo em log (o erro vai truncado em 300 chars para `whatsapp_send_log`);
+      acesso via query builder (sem SQL string); guard de secret antes de qualquer I/O.
+  - nome: "Sem migration / sem mudança de schema"
+    resultado: PASS
+    evidencia: "Índice `ux_system_events_dedupe_key` confirmado presente em produção via pg_indexes."
+
+concerns:
+  - id: C1
+    severidade: baixa
+    titulo: "Dedup por hora UTC truncada dispara 2 alertas na virada da hora"
+    detalhe: >
+      `dedupe_key` usa `new Date().toISOString().slice(0,13)`. Execuções às 09:59 e 10:01 caem em
+      chaves diferentes e enviam 2 alertas com 2 minutos de intervalo. Impacto real: uma mensagem
+      extra, no máximo 1× por hora de incidente.
+    recomendacao: >
+      NÃO corrigir agora. Uma janela deslizante exigiria estado adicional e mais complexidade que
+      o defeito justifica — e o modo de falha é uma mensagem a mais, nunca uma a menos.
+  - id: C2
+    severidade: media
+    titulo: "Responder ao alerta faz a Nicole atender o admin como lead"
+    detalhe: >
+      O alerta sai do número comercial da empresa. Se o admin responder, o inbound entra no webhook
+      normalmente. VERIFICADO em produção: o número 5544999761478 já existe como lead (criado
+      18/06/2026 via walk_in) e sua conversa `66f3706b` está com `is_ai_active: true` — ou seja, a
+      Nicole responderia. NÃO é regressão desta story: o mesmo já vale para `alerta_sla_gestor`
+      (Fernanda/Alexandre) e o número do Alexandre também já é lead desde 14/06. O que muda é a
+      frequência: alerta de sistema tende a ser respondido com "ok, resolvi".
+    recomendacao: >
+      Operacional, não de código: não responder ao WhatsApp do alerta. Se incomodar na prática,
+      uma allowlist de números internos no webhook é story própria — e beneficiaria também o
+      `alerta_sla_gestor`, que tem o mesmo comportamento hoje.
+  - id: C3
+    severidade: informativa
+    titulo: "Query sem filtro de org_id"
+    detalhe: >
+      A varredura de `system_events` não filtra `org_id`, por decisão consciente (o incidente
+      atingiu caminhos com e sem org). Hoje é irrelevante — a instalação é single-org.
+    recomendacao: "Revisitar quando o Epic 900 (SaaS multi-tenant) sair do papel."
+
+bloqueios_para_producao:
+  - id: B1
+    titulo: "Template `alerta_sistema_admin` não existe na Meta"
+    impacto: >
+      Sem ele `sendWhatsAppTemplate` devolve 400 e NENHUM alerta sai. O código degrada sem quebrar
+      (o cron responde e loga a falha de envio), mas a story não cumpre seu propósito.
+    dono: usuario
+  - id: B2
+    titulo: "`ALERTA_SISTEMA_PHONES` não gravada em produção"
+    impacto: >
+      Cron responde `{ skipped: 'sem destinatário' }` — degradação explícita e segura, mas inerte.
+      Gravar SOMENTE via `scripts/vercel-env-set.sh`; `vercel env add` por pipe grava vazio em
+      silêncio (2 incidentes anteriores no projeto).
+    dono: usuario
+
+merge_seguro_sem_os_bloqueios: true
+merge_rationale: >
+  O código é inerte até a env existir: sem destinatário o cron sai no primeiro guard, sem enviar
+  nada e sem gravar marcador. Não há risco de disparo indevido nem de custo. Mergear agora e ligar
+  depois é seguro — e evita que a branch envelheça esperando aprovação da Meta.
+
+coderabbit:
+  executado: false
+  motivo: >
+    Conforme `.claude/rules/coderabbit-integration.md`, o gatilho válido neste repo é o GitHub App
+    no PR; o CLI nesta máquina falhou com `WebSocket closed` na Story 90-1. Registrado como NÃO
+    executado — nunca como aprovado.

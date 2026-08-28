@@ -89,6 +89,7 @@ export const CAPABILITIES = [
   { key: "leads.followup_nicole", label: "Follow-up da Nicole no lead", description: "Ligar/desligar o follow-up automático da Nicole para um lead específico. Não confundir com ia_handoff/ia_retomar, que são da conversa ao vivo. O corretor DONO do lead também pode, sem esta capability (Story 75-368).", seed: [A, S, GC, SDR], enforced: true },
   { key: "leads.ia_resumo", label: "Resumo IA do lead", description: "Gerar resumo da conversa por IA.", seed: [A, S], enforced: true },
   { key: "leads.ia_analisar", label: "Análise de comportamento", description: "Rodar a análise de comportamento IA do lead.", seed: [A, S, GC, SDR, COR], enforced: true },
+  { key: "leads.live_coach", label: "Live Coach na conversa", description: "Receber sugestões de resposta a objeções durante a conversa que o corretor assumiu (Story 90-1). É o kill switch do coach: desligar para um perfil PARA de gerar (não só de exibir), porque a geração no webhook confere a capability do corretor DONO do lead.", seed: [COR, A, S, GC, SDR], enforced: true },
 
   // ── Conversas (WhatsApp com leads) ───────────────────────────────────────
   // enforced na 75-310 (F3-9): composers/rotas de envio decidem por can().

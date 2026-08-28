@@ -409,7 +409,21 @@ issues:
     recommendation: >
       Tarefa do @devops, com roteiro completo já no Dev Agent Record. Não bloqueia
       o merge; bloqueia o "Done".
-    status: OPEN
+    status: RESOLVED
+    resolution: >
+      Fechado em 2026-08-26 pelo @devops (Gage). Validação end-to-end concluída
+      com o `test_event_code` real `TEST15571` numa sessão de browser real em
+      `trifold.eng.br/vindresidence/?fbclid=TESTE123` (14:06–14:23 BRT), com
+      evidência visual em 4 fontes independentes: Events Manager (Lead e
+      CompleteRegistration marcados "Desduplicado" = pareamento por `event_id`
+      entre servidor e browser), aba Rede do DevTools (`fbevents.js` + config do
+      pixel + beacons `tr`), extensão Meta Pixel Helper (os 5 eventos "Ativo",
+      incluindo o `PageView`) e console sem violação de CSP. O `PageView` não
+      aparece no painel de Test Events por limitação da ferramenta do Meta — o
+      SDK JS não carrega `test_event_code`, logo o painel só enxerga a metade
+      servidor de cada par. Env de teste removida do `trifold-crm` (ausência
+      reconferida) + redeploy, e os 4 leads de teste apagados de produção. Ver
+      "Fechamento do T12 — 2026-08-26" no Dev Agent Record da story.
 
   - id: "86.11-QA-008"
     severity: low

@@ -1,0 +1,115 @@
+storyId: "75-369"
+title: "Extrato: só Recebimento e Abatimento de Adiantamento contam como pagamento"
+verdict: PASS
+readiness: 10/10
+reviewer: "@qa (Quinn)"
+date: 2026-08-28
+branch: fix/portal-tipos-baixa-pagamento
+commit: ee7b2ae4
+merge_commit: ba6291b6 (PR #520)
+producao: deploy concluído em 28/08/2026
+
+checks:
+  code_review: PASS         # allowlist substitui blacklist na fonte única (installments.ts); consumidores herdam a regra
+  unit_tests: PASS          # 260 files / 3.248 tests PASS; 39 no arquivo tocado (18 novos)
+  mutation_check: PASS      # restaurando o comportamento antigo, 18 dos 39 falham — os testes reprovam de verdade
+  acceptance_criteria: PASS # AC1-AC7 rastreados abaixo
+  regressions: PASS         # varredura dos consumidores: nenhum recalcula pagamento por fora
+  performance: PASS         # nenhuma chamada nova ao Sienge; filtro em memória
+  security: PASS            # n/a — sem input externo novo, sem query, sem credencial
+  documentation: PASS       # story + gate + comentários de código explicando a decisão do financeiro
+  dados_reais: PASS         # conciliado com os extratos oficiais do Vind e do Yarden — ver abaixo
+
+acceptance_criteria_trace:
+  AC1: "Só recebimento e abatimento de adiantamento em receipts — it.each com os 2 tipos, esperando PAGO + receiptValue."
+  AC2: "Os outros 9 tipos vão para nonCashReceipts — it.each com os 9, esperando RENEGOCIADA + receipts vazio."
+  AC3: "Tipo desconhecido não conta — 'Dação em Pagamento' → RENEGOCIADA e aparece em collectUnknownReceiptTypes."
+  AC4: "receiptType ausente ainda conta — teste pré-existente mantido e verde."
+  AC5: "Saldo devedor não muda — getOpenBalance() === 0 verificado em cada um dos 9 tipos."
+  AC6: "Rótulo pelo tipo real — describe getNonCashLabel com 10 pares tipo→rótulo, fallback 'Baixada'."
+  AC7: "11 tipos + desconhecido + ausente cobertos; mais adiantamento+abatimento, recebimento+repactuação e informe."
+
+regression_sweep:
+  - "api/cron/boleto-scan: filtra por hasBoleto (generatedBillet && currentBalance > 0) — não olha receipts. Intacto."
+  - "cliente/financeiro/boleto: filtra hasBoleto && status !== PAGO — parcela baixada sem pagamento tem currentBalance <= 0, logo hasBoleto=false. Intacto."
+  - "computeInformeFromStatements: soma inst.receipts e exclui RENEGOCIADA do remainingBalance — acompanha a nova regra automaticamente."
+  - "Nenhum cache/persistência de total pago: os consumidores chamam getFinancialStatement direto no Sienge."
+
+concerns:
+  - id: C1
+    status: RESOLVIDO em 28/08/2026
+    severity: MEDIUM
+    title: "Nenhuma validação com dados reais ainda"
+    detail: >
+      A regra está provada em teste unitário, não contra a base. O caso que originou a
+      investigação (CT.YAR-1301) foi conferido contra o Sienge ao centavo no PR #508, mas a
+      lista dos 9 tipos veio de uma varredura ad-hoc que não ficou versionada como script.
+      A conciliação combinada com o financeiro (extrato do Sienge por contrato × tela) é o
+      que fecha esta lacuna.
+    mitigation: "Aguardar o extrato do Sienge e conciliar antes de considerar a regra validada."
+    resolucao: >
+      Feita no mesmo dia. 89 títulos (36 Vind + 53 Yarden), 71 clientes, 89 de 89 encontrados nos
+      dois lados. Saldo devedor idêntico ao centavo em 89/89 (R$ 47.125.810,35). Total pago a
+      R$ 721,78 do extrato oficial em R$ 14,5 milhões — contra R$ 10,8 milhões de excesso antes da
+      correção. A regra está confirmada pela própria fonte: o Sienge deixa a coluna "Recto líquido"
+      em branco nas baixas que não são pagamento e escreve o motivo na linha
+      ("*** Substituição - Título 10638 - CR ***"). Detalhamento na story.
+  - id: C2
+    severity: MEDIUM
+    title: "Default restritivo pode esconder pagamento de um tipo novo"
+    detail: >
+      AC3 inverte a política: tipo desconhecido deixa de contar. Protege contra repetir este
+      bug (exibir a mais), mas cria o risco simétrico — se o Sienge criar um tipo que é
+      pagamento real, o portal passa a exibir a menos, silenciosamente, até alguém classificar.
+      collectUnknownReceiptTypes() existe mas não é chamado por nenhuma rota nem alerta.
+    mitigation: >
+      Trade-off aceito e documentado. Vigilância ativa (alerta quando aparecer tipo novo)
+      fica como débito — registrar no backlog em vez de ampliar o escopo desta story.
+  - id: C3
+    severity: LOW
+    title: "Milhares de parcelas mudam de 'Pago' para baixa sem pagamento na tela do cliente"
+    detail: >
+      É o efeito pretendido, mas é visível: um cliente que via a parcela como paga passa a
+      ver 'Distratada', 'Cancelada' ou 'Adiantamento'. Vale o financeiro saber antes de o
+      deploy ir ao ar, para não ser pego de surpresa por ligação de cliente.
+    mitigation: "Avisar o financeiro na entrega. O rótulo por tipo real já evita o pior (chamar distrato de 'renegociada')."
+    status: >
+      ACEITO. Deploy feito em 28/08/2026 com o dono do produto ciente do efeito. Sem risco de
+      contato de cliente no fim de semana (confirmado pelo Marcos).
+
+coderabbit:
+  cli: "não executado — o gatilho deste repo é o GitHub App, que revisa no PR"
+
+build:
+  tests: "vitest 260 files / 3.248 tests passed (6 expected fail pré-existentes)"
+  typecheck: "tsc --noEmit exit 0"
+  lint: "eslint exit 0 — 0 errors; 38 warnings pré-existentes, nenhum nos arquivos tocados"
+
+verdict_rationale: >
+  PASS. O gate abriu CONCERNS por um único motivo — a regra não tinha sido conferida contra dados
+  reais (C1) — e essa conferência foi feita no mesmo dia, contra os extratos oficiais do Vind e do
+  Yarden: 89 de 89 títulos no saldo devedor e R$ 721,78 de diferença no total pago. C2 segue como
+  débito registrado em docs/backlog.md e C3 foi aceito com o deploy. Nada pendente que dependa de
+  código.
+
+questoes_abertas_fora_de_escopo:
+  - titulo: "Juros de atraso e desconto entram no total pago?"
+    origem: "conciliação de 28/08/2026 — explica os R$ 721,78 restantes"
+    dados: "R$ 4.706,22 de acréscimo e R$ 1.608,34 de desconto em 31 dos 89 títulos"
+    impacto_se_aprovado: "trocar receiptValue por netReceiptValue — mudança nova, não desta story"
+    status: "aguardando decisão do financeiro"
+  - titulo: "Adiantamento conta na entrada ou no uso?"
+    origem: "conciliação de 28/08/2026 — CT.VIND-904"
+    dados: "o Sienge conta na entrada (título 10609, R$ 2.358,38); a decisão do financeiro foi contar no uso (título 10578, R$ 2.376,10)"
+    impacto_se_alterado: "muda o contrato em que o valor aparece; o total do cliente é praticamente o mesmo"
+    status: "aguardando confirmação do financeiro"
+
+files:
+  - packages/web/src/lib/integrations/sienge/installments.ts
+  - packages/web/src/lib/integrations/sienge/types.ts
+  - packages/web/src/lib/integrations/sienge/client.ts
+  - packages/web/src/lib/integrations/sienge/client.test.ts
+  - packages/web/src/app/portal-viewer/[vinculo_id]/financeiro/page.tsx
+  - packages/web/src/app/cliente/[obra_id]/financeiro/extrato/_components/extrato-client.tsx
+  - packages/web/src/lib/pdf/extrato-pdf.tsx
+  - docs/stories/75-369-extrato-tipos-de-baixa-pagamento.story.md

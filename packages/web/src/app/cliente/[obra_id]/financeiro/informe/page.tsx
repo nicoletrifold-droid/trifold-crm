@@ -1,8 +1,9 @@
 import Link from "next/link"
 import { redirect } from "next/navigation"
-import { ChevronLeft, FileDown, TrendingDown, TrendingUp, Wallet } from "lucide-react"
+import { ChevronLeft, Clock, FileDown, TrendingDown, TrendingUp, Wallet } from "lucide-react"
 import { createClient } from "@web/lib/supabase/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
+import { INFORME_RENDIMENTOS_ENABLED } from "@web/lib/portal/features"
 import { getFinancialStatement, getIncomeTax, computeInformeFromStatements } from "@web/lib/integrations/sienge/client"
 import type { ComputedInforme } from "@web/lib/integrations/sienge/types"
 
@@ -74,6 +75,42 @@ export default async function InformePage({ params, searchParams }: PageProps) {
     .from("obras").select("id, name").eq("id", obra_id).single()
 
   if (!obra || !acesso) redirect("/cliente/sem-obra")
+
+  // Feature desligada: não consulta o Sienge nem exibe valores (ver features.ts)
+  if (!INFORME_RENDIMENTOS_ENABLED) {
+    return (
+      <div className="min-h-screen bg-stone-950">
+        <header className="sticky top-0 z-10 border-b border-stone-800 bg-stone-950/90 backdrop-blur-sm lg:hidden">
+          <div className="mx-auto max-w-2xl px-4 py-4">
+            <p className="text-xs text-stone-500">Financeiro · Informe de Rendimentos</p>
+            <p className="text-sm font-semibold text-white">{obra.name}</p>
+          </div>
+        </header>
+
+        <main className="mx-auto max-w-3xl px-4 py-6 lg:py-8">
+          <Link
+            href={`/cliente/${obra_id}/financeiro`}
+            className="mb-6 inline-flex items-center gap-1.5 text-sm text-stone-400 transition-colors hover:text-white"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Voltar
+          </Link>
+
+          <h1 className="text-xl font-bold text-white lg:text-2xl">Informe de Rendimentos</h1>
+
+          <div className="mt-6 rounded-xl border border-stone-800 bg-stone-900 px-6 py-12 text-center">
+            <Clock className="mx-auto mb-3 h-6 w-6 text-stone-500" />
+            <p className="text-sm font-medium text-white">
+              O Informe de Rendimentos estará disponível em breve.
+            </p>
+            <p className="mx-auto mt-2 max-w-md text-sm text-stone-500">
+              Se precisar do documento agora, fale com a construtora.
+            </p>
+          </div>
+        </main>
+      </div>
+    )
+  }
 
   const { data: portalUser } = await supabase
     .from("users").select("id, sienge_customer_id, cpf, email, name")

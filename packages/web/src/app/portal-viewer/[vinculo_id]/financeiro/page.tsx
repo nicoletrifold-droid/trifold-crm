@@ -2,6 +2,7 @@ import { redirect } from "next/navigation"
 import { requireViewerAccess, getViewerVinculo } from "@web/lib/portal/viewer"
 import { getVinculoFinancialStatement } from "@web/lib/portal/obra-financeiro"
 import type { FormattedInstallment } from "@web/lib/integrations/sienge/types"
+import { getNonCashLabel, getOpenBalance } from "@web/lib/integrations/sienge/installments"
 
 const CONDITION_LABEL: Record<string, string> = {
   AT: "À Vista",
@@ -22,7 +23,8 @@ function formatCurrency(value: number): string {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value)
 }
 
-function StatusBadge({ status }: { status: FormattedInstallment["status"] }) {
+function StatusBadge({ inst }: { inst: FormattedInstallment }) {
+  const status = inst.status
   if (status === "PAGO") {
     return (
       <span className="inline-flex items-center rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-semibold text-emerald-400">
@@ -34,6 +36,15 @@ function StatusBadge({ status }: { status: FormattedInstallment["status"] }) {
     return (
       <span className="inline-flex items-center rounded-full bg-sky-500/15 px-2.5 py-0.5 text-xs font-semibold text-sky-400">
         Parcialmente pago
+      </span>
+    )
+  }
+  if (status === "RENEGOCIADA") {
+    // Rótulo pelo tipo real da baixa: distrato, cancelamento e substituição
+    // caem no mesmo status, mas não são "renegociada" para o cliente.
+    return (
+      <span className="inline-flex items-center rounded-full bg-violet-500/15 px-2.5 py-0.5 text-xs font-semibold text-violet-300">
+        {getNonCashLabel(inst)}
       </span>
     )
   }
@@ -91,13 +102,15 @@ export default async function ViewerFinanceiroPage({
 
   const pagas = installments.filter((i) => i.status === "PAGO")
   const parciais = installments.filter((i) => i.status === "PARCIAL")
-  const pendentes = installments.filter((i) => i.status !== "PAGO")
-  // Total pago = todas as baixas, inclusive as parciais de parcelas em aberto.
-  const totalPago = installments.reduce((s, i) => s + (i.receiptValue ?? 0), 0)
-  const totalPendente = pendentes.reduce(
-    (s, i) => s + (i.currentBalance > 0 ? i.currentBalance : i.originalValue),
-    0
+  const semPagamento = installments.filter((i) => i.status === "RENEGOCIADA")
+  const pendentes = installments.filter(
+    (i) => i.status !== "PAGO" && i.status !== "RENEGOCIADA"
   )
+  // Total pago = baixas em dinheiro, inclusive as parciais de parcelas em
+  // aberto. Baixa que não é pagamento não entra: já foi filtrada em
+  // getFinancialStatement.
+  const totalPago = installments.reduce((s, i) => s + (i.receiptValue ?? 0), 0)
+  const totalPendente = pendentes.reduce((s, i) => s + getOpenBalance(i), 0)
 
   return (
     <div>
@@ -146,6 +159,23 @@ export default async function ViewerFinanceiroPage({
         </div>
       )}
 
+      {/* Explica as parcelas baixadas sem pagamento — sem isso a parcela aparece sem
+          valor pago e sem saldo, e parece que sumiu dinheiro. */}
+      {semPagamento.length > 0 && (
+        <div className="mb-4 rounded-xl border border-violet-500/20 bg-violet-500/5 px-4 py-3">
+          <p className="text-xs leading-relaxed text-stone-400">
+            <span className="font-semibold text-violet-300">
+              {semPagamento.length === 1
+                ? "1 parcela baixada sem pagamento."
+                : `${semPagamento.length} parcelas baixadas sem pagamento.`}
+            </span>{" "}
+            São baixas que o Sienge registra sem entrada de dinheiro — renegociação,
+            substituição, cancelamento, distrato ou adiantamento. Não entram no total pago
+            nem no total em aberto, para a mesma dívida não ser contada duas vezes.
+          </p>
+        </div>
+      )}
+
       {installments.length === 0 ? (
         <div className="rounded-xl border border-stone-800 bg-stone-900 px-6 py-12 text-center">
           <p className="text-sm text-stone-500">Nenhuma parcela encontrada.</p>
@@ -163,7 +193,7 @@ export default async function ViewerFinanceiroPage({
                     <span className="text-sm font-semibold text-white">
                       {CONDITION_LABEL[inst.conditionType] ?? inst.conditionType} {inst.installmentNumber}
                     </span>
-                    <StatusBadge status={inst.status} />
+                    <StatusBadge inst={inst} />
                   </div>
                   <p className="mt-1 text-xs text-stone-500">
                     Vencimento: {formatDate(inst.dueDate)}
@@ -176,9 +206,9 @@ export default async function ViewerFinanceiroPage({
                     {formatCurrency(
                       inst.status === "PAGO"
                         ? (inst.receiptValue ?? inst.originalValue)
-                        : inst.currentBalance > 0
-                          ? inst.currentBalance
-                          : inst.originalValue
+                        : inst.status === "RENEGOCIADA"
+                          ? inst.originalValue
+                          : getOpenBalance(inst)
                     )}
                     {inst.status === "PARCIAL" && (
                       <span className="ml-2 text-xs font-medium text-stone-400">em aberto</span>

@@ -13,9 +13,7 @@ import {
 import {
   eventIdValido,
   lerTracking,
-  LANDING_VIND_CONTENT_CATEGORY,
-  LANDING_VIND_CONTENT_NAME,
-  LANDING_VIND_URL_PADRAO,
+  resolveLandingConfig,
   type TrackingLanding,
 } from "@web/lib/meta/landing-page-tracking"
 import { FORM_CAPI_EVENTS } from "@trifold/shared"
@@ -58,8 +56,9 @@ export async function POST(request: NextRequest) {
   const fields: Record<string, string> = {}
   const contentType = request.headers.get("content-type") ?? ""
 
-  // Story 86-11 (AC6) — bloco de tracking OPCIONAL, só da landing do Vind
-  // Residence. Lido do JSON BRUTO, nunca do mapa `fields`: `flattenIntoFields`
+  // Story 86-11 (AC6) — bloco de tracking OPCIONAL, só das landings standalone
+  // (`vind-residence`, `yarden`; qual delas vem em `tracking.landing`, Story
+  // 86-12). Lido do JSON BRUTO, nunca do mapa `fields`: `flattenIntoFields`
   // descarta objetos aninhados de propósito, e é isso que mantém o campo novo
   // invisível para todo o tráfego WordPress que compartilha este endpoint — e
   // que impede IP/UA do visitante de vazarem para `webhook_logs.payload` e
@@ -406,12 +405,17 @@ function dispararEventosCapi(
   const tracking = ctx.tracking
   if (!sinais || !tracking) return
 
+  // Story 86-12 (AC5/AC7) — qual landing originou o lead. O slug vem do proxy
+  // (constante do arquivo, nunca do browser); ausente/desconhecido cai no
+  // default `vind_residence`, preservando o comportamento da 86-11.
+  const landingConfig = resolveLandingConfig(tracking.landing)
+
   const base = {
     sinais,
     lead: { leadId, ...lead },
-    contentName: LANDING_VIND_CONTENT_NAME,
-    contentCategory: LANDING_VIND_CONTENT_CATEGORY,
-    urlPadrao: LANDING_VIND_URL_PADRAO,
+    contentName: landingConfig.contentName,
+    contentCategory: landingConfig.contentCategory,
+    urlPadrao: landingConfig.urlPadrao,
     // `st`/`ct` estão fora do escopo da 86-11 — ver `derivarUf` em form-capi.ts.
     derivarUf: false,
   } as const

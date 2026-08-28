@@ -54,6 +54,14 @@ vi.mock("@web/lib/email-automations", () => ({
   triggerAutomations: vi.fn(),
 }))
 
+// Story 90-1 — Live Coach. Mockado aqui para que o `after()` do coach não
+// dependa do Anthropic real; o teste de fail-open troca a implementação para
+// rejeitar e prova que o webhook responde 200 do mesmo jeito.
+const coachMock = vi.fn(async () => {})
+vi.mock("@web/lib/coach/generate-suggestion", () => ({
+  generateCoachSuggestion: (...args: unknown[]) => coachMock(...(args as [])),
+}))
+
 // ---- In-memory Supabase mock ---------------------------------------------
 
 interface MessageRow {
@@ -64,6 +72,13 @@ interface MessageRow {
   media_url: string | null
   media_type: string | null
   metadata: Record<string, unknown>
+  /**
+   * O mock não tinha esta coluna, embora o schema real a defina como
+   * `NOT NULL DEFAULT now()` (001_base_schema.sql:180). Sem ela o
+   * `inboundCreatedAt` da rota vinha sempre null nos testes — e nem a guarda
+   * anti-rajada (75-359) nem o `after()` do Live Coach (90-1) eram exercidos.
+   */
+  created_at: string
 }
 
 interface LeadRow {
@@ -348,6 +363,8 @@ function buildSupabaseMock() {
               media_url: (raw.media_url as string | null) ?? null,
               media_type: (raw.media_type as string | null) ?? null,
               metadata: (raw.metadata as Record<string, unknown>) ?? {},
+              // `DEFAULT now()` no schema real — o banco carimba, não a app.
+              created_at: (raw.created_at as string | undefined) ?? new Date().toISOString(),
             }
             db.messages.push(newRow)
             inserted.push(newRow as unknown as Record<string, unknown>)
@@ -477,6 +494,8 @@ describe("WhatsApp webhook — Story 21.1", () => {
     nextId = 0
     logEventMock.mockClear()
     fetchMock.mockClear()
+    coachMock.mockClear()
+    coachMock.mockResolvedValue(undefined)
     process.env.META_APP_SECRET = APP_SECRET
     process.env.NEXT_PUBLIC_SUPABASE_URL = "http://localhost"
     process.env.SUPABASE_SERVICE_ROLE_KEY = "test-key"
@@ -811,6 +830,49 @@ describe("WhatsApp webhook — Story 21.1", () => {
     // Antes o update substituía o metadata inteiro e apagava o media_id.
     expect(userMsg!.metadata.media_id).toBe("IMG-OK")
     expect(userMsg!.metadata.media_download_failed).toBe(false)
+  })
+
+  it("90-1 — coach lançando exceção: webhook responde 200 e a mensagem do lead é gravada igual", async () => {
+    coachMock.mockRejectedValueOnce(new Error("Anthropic fora do ar"))
+
+    const { POST } = await import("../route")
+
+    const res = await POST(
+      signedRequest(
+        buildPayload({ from: "+5544999689446", wamid: "wamid.COACH1", text: "achei caro demais" }),
+        APP_SECRET
+      )
+    )
+
+    // O contrato que importa: a Meta recebe 200 e a mensagem não se perde.
+    expect(res.status).toBe(200)
+    await flushAsync()
+
+    expect(db.messages.filter((m) => m.role === "user").length).toBe(1)
+    expect(db.messages[0]!.content).toBe("achei caro demais")
+  })
+
+  it("90-1 — coach recebe o id e o created_at da mensagem inbound (FK message_id)", async () => {
+    const { POST } = await import("../route")
+
+    const res = await POST(
+      signedRequest(
+        buildPayload({ from: "+5544999689446", wamid: "wamid.COACH2", text: "ta muito caro isso" }),
+        APP_SECRET
+      )
+    )
+    expect(res.status).toBe(200)
+    await flushAsync()
+
+    expect(coachMock).toHaveBeenCalled()
+    const [args] = coachMock.mock.calls[0] as unknown as [
+      { messageId: string; messageCreatedAt: string; text: string },
+    ]
+    // Sem o `.select("id, created_at")` do INSERT, messageId viria undefined e o
+    // `after()` do coach nem seria agendado — é isto que este teste tranca.
+    expect(args.messageId).toBe(db.messages[0]!.id)
+    expect(args.messageCreatedAt).toBeTruthy()
+    expect(args.text).toBe("ta muito caro isso")
   })
 
   it("75-222 — texto puro: colunas de mídia ficam NULL (não polui mensagens sem mídia)", async () => {
