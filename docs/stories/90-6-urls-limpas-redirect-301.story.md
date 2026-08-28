@@ -585,7 +585,7 @@ com o File List. `0` ocorrências das URLs antigas em qualquer `*.dc.html`.
 | QA-3 | medium | Deploy da 90-6 publica junto o roteamento/CSP da 86-12 (produção está com `vercel.json` anterior à 86-12: `/yarden` → 404 hoje). |
 | QA-4 | low | 6 stories downstream do épico ainda citam `Sobre Nós.dc.html`; a 90-3a manda editar "o arquivo com o nome atual". @sm/@po. |
 | QA-5 | low | Nenhuma suíte permanente para 12 redirects + 9 rewrites, com 7 stories do épico ainda por vir. |
-| QA-6 | low | Resíduo da 86-12 no README (`/((?!vindresidence).*)` vs `|yarden` real). |
+| QA-6 | low | Resíduo da 86-12 no README: descreve o negative-lookahead sem `yarden`, mas o `vercel.json` real inclui as duas landings no grupo. |
 | QA-7 | low | `assets/…` e `./support.js` são relativos — URLs limpas só funcionam por serem de 1 segmento. |
 
 ### QA-2 em detalhe — a divergência corre nos dois sentidos
@@ -738,6 +738,26 @@ idênticos aos da primeira.
   crítica (linha 76 manda editar o arquivo pelo nome antigo).
 - **QA-5 e QA-7:** backlog do épico 90, não bloqueiam.
 - **QA-6:** cosmético no README (resíduo da 86-12), corrigir na próxima edição do arquivo.
+
+### CodeRabbit no PR #523 — 2 achados, ambos `Minor`
+
+1. **`docs/stories/90-6…:588` — tabela Markdown quebrada.** A célula da linha QA-6 continha um
+   pipe literal dentro de crase, o que criava uma 4ª coluna e truncava o texto no render. Corrigido
+   (reformulado sem pipe); as 7 linhas da tabela agora têm 3 colunas. Só formatação — nenhum
+   conteúdo do veredito do @qa foi alterado.
+
+2. **`Artigo.dc.html:56` — item "Blog" do menu mobile é `href="#"` + `toggleMenu`,** ou seja fecha o
+   overlay em vez de navegar para o índice do blog. **Achado válido, mas PRÉ-EXISTENTE e fora do
+   escopo desta story:** a linha é byte-idêntica ao baseline `origin/main` (conferido), o rename e
+   as 102 substituições não a tocaram, e é exatamente a assimetria que a correção #2 do @po já havia
+   documentado ("`Artigo.dc.html` tem 3× para Sobre Nós/Empreendimentos/B2B, mas só 2× para Blog").
+   Não corrigido aqui: mudar markup de página exigiria novo `vercel deploy --prod` e QA próprio,
+   fora das ACs da 90-6. **Registrado para o backlog do épico 90** — casa bem com a 90-1
+   (pré-renderização), que já mexe nesse arquivo.
+
+[AUTO-DECISION] Corrigir apenas o achado 1 (documentação, do próprio diff) e encaminhar o achado 2
+para o backlog → motivo: o achado 2 é regressão de ninguém, está fora das ACs e alterá-lo
+silenciosamente publicaria mudança de produção sem story nem gate.
 
 ### Por que `InReview` e não `Done`
 
