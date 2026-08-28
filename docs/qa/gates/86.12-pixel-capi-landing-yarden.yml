@@ -1,0 +1,211 @@
+storyId: "86-12"
+title: "Pixel Meta + CAPI na landing do Yarden (landing nova)"
+reviewer: "Quinn (@qa)"
+reviewed_at: "2026-08-26"
+# Metadata conferida rodando git, NÃO lida do contexto da sessão (o prompt de
+# spawn trazia outro branch — `fix/design-system-vercelignore-claude-exposure`,
+# que não é o branch com checkout aqui).
+# `git rev-parse --abbrev-ref HEAD` → docs/86-12-story-draft
+# `git log -1` → eac7d1eb
+# `git ls-remote --heads origin docs/86-12-story-draft` → VAZIO (branch não existe no remoto)
+branch: "docs/86-12-story-draft"
+commit: "eac7d1eb (só commits de @sm/@po). A implementação T1–T11 está NÃO COMMITADA no working tree — @devops precisa commitar antes do push."
+schema: 1
+story: "86.12"
+gate: PASS
+
+verdict: PASS
+status_reason: >
+  Todos os 12 ACs implementáveis entregues e verificados no código; as 5
+  armadilhas históricas desta família de stories foram checadas uma a uma e
+  nenhuma se materializou. Restam 3 achados `low` (2 deles follow-ups amarrados à
+  dependência externa de conteúdo do AC12) e o AC13, que é validação pós-deploy
+  do @devops.
+
+verdict_rationale: >
+  Esta é a segunda cópia do padrão da 86-11, e o modo de falha dominante de um
+  clone é silencioso: o código funciona, os testes passam, e o dado sai rotulado
+  para o empreendimento errado. Revisei cada um desses pontos por leitura de
+  código + MUTAÇÃO (8 mutações, todas mataram teste — nenhum dos testes-chave
+  passa por vacuidade). Nada foi aceito por relato do @dev.
+
+  O ADAPT do AC5 é do tamanho certo: 3 constantes viraram um `Record` fixo + um
+  resolver, os 2 (únicos) call-sites trocaram de import, e `form-capi.ts` /
+  `capi-payload.ts` / `capi-client.ts` / `landing-pages/vind-residence/*` não
+  foram tocados — conferido por `git diff` vazio, não por afirmação. A
+  não-regressão do Vind Residence é provada por VALOR (as três strings da 86-11
+  escritas à mão no teste), não por acompanhar o `LANDING_CONFIGS`.
+
+  Os dois achados que o @po levantou na validação estão fechados e travados por
+  teste com assert positivo: `page: "yarden"` (identidade do lead no CRM) e
+  `landing: "yarden"` (segmentação Meta) são campos DISTINTOS e ambos foram
+  trocados. A trust boundary está no lugar certo — `landing`, `client_ip` e
+  `client_ua` são atribuídos DEPOIS do loop da allowlist nos dois proxies,
+  sobrescrevendo qualquer forja do browser.
+
+checks:
+  code_review: PASS         # ADAPT no ponto de estrangulamento certo; nenhum código morto clonado (D2); comentários corrigidos onde a garantia antiga virou falsa (D8)
+  unit_tests: PASS          # re-executado por mim: 255 arquivos / 3146 testes + 6 expected fail, exit 0. 8/8 mutações mataram teste
+  acceptance_criteria: PASS # AC1–AC12 entregues e cobertos. AC13 é pós-deploy (@devops/T13) — bloqueia o "Done" do deploy, não o merge
+  no_regressions: PASS      # suíte verde; `git diff` VAZIO em form-capi.ts, capi-payload.ts, capi-client.ts e landing-pages/vind-residence/*; default do resolver provado por valor
+  performance: PASS         # nenhuma query, rota ou env nova; `quandoFbpPronto` tem teto (50 × 100ms) e faz `clearInterval`; CAPI segue dentro de `after()`
+  security: PASS            # guarda de prototype-pollution verificada por mutação; trust boundary dos 3 campos do proxy; CORS allowlist do projeto certo; zero PII em log; `.vercelignore` versionável
+  documentation: PASS       # README do yarden com checklist de integração (noindex como passo 0), decision log D1–D8, Dev Agent Record completo e honesto sobre os desvios
+
+# ---------------------------------------------------------------------------
+# Os 5 pontos de atenção redobrada do briefing — verificados um a um
+# ---------------------------------------------------------------------------
+pontos_de_atencao_verificados: |
+  | # | Ponto | Verificação | Resultado |
+  |---|---|---|---|
+  | 1 | AC5 — guarda de prototype chain | leitura de `landing-page-tracking.ts:82` | `Object.prototype.hasOwnProperty.call(LANDING_CONFIGS, slug)` **presente**. Teste dedicado cobre `constructor`/`toString`/`hasOwnProperty`/`__proto__` |
+  | 1 | AC5 — não-regressão do default | leitura do teste + execução | `resolveLandingConfig(undefined)` e `("vind_residence")` comparados contra literal com as 3 strings da 86-11 **escritas à mão no teste** (`landing_vind_residence` / `Landing Vind Residence` / `https://trifold.eng.br/vindresidence/`) — se o `LANDING_CONFIGS` mudar, o teste acusa em vez de acompanhar |
+  | 2 | AC8 — `payload.page` | `diff` vind→yarden + teste | `page: PAGE_NAME` com `const PAGE_NAME = "yarden"`. Assert POSITIVO `expect(payload.page).toBe("yarden")` |
+  | 2 | AC8 — `landing` é constante do arquivo | leitura dos 2 proxies | `const LANDING_SLUG = "yarden"` em `lead.js` e `track.js`; NÃO está em `TRACKING_FIELDS`/`TRACK_FIELDS` (listas do que se lê do browser); atribuído **depois** do loop, sobrescrevendo forja. Teste manda `landing: "vind_residence"` no corpo e assere que sai `"yarden"` |
+  | 3 | AC7 — precedência de IP/UA | leitura de `form-capi.ts:135-138` | `(confiaNoCorpo ? texto(corpo?.client_ip) : undefined) ?? ipDaRequest(request)` — corpo PRIMEIRO, request só como fallback. Nunca o contrário. `confiarEmClientIpDoCorpo: true` fixo nas 2 rotas. **`form-capi.ts` não foi tocado por esta story** (`git diff` vazio) |
+  | 4 | AC1 — dataset ID nos 2 lugares | grep no `index.html` | `window.TRIFOLD_PIXEL_ID = '1337310707164669'` (linha 30, usado no `fbq('init')` linha 39) e `<noscript>` `tr?id=1337310707164669` (linha 272) — **idênticos**. Há teste que compara os dois entre si |
+  | 5 | AC9 — catch-all da CSP | parse do `vercel.json` | `/((?!vindresidence\|yarden).*)` — os DOIS no negative lookahead. 3 blocos novos de headers, 2 rewrites, 1 redirect; `connect.facebook.net` em `script-src`, `www.facebook.com` em `img-src`, ambos + `yarden.vercel.app` em `connect-src`. Bloco catch-all e os 3 blocos do Vind **intocados** exceto o regex |
+  | 6 | AC10 / `86.11-QA-005` | grep `console` no `index.html` | **nenhum `console.*` executável** — só 2 comentários explicando por que o log do Vind não foi clonado. Há assert estático travando o retorno |
+  | 7 | Suíte re-executada por mim | `npx vitest run`, `npm run type-check -- --force`, `npm run lint -- --force` | 255 arq / 3146 passed + 6 expected fail, exit 0; type-check 8/8 (**0 cached**); lint 8/8, **0 errors**, 34 warnings — grep confirma que **nenhum** warning está em arquivo tocado por esta story |
+  | 8 | T12/T13 não tentadas / nenhum push | `git ls-remote`, `ls .vercel` | `git ls-remote --heads origin docs/86-12-story-draft` → **VAZIO**: branch não existe no remoto, nenhum push aconteceu. Não há `.vercel/` em `landing-pages/yarden/` — projeto Vercel não foi criado |
+
+mutacoes_executadas: |
+  Teste que passa sem exercitar nada é pior que teste nenhum. Mutei o código e
+  confirmei que cada guarda tem um teste que morre sem ela:
+
+  | # | Mutação | Arquivo | Resultado |
+  |---|---|---|---|
+  | M1 | `hasOwnProperty.call(...)` → `slug in LANDING_CONFIGS` | `landing-page-tracking.ts` | ❌ 1 falha — a guarda de prototype chain é real (confirma D1) |
+  | M2 | `page: PAGE_NAME` → `page: "vind-residence"` | `yarden/api/lead.js` | ❌ 1 falha — o achado do @po está travado |
+  | M3 | remove `tracking.landing = LANDING_SLUG` | `yarden/api/lead.js` | ❌ 5 falhas |
+  | M4 | id do `<noscript>` → `9999999999999999` | `yarden/index.html` | ❌ 1 falha — a divergência de dataset é pega |
+  | M4b | `TRACK_ENDPOINT` → `vind-residence.vercel.app` | `yarden/index.html` | ❌ 1 falha |
+  | M4c | reintroduz `console.log("[lead capturado]", data)` | `yarden/index.html` | ❌ 1 falha — `86.11-QA-005` não pode voltar num merge |
+  | M5 | `resolveLandingConfig(tracking.landing)` → `(undefined)` | `landing-page/route.ts` | ❌ 1 falha |
+  | M6 | `resolveLandingConfig(tracking?.landing)` → `(undefined)` | `track/route.ts` | ❌ 2 falhas |
+  | M7 | `confiarEmClientIpDoCorpo: true` → `false` | `track/route.ts` | ❌ 1 falha — a precedência de IP/UA é testada de verdade |
+  | M8 | `confiarEmClientIpDoCorpo: true` → `false` | `landing-page/route.ts` | ❌ 2 falhas |
+
+  **8/8 mutações mataram teste.** Todos os arquivos restaurados e conferidos por
+  `sha256` contra o backup pré-mutação; suíte completa re-executada depois da
+  restauração com o mesmo resultado (255/3146).
+
+falsos_positivos_descartados: |
+  Coisas que pareciam achado e não eram — registradas para não voltarem como
+  ruído numa próxima revisão:
+
+  - **`var VISITOR_KEY` duplicado no `index.html`**: era artefato do MEU comando
+    (`sed -n '1,60p;60,200p'` imprime a linha 60 duas vezes). `grep -n VISITOR_KEY`
+    confirma **uma** declaração, na linha 60. Não é defeito.
+  - **`.vercelignore` do yarden ser untracked**: é o estado esperado de um
+    diretório novo inteiro. Rodei `git check-ignore` nos 9 arquivos do projeto —
+    **nenhum é ignorado**, então o `.vercelignore` (que exclui `.claude`,
+    `README.md` e `*.test.ts`) vai ser versionado junto. A armadilha que expôs
+    `.claude` no `trifold-design-system` não se repete aqui.
+  - **Blocos novos de CSP sem `X-Frame-Options`**: os 3 blocos do Vind Residence
+    também não têm (só o catch-all tem). É clone fiel, e o `frame-ancestors 'none'`
+    da própria CSP cobre o caso em navegador moderno. Não é regressão.
+
+top_issues:
+  - id: "86.12-QA-001"
+    severity: low
+    category: requirements
+    finding: >
+      `<meta name="robots" content="noindex, nofollow">` (D7) é comportamento que
+      a story não pediu. A mitigação é uma linha de checklist no README (passo 0),
+      não um teste — se ninguém remover a tag quando o conteúdo definitivo chegar,
+      a landing final fica fora da busca orgânica em silêncio.
+    suggested_action: >
+      Aceitável para um placeholder (a URL hoje é 404, indexar página vazia é pior).
+      Criar item de backlog amarrado à entrega do conteúdo do AC12 em vez de
+      confiar só no README. Não bloqueia — não afeta tráfego pago nem Pixel/CAPI.
+    status: OPEN
+
+  - id: "86.12-QA-002"
+    severity: low
+    category: requirements
+    finding: >
+      O checkbox de aceite de política de privacidade é `required` mas o texto não
+      tem link para política nenhuma (D4 — nenhuma URL foi fornecida, e inventar
+      violaria o Artigo IV). Consentimento obrigatório apontando para nada é frágil
+      do ponto de vista de LGPD.
+    suggested_action: >
+      Decisão correta do @dev (melhor sem link que com `href="#"` morto). Fornecer
+      a URL da política junto com o conteúdo do AC12 e amarrar isso ao mesmo
+      follow-up do `86.12-QA-001`.
+    status: OPEN
+
+  - id: "86.12-QA-003"
+    severity: low
+    category: security
+    finding: >
+      Herdado, não introduzido: `86.11-QA-003` (sem rate limit em
+      `POST /api/webhooks/landing-page/track`) continua OPEN, e esta story
+      acrescenta uma SEGUNDA fonte pública de tráfego para o mesmo endpoint — o
+      proxy `yarden/api/track.js`, que também não tem rate limit. O CRM exige token
+      (conferido: `Bearer` ou `?token=`, 401 sem ele), então o alvo real é o proxy.
+    suggested_action: >
+      Explicitamente fora de escopo pelo AC10 e correto assim. Manter no backlog da
+      86-11 como propriedade da rota compartilhada, agora com a nota de que a
+      superfície dobrou. Não reabrir nesta story.
+    status: INHERITED
+
+status_da_story: |
+  Mantida em `InReview`. NÃO promovi para `Done`, e o motivo é factual:
+  `story-lifecycle.md` atribui a transição para `Done` ao **@devops após o push**
+  ("Done | @qa PASS, @devops pushes | @devops"), e neste momento nada foi
+  commitado, nada foi deployado e o **AC13 não foi validado** (T12/T13 abertas).
+
+  É o mesmo tratamento da story-irmã: a 86-11 recebeu gate PASS na iteração 2
+  com `Status: InReview`, e só foi para `Done` num commit posterior
+  (`96c28996 docs(story): 86-11 para Done — T12/AC11 verificada com browser real`).
+
+  Marcar `Done` agora afirmaria "está em produção" sobre uma landing que não
+  existe em produção — a mesma classe de rótulo silenciosamente errado que esta
+  revisão inteira se dedicou a prevenir. **O gate está PASS: não há nada pendente
+  do lado do @dev.**
+
+notas_para_devops: |
+  1. **A implementação está toda NÃO COMMITADA.** O branch `docs/86-12-story-draft`
+     tem 3 commits, todos de @sm/@po (docs). Os 9 arquivos novos de
+     `landing-pages/yarden/`, os 7 modificados em `packages/web` +
+     `trifold-design-system/vercel.json` e o `.ai/decision-log-86-12.md` estão no
+     working tree. Commitar antes do push.
+  2. **`branch.docs/86-12-story-draft.remote/merge` está configurado no
+     `.git/config`, mas o branch NÃO existe no remoto** (`git ls-remote` vazio).
+     Inofensivo, mas explica o `[gone]` do `git status -sb` — não é sinal de push.
+  3. **Ordem de deploy é carga viva** (sem ela o Pixel fica bloqueado mesmo com a
+     landing no ar): (1) `packages/web` → (2) projeto Vercel `yarden` →
+     (3) `landing-pages/trifold-design-system` (CSP).
+  4. **T12** — criar o projeto `yarden`; replicar `LANDING_PAGE_WEBHOOK_SECRET`
+     (mesmo valor do `vind-residence`) via `scripts/vercel-env-set.sh` ou REST API.
+     **Nunca `vercel env add` via pipe/stdin** — grava valor vazio em silêncio
+     (2 incidentes anteriores). Se o nome `yarden` estiver indisponível no scope,
+     **escalar ao stakeholder**: o literal aparece em `ALLOWED_ORIGINS` (2
+     arquivos), nos `rewrites`/`connect-src` da CSP e nos 2 endpoints do
+     `index.html`.
+  5. **T13 / AC13** — a não-regressão do Vind Residence EM PRODUÇÃO
+     (`content_category: "landing_vind_residence"` + `metadata.landing_page:
+     "vind-residence"`) é obrigatória no mesmo passo. Os testes unitários provam a
+     função `resolveLandingConfig`, não o deploy. Filtrar por
+     `content_category: "landing_yarden"` no Test Events — o dataset
+     `1337310707164669` é compartilhado com a outra landing.
+  6. Rebase do `trifold-design-system/vercel.json`: o arquivo já é tracked (PR
+     #501/#505). Conferir que as adições do Yarden não se perdem numa resolução
+     de conflito — o catch-all `/((?!vindresidence|yarden).*)` é a linha que mais
+     importa e a mais fácil de perder.
+
+evidence_verificada_por_mim: |
+  | Verificação | Comando | Resultado |
+  |---|---|---|
+  | Suíte completa (2x — antes e depois das mutações) | `npx vitest run` | 255 arquivos, 3146 passed + 6 expected fail, exit 0 |
+  | Type-check sem cache | `npm run type-check -- --force` | 8/8 successful, **0 cached** (cache hit não é evidência) |
+  | Lint sem cache | `npm run lint -- --force` | 8/8, **0 errors**, 34 warnings; grep por `landing-page`/`yarden` no log → **nenhum** warning em arquivo desta story |
+  | Módulos que a story diz não ter tocado | `git diff --stat` | `form-capi.ts`, `capi-payload.ts`, `capi-client.ts`, `landing-pages/vind-residence/*` **ausentes do diff** — a alegação é literal |
+  | CSP | parse Python do `vercel.json` | 2 redirects / 5 rewrites / 7 blocos de headers; catch-all `/((?!vindresidence\|yarden).*)` |
+  | Proxies | `diff -u vind-residence/api/* yarden/api/*` | exatamente as 3 mudanças do AC8 + os comentários; nenhum drift acidental |
+  | Config do projeto | `diff` de `package.json`/`.vercelignore`/`.gitignore` | `.vercelignore` e `.gitignore` idênticos; `package.json` só troca o `name` |
+  | Arquivos gitignorados no yarden | `git check-ignore` nos 9 arquivos | **nenhum** — `.vercelignore` será versionado |
+  | Nenhum push | `git ls-remote --heads origin docs/86-12-story-draft` | **vazio** |
+
+waiver: { active: false }

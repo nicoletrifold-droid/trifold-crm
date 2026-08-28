@@ -1,6 +1,6 @@
 # Story 86-12 — Pixel Meta + CAPI na landing do Yarden (landing nova, sem tracking nem conteúdo hoje)
 
-**Status:** Ready
+**Status:** InReview (QA PASS — liberado para @devops; `Done` após T12/T13/AC13)
 **Epic:** 86 — Conversions API (CAPI) e Rastreamento Meta
 **Executor:** @dev (Dex)
 **Quality Gate:** @qa (Quinn) — `*qa-gate` ao fim da implementação
@@ -644,17 +644,17 @@ Antes do AC9/AC13 poderem ser validados em produção, @devops precisa:
 ## Tasks / Subtasks
 
 - [x] **T0 (era bloqueante para AC1)** — ✅ **FECHADA em 2026-08-26 pelo @po:** stakeholder confirmou reusar o dataset `1337310707164669` (mesmo do Vind Residence) e o nome de projeto Vercel `yarden`. Nenhuma decisão de negócio pendente.
-- [ ] **T1 (AC1)** — Pixel base code (`window.TRIFOLD_PIXEL_ID = '1337310707164669'` + `<noscript>` com o mesmo ID) + `fbq('track', 'PageView', ...)` em `landing-pages/yarden/index.html`
-- [ ] **T2 (AC2)** — helper vanilla JS de `visitor_id` (clonado da 86-11)
-- [ ] **T3 (AC3)** — helper vanilla JS de captura `fbc`/`fbp`/`fbclid` (clonado da 86-11)
-- [ ] **T4 (AC4)** — disparo dos eventos browser-side com `event_id` compartilhado; listener de primeiro foco para `InitiateCheckout`; dois UUIDs para `Lead`/`CompleteRegistration`
-- [ ] **T5 (AC5)** — ADAPT `packages/web/src/lib/meta/landing-page-tracking.ts`: `LandingSlug`, `LANDING_CONFIGS`, `DEFAULT_LANDING_SLUG`, `resolveLandingConfig`, `TrackingLanding.landing?` + testes
-- [ ] **T6 (AC6)** — ajustar `landing-page/track/route.ts` para usar `resolveLandingConfig(tracking.landing)`
-- [ ] **T7 (AC7)** — ajustar `landing-page/route.ts` (`dispararEventosCapi`) para usar `resolveLandingConfig(tracking.landing)`
-- [ ] **T8 (AC8)** — criar `landing-pages/yarden/api/lead.js` e `api/track.js` (clonados do Vind Residence) com as **3** mudanças: `ALLOWED_ORIGINS` → `https://yarden.vercel.app`, `landing: "yarden"` fixo, e **`page: "yarden"` no payload do `lead.js`** (o literal `"vind-residence"` da linha 123 — sem isso o lead entra no CRM rotulado como Vind Residence)
-- [ ] **T9 (AC12)** — criar `landing-pages/yarden/index.html` placeholder (formulário funcional + tracking completo, endpoints em `https://yarden.vercel.app/api/{lead,track}`, sem copy de marketing, **sem clonar o `console.log('[lead capturado]', data)`** — ver AC10) + `package.json`/`.vercelignore`/`.gitignore`/`README.md` clonados
-- [ ] **T10 (AC9)** — atualizar CSP em `landing-pages/trifold-design-system/vercel.json`: 3 blocos novos de `headers` (`/yarden`, `/yarden/`, `/yarden/:path*`), **2** `rewrites` novos (`/yarden/`, `/yarden/:path*` → `https://yarden.vercel.app`), 1 `redirect` novo (`/yarden` → `/yarden/`), e atualizar o regex catch-all para `/((?!vindresidence|yarden).*)`
-- [ ] **T11 (AC11)** — testes de degradação graciosa
+- [x] **T1 (AC1)** — Pixel base code (`window.TRIFOLD_PIXEL_ID = '1337310707164669'` + `<noscript>` com o mesmo ID) + `fbq('track', 'PageView', ...)` em `landing-pages/yarden/index.html`
+- [x] **T2 (AC2)** — helper vanilla JS de `visitor_id` (clonado da 86-11)
+- [x] **T3 (AC3)** — helper vanilla JS de captura `fbc`/`fbp`/`fbclid` (clonado da 86-11)
+- [x] **T4 (AC4)** — disparo dos eventos browser-side com `event_id` compartilhado; listener de primeiro foco para `InitiateCheckout`; dois UUIDs para `Lead`/`CompleteRegistration`
+- [x] **T5 (AC5)** — ADAPT `packages/web/src/lib/meta/landing-page-tracking.ts`: `LandingSlug`, `LANDING_CONFIGS`, `DEFAULT_LANDING_SLUG`, `resolveLandingConfig`, `TrackingLanding.landing?` + testes
+- [x] **T6 (AC6)** — ajustar `landing-page/track/route.ts` para usar `resolveLandingConfig(tracking.landing)`
+- [x] **T7 (AC7)** — ajustar `landing-page/route.ts` (`dispararEventosCapi`) para usar `resolveLandingConfig(tracking.landing)`
+- [x] **T8 (AC8)** — criar `landing-pages/yarden/api/lead.js` e `api/track.js` (clonados do Vind Residence) com as **3** mudanças: `ALLOWED_ORIGINS` → `https://yarden.vercel.app`, `landing: "yarden"` fixo, e **`page: "yarden"` no payload do `lead.js`** (o literal `"vind-residence"` da linha 123 — sem isso o lead entra no CRM rotulado como Vind Residence)
+- [x] **T9 (AC12)** — criar `landing-pages/yarden/index.html` placeholder (formulário funcional + tracking completo, endpoints em `https://yarden.vercel.app/api/{lead,track}`, sem copy de marketing, **sem clonar o `console.log('[lead capturado]', data)`** — ver AC10) + `package.json`/`.vercelignore`/`.gitignore`/`README.md` clonados
+- [x] **T10 (AC9)** — atualizar CSP em `landing-pages/trifold-design-system/vercel.json`: 3 blocos novos de `headers` (`/yarden`, `/yarden/`, `/yarden/:path*`), **2** `rewrites` novos (`/yarden/`, `/yarden/:path*` → `https://yarden.vercel.app`), 1 `redirect` novo (`/yarden` → `/yarden/`), e atualizar o regex catch-all para `/((?!vindresidence|yarden).*)`
+- [x] **T11 (AC11)** — testes de degradação graciosa
 - [ ] **T12 (infra, @devops — bloqueia deploy, NÃO bloqueia T1-T11)** — criar projeto Vercel `yarden` + replicar `LANDING_PAGE_WEBHOOK_SECRET` (mesmo valor do Vind Residence) via `scripts/vercel-env-set.sh` (nunca `vercel env add` via pipe)
 - [ ] **T13 (AC13, @devops)** — validação end-to-end com `META_CAPI_TEST_EVENT_CODE` (dataset `1337310707164669`, filtrar `content_category: "landing_yarden"`) + **não-regressão do Vind Residence em produção** + remoção da env de teste
 
@@ -665,11 +665,347 @@ Antes do AC9/AC13 poderem ser validados em produção, @devops precisa:
 | 2026-08-26 | 0.1 | Story criada a partir da constatação de que `trifold.eng.br/y/` (landing WordPress antiga do Yarden) está 404 em produção e o usuário decidiu reconstruir em `trifold.eng.br/yarden/`, replicando o padrão Done da Story 86-11. Achado crítico verificado nesta sessão: os módulos server-side reusados da 86-11 hardcodam identificadores "Vind Residence" — introduzido o AC5 (discriminador multi-landing, ADAPT em `landing-page-tracking.ts`) para resolver isso sem duplicar rotas/módulo. Duas decisões de negócio deixadas explicitamente abertas para @po validar com o usuário: dataset/Pixel ID (AC1) e a inexistência de conteúdo definitivo da página (AC12, tratado como dependência externa). | @sm (River) |
 | 2026-08-26 | 0.2 | **Decisões de negócio confirmadas pelo stakeholder (lucas@trifold.eng.br) e TRAVADAS na story.** (1) Dataset/Pixel Meta: reusar `1337310707164669` (conta "TRIFOLD - VIND"), o mesmo do Vind Residence — NÃO criar dataset próprio do Yarden; a marcação `[AUTO-DECISION]`/"reversível, não travado" foi removida do AC1 e a segmentação por empreendimento fica por `content_category` (AC5). (2) Nome do projeto Vercel: `yarden`, URL `https://yarden.vercel.app` — deixou de ser placeholder e passou a valor definitivo no cabeçalho, na Descoberta de runtime, no AC8 (`ALLOWED_ORIGINS`), no AC9 (`rewrites`), no AC12 (`CONFIG.leadEndpoint`/`TRACK_ENDPOINT`) e no "Pré-requisito de infraestrutura"; uma indisponibilidade do nome agora escala de volta ao stakeholder em vez de virar escolha do @devops. T0 marcada como fechada. | @po (Pax) |
 | 2026-08-26 | 0.3 | **Validação `*validate-story-draft`: GO, 9.5/10** — todas as afirmações técnicas do @sm re-verificadas pelo @po lendo o código (não por relato): as 3 constantes `LANDING_VIND_*` (`landing-page-tracking.ts:29/32/35`), os exatamente 2 consumidores (`route.ts:16-18,412-414` e `track/route.ts:6-8,116-118`), a allowlist de 9 campos de `lerTracking` sem `landing`, `confiarEmClientIpDoCorpo: true` fixo nas duas rotas, o corpo da rota `/track` sendo ele mesmo o bloco de tracking (justificando a assimetria `payload.tracking` vs `payload` do AC8), e o inventário real do `vercel.json` (1 redirect / 3 rewrites dos quais 2 são do Vind Residence / 4 blocos de headers com catch-all `/((?!vindresidence).*)`). **Correções aplicadas pelo @po:** (a) 🔴 **AC8 ganhou uma terceira mudança obrigatória — `page: "vind-residence"` → `page: "yarden"` em `lead.js:123`**: esse campo não é tracking Meta, é achatado por `flattenIntoFields` e persistido em `webhook_logs.payload.page`, `leads.metadata.landing_page`, `leads.metadata.page` e na descrição da activity; clonar sem trocar rotularia todo lead do Yarden como Vind Residence no próprio CRM, e nenhum teste de CAPI pegaria — com teste dedicado acrescentado em Testing; (b) AC9 corrigido de "3 novos blocos de rewrites" para 2, com o inventário real do arquivo documentado; (c) AC1 explicitou que o dataset ID aparece em DOIS pontos do `<head>` (`window.TRIFOLD_PIXEL_ID` e o `<noscript>` de fallback) e os dois precisam bater; (d) AC10 passou a proibir explicitamente a clonagem do `console.log('[lead capturado]', data)` do Vind Residence (`86.11-QA-005`, OPEN) — herdar o defeito num arquivo novo seria regressão introduzida, não herdada — e registrou `86.11-QA-003`/`86.11-QA-006` como herdados conscientemente; (e) AC13 ganhou a não-regressão obrigatória do Vind Residence em produção pós-deploy do ADAPT; (f) "Pré-requisito de infraestrutura" recebeu um bloco explícito de que é bloqueio de DEPLOY (@devops/T12) e não de desenvolvimento — o @dev não deve pausar a story por ele. **Status: `Draft` → `Ready`** conforme `story-lifecycle.md`. | @po (Pax) |
+| 2026-08-26 | 0.4 | **Implementação T0–T11 concluída (modo autônomo).** Criado o projeto `landing-pages/yarden/` (index.html placeholder com Pixel + os 5 eventos, `api/lead.js`, `api/track.js`, 2 arquivos de teste, `package.json`/`README.md`/`.gitignore`/`.vercelignore`); ADAPT do AC5 em `landing-page-tracking.ts` (`LandingSlug`/`LANDING_CONFIGS`/`DEFAULT_LANDING_SLUG`/`resolveLandingConfig` + `TrackingLanding.landing?`) com as 3 constantes `LANDING_VIND_*` removidas e os 2 call sites ajustados (AC6/AC7); CSP do `trifold-design-system` estendida com 3 blocos de headers, 2 rewrites, 1 redirect e o catch-all `/((?!vindresidence\|yarden).*)` (AC9). **Desvios do esboço da story, com justificativa:** (a) `resolveLandingConfig` valida com `hasOwnProperty` e não com `slug in LANDING_CONFIGS` — o `in` aceita `"constructor"`/`"toString"` e devolveria uma função como config, fazendo o evento CAPI sair sem categoria em silêncio a partir de um corpo JSON controlável por qualquer chamador com o token (teste dedicado falha com `in`); (b) `connect-src` dos blocos novos de CSP aponta para `yarden.vercel.app` — o AC9 deixava isso condicional e a condição se verifica; (c) `montarTracking` do Yarden nunca devolve `null`, então o `if (tracking)` do proxy do Vind virou código morto e não foi clonado. **Acréscimos ao escopo de teste:** `tracking-browser.test.ts` executa os `<script>` inline do `index.html` com globais falsos, travando as 3 classes de erro silencioso de um clone (id do Pixel divergente entre `fbq('init')` e o `<noscript>`, endpoints ainda apontando para `vind-residence.vercel.app`, e o retorno do `console.log('[lead capturado]', data)` do `86.11-QA-005`) e automatizando os casos do AC11 que a story previa só como manuais. **Comportamento não pedido introduzido:** `<meta name="robots" content="noindex, nofollow">` no placeholder, com a remoção registrada como passo 0 do checklist de integração de conteúdo no README — sem isso, esquecer a tag deixaria a landing definitiva fora da busca orgânica em silêncio. **Validações:** suíte completa verde (255 arquivos / 3146 testes, +41 novos), `type-check` 8/8, `lint` 0 errors (34 warnings, todas pré-existentes e em arquivos não tocados). **T12/T13 permanecem abertas — são de @devops** e bloqueiam o deploy/validação em produção, não a implementação. **Status: `Ready` → `InReview`.** | @dev (Dex) |
+| 2026-08-26 | 0.5 | **QA gate (`*qa-gate`) — veredito PASS.** Todos os 12 ACs implementáveis verificados no código; AC13 é pós-deploy (@devops). Nada aceito por relato: suíte re-executada por mim (255 arquivos / 3146 passed + 6 expected fail), `type-check --force` 8/8 com **0 cached**, `lint --force` 0 errors / 34 warnings (nenhuma em arquivo desta story, conferido por grep). **8 mutações executadas, 8 mataram teste** — `hasOwnProperty`→`in` (D1 confirmada), `page: PAGE_NAME`→`"vind-residence"` (achado do @po travado), remoção do `tracking.landing`, id divergente no `<noscript>`, endpoints apontando para `vind-residence.vercel.app`, retorno do `console.log('[lead capturado]')` (`86.11-QA-005`), `resolveLandingConfig(tracking.landing)`→`(undefined)` nas 2 rotas e `confiarEmClientIpDoCorpo: true`→`false` nas 2 rotas; arquivos restaurados e conferidos por `sha256`. Não-regressão do Vind Residence provada por VALOR (as 3 strings da 86-11 escritas à mão no teste) e por `git diff` **vazio** em `form-capi.ts`/`capi-payload.ts`/`capi-client.ts`/`landing-pages/vind-residence/*`. Catch-all da CSP conferido por parse: `/((?!vindresidence\|yarden).*)`. Dataset `1337310707164669` idêntico nos dois pontos do `<head>`. `git check-ignore` nos 9 arquivos do yarden: nenhum ignorado — o `.vercelignore` será versionado (a armadilha do `.claude` no `trifold-design-system` não se repete). **Nenhum push:** `git ls-remote --heads origin docs/86-12-story-draft` devolve vazio; sem `.vercel/` no projeto — T12/T13 não tentadas. 3 achados `low`, nenhum bloqueante (`86.12-QA-001` noindex não pedido; `86.12-QA-002` checkbox de política sem link; `86.12-QA-003` rate limit herdado da 86-11 com superfície dobrada). **Status mantido em `InReview`** — `story-lifecycle.md` atribui o `Done` ao @devops após o push, e AC13 (validação em produção) está aberto; mesmo tratamento dado à 86-11. | @qa (Quinn) |
+| 2026-08-28 | 0.6 | **Achados do CodeRabbit no PR #512 corrigidos (6/6, todos `Minor`).** Veredito da review era `CHANGES_REQUESTED`; cada achado foi re-verificado no código antes do fix (a review estava com números de linha levemente defasados, mas os 6 se confirmaram). **(1) CSP** — `'unsafe-eval'` removido do `script-src` dos 3 blocos `/yarden*` do `trifold-design-system/vercel.json`: o `fbevents.js` não precisa dele em operação padrão, só de `connect.facebook.net` em `script-src` e `connect-src`, que já estavam lá. Os 3 blocos `/vindresidence*` e o catch-all **ficaram como estavam** — herança da 86-11 e do design system, fora do escopo desta story. **(2) Token fora da query string** — `api/lead.js` e `api/track.js` passaram a autenticar por `Authorization: Bearer` em vez de `?token=`; query string é gravada em texto puro nos logs de plataforma/proxy, o que vazaria o `LANDING_PAGE_WEBHOOK_SECRET` para quem tiver acesso a log. Troca unilateral: as duas rotas do CRM já leem o header com precedência sobre `?token=` (`route.ts:44-48`, `track/route.ts:63-67`), então **nada mudou no lado do CRM**. **(3) Acessibilidade** — `role="status"` + `aria-live="polite"` no `#formMsg`: o resultado do envio só muda via `textContent`, sem recarregar nem mover foco, então sem live region o leitor de tela não anunciava nem sucesso nem erro. **(4) Duplo submit** — flag `enviando` + `disabled` no botão, liberados nos DOIS desfechos (`ok()` e `fail()`); sem isso um duplo-clique criava dois leads e um segundo par `Lead`/`CompleteRegistration` com `event_id` novos, que o Meta **não** deduplica (ids distintos são eventos distintos por definição). `liberar()` também no caminho de erro de propósito: só no sucesso deixaria o formulário morto após uma falha de rede. **(5) README** — `tracking-browser.test.ts` acrescentado à árvore de estrutura e a seção de testes virou tabela com o escopo de cada arquivo; 2 pontos novos em "não pode regredir" (token no header, Pixel não precisa de `unsafe-eval`). **(6) Assertions de batch CAPI** — `expect(batches[0]).toHaveLength(2)` nos 3 testes de batch de `route.test.ts` (antes o `for` sobre `batches[0]` passaria com array vazio ou de 1 evento, exatamente a regressão que o teste existe para pegar) + `content_category` agora conferida também no **segundo** evento, não só no primeiro. **Acréscimos de teste (não pedidos pela review, para os fixes 2/3/4 não regredirem):** 1 caso em `api-proxy.test.ts` provando o header no `lead.js` (a review só cobria o `track.js`) e 2 casos estáticos em `tracking-browser.test.ts` travando a live region e a guarda de duplo submit — o README avisa que o placeholder vai ser reescrito quando a copy chegar, então fix de HTML sem teste é fix temporário. O stub de `fetch` dos testes de proxy passou a capturar `init.headers`. **Os 2 casos novos foram provados por mutação, não por relato:** revertendo o `lead.js` para `?token=` e removendo o `if (enviando) return` do `index.html`, os 2 testes falharam (`2 failed \| 42 passed`); arquivos restaurados e conferidos por grep, suíte de volta a verde. **Validações:** `npx vitest run` **255 arquivos / 3149 passed + 6 expected fail** (+3 vs. 0.5, zero regressão); `npm run type-check` 8/8; `npm run lint` 0 errors / 34 warnings (as mesmas pré-existentes, nenhuma em arquivo desta story); os 2 `.test.ts` do yarden também checados por `tsc --noEmit` direto, já que `turbo` não tem task de type-check no projeto `yarden-landing`. Nota local: `npm run type-check` estoura o heap do V8 (exit 137) com o default do Node nesta máquina — roda limpo com `NODE_OPTIONS=--max-old-space-size=8192`; é ambiente, não erro de tipo, e o CI já rodava verde. **Comentários do CodeRabbit no PR não foram respondidos/resolvidos e o PR não foi mergeado — alçada do @devops.** Status mantido em `InReview`. | @dev (Dex) |
+| 2026-08-28 | 0.7 | **2ª rodada de achados do CodeRabbit no PR #512 corrigida (3/3).** A re-review incidiu sobre o código dos fixes da 0.6, não sobre código novo. **(1) `Minor` — `fetch` ao CRM sem teto de tempo** (`api/lead.js`, `api/track.js`): o modo de falha coberto NÃO é "o CRM devolveu erro" (isso já era o 502), é "o CRM aceitou a conexão e nunca respondeu" — deploy no meio, pool esgotado, Supabase lento. Sem teto próprio a função ficava pendurada até a plataforma matá-la, e o browser recebia o erro genérico da Vercel em vez de um erro tratado. Acrescentado `CRM_TIMEOUT_MS = 8000` + `AbortController`/`signal` nas duas rotas, `504 Upstream timeout` no caminho de abort e `clearTimeout(timer)` no `finally`. **O valor foi escolhido, não copiado:** `landing-pages/yarden/` **não tem `vercel.json`**, então vale o `maxDuration` default da plataforma (10s) — um teto de 10s (o de `AbortSignal.timeout(10_000)` usado em `packages/web/src/lib/meta/*`) **nunca dispararia primeiro** e o fix seria decorativo; 8s deixa folga para serializar a resposta. Os proxies do Vind Residence **não têm** timeout nenhum, então não havia constante de proxy para reusar (é débito herdado, deixado fora de escopo). Motivo do abort detectado por **flag `expirou`** e não por `err.name === "AbortError"`: o nome varia entre versões de Node/undici e confundiria um abort de outra origem com timeout. `504` e não `500` porque o erro não é deste proxy — o `if(!r.ok)` do formulário já trata os dois igual (mostra erro, reabilita o botão e **não** dispara `Lead`/`CompleteRegistration`, que sem contraparte de servidor sairiam sem deduplicação), então o ganho do status honesto é no log da Vercel de quem for investigar. **(2) `Minor` — MD056** na linha 0.6 deste Change Log: `2 failed \| 42 passed` estava dentro de code span, mas **backtick não protege `\|` em tabela GFM** (a linha é quebrada em células ANTES do parse inline), então a tabela renderizava errada; escapado para `\|`. Conferido por contagem: a linha 0.6 tinha **5** pipes não escapados contra **4** (os delimitadores reais) em todas as outras, e agora tem 4. **(3) `Trivial` — aspas** nos blocos de opções do `fetch`: `.coderabbit.yaml` pede aspas simples para `**/*.js`. Trocadas apenas nos trechos apontados. **Inconsistência residual assumida:** os dois proxies são clones 100% duplas-aspas (`0` simples antes desta rodada); converter os arquivos inteiros seriam ~106 trocas enterrando os fixes reais no diff a um commit do merge, e nenhum linter cobre esses arquivos (`yarden-landing` não tem script de `lint`) — a normalização de `landing-pages/*/api/*` fica como débito separado. **Cobertura do fix #1 (o único com substância funcional): 5 casos novos** em `api-proxy.test.ts` (504 no timeout em cada proxy, `getTimerCount() === 0` no sucesso de cada um, e `getTimerCount() === 0` no desfecho 502 para provar que o `finally` cobre os dois caminhos), com `fetch` que só termina quando o `signal` aborta — se o proxy não passar `signal`, o stub rejeita na hora com erro distinguível em vez de pendurar até o timeout do vitest. Cada teste avança os fake timers até **1ms antes** do teto e exige que nada tenha respondido ainda, para o assert final não passar por um abort imediato acidental. AC10 re-conferido no caminho novo: o log do abort não carrega PII, `fbc`/`fbp` nem o segredo. `vi.useRealTimers()` no `afterEach` para os fake timers não vazarem. **Provado por mutação, não por relato — 3 mutações, 3 mataram teste:** remover `signal: controller.signal` (1 falha), remover `clearTimeout(timer)` dos dois proxies (3 falhas), e `CRM_TIMEOUT_MS` `8000` → `12000` (1 falha — é este caso que impede o teto de subir acima do limite da plataforma sem ninguém notar); arquivos restaurados e conferidos por `sha256` idêntico. **Validações:** `npx vitest run` **255 arquivos / 3154 passed + 6 expected fail** (+5 vs. 0.6 = exatamente os 5 casos novos, zero regressão); `npm run type-check --force` 8/8 com **0 cached**, mais `tsc --noEmit` direto nos 2 `.test.ts` do yarden (turbo não cobre `yarden-landing`) — 0 erros; `npm run lint --force` 0 errors / 34 warnings, as mesmas pré-existentes, e `grep` por `yarden`/`landing-pages` na saída volta **vazio**. **Sem `git push`, sem responder/resolver comentário no PR e sem merge — alçada do @devops.** Status mantido em `InReview`. | @dev (Dex) |
 
 ## Dev Agent Record
 
-_A ser preenchido pelo @dev durante a implementação._
+### Agent Model Used
+
+Claude Opus 5 (`claude-opus-5[1m]`) — @dev (Dex), modo autônomo (YOLO).
+
+### Escopo executado
+
+**T0–T11 completas. T12/T13 NÃO iniciadas** — são de @devops (criar o projeto
+Vercel `yarden`, replicar `LANDING_PAGE_WEBHOOK_SECRET`, deploy, validação
+end-to-end no Test Events + não-regressão do Vind Residence em produção).
+Nenhum `git push` foi executado.
+
+Conforme o bloco "Pré-requisito de infraestrutura", a ausência do projeto Vercel
+não bloqueou nada de T1–T11: `https://yarden.vercel.app` já é valor definitivo e
+foi usado como tal em `ALLOWED_ORIGINS`, nos `rewrites` da CSP e nos dois
+endpoints do `index.html`.
+
+### Decisões autônomas
+
+Registradas em `.ai/decision-log-86-12.md` (D1–D8). As que mudam algo que a story
+prescrevia literalmente ou que introduzem comportamento não pedido:
+
+- **D1 — `hasOwnProperty` no lugar do `slug in LANDING_CONFIGS` do esboço do AC5.**
+  O operador `in` encontra propriedades herdadas de `Object.prototype`:
+  `resolveLandingConfig("constructor")` cairia no ramo "slug conhecido" e
+  devolveria a **função** `Object` como se fosse uma config —
+  `contentCategory` viria `undefined` e o evento CAPI sairia sem categoria, em
+  silêncio, a partir de um corpo JSON que qualquer chamador com o token controla.
+  Há teste dedicado; ele falha com `in`.
+- **D2 — o `montarTracking` do Yarden nunca devolve `null`.** Com `landing`
+  sempre presente, o `if (tracking) payload.tracking = tracking` do proxy do Vind
+  Residence virou código morto e não foi clonado. A divergência está comentada no
+  arquivo. Sem `event_id` o CRM continua não disparando evento nenhum.
+- **D3 — `connect-src` dos 3 blocos novos de CSP aponta para
+  `https://yarden.vercel.app`**, não para `vind-residence.vercel.app`. O AC9
+  deixava isso condicional; a condição se verifica, porque o `index.html` chama
+  os dois endpoints por URL absoluta. Os blocos do Vind Residence não foram
+  tocados.
+- **D4/D5 — o placeholder NÃO clona o WhatsApp flutuante, o `href="#"` da
+  política de privacidade nem nenhuma referência a `assets/`.** Não há número,
+  URL de política nem imagens fornecidos (Artigo IV). Um número clonado mandaria
+  lead do Yarden para a conversa do outro empreendimento; um `assets/` copiado
+  publicaria renders do empreendimento errado. Os dois checkboxes obrigatórios do
+  AC12 existem (o de política como texto sem link).
+- **D6 — teste novo além do pedido:** `landing-pages/yarden/tracking-browser.test.ts`
+  extrai os dois `<script>` inline do `index.html` e os executa com globais
+  falsos (sem jsdom, que o projeto não usa). A story deixava o `index.html` como
+  verificação **manual**, mas as classes de erro mais prováveis num arquivo
+  clonado são todas silenciosas em produção: id do Pixel divergindo entre
+  `fbq('init')` e o `<noscript>` (o próprio @po levantou isso no AC1), endpoints
+  ainda apontando para `vind-residence.vercel.app`, e o `console.log('[lead
+  capturado]', data)` (`86.11-QA-005`) voltando num merge. O mesmo harness
+  automatiza os itens do AC11 que só existiriam como teste manual.
+- **D7 — `<meta name="robots" content="noindex, nofollow">` no placeholder**
+  (comportamento não pedido pela story). A URL hoje é 404; indexar uma página sem
+  conteúdo cria um resultado de busca ruim para o nome do empreendimento. Não
+  afeta tráfego pago nem o Pixel/CAPI. **Risco introduzido:** se ninguém remover
+  a tag junto com o conteúdo definitivo, a landing final fica fora da busca
+  orgânica em silêncio — está como **passo 0** do checklist "Integrar o conteúdo
+  definitivo" no `README.md` do projeto.
+- **D8 — comentários das rotas compartilhadas** deixaram de afirmar que servem
+  "a landing do Vind Residence", porque depois do AC5 isso é falso. Nenhuma linha
+  de lógica além do que AC6/AC7 pedem.
+
+### Notas de implementação
+
+- **AC10, defeito herdado NÃO clonado:** o `index.html` do Yarden não tem
+  `console.log` nenhum. O branch `else { console.log('[lead capturado]', data) }`
+  do Vind Residence (`86.11-QA-005`, OPEN — imprime `fbc`/`fbp` no console do
+  browser) foi removido junto com a condicional `if (CONFIG.leadEndpoint)`, que
+  no Yarden nunca é falsa. Há assert estático travando o retorno
+  (`not.toMatch(/console\.(log|debug|info)/)`).
+- **AC6 usa `tracking?.landing`** (opcional), não `tracking.landing` como no
+  esboço da story: nessa rota `lerTracking` pode devolver `undefined` e o
+  encadeamento direto não compila. `resolveLandingConfig(undefined)` cai no
+  default, que é exatamente o comportamento desejado.
+- **AC5, não-regressão provada por valor, não por confiança:** o teste compara
+  `resolveLandingConfig(undefined)` e `resolveLandingConfig("vind_residence")`
+  contra um objeto literal com as três strings da 86-11 escritas à mão no teste
+  (`landing_vind_residence` / `Landing Vind Residence` /
+  `https://trifold.eng.br/vindresidence/`). Se alguém mudar o `LANDING_CONFIGS`,
+  o teste acusa em vez de acompanhar a mudança.
+- **`page` vs `landing` são campos distintos e ambos foram trocados** (achado do
+  @po no AC8): `page: "yarden"` (identidade do lead no CRM, só em `lead.js`) e
+  `tracking.landing: "yarden"` (segmentação Meta, nos dois proxies). Há assert
+  positivo dedicado para cada um, e um caso provando que um `landing` forjado
+  pelo browser é sobrescrito pelo proxy.
+- **`landing` NÃO foi adicionado a `TRACKING_FIELDS`/`TRACK_FIELDS`** — essas
+  listas são de campos lidos do corpo do browser, e `landing` é constante do
+  arquivo. É atribuição direta depois do loop, para sobrescrever qualquer
+  tentativa de forja.
+- `landing-pages/vind-residence/*` **não foi tocado** (fora de escopo explícito).
+  Os proxies dele continuam sem enviar `landing` e caem no `DEFAULT_LANDING_SLUG`.
+- **Sem migration, sem env nova no `trifold-crm`, sem rota nova.** A única env
+  nova é `LANDING_PAGE_WEBHOOK_SECRET` replicada (mesmo valor) no projeto Vercel
+  do Yarden — T12, @devops.
+- CodeRabbit não rodou: `coderabbit_integration` continua ausente de
+  `core-config.yaml` (desabilitado neste projeto).
+
+### Validações executadas
+
+| Comando | Resultado |
+|---|---|
+| `npx vitest run` (suíte completa, raiz) | ✅ **255 arquivos, 3146 passed + 6 expected fail** — zero regressão |
+| `npx vitest run landing-pages packages/web/src/lib/meta packages/web/src/app/api/webhooks/landing-page` | ✅ 11 arquivos, 167 testes |
+| `npm run type-check` (turbo, 8 tasks) | ✅ 8/8 successful |
+| `npm run lint` (turbo, 8 tasks) | ✅ 8/8 successful — 0 errors, 34 warnings, **todas pré-existentes em arquivos não tocados por esta story** |
+| Balanceamento de tags do `index.html` | ✅ nenhuma tag não fechada, nenhum fechamento fora de ordem |
+| `node -e` parse de `vercel.json` | ✅ 2 redirects / 5 rewrites / 7 blocos de headers, catch-all `/((?!vindresidence\|yarden).*)` |
+
+Testes novos: **41** (21 em `api-proxy.test.ts`, 20 em `tracking-browser.test.ts`)
++ 8 casos acrescentados aos 3 arquivos de teste existentes.
+
+### Pendências (fora do controle do @dev)
+
+1. **T12 (@devops)** — criar o projeto Vercel `yarden` e replicar
+   `LANDING_PAGE_WEBHOOK_SECRET` (mesmo valor do `vind-residence`) via
+   `scripts/vercel-env-set.sh` / REST API. **Nunca `vercel env add` via pipe** —
+   grava valor vazio em silêncio (2 incidentes anteriores). Se o nome `yarden`
+   estiver indisponível no scope, escalar ao stakeholder: o literal aparece em
+   `ALLOWED_ORIGINS` (2 arquivos), nos `rewrites`/`connect-src` da CSP e nos 2
+   endpoints do `index.html`.
+2. **T13 (@devops)** — validação end-to-end com `META_CAPI_TEST_EVENT_CODE`
+   (dataset `1337310707164669`, filtrar `content_category: "landing_yarden"`),
+   **mais a não-regressão do Vind Residence em produção** (`landing_vind_residence`
+   + `metadata.landing_page: "vind-residence"`), e remoção da env de teste.
+   Os testes unitários provam a função `resolveLandingConfig`, não o deploy.
+3. **Ordem de deploy** (sem ela o Pixel fica bloqueado mesmo com a landing no ar):
+   (1) `packages/web` → (2) projeto `yarden` → (3)
+   `landing-pages/trifold-design-system` (CSP).
+4. **Conteúdo/copy definitivo** (AC12) — dependência externa do usuário. Checklist
+   de integração em `landing-pages/yarden/README.md`, incluindo remover o
+   `noindex` e preservar os `id` dos campos do formulário.
+
+### File List
+
+**Criados**
+
+- `landing-pages/yarden/index.html`
+- `landing-pages/yarden/api/lead.js`
+- `landing-pages/yarden/api/track.js`
+- `landing-pages/yarden/api-proxy.test.ts`
+- `landing-pages/yarden/tracking-browser.test.ts`
+- `landing-pages/yarden/package.json`
+- `landing-pages/yarden/README.md`
+- `landing-pages/yarden/.gitignore`
+- `landing-pages/yarden/.vercelignore`
+- `.ai/decision-log-86-12.md`
+
+**Modificados**
+
+- `packages/web/src/lib/meta/landing-page-tracking.ts` (AC5 — `LandingSlug`,
+  `LandingConfig`, `LANDING_CONFIGS`, `DEFAULT_LANDING_SLUG`,
+  `resolveLandingConfig`, `TrackingLanding.landing?`; remoção das 3 constantes
+  `LANDING_VIND_*`)
+- `packages/web/src/lib/meta/landing-page-tracking.test.ts` (5 casos novos de
+  `lerTracking` + bloco `resolveLandingConfig` com 6 casos)
+- `packages/web/src/app/api/webhooks/landing-page/route.ts` (AC7)
+- `packages/web/src/app/api/webhooks/landing-page/route.test.ts` (3 casos novos)
+- `packages/web/src/app/api/webhooks/landing-page/track/route.ts` (AC6)
+- `packages/web/src/app/api/webhooks/landing-page/track/route.test.ts` (3 casos novos)
+- `landing-pages/trifold-design-system/vercel.json` (AC9)
+- `docs/stories/86-12-pixel-capi-landing-yarden.story.md` (este registro)
+
+**Não tocados de propósito:** `landing-pages/vind-residence/*` (fora de escopo
+explícito — o default de `resolveLandingConfig` preserva o comportamento sem
+precisar editar os proxies dele).
+
+**Revisão CodeRabbit do PR #512 (2026-08-28)** — os 6 achados `Minor` foram
+corrigidos nos arquivos que já constam acima; nenhum arquivo novo foi criado:
+
+| Arquivo | Achado endereçado |
+|---|---|
+| `landing-pages/trifold-design-system/vercel.json` | #1 — `'unsafe-eval'` removido do `script-src` dos **3** blocos `/yarden*` |
+| `landing-pages/yarden/api/lead.js` | #2 — token do CRM via `Authorization: Bearer` no lugar de `?token=` |
+| `landing-pages/yarden/api/track.js` | #2 — idem |
+| `landing-pages/yarden/api-proxy.test.ts` | #2 — stub de `fetch` passou a capturar headers; assertion de query string trocada por header + 1 caso novo cobrindo o `lead.js` |
+| `landing-pages/yarden/index.html` | #3 — `role="status"`/`aria-live="polite"` no `#formMsg`; #4 — guarda de duplo submit |
+| `landing-pages/yarden/tracking-browser.test.ts` | #3/#4 — 2 casos estáticos novos travando a live region e a guarda de duplo submit |
+| `landing-pages/yarden/README.md` | #5 — `tracking-browser.test.ts` na árvore e na seção de testes; 2 pontos novos em "não pode regredir" (token no header, Pixel não precisa de `unsafe-eval`) |
+| `packages/web/src/app/api/webhooks/landing-page/route.test.ts` | #6 — `toHaveLength(2)` nos 3 testes de batch CAPI + `content_category` conferida no **segundo** evento |
+
+**Ainda com `'unsafe-eval'` de propósito:** os 3 blocos `/vindresidence*` e o
+catch-all do `vercel.json`. São herança da 86-11 e do design system, fora do
+escopo desta story — removê-los aqui misturaria um risco de regressão em
+`trifold.eng.br` inteiro com um fix de landing.
+
+**2ª rodada de revisão CodeRabbit do PR #512 (2026-08-28)** — 3 achados novos,
+todos sobre o código da 1ª rodada. Nenhum arquivo novo criado:
+
+| Arquivo | Achado endereçado |
+|---|---|
+| `landing-pages/yarden/api/lead.js` | #1 — `CRM_TIMEOUT_MS = 8000` + `AbortController`/`signal` na chamada ao CRM, `504` no timeout e `clearTimeout` no `finally`; #3 — aspas simples no bloco de opções do `fetch` |
+| `landing-pages/yarden/api/track.js` | #1/#3 — idem |
+| `landing-pages/yarden/api-proxy.test.ts` | #1 — `describe` novo com 5 casos de teto de tempo; `vi.useRealTimers()` no `afterEach` para os fake timers não vazarem para a suíte |
+| `docs/stories/86-12-pixel-capi-landing-yarden.story.md` | #2 — MD056: `\|` escapado em `2 failed \| 42 passed` na linha 0.6 do Change Log |
+
+**Por que 8000ms e não 10000ms:** `landing-pages/yarden/` **não tem
+`vercel.json`**, então vale o `maxDuration` default da plataforma (10s). Um teto
+igual ao da infraestrutura nunca dispararia primeiro — o fix seria decorativo, e
+o browser continuaria recebendo o erro genérico da Vercel em vez do `504`
+tratado. Os 10s de `AbortSignal.timeout(10_000)` em
+`packages/web/src/lib/meta/*` **não** foram copiados por isso: lá o limite
+externo é outro. Há teste travando o valor (mutação `8000` → `12000` derruba).
+
+**Aspas simples só no bloco do `fetch`:** os dois proxies são 100%
+duplas-aspas (clone do Vind Residence, `0` aspas simples antes desta rodada), e
+a convenção do `.coderabbit.yaml` para `**/*.js` é simples. Converter o arquivo
+inteiro seria ~106 trocas enterrando os fixes reais no diff a um commit do
+merge; ficou só o trecho apontado. **A inconsistência residual é consciente** —
+normalizar `landing-pages/{yarden,vind-residence}/api/*` inteiros é item de
+débito técnico separado, não desta story. Nenhum linter cobre esses arquivos
+hoje (`yarden-landing` não tem script de `lint`), então não há gate quebrado.
 
 ## QA Results
 
-_A ser preenchido pelo @qa após o `*qa-gate`._
+### Review Date: 2026-08-26
+
+### Reviewed By: Quinn (@qa — Test Architect)
+
+**Veredito: PASS** · Gate: `docs/qa/gates/86.12-pixel-capi-landing-yarden.yml`
+
+**Metadata conferida rodando `git`, não lida do contexto da sessão:** branch
+`docs/86-12-story-draft`, HEAD `eac7d1eb` (só commits de @sm/@po — a
+implementação T1–T11 está **não commitada** no working tree).
+`git ls-remote --heads origin docs/86-12-story-draft` devolve **vazio**: o branch
+não existe no remoto, **nenhum `git push` aconteceu**. Não há `.vercel/` em
+`landing-pages/yarden/` — T12 não foi tentada.
+
+#### Como revisei
+
+Esta é a segunda cópia do padrão da 86-11, e o modo de falha dominante de um
+clone é silencioso: o código funciona, os testes passam, e o dado sai rotulado
+para o empreendimento errado. Nada foi aceito por relato do @dev — cada guarda
+crítica foi **mutada** para confirmar que existe um teste que morre sem ela.
+
+**8 mutações, 8 mataram teste:**
+
+| # | Mutação | Resultado |
+|---|---|---|
+| M1 | `hasOwnProperty.call(...)` → `slug in LANDING_CONFIGS` | ❌ 1 falha |
+| M2 | `page: PAGE_NAME` → `page: "vind-residence"` | ❌ 1 falha |
+| M3 | remove `tracking.landing = LANDING_SLUG` | ❌ 5 falhas |
+| M4 | id do `<noscript>` → outro dataset | ❌ 1 falha |
+| M4b | `TRACK_ENDPOINT` → `vind-residence.vercel.app` | ❌ 1 falha |
+| M4c | reintroduz `console.log('[lead capturado]', data)` | ❌ 1 falha |
+| M5 / M6 | `resolveLandingConfig(tracking.landing)` → `(undefined)` | ❌ 1 / 2 falhas |
+| M7 / M8 | `confiarEmClientIpDoCorpo: true` → `false` | ❌ 1 / 2 falhas |
+
+Arquivos restaurados e conferidos por `sha256` contra o backup pré-mutação;
+suíte completa re-executada depois, com o mesmo resultado.
+
+#### Pontos de atenção — verificados um a um
+
+- **AC5 — guarda de prototype chain (D1): CONFIRMADA.**
+  `landing-page-tracking.ts:82` usa
+  `Object.prototype.hasOwnProperty.call(LANDING_CONFIGS, slug)`, com teste
+  cobrindo `constructor`/`toString`/`hasOwnProperty`/`__proto__`. M1 prova que o
+  teste morre com `in`.
+- **AC5 — não-regressão do Vind Residence: provada por VALOR, não presumida.**
+  O teste compara `resolveLandingConfig(undefined)` e `("vind_residence")`
+  contra um literal com as 3 strings da 86-11 escritas à mão
+  (`landing_vind_residence` / `Landing Vind Residence` /
+  `https://trifold.eng.br/vindresidence/`) — se alguém mudar o
+  `LANDING_CONFIGS`, o teste acusa em vez de acompanhar.
+- **AC8 — `payload.page`: correto.** `page: PAGE_NAME` com
+  `const PAGE_NAME = "yarden"`, com assert **positivo**
+  (`expect(payload.page).toBe("yarden")`). O achado do @po está travado (M2).
+- **AC8 — trust boundary: no lugar certo.** `landing` é `const LANDING_SLUG`
+  nos dois proxies, **fora** de `TRACKING_FIELDS`/`TRACK_FIELDS`, atribuído
+  **depois** do loop da allowlist. Teste manda `landing: "vind_residence"` no
+  corpo e assere que sai `"yarden"`.
+- **AC7 — precedência de IP/UA: correta e não regredida.**
+  `(confiaNoCorpo ? texto(corpo?.client_ip) : undefined) ?? ipDaRequest(request)`
+  — corpo primeiro, request só como fallback, nunca o contrário. `form-capi.ts`
+  **não aparece no `git diff`**: a alegação de não ter sido tocado é literal.
+  M7/M8 provam que a precedência é testada de verdade nas duas rotas.
+- **AC1 — dataset nos dois lugares: idênticos.** `1337310707164669` no
+  `window.TRIFOLD_PIXEL_ID` (linha 30, usado no `fbq('init')` linha 39) e no
+  `<noscript>` (linha 272), com teste comparando os dois entre si (M4).
+- **AC9 — catch-all da CSP: `/((?!vindresidence|yarden).*)`.** Os dois no
+  negative lookahead. Inventário do arquivo por parse: 2 redirects, 5 rewrites,
+  7 blocos de headers. Blocos do Vind intocados exceto o regex.
+- **AC10 / `86.11-QA-005`: defeito NÃO clonado.** Nenhum `console.*` executável
+  no `index.html` do Yarden — só dois comentários explicando a omissão, com
+  assert estático travando o retorno (M4c).
+- **Suíte re-executada por mim** (não pelo relato): `npx vitest run` → 255
+  arquivos, 3146 passed + 6 expected fail, exit 0. `type-check --force` → 8/8,
+  **0 cached**. `lint --force` → 8/8, **0 errors**, 34 warnings, e grep confirma
+  que **nenhuma** está em arquivo tocado por esta story.
+
+#### Falsos positivos descartados
+
+- `var VISITOR_KEY` "duplicado" era artefato do meu próprio comando (`sed` com
+  ranges sobrepostos). `grep` confirma **uma** declaração.
+- `.vercelignore` untracked é o estado normal de um diretório novo:
+  `git check-ignore` nos 9 arquivos do projeto retorna **nenhum ignorado**, então
+  ele será versionado. A armadilha que expôs `.claude` no `trifold-design-system`
+  não se repete.
+- Blocos novos de CSP sem `X-Frame-Options`: os do Vind também não têm, e
+  `frame-ancestors 'none'` cobre. Clone fiel, não regressão.
+
+#### Achados (nenhum bloqueante)
+
+| ID | Sev | Achado | Ação sugerida |
+|---|---|---|---|
+| `86.12-QA-001` | low | `<meta robots noindex>` (D7) é comportamento não pedido; a mitigação é uma linha de README, não um teste — esquecê-la deixa a landing definitiva fora da busca orgânica em silêncio | Decisão aceitável para placeholder. Criar item de backlog amarrado à entrega do AC12 em vez de confiar só no README |
+| `86.12-QA-002` | low | Checkbox de política de privacidade é `required` mas sem link (D4 — nenhuma URL fornecida) | Decisão correta (melhor sem link que com `href="#"` morto). Fornecer a URL junto com o conteúdo do AC12 |
+| `86.12-QA-003` | low (herdado) | `86.11-QA-003` (sem rate limit em `/landing-page/track`) segue OPEN e esta story **dobra** a superfície: o proxy `yarden/api/track.js` também não tem. O CRM exige token (401 sem ele), então o alvo é o proxy | Fora de escopo pelo AC10 e correto assim. Manter no backlog da 86-11 com a nota da superfície dobrada |
+
+#### Pendências que bloqueiam o deploy (não o merge)
+
+T12 e T13 são de **@devops** e continuam abertas por desenho. Detalhamento em
+`notas_para_devops` no arquivo de gate — em especial: a implementação está
+**não commitada**; a ordem de deploy (`packages/web` → projeto `yarden` → CSP)
+é carga viva; `LANDING_PAGE_WEBHOOK_SECRET` **nunca** via `vercel env add` por
+pipe; e a não-regressão do Vind Residence em produção é obrigatória no AC13.
+
+### Gate Status
+
+Gate: PASS → `docs/qa/gates/86.12-pixel-capi-landing-yarden.yml`
+
+**Status: mantido em `InReview`, liberado para @devops.** Não promovi para `Done`,
+e o motivo é factual: `story-lifecycle.md` atribui a transição para `Done` ao
+**@devops após o push** ("Done | @qa PASS, @devops pushes | @devops"), e neste
+momento nada foi commitado, nada foi deployado e o **AC13 não foi validado**
+(T12/T13 abertas). É o mesmo tratamento que a story-irmã 86-11 recebeu: gate PASS
+na iteração 2 com `Status: InReview`, e `Done` só num commit posterior, depois de
+o @devops verificar o AC11/T12 com browser real.
+
+Marcar `Done` agora afirmaria "está em produção" sobre uma landing que não existe
+em produção — exatamente a classe de rótulo silenciosamente errado que esta
+revisão passou o tempo todo prevenindo. **O gate está PASS: não há nada pendente
+do lado do @dev.** A transição para `Done` cabe ao @devops depois de T12
+(projeto Vercel + secret), do push/deploy na ordem correta e de T13 (Test Events
+com `content_category: "landing_yarden"` + não-regressão do Vind Residence).
+
+— Quinn, guardião da qualidade 🛡️
