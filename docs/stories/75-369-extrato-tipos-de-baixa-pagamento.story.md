@@ -169,3 +169,49 @@ claude-opus-5[1m] (@dev / Dex)
 |---|---|---|
 | 2026-08-28 | @dev | Story criada a partir da decisão do financeiro (WhatsApp 28/08) |
 | 2026-08-28 | @dev | T1–T5 implementadas; testes, typecheck e lint verdes → Ready for Review |
+
+---
+
+## QA Results
+
+**Reviewer:** @qa (Quinn) · **Data:** 2026-08-28 · **Gate:** `docs/qa/gates/75-369-extrato-tipos-de-baixa-pagamento.yml`
+
+### Verdict: CONCERNS (não bloqueia merge) · Readiness 8/10
+
+| Check | Resultado |
+|---|---|
+| Code review | PASS — a regra vive numa fonte única (`installments.ts`); os consumidores herdam |
+| Testes | PASS — 260 arquivos / 3.248 testes; 39 no arquivo tocado (18 novos) |
+| Mutação | PASS — restaurado o comportamento antigo, 18 dos 39 falham. Os testes reprovam de verdade |
+| ACs | PASS — AC1 a AC7 rastreados no gate, cada um com o teste que o cobre |
+| Regressões | PASS — varredura dos consumidores abaixo |
+| Typecheck / Lint | PASS — exit 0 nos dois; nenhum warning novo |
+| Segurança | n/a — sem input externo novo, sem query, sem credencial |
+
+### Varredura de regressão
+
+- `api/cron/boleto-scan` filtra por `hasBoleto` (`generatedBillet && currentBalance > 0`), que não
+  olha `receipts`. Intacto.
+- `cliente/financeiro/boleto` filtra `hasBoleto && status !== "PAGO"`. Parcela baixada sem pagamento
+  tem `currentBalance <= 0`, logo `hasBoleto` é `false` — não vira boleto fantasma.
+- `computeInformeFromStatements` soma `inst.receipts` e exclui `RENEGOCIADA` do saldo restante:
+  acompanha a nova regra sem mudança.
+- Nenhum cache ou persistência de "total pago" — todos os consumidores chamam
+  `getFinancialStatement` direto no Sienge. Não há dado velho para invalidar após o deploy.
+
+### Concerns
+
+- **C1 (MEDIUM) — a regra ainda não foi conferida contra dados reais.** Está provada em teste
+  unitário; a lista dos 9 tipos veio de uma varredura ad-hoc que não ficou versionada como script. A
+  conciliação combinada com o financeiro (extrato do Sienge por contrato × tela) é o que fecha isso.
+  É o motivo de não ser PASS limpo.
+- **C2 (MEDIUM) — o default restritivo pode esconder um pagamento de tipo novo.** Trade-off aceito e
+  documentado; registrado como débito em `docs/backlog.md` (alerta via `collectUnknownReceiptTypes`).
+- **C3 (LOW) — mudança visível para o cliente.** Milhares de parcelas deixam de exibir "Pago" e
+  passam a exibir "Distratada", "Cancelada" ou "Adiantamento". É o efeito pretendido, mas o
+  financeiro precisa saber antes do deploy para não ser pego por ligação de cliente.
+
+### Nota sobre o rótulo
+
+O `getNonCashLabel` foi a decisão certa e não era escopo óbvio: sem ele a tela chamaria um distrato
+de "Renegociada" — trocaria um número errado por uma palavra errada.

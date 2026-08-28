@@ -1,0 +1,88 @@
+storyId: "75-369"
+title: "Extrato: só Recebimento e Abatimento de Adiantamento contam como pagamento"
+verdict: CONCERNS
+readiness: 8/10
+reviewer: "@qa (Quinn)"
+date: 2026-08-28
+branch: fix/portal-tipos-baixa-pagamento
+commit: ee7b2ae4
+
+checks:
+  code_review: PASS         # allowlist substitui blacklist na fonte única (installments.ts); consumidores herdam a regra
+  unit_tests: PASS          # 260 files / 3.248 tests PASS; 39 no arquivo tocado (18 novos)
+  mutation_check: PASS      # restaurando o comportamento antigo, 18 dos 39 falham — os testes reprovam de verdade
+  acceptance_criteria: PASS # AC1-AC7 rastreados abaixo
+  regressions: PASS         # varredura dos consumidores: nenhum recalcula pagamento por fora
+  performance: PASS         # nenhuma chamada nova ao Sienge; filtro em memória
+  security: PASS            # n/a — sem input externo novo, sem query, sem credencial
+  documentation: PASS       # story + gate + comentários de código explicando a decisão do financeiro
+
+acceptance_criteria_trace:
+  AC1: "Só recebimento e abatimento de adiantamento em receipts — it.each com os 2 tipos, esperando PAGO + receiptValue."
+  AC2: "Os outros 9 tipos vão para nonCashReceipts — it.each com os 9, esperando RENEGOCIADA + receipts vazio."
+  AC3: "Tipo desconhecido não conta — 'Dação em Pagamento' → RENEGOCIADA e aparece em collectUnknownReceiptTypes."
+  AC4: "receiptType ausente ainda conta — teste pré-existente mantido e verde."
+  AC5: "Saldo devedor não muda — getOpenBalance() === 0 verificado em cada um dos 9 tipos."
+  AC6: "Rótulo pelo tipo real — describe getNonCashLabel com 10 pares tipo→rótulo, fallback 'Baixada'."
+  AC7: "11 tipos + desconhecido + ausente cobertos; mais adiantamento+abatimento, recebimento+repactuação e informe."
+
+regression_sweep:
+  - "api/cron/boleto-scan: filtra por hasBoleto (generatedBillet && currentBalance > 0) — não olha receipts. Intacto."
+  - "cliente/financeiro/boleto: filtra hasBoleto && status !== PAGO — parcela baixada sem pagamento tem currentBalance <= 0, logo hasBoleto=false. Intacto."
+  - "computeInformeFromStatements: soma inst.receipts e exclui RENEGOCIADA do remainingBalance — acompanha a nova regra automaticamente."
+  - "Nenhum cache/persistência de total pago: os consumidores chamam getFinancialStatement direto no Sienge."
+
+concerns:
+  - id: C1
+    severity: MEDIUM
+    title: "Nenhuma validação com dados reais ainda"
+    detail: >
+      A regra está provada em teste unitário, não contra a base. O caso que originou a
+      investigação (CT.YAR-1301) foi conferido contra o Sienge ao centavo no PR #508, mas a
+      lista dos 9 tipos veio de uma varredura ad-hoc que não ficou versionada como script.
+      A conciliação combinada com o financeiro (extrato do Sienge por contrato × tela) é o
+      que fecha esta lacuna.
+    mitigation: "Aguardar o extrato do Sienge e conciliar antes de considerar a regra validada."
+  - id: C2
+    severity: MEDIUM
+    title: "Default restritivo pode esconder pagamento de um tipo novo"
+    detail: >
+      AC3 inverte a política: tipo desconhecido deixa de contar. Protege contra repetir este
+      bug (exibir a mais), mas cria o risco simétrico — se o Sienge criar um tipo que é
+      pagamento real, o portal passa a exibir a menos, silenciosamente, até alguém classificar.
+      collectUnknownReceiptTypes() existe mas não é chamado por nenhuma rota nem alerta.
+    mitigation: >
+      Trade-off aceito e documentado. Vigilância ativa (alerta quando aparecer tipo novo)
+      fica como débito — registrar no backlog em vez de ampliar o escopo desta story.
+  - id: C3
+    severity: LOW
+    title: "Milhares de parcelas mudam de 'Pago' para baixa sem pagamento na tela do cliente"
+    detail: >
+      É o efeito pretendido, mas é visível: um cliente que via a parcela como paga passa a
+      ver 'Distratada', 'Cancelada' ou 'Adiantamento'. Vale o financeiro saber antes de o
+      deploy ir ao ar, para não ser pego de surpresa por ligação de cliente.
+    mitigation: "Avisar o financeiro na entrega. O rótulo por tipo real já evita o pior (chamar distrato de 'renegociada')."
+
+coderabbit:
+  cli: "não executado — o gatilho deste repo é o GitHub App, que revisa no PR"
+
+build:
+  tests: "vitest 260 files / 3.248 tests passed (6 expected fail pré-existentes)"
+  typecheck: "tsc --noEmit exit 0"
+  lint: "eslint exit 0 — 0 errors; 38 warnings pré-existentes, nenhum nos arquivos tocados"
+
+verdict_rationale: >
+  CONCERNS, não FAIL: o código está correto, coberto e sem regressão, e o gate não bloqueia o
+  merge. O que impede um PASS limpo é que a regra ainda não foi conferida contra dados reais
+  (C1) — e essa conferência já está combinada com o financeiro, é o próximo passo do fluxo,
+  não uma pendência esquecida.
+
+files:
+  - packages/web/src/lib/integrations/sienge/installments.ts
+  - packages/web/src/lib/integrations/sienge/types.ts
+  - packages/web/src/lib/integrations/sienge/client.ts
+  - packages/web/src/lib/integrations/sienge/client.test.ts
+  - packages/web/src/app/portal-viewer/[vinculo_id]/financeiro/page.tsx
+  - packages/web/src/app/cliente/[obra_id]/financeiro/extrato/_components/extrato-client.tsx
+  - packages/web/src/lib/pdf/extrato-pdf.tsx
+  - docs/stories/75-369-extrato-tipos-de-baixa-pagamento.story.md

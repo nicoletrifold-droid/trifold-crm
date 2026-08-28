@@ -497,6 +497,27 @@ CREATE INDEX IF NOT EXISTS idx_leads_metadata_leadgen_id
 
 ---
 
+### [PORTAL] 🟡 Tipo de baixa novo no Sienge some do "total pago" sem ninguém saber
+
+**Adicionado em:** 2026-08-28
+**Prioridade:** **P2**
+**Origem:** Concern C2 do gate da Story `75-369` (`docs/qa/gates/75-369-extrato-tipos-de-baixa-pagamento.yml`).
+
+A `75-369` inverteu a política de `isCashReceipt`: de blacklist com default permissivo para
+**allowlist** (`packages/web/src/lib/integrations/sienge/installments.ts`). Foi a correção certa —
+o default permissivo era exatamente o que deixava 9 tipos de baixa contábil inflarem o "total pago"
+em R$ 155,7 milhões. Mas cria o risco simétrico: se o Sienge passar a registrar um tipo **novo** que
+é pagamento de verdade, ele cai em `nonCashReceipts` e **some do total pago silenciosamente**.
+
+`collectUnknownReceiptTypes()` já detecta o tipo novo, mas **não é chamado por nenhuma rota, cron ou
+alerta** — é uma função de diagnóstico esperando alguém rodar. Enquanto for assim, o único jeito de
+descobrir é um cliente ligar dizendo que o extrato encolheu.
+
+**Ação sugerida:** chamar `collectUnknownReceiptTypes()` no `boleto-scan` (que já varre a base) e
+disparar alerta quando voltar não-vazio — mesmo canal dos outros alertas operacionais.
+
+---
+
 ### [UX] Portal — Página Financeiro sem conteúdo
 
 **Adicionado em:** 2026-05-26
