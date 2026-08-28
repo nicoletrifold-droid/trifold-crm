@@ -1,6 +1,6 @@
 import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer"
 import type { FormattedInstallment } from "@web/lib/integrations/sienge/types"
-import { getOpenBalance } from "@web/lib/integrations/sienge/installments"
+import { getNonCashLabel, getOpenBalance } from "@web/lib/integrations/sienge/installments"
 
 const BRAND = "#E8856A"
 const DARK = "#1C1917"
@@ -245,14 +245,15 @@ export function ExtratoPDF({
   geradoEm,
 }: ExtratoPDFProps) {
   // Total pago = baixas em dinheiro, inclusive as parciais de parcelas em
-  // aberto. Reparcelamento não entra: já foi filtrado em getFinancialStatement.
+  // aberto. Baixa que não é pagamento (reparcelamento, distrato, cancelamento…)
+  // não entra: já foi filtrada em getFinancialStatement.
   const totalPago = installments.reduce((sum, i) => sum + (i.receiptValue ?? 0), 0)
 
   // PARCIAL, BOLETO_GERADO e EM_ABERTO somados como "Em aberto" (total ainda
-  // devido). RENEGOCIADA vale 0 — a dívida está nas parcelas que a substituíram.
+  // devido). RENEGOCIADA vale 0 — a parcela foi baixada sem pagamento.
   const totalAberto = installments.reduce((sum, i) => sum + getOpenBalance(i), 0)
 
-  const renegociadas = installments.filter((i) => i.status === "RENEGOCIADA").length
+  const semPagamento = installments.filter((i) => i.status === "RENEGOCIADA").length
 
   const periodoLabel =
     de && ate
@@ -327,7 +328,7 @@ export function ExtratoPDF({
                   ) : inst.status === "PARCIAL" ? (
                     <View style={s.badgeParcial}><Text style={s.badgeParcialText}>Parcial</Text></View>
                   ) : inst.status === "RENEGOCIADA" ? (
-                    <View style={s.badgeRenegociada}><Text style={s.badgeRenegociadaText}>Renegociada</Text></View>
+                    <View style={s.badgeRenegociada}><Text style={s.badgeRenegociadaText}>{getNonCashLabel(inst)}</Text></View>
                   ) : inst.status === "BOLETO_GERADO" ? (
                     <View style={s.badgeBoleto}><Text style={s.badgeBoletoText}>Boleto</Text></View>
                   ) : (
@@ -373,15 +374,16 @@ export function ExtratoPDF({
           </View>
         </View>
 
-        {/* Nota de renegociação — explica por que parcelas aparecem sem valor pago */}
-        {renegociadas > 0 && (
+        {/* Nota das baixas sem pagamento — explica por que parcelas aparecem sem valor pago */}
+        {semPagamento > 0 && (
           <View style={s.notaBox}>
             <Text style={s.notaText}>
-              {renegociadas === 1
-                ? "1 parcela foi renegociada"
-                : `${renegociadas} parcelas foram renegociadas`}
-              : substituídas por novas parcelas neste mesmo contrato. Elas não entram
-              no total pago nem no total em aberto para não contar a mesma dívida duas vezes.
+              {semPagamento === 1
+                ? "1 parcela foi baixada sem pagamento"
+                : `${semPagamento} parcelas foram baixadas sem pagamento`}
+              : são baixas que o Sienge registra sem entrada de dinheiro — renegociação,
+              substituição, cancelamento, distrato ou adiantamento. Elas não entram no
+              total pago nem no total em aberto para não contar a mesma dívida duas vezes.
             </Text>
           </View>
         )}
