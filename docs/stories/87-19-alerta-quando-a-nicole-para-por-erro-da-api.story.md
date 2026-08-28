@@ -309,3 +309,49 @@ Review automático roda pelo GitHub App no PR. Achado do bot **não bloqueia mer
   - `packages/web/src/app/api/cron/nicole-health/route.test.ts` (novo)
   - `packages/web/vercel.json` (modificado — 1 entrada de cron)
   - `docs/stories/87-19-alerta-quando-a-nicole-para-por-erro-da-api.story.md` (esta story)
+
+---
+
+## QA Results
+
+**Gate: CONCERNS** · @qa (Quinn) · 28/08/2026 · `docs/qa/gates/87-19-alerta-falha-nicole-api-ia.yml`
+
+### O que foi verificado (não aceito por afirmação)
+
+| Verificação | Resultado |
+|---|---|
+| Suíte completa por **exit code** (nunca `grep -c`) | ✅ `EXIT=0` — 260 arquivos, 3219 testes, 0 falhas |
+| Typecheck / lint | ✅ ambos `EXIT=0` |
+| **Mutação re-executada no gate** | ✅ classificador genérico → 7 vermelhos; dedup neutralizado → AC5 vermelho; limiar ignorado → AC3 vermelho |
+| Guard não é teatro | ✅ `CRON_SECRET` lido **dentro** do handler (`route.ts:46`), ao contrário de `webhook-health` |
+| Índice para a query | ✅ `idx_system_events_level(level, created_at DESC)` casa exatamente com o filtro |
+| Realimentação do alerta | ✅ impossível — nada no caminho do alerta grava `level:"error"` |
+| Segurança | ✅ sem segredo em log, guard antes de I/O, query builder |
+
+### Concerns
+
+- **C2 (média) — responder ao alerta faz a Nicole atender o admin.** Verificado em produção: o
+  número `5544999761478` **já é lead** (criado 18/06/2026 via `walk_in`) e sua conversa `66f3706b`
+  está com `is_ai_active: true`. Se o admin responder "ok, resolvi", a Nicole o atende como
+  comprador. **Não é regressão desta story** — vale igual para o `alerta_sla_gestor` de hoje, e o
+  número do Alexandre também já é lead desde 14/06. Mitigação é operacional (não responder); uma
+  allowlist de números internos no webhook seria story própria e beneficiaria os dois alertas.
+- **C1 (baixa) — virada da hora.** `dedupe_key` usa a hora UTC truncada; execuções às 09:59 e 10:01
+  enviam 2 alertas em 2 min. Recomendação explícita: **não corrigir** — o modo de falha é uma
+  mensagem a mais, nunca uma a menos, e a correção custaria mais que o defeito.
+- **C3 (informativa)** — query sem filtro de `org_id`; irrelevante enquanto single-org.
+
+### Por que CONCERNS e não PASS
+
+Nada no código motiva reprovação. O gate não é PASS por dois bloqueios **externos ao código**:
+o template `alerta_sistema_admin` ainda não existe na Meta (sem ele nenhum alerta sai) e a env
+`ALERTA_SISTEMA_PHONES` não foi gravada em produção.
+
+### Merge é seguro mesmo com os bloqueios
+
+O código é **inerte** até a env existir: sem destinatário o cron sai no primeiro guard, sem enviar
+nada e sem gravar marcador de dedup. Zero risco de disparo indevido ou custo. Mergear agora e ligar
+depois evita a branch envelhecer esperando a Meta.
+
+**CodeRabbit CLI: não executado** (o gatilho válido do repo é o GitHub App no PR; o CLI falhou com
+`WebSocket closed` na Story 90-1). Registrado como não executado — nunca como aprovado.
