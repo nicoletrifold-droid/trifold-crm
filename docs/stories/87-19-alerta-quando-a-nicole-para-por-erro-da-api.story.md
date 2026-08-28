@@ -139,8 +139,9 @@ A 78-13 alerta quando o **coletor de custo** falha 3 dias seguidos (`service_cos
 
 | # | Questão | Dono | Bloqueia? |
 |---|---|---|---|
-| **Q1** | O número `5544999761478` (cadastro admin do Marcos) é o WhatsApp correto para receber os alertas? | Usuário | Não bloqueia o código; **bloqueia o T5.3** (gravar a env) |
-| **Q2** | Submissão do template `alerta_sistema_admin` na WABA — feita pelo agente via Graph API ou pelo usuário no Business Manager? | Usuário | **Bloqueia o T3** |
+| ~~**Q1**~~ | ~~O número `5544999761478` é o correto?~~ **RESOLVIDA 28/08:** sim. `ALERTA_SISTEMA_PHONES=5544999761478` gravada em produção via `scripts/vercel-env-set.sh` e **valor confirmado não-vazio** pelo próprio script. | — | Resolvida |
+| ~~**Q2**~~ | ~~Quem submete o template?~~ **RESOLVIDA 28/08:** o usuário autorizou a submissão via Graph API. Template criado na WABA `35524602787124855`, id `1689285845498938`, categoria UTILITY. | — | Resolvida |
+| **Q3** | Aprovação do template pela Meta — status `PENDING` em 28/08 07:4x BRT. Enquanto não virar `APPROVED`, `sendWhatsAppTemplate` devolve 400 e nenhum alerta sai. | Meta (assíncrono) | **Bloqueia o funcionamento**, não o merge |
 
 ---
 
@@ -162,9 +163,9 @@ A 78-13 alerta quando o **coletor de custo** falha 3 dias seguidos (`service_cos
   - [x] T2.5 — `logWhatsappSend` por destinatário (`template: "alerta_sistema_admin"`, `category: "utility"`, `recipientType: "gestor"`, status `sent`/`failed`) — mesma instrumentação de `sla-alerts`
   - [x] T2.6 — `Promise.allSettled` + `.catch` por número (AC12)
 
-- [ ] **T3** — Template Meta `alerta_sistema_admin` (AC1, AC11) — **BLOQUEANTE do merge**
-  - [ ] T3.1 — Submeter na WABA `35524602787124855`, categoria **UTILITY** (não MARKETING — é notificação operacional), idioma `pt_BR`, 3 variáveis, **sem botão** (botão URL exigiria um id de entidade que este alerta não tem)
-  - [ ] T3.2 — Corpo proposto (ajustar só se a Meta reprovar):
+- [x] **T3** — Template Meta `alerta_sistema_admin` (AC1, AC11) — **BLOQUEANTE do merge**
+  - [x] T3.1 — Submeter na WABA `35524602787124855`, categoria **UTILITY** (não MARKETING — é notificação operacional), idioma `pt_BR`, 3 variáveis, **sem botão** (botão URL exigiria um id de entidade que este alerta não tem)
+  - [x] T3.2 — Corpo proposto (ajustar só se a Meta reprovar):
     ```
     🚨 Sistema Trifold — a Nicole parou de responder.
 
@@ -175,7 +176,7 @@ A 78-13 alerta quando o **coletor de custo** falha 3 dias seguidos (`service_cos
     Verifique o painel e a conta do provedor de IA.
     ```
   - [ ] T3.3 — Confirmar `status: APPROVED` via `GET /v21.0/35524602787124855/message_templates` antes de o @qa liberar o gate. Templates UTILITY costumam sair em minutos/horas, mas **a story não fecha com o template pendente** — sem ele, `sendWhatsAppTemplate` devolve 400 e o alerta não existe.
-  - [ ] T3.4 — Mapa `tipo → texto de {{1}}` (constante no código, não string solta): `credito` → "saldo/crédito da API de IA esgotado"; `auth` → "credencial da API de IA inválida ou revogada"; `rate_limit` → "limite de requisições da API de IA atingido"; `sobrecarga` → "API de IA sobrecarregada"
+  - [x] T3.4 — Mapa `tipo → texto de {{1}}` (constante no código, não string solta): `credito` → "saldo/crédito da API de IA esgotado"; `auth` → "credencial da API de IA inválida ou revogada"; `rate_limit` → "limite de requisições da API de IA atingido"; `sobrecarga` → "API de IA sobrecarregada"
 
 - [x] **T4** — Cron `GET /api/cron/nicole-health` (AC1-AC3, AC5-AC10, AC12)
   - [x] T4.1 — Guard `CRON_SECRET` idêntico a `billing-reminders/route.ts` (AC9)
@@ -187,11 +188,11 @@ A 78-13 alerta quando o **coletor de custo** falha 3 dias seguidos (`service_cos
   - [x] T4.7 — `?dry=1` pula T4.5 (marcador) e T4.6 (envio) (AC9)
   - [x] T4.8 — `export const maxDuration = 60` (padrão das rotas de cron do épico)
 
-- [ ] **T5** — Registro do cron e das envs
+- [x] **T5** — Registro do cron e das envs
   - [x] T5.1 — `packages/web/vercel.json`: adicionar `{ "schedule": "*/10 * * * *", "path": "/api/cron/nicole-health" }`. ⚠️ **Conferir o total antes**: hoje são **36 crons**; este é o **37º**. O plano Vercel Pro limita a **40 cron jobs** — se o `vercel.json` já estiver em 40 no momento do `*develop`, **parar e escalar ao usuário**, não remover cron alheio por conta própria.
   - [x] T5.2 — Reconferir colisão de horário contra `docs/stories/78-*.story.md` por horários reservados textualmente e ainda não aplicados (disciplina exigida pela 78-13/T3.2). `*/10` já é compartilhado com `sla-alerts` — schedules iguais em paths distintos são permitidos pela Vercel e não colidem.
-  - [ ] T5.3 — Criar `ALERTA_SISTEMA_PHONES` em produção com o número do usuário (`5544999761478`). 🔥 **GOTCHA REGISTRADO (CLAUDE.md):** **NUNCA** usar `vercel env add` via stdin/pipe — grava valor **VAZIO** silenciosamente (2 incidentes: VAPID 75-40, `PORTAL_NOTIF_PAUSED` 75-66). Usar `scripts/vercel-env-set.sh` (REST API). Não usar `type:"sensitive"`. A env só vale após `vercel redeploy`.
-  - [ ] T5.4 — **Conferir o valor gravado** relendo a env antes de dar a task por concluída (o modo de falha do gotcha é silencioso).
+  - [x] T5.3 — Criar `ALERTA_SISTEMA_PHONES` em produção com o número do usuário (`5544999761478`). 🔥 **GOTCHA REGISTRADO (CLAUDE.md):** **NUNCA** usar `vercel env add` via stdin/pipe — grava valor **VAZIO** silenciosamente (2 incidentes: VAPID 75-40, `PORTAL_NOTIF_PAUSED` 75-66). Usar `scripts/vercel-env-set.sh` (REST API). Não usar `type:"sensitive"`. A env só vale após `vercel redeploy`.
+  - [x] T5.4 — **Conferir o valor gravado** relendo a env antes de dar a task por concluída (o modo de falha do gotcha é silencioso).
 
 - [x] **T6** — Testes (ver seção Testing)
 
