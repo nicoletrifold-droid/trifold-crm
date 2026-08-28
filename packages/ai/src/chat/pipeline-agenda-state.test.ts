@@ -577,6 +577,21 @@ describe("AC7 — o bloco [SISTEMA] dos turnos-ouro é byte a byte o do HEAD", (
   // com o mesmo seed e o mesmo `now`. Qualquer diferença aqui é achado
   // bloqueante: significaria que a story mudou o que a Nicole ouve quando o
   // estado estava certo.
+  //
+  // 🔧 RECALIBRAÇÃO JUSTIFICADA — Story 87-17 (Defeito A), `AC10` item 2 e 3.
+  // Dois goldens de PERÍODO ("dia+período" e "G6") deixaram de ser byte a byte o
+  // do `HEAD`, e isto é MUDANÇA DESEJADA, não achado: a lista de horários livres
+  // de um período era sempre a borda de abertura (`08:00 ou 08:30 ou 09:00`)
+  // porque `freeSlotsInPeriod` parava nos 3 PRIMEIROS livres. Foi essa geometria
+  // que fez a Nicole dizer a uma lead, em produção (26/08/2026, conversa
+  // `02d3a064-0271-4e34-b64a-c6ecd57ddae0`), que *"os horários disponíveis à
+  // tarde são esses mesmo: 12h, 12h30 ou 13h"* com 15h e 17h LIVRES. Agora a
+  // oferta é uma amostra espalhada do período inteiro, e o sábado de manhã
+  // (7 candidatos: 08:00…11:00, todos livres na fixture) passa a
+  // `08:00 ou 09:30 ou 11:00` — índices 0, 3 e 6.
+  // A guarda deste bloco CONTINUA VALENDO para todo o resto: qualquer OUTRA
+  // diferença aqui — inclusive nestas duas strings, depois desta linha — segue
+  // sendo achado bloqueante. Não recalibre um golden sem escrever por quê.
   const NOW = "2026-08-12T13:00:00Z" // quarta-feira, 10:00 BRT
   const REGRA =
     " REGRA ABSOLUTA: só afirme dia/horário de visita que esteja NESTE bloco. Nunca invente, arredonde nem complete um horário — se o que o cliente pediu não está aqui, PERGUNTE em vez de confirmar.]"
@@ -595,7 +610,7 @@ describe("AC7 — o bloco [SISTEMA] dos turnos-ouro é byte a byte o do HEAD", (
     [
       "dia+período",
       "Sábado de manhã",
-      "[SISTEMA: O cliente quer a visita de manhã em sábado, 15 de agosto. Horários LIVRES nesse período: sábado, 15 de agosto às 08:00 ou sábado, 15 de agosto às 08:30 ou sábado, 15 de agosto às 09:00. Ofereça exatamente esses e pergunte qual ele prefere — NÃO confirme nenhum antes de ele escolher." + REGRA + "\n\nSábado de manhã",
+      "[SISTEMA: O cliente quer a visita de manhã em sábado, 15 de agosto. Horários LIVRES nesse período: sábado, 15 de agosto às 08:00 ou sábado, 15 de agosto às 09:30 ou sábado, 15 de agosto às 11:00. Ofereça exatamente esses e pergunte qual ele prefere — NÃO confirme nenhum antes de ele escolher." + REGRA + "\n\nSábado de manhã",
     ],
   ]
 
@@ -637,7 +652,7 @@ describe("AC7 — o bloco [SISTEMA] dos turnos-ouro é byte a byte o do HEAD", (
       "G6 pendência de dia + período — o fluxo que a v1 desta story apagava",
       { name: "Ana", agenda_state: buildAgendaState({ citacao: "pode ser sábado", now: ancora, fonte: "pendencia", dataAbsoluta: "2026-08-15" }) },
       "de manhã", [],
-      "[SISTEMA: O cliente quer a visita de manhã em sábado, 15 de agosto. Horários LIVRES nesse período: sábado, 15 de agosto às 08:00 ou sábado, 15 de agosto às 08:30 ou sábado, 15 de agosto às 09:00. Ofereça exatamente esses e pergunte qual ele prefere — NÃO confirme nenhum antes de ele escolher." + REGRA + "\n\nde manhã",
+      "[SISTEMA: O cliente quer a visita de manhã em sábado, 15 de agosto. Horários LIVRES nesse período: sábado, 15 de agosto às 08:00 ou sábado, 15 de agosto às 09:30 ou sábado, 15 de agosto às 11:00. Ofereça exatamente esses e pergunte qual ele prefere — NÃO confirme nenhum antes de ele escolher." + REGRA + "\n\nde manhã",
       null,
     ],
     [

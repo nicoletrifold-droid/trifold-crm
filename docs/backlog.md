@@ -31,6 +31,93 @@ consultar a tabela) antes de mais rotas de `/platform` acumularem em cima do bur
 
 ---
 
+### [Agendamento público] 🔴 Erro de consulta zera a lista de OCUPADOS e abre o portão antes do `INSERT` — story `87-19`
+
+**Adicionado em:** 2026-08-27
+**Prioridade:** **P1**
+**Origem:** Auditoria do §3 da Story `87-18` (@sm) + verificação e arbitragem do @po
+(`docs/qa/po-validation-87-18.md`, DECISÃO 2). Procedência: **leitura de código**, não achado de bot.
+**Ação:** `@sm *draft` da story **`87-19`**. É a **próxima da fila** depois do deploy do `#517`
+(`87-17` Fatia 1 + `87-18`) e vem **antes da Fatia 2 da `87-17`**.
+
+Dois helpers descartam o `error` de uma consulta de LISTA ao `appointments` e devolvem `data ?? []`:
+
+- `packages/web/src/lib/appointments/team-slots.ts:36` — `ocupadosDaEquipe`
+- `packages/web/src/app/api/agendar/[token]/route.ts:48` — `imobBusyBetween` (cópia privada paralela)
+
+**Erro de consulta → lista de ocupados VAZIA → "o dia inteiro está livre".** Consumidores medidos em
+27/08: `gradeDaEquipe` (`team-slots.ts:53-73`, monta a grade e é chamada por
+`/api/formulario/[token]/agenda:67` e `/api/appointments/slots:37`),
+`/api/formulario/[token]/agenda:155` e `/api/agendar/[token]:84,145`.
+
+🔴 **O que torna isto P1 (e não uma nota de higiene): nos DOIS `POST` públicos o helper é o ÚLTIMO
+PORTÃO antes da escrita.** `agendar/[token]/route.ts:145-160` → `taken = busy.some(overlaps)` (`:150`) →
+`if (taken) 409` (`:155`) → senão `.from("appointments").insert()` em `:208-209`.
+`formulario/[token]/agenda/route.ts:155-171` → `tomado` (`:162`) → `409` (`:166`) → senão
+`.insert()` em `:192-193`. Lista vazia = portão aberto = **linha gravada por
+cima de um compromisso existente**, em link **público por token**, sem sessão, sem Nicole e sem
+corretor no meio para estranhar. Consequência física: duas pessoas no mesmo horário, com confirmação
+enviada às duas.
+
+**Raio de alcance MAIOR que o do `isSlotFree` da `87-18`:** lá é uma consulta **por candidato** (um
+erro contamina um horário); aqui é **uma consulta pela janela toda** (um erro apaga o dia inteiro).
+Os dois helpers usam o **admin client** (`createAdminClient`, service-role), então o gatilho "RLS
+surpresa" não se aplica — sobram `timeout`, cache de schema e `5xx` do PostgREST.
+
+**Por que NÃO entrou na `87-18`:** o remédio é **oposto**. Na `87-18`, `unknown` → *omitir o
+candidato e seguir* (a oferta é amostra por natureza). Aqui uma lista parcial é indistinguível de uma
+lista completa, então o único remédio honesto é **falhar FECHADO**: propagar o erro e **recusar a
+gravação** (`503` "não consegui confirmar agora"), nunca gravar sob incerteza. Juntar duas
+invariantes opostas no mesmo PR é exatamente o que a `AC7` da `87-18` existe para impedir.
+
+**Não medido em produção** (é silencioso por construção, como o da `87-18`). Prioridade vem do raio e
+do fato de o erro cair no portão de escrita, não de incidente contado.
+
+---
+
+### [Nicole] 🟡 `freeSlotsInPeriod` sem tratamento de erro — 11 queries por oferta e uma rejeição faz o lead não receber resposta
+
+**Adicionado em:** 2026-08-27
+**Prioridade:** P2
+**Origem:** Quality gate @qa da Story 87-17, Fatia 1 (`docs/qa/gates/87-17-fatia1-oferta-de-horario-espalhada.yml`, achado `REL-1`)
+
+A Fatia 1 da `87-17` passou a conferir o período inteiro: `isSlotFree` é **uma query ao
+`appointments` por candidato**, então uma oferta de período saiu de **3** para **11** consultas
+(7 em `manha`), em `Promise.all` (profundidade sequencial 1, autorizado pela `AC4-(b)`).
+
+Nenhum dos dois chamadores (`packages/ai/src/chat/pipeline.ts:1044` e `:1123`) tem `try/catch`.
+Uma rejeição de `isSlotFree` sobe até o `catch (asyncErr)` do webhook
+(`packages/web/src/app/api/webhook/whatsapp/route.ts:1328`), vira `WEBHOOK_ASYNC_ERROR` em
+`system_events` e **o lead que pediu "amanhã à tarde" não recebe resposta nenhuma**. É o mesmo
+**modo** de falha do código anterior (o laço com `await` também abortava na primeira query que
+falhasse) — o que mudou é a **probabilidade**, ~3,7×. Não é silencioso: há evento.
+
+**Por que não foi corrigido na Fatia 1:** a correção óbvia ("falha de `isSlotFree` = trate como
+não livre") **esconderia um horário livre** sob erro transitório — uma versão branda do próprio
+defeito que a `87-17` conserta ("negar disponibilidade que existe"). A decisão precisa ser
+explícita, não um remendo.
+
+**Ação:** decidir entre (a) `Promise.allSettled` + rejeição = "não livre", respondendo com lista
+possivelmente incompleta, e (b) `try/catch` no chamador com um bloco `[SISTEMA]` honesto de "não
+consegui consultar a agenda agora". Qualquer das duas precisa de **evento próprio** em
+`system_events` (hoje só existe o `WEBHOOK_ASYNC_ERROR` genérico) para o volume ser medível.
+
+**`[@po 27/08]` ATUALIZAÇÃO — a Story `87-18` ESTREITA este item (não o absorve).** A `87-18`
+(validada hoje, no PR `#517`) conserta o caminho **B** — o PostgREST devolvendo `{ data: null, error }`
+sem lançar — introduzindo a invariante *"`unknown` nunca é afirmação: nem livre nem ocupado"*, o
+terceiro estado de `isSlotFree`, a mensagem honesta de "não consegui confirmar" nos 4 sítios de
+`pipeline.ts` e o evento `NICOLE_SLOT_QUERY_ERROR`. Consequências para este item:
+1. **A opção (a) morre.** Mapear rejeição de rede para "não livre" contradiz a invariante da `87-18`:
+   uma rejeição é a MESMA ignorância que um `error`, e chamá-la de "ocupado" reintroduziria pela porta
+   do caminho A a mentira fechada no caminho B.
+2. **A opção (b) fica quase de graça** depois da `87-18`: a mensagem honesta e o evento já existirão —
+   falta mapear a rejeição para `"unknown"` e deixar o resto do caminho fazer o trabalho.
+3. **A fronteira segue de pé:** a `AC7` da `87-18` é o controle negativo que prova que ela **não**
+   toca o caminho da rejeição (uma rejeição continua subindo como sobe hoje). Este item continua
+   aberto, com o mesmo escopo — só com o espaço de decisão menor.
+
+---
+
 
 ### [Epic 900] 🟠 `SEC-001` — a recusa de `"*"` de `platformQuery()` não cobre embedding do PostgREST
 
@@ -127,6 +214,42 @@ por arquivo. `src/app/api/platform/orgs/route.ts` continua emitindo 2 warnings d
 **Ação:** decidir se entra em `legitimos` com o motivo "RPC de provisionamento cross-org: o platform
 admin nunca pertence à org que está criando" ou se a chamada migra para um helper. Não é urgente:
 falha alto (warning visível), nunca silencioso.
+
+---
+
+### [NICOLE] 🟡 `NICOLE_SLOT_UNAUTHORIZED` dispara junto com o evento correto no caminho de incerteza da `87-18`
+
+**Adicionado em:** 2026-08-27
+**Prioridade:** P2
+**Origem:** Quality gate @qa da Story `87-18` (`docs/qa/gates/87-18-erro-de-consulta-vira-horario-livre-em-silencio.yml`, achado `OBS-1`). Procedência: **medição própria do @qa no código**, não achado de bot.
+
+A `87-18` criou dois ramos em `packages/ai/src/chat/pipeline.ts` (`:1015` remarcar e `:1107` agendar)
+que, sob erro de consulta da agenda, **citam o horário pedido** na frase do `[SISTEMA]` e
+deliberadamente **não setam `authorizedSlotUtc`** (é exatamente isso que corta o `INSERT`).
+
+O guard anti-alucinação (`pipeline.ts:1289-1326`) usa `detectAffirmedSlot`, que **não exige verbo de
+afirmação** — ele só faz parse de dia+hora não ambíguos na resposta da Nicole (`isAmbiguousSlotText`
+só se cala quando há múltiplas opções). Com `authorizedSlotUtc` nulo, o ramo do `:1310` emite
+**`NICOLE_SLOT_UNAUTHORIZED`** — *"Nicole afirmou X sem o sistema ter autorizado horário algum"* —
+que descreve algo **mais grave** do que aconteceu: ela não afirmou nada, ela repetiu o horário que o
+cliente pediu para dizer que não conseguiu checar.
+
+**Medido no gate:** em 3 respostas plausíveis da Nicole sob incerteza, **2** resolvem para
+`2026-08-15T13:00:00.000Z` em `detectAffirmedSlot`. Ou seja: cada turno de outage tende a produzir
+**dois** eventos — o `NICOLE_SLOT_QUERY_ERROR` correto e este por cima.
+
+**Não é bloqueante e não houve dano:** o guard é *fail-open* (só emite, nunca bloqueia o envio),
+nada é gravado em `appointments`, e o evento certo sai no mesmo turno, na mesma conversa — a
+correlação é trivial para quem souber. A classe **pré-existe** no ramo "horário ocupado sem
+alternativas" (que também cita `whenStr` com `authorizedSlotUtc` nulo); a `87-18` a **alarga**.
+
+**Por que registrar:** o Epic 87 é sobre confiar nos instrumentos. Um evento que erra na direção
+alarmista manda o investigador futuro pelo caminho errado — é o espelho do falso verde que o epic
+combate.
+
+**Opções (decisão de @po, não de @dev):** (a) omitir o horário da frase nova — ela fica menos útil
+para o modelo; (b) o guard se calar no turno em que houve `NICOLE_SLOT_QUERY_ERROR`; (c) não fazer
+nada e documentar a co-ocorrência como leitura esperada do evento.
 
 ---
 
@@ -374,6 +497,60 @@ Smokes menores pendentes (confirmam o que já foi medido por privilégio): `/bro
 
 ---
 
+### [DB] ⚪ Colisão de numeração na migration `240` — DECIDIDO: não renomear
+
+**Adicionado em:** 2026-08-27
+**Prioridade:** — (fechado como *não fazer*)
+**Origem:** Story 90-1 (Epic 90), levantado ao conferir a numeração livre para a 242
+
+Existem dois arquivos com o mesmo prefixo:
+
+```
+supabase/migrations/240_followup_nicole_por_lead.sql
+supabase/migrations/240_provision_org.sql
+```
+
+**✅ DECIDIDO (Marcos, 2026-08-27) — não renomear.** Ganho × risco:
+
+- **Ganho ≈ zero.** As duas já estão aplicadas em produção. Renomear no repositório não altera
+  nada no banco; só muda o nome do arquivo no histórico.
+- **Risco não-zero.** Se alguém reaplicar o diretório em ambiente novo, a ordem relativa entre as
+  duas muda conforme o nome — e hoje a ordem que produção viu está congelada no que já foi aplicado.
+- Nenhuma ferramenta do fluxo atual quebra por causa disso (a aplicação é manual, arquivo por
+  arquivo, via SQL Editor / Management API).
+
+**O que fica no lugar da correção:** este registro. Quem for criar migration nova deve conferir a
+numeração livre **no repo e no schema remoto** — a colisão do 240 existe justamente porque isso não
+foi feito na época.
+
+**Reabrir se:** o projeto passar a aplicar migrations por ferramenta que ordene por nome de arquivo.
+
+---
+
+### [COACH] 🔵 Live Coach — 2-3 queries por inbound antes do gate descartar
+
+**Adicionado em:** 2026-08-27
+**Prioridade:** P3 (baixa — otimização, sem impacto funcional)
+**Origem:** Gate da Story 90-1 (`docs/qa/gates/90-1-live-coach-backend.yml`), concern *low* aceito
+
+`lib/coach/generate-suggestion.ts` consulta `conversations` e `messages` para decidir se o humano
+está no atendimento. Uma dessas queries repete o que `notifyBrokerOnReply` (Story 63-12) já faz no
+**mesmo request** do webhook.
+
+**Por que não foi corrigido:** o ganho é ~1 query por mensagem inbound em conversa assumida —
+irrelevante para o Postgres neste volume. O risco é mexer no caminho crítico do webhook da Meta,
+onde exceção ou atraso custa mensagem de lead perdida. Ganho baixo × risco médio-alto.
+
+**Nota de honestidade:** este item **não** foi validado por review automatizado. O review retroativo
+do CodeRabbit sobre o diff da 90-1 falhou por erro de conexão e foi encerrado — então ninguém além
+da revisão manual olhou essas queries. Fica como backlog, **não como fechado**.
+
+**Ação, se um dia valer:** passar o `is_ai_active` que o webhook já leu por parâmetro, ou consolidar
+a leitura de takeover num helper compartilhado com o 63-12. Só encostar nisso quando houver outro
+motivo para editar o arquivo.
+
+---
+
 ### [DB] ⛔ `supabase db push` proibido contra produção — registro 52 versões atrasado
 
 **Adicionado em:** 2026-08-03
@@ -385,6 +562,28 @@ Smokes menores pendentes (confirmam o que já foi medido por privilégio): `/bro
 Aplicação em produção deve ser sempre pela **Management API, arquivo inteiro num único POST** (roda em transação implícita: erro aborta tudo sem deixar estado parcial). Procedimento em `docs/runbooks/aplicar-209-210.md`.
 
 **Decisão pendente:** ou registrar as ~52 versões faltantes de uma vez, ou assumir formalmente que `db push` não vale para este projeto e documentar. Registrar só as últimas mascararia o drift sem tornar o push seguro.
+
+**✅ DECIDIDO (Marcos, 2026-08-27) — assumir formalmente que `db push` não vale aqui. NÃO
+ressincronizar `schema_migrations`.**
+
+O critério foi ganho × risco, não conveniência:
+
+- **Ganho de ressincronizar ≈ zero.** O único benefício seria destravar `supabase db push` — um
+  comando que a decisão do projeto proíbe. Ferramenta que ninguém vai usar não paga risco nenhum.
+- **Risco alto.** `supabase_migrations.schema_migrations` é a tabela de controle de migrations de
+  **produção**. Errar o registro pode fazer uma ferramenta futura concluir que migrations aplicadas
+  estão pendentes (ou o contrário).
+- **O fluxo real já funciona e está documentado:** SQL Editor / Management API, arquivo inteiro num
+  POST, sempre antes do merge. Exercitado de novo hoje nas migrations 242/243 (Story 90-1), com
+  pré-condições verificadas antes e conferência depois — ver
+  `docs/runbooks/aplicar-242-243-live-coach.md`.
+
+**Consequência aceita:** o painel do Supabase continuará mostrando "LAST MIGRATION: 168". Isso é
+cosmético e já está documentado na memória do projeto e no `CLAUDE.md`. Quem olhar o painel e
+concluir que produção está atrasada está lendo errado — a fonte de verdade é o schema, não a tabela.
+
+**Reabrir se:** o projeto passar a depender do CLI para migrations (ex.: pipeline de CI que aplique
+schema), aí a ressincronização deixa de ser desperdício e vira pré-requisito.
 
 ---
 
@@ -418,6 +617,27 @@ CREATE INDEX IF NOT EXISTS idx_leads_metadata_leadgen_id
   ON leads ((metadata->>'leadgen_id'))
   WHERE metadata->>'leadgen_id' IS NOT NULL;
 ```
+
+---
+
+### [PORTAL] 🟡 Tipo de baixa novo no Sienge some do "total pago" sem ninguém saber
+
+**Adicionado em:** 2026-08-28
+**Prioridade:** **P2**
+**Origem:** Concern C2 do gate da Story `75-369` (`docs/qa/gates/75-369-extrato-tipos-de-baixa-pagamento.yml`).
+
+A `75-369` inverteu a política de `isCashReceipt`: de blacklist com default permissivo para
+**allowlist** (`packages/web/src/lib/integrations/sienge/installments.ts`). Foi a correção certa —
+o default permissivo era exatamente o que deixava 9 tipos de baixa contábil inflarem o "total pago"
+em R$ 155,7 milhões. Mas cria o risco simétrico: se o Sienge passar a registrar um tipo **novo** que
+é pagamento de verdade, ele cai em `nonCashReceipts` e **some do total pago silenciosamente**.
+
+`collectUnknownReceiptTypes()` já detecta o tipo novo, mas **não é chamado por nenhuma rota, cron ou
+alerta** — é uma função de diagnóstico esperando alguém rodar. Enquanto for assim, o único jeito de
+descobrir é um cliente ligar dizendo que o extrato encolheu.
+
+**Ação sugerida:** chamar `collectUnknownReceiptTypes()` no `boleto-scan` (que já varre a base) e
+disparar alerta quando voltar não-vazio — mesmo canal dos outros alertas operacionais.
 
 ---
 
@@ -611,7 +831,35 @@ cobre um caso que este item não cobre (lead sem conversa nenhuma). Os dois são
 
 **Aguarda decisão do Marcos.**
 
-## [@devops 24/08/2026] CodeRabbit está inativo, mas os artefatos dizem que é gate obrigatório
+## ✅ [@devops 24/08/2026] CodeRabbit está inativo, mas os artefatos dizem que é gate obrigatório
+
+> **RESOLVIDO em 2026-08-27** (Story 90-1, PR #514). O diagnóstico registrado abaixo estava
+> **inteiramente correto** e foi confirmado item por item — vale ler como exemplo de investigação que
+> não precisou ser repetida.
+>
+> **O que mudou:**
+> - **GitHub App instalado** no repositório (autorizado pelo Marcos). Verificação objetiva: o PR #514
+>   recebeu review do autor `coderabbitai` e o check `CodeRabbit — Review completed` passou a aparecer.
+>   O bot confirma no comentário que está lendo `.coderabbit.yaml`.
+> - **`.coderabbit.yaml` deixou de cobrir só `.aios-core/**`.** Ganhou `path_instructions` para
+>   `supabase/migrations/**`, `webhook*/**`, `packages/ai/**`, `packages/web/src/lib/**` e
+>   `**/*.test.ts` — regras derivadas de incidentes reais, não de boas práticas genéricas.
+> - **A rule e a skill deixaram de assumir WSL.** A skill tinha um caminho absoluto de **outra
+>   máquina e outro projeto** (`/mnt/c/Users/AllFluence-User/.../aios-core`), o que a fazia falhar em
+>   qualquer ambiente. Agora há detecção de plataforma obrigatória.
+> - **A rule declara o App como gatilho primário** (roda no servidor, independe do SO) e o CLI como
+>   complemento local.
+>
+> **A "mentira documentada" que este item denunciava está desfeita:** binário ausente agora se
+> registra como "não executado", nunca como "passou". Foi exatamente assim que a Story 90-1 procedeu
+> nos três gates antes da instalação.
+>
+> **O que NÃO ficou resolvido:** o CLI local foi instalado e autenticado nesta máquina
+> (`~/.local/bin/coderabbit` 0.7.5), mas um review retroativo falhou com
+> `Connection failed: WebSocket closed` após 60 min. Não investigado — o gatilho que importa (App)
+> funciona, e o CLI é complemento opcional. As 124 stories com seção "CodeRabbit Integration"
+> preenchida retroativamente **não** foram revisitadas: seguem afirmando um gate que não rodou na
+> época. Corrigir 124 documentos históricos não foi julgado como ganho que pague o esforço.
 
 **Origem:** Story 75-368 (o `@dev` reportou que não conseguiu rodar). **Prioridade sugerida:** média —
 não é o que está falhando hoje, mas é uma mentira documentada. **Complexidade:** XS para acertar os

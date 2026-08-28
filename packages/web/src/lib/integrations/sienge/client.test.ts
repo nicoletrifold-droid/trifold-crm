@@ -8,7 +8,13 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
-import { getFinancialStatement, computeInformeFromStatements } from "./client"
+import {
+  getFinancialStatement,
+  computeInformeFromStatements,
+  getOpenBalance,
+  getNonCashLabel,
+  collectUnknownReceiptTypes,
+} from "./client"
 import type { SiengeInstallment } from "./types"
 
 function makeInstallment(overrides: Partial<SiengeInstallment>): SiengeInstallment {
@@ -133,6 +139,7 @@ describe("computeInformeFromStatements — baixas nos meses reais", () => {
     originalValue: 397600,
     generatedBillet: false,
     hasBoleto: false,
+    nonCashReceipts: [],
   }
 
   it("parcela com baixas em meses diferentes distribui cada baixa no seu mês", () => {
@@ -186,5 +193,358 @@ describe("computeInformeFromStatements — baixas nos meses reais", () => {
     expect(informe.totalPaidInYear).toBe(200)
     expect(informe.accumulatedPaid).toBe(300)
     expect(informe.remainingBalance).toBe(0)
+  })
+})
+
+/**
+ * Reparcelamento: o Sienge baixa a parcela antiga com
+ * `receiptType: "Reparcelamento"` e gera novas parcelas com o saldo. Tratar
+ * isso como pagamento contava a mesma dívida duas vezes.
+ *
+ * Caso real (CT.YAR-1301, cliente 1469): 13 baixas de "Recebimento" somando
+ * R$ 115.786,94 — o total do extrato oficial do Sienge — e 75 baixas de
+ * "Reparcelamento" somando R$ 423.317,28. O portal exibia a soma das duas,
+ * R$ 539.104,22.
+ */
+describe("getFinancialStatement — reparcelamento não é pagamento", () => {
+  beforeEach(() => {
+    vi.stubEnv("SIENGE_SUBDOMAIN", "trifold")
+    vi.stubEnv("SIENGE_USERNAME", "user")
+    vi.stubEnv("SIENGE_PASSWORD", "pass")
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.unstubAllGlobals()
+  })
+
+  it("baixa só de Reparcelamento → RENEGOCIADA, sem valor pago", async () => {
+    mockStatementResponse([
+      makeInstallment({
+        currentBalance: 0,
+        originalValue: 2000,
+        receipts: [
+          { receiptDate: "2025-12-06", receiptValue: 2000, receiptType: "Reparcelamento" },
+        ],
+      }),
+    ])
+
+    const [inst = null!] = await getFinancialStatement(1469)
+    expect(inst.status).toBe("RENEGOCIADA")
+    expect(inst.receiptValue).toBeUndefined()
+    expect(inst.receiptDate).toBeUndefined()
+    expect(inst.receipts).toHaveLength(0)
+    expect(inst.nonCashReceipts).toHaveLength(1)
+    // Não é dívida: já está representada nas parcelas que a substituíram.
+    expect(getOpenBalance(inst)).toBe(0)
+  })
+
+  it("baixa de Recebimento continua contando como pagamento", async () => {
+    mockStatementResponse([
+      makeInstallment({
+        currentBalance: 0,
+        originalValue: 10000,
+        receipts: [
+          { receiptDate: "2025-11-03", receiptValue: 10000, receiptType: "Recebimento" },
+        ],
+      }),
+    ])
+
+    const [inst = null!] = await getFinancialStatement(1469)
+    expect(inst.status).toBe("PAGO")
+    expect(inst.receiptValue).toBe(10000)
+    expect(getOpenBalance(inst)).toBe(0)
+  })
+
+  it("receiptType ausente conta como pagamento (não sumir com valor legítimo)", async () => {
+    mockStatementResponse([
+      makeInstallment({
+        currentBalance: 0,
+        receipts: [{ receiptDate: "2026-01-10", receiptValue: 500 }],
+      }),
+    ])
+
+    const [inst = null!] = await getFinancialStatement(1469)
+    expect(inst.status).toBe("PAGO")
+    expect(inst.receiptValue).toBe(500)
+  })
+
+  it("pagamento em dinheiro + reparcelamento posterior: só o dinheiro conta", async () => {
+    mockStatementResponse([
+      makeInstallment({
+        currentBalance: 0,
+        originalValue: 3000,
+        receipts: [
+          { receiptDate: "2026-01-10", receiptValue: 1000, receiptType: "Recebimento" },
+          { receiptDate: "2026-02-10", receiptValue: 2000, receiptType: "Reparcelamento" },
+        ],
+      }),
+    ])
+
+    const [inst = null!] = await getFinancialStatement(1469)
+    expect(inst.status).toBe("PAGO")
+    expect(inst.receiptValue).toBe(1000)
+    expect(inst.nonCashReceipts).toHaveLength(1)
+  })
+
+  it("grafia com acento/maiúsculas é reconhecida", async () => {
+    mockStatementResponse([
+      makeInstallment({
+        currentBalance: 0,
+        receipts: [{ receiptDate: "2026-01-10", receiptValue: 900, receiptType: "REPARCELAMENTO" }],
+      }),
+    ])
+
+    const [inst = null!] = await getFinancialStatement(1469)
+    expect(inst.status).toBe("RENEGOCIADA")
+    expect(inst.receiptValue).toBeUndefined()
+  })
+
+  it("informe do ano ignora reparcelamento e não ressuscita a dívida no saldo", async () => {
+    mockStatementResponse([
+      // Paga de verdade em 2026
+      makeInstallment({
+        installmentId: 1,
+        currentBalance: 0,
+        originalValue: 10000,
+        receipts: [
+          { receiptDate: "2026-01-15", receiptValue: 10000, receiptType: "Recebimento" },
+        ],
+      }),
+      // Renegociada em 2026 — não é rendimento nem saldo
+      makeInstallment({
+        installmentId: 2,
+        currentBalance: 0,
+        originalValue: 90000,
+        receipts: [
+          { receiptDate: "2026-02-20", receiptValue: 90000, receiptType: "Reparcelamento" },
+        ],
+      }),
+      // Parcela nova gerada pelo acordo, ainda em aberto
+      makeInstallment({ installmentId: 3, currentBalance: 95000, originalValue: 90000 }),
+    ])
+
+    const installments = await getFinancialStatement(1469)
+    const informe = computeInformeFromStatements(installments, 2026)
+
+    expect(informe.totalPaidInYear).toBe(10000)
+    expect(informe.accumulatedPaid).toBe(10000)
+    // Só a parcela nova — a renegociada (saldo 0) não pode virar originalValue.
+    expect(informe.remainingBalance).toBe(95000)
+    expect(informe.monthlyBreakdown).toHaveLength(1)
+    expect(informe.monthlyBreakdown[0]).toMatchObject({ month: 1, value: 10000 })
+  })
+})
+
+describe("collectUnknownReceiptTypes", () => {
+  it("aponta tipos de baixa ainda não classificados", () => {
+    const base = {
+      billReceivableId: 1,
+      documentId: "CT.X",
+      installmentId: 1,
+      installmentNumber: "1",
+      dueDate: "2026-01-01",
+      conditionType: "PM" as const,
+      originalValue: 100,
+      currentBalance: 0,
+      generatedBillet: false,
+      hasBoleto: false,
+      status: "PAGO" as const,
+      nonCashReceipts: [],
+    }
+
+    expect(
+      collectUnknownReceiptTypes([
+        { ...base, receipts: [{ receiptDate: "2026-01-01", receiptValue: 100, receiptType: "Recebimento" }] },
+        { ...base, receipts: [{ receiptDate: "2026-01-01", receiptValue: 100, receiptType: "Dação em pagamento" }] },
+      ])
+    ).toEqual(["Dação em pagamento"])
+  })
+})
+
+/**
+ * Story 75-369 — só "Recebimento" e "Abatimento de Adiantamento" são pagamento.
+ *
+ * Decisão do financeiro (28/08/2026) depois da varredura da base completa: dos
+ * 11 tipos de baixa que o Sienge registra, os outros 9 são baixa contábil e
+ * somavam R$ 155,7 milhões a mais no "total pago" exibido no portal.
+ */
+describe("getFinancialStatement — tipos de baixa que contam como pagamento", () => {
+  beforeEach(() => {
+    vi.stubEnv("SIENGE_SUBDOMAIN", "trifold")
+    vi.stubEnv("SIENGE_USERNAME", "user")
+    vi.stubEnv("SIENGE_PASSWORD", "pass")
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.unstubAllGlobals()
+  })
+
+  async function statusFor(receiptType: string | undefined) {
+    mockStatementResponse([
+      makeInstallment({
+        currentBalance: 0,
+        originalValue: 1000,
+        receipts: [{ receiptDate: "2026-03-10", receiptValue: 1000, receiptType }],
+      }),
+    ])
+    const [inst = null!] = await getFinancialStatement(1469)
+    return inst
+  }
+
+  it.each(["Recebimento", "Abatimento de Adiantamento"])(
+    "%s conta como pagamento",
+    async (tipo) => {
+      const inst = await statusFor(tipo)
+      expect(inst.status).toBe("PAGO")
+      expect(inst.receiptValue).toBe(1000)
+      expect(inst.nonCashReceipts).toHaveLength(0)
+    }
+  )
+
+  it.each([
+    "Reparcelamento",
+    "Substituição",
+    "Cancelamento",
+    "Adiantamento",
+    "Distrato",
+    "Outros",
+    "Bonificação",
+    "Repactuação",
+    "Outros com Resíduo",
+  ])("%s NÃO conta como pagamento", async (tipo) => {
+    const inst = await statusFor(tipo)
+    expect(inst.status).toBe("RENEGOCIADA")
+    expect(inst.receiptValue).toBeUndefined()
+    expect(inst.receipts).toHaveLength(0)
+    expect(inst.nonCashReceipts).toHaveLength(1)
+    // Saldo não muda em nenhum cenário: a parcela não volta a ser dívida.
+    expect(getOpenBalance(inst)).toBe(0)
+  })
+
+  it("tipo desconhecido NÃO conta como pagamento — default restritivo", async () => {
+    const inst = await statusFor("Dação em Pagamento")
+    expect(inst.status).toBe("RENEGOCIADA")
+    expect(inst.receiptValue).toBeUndefined()
+    expect(inst.nonCashReceipts).toHaveLength(1)
+    // E fica visível para auditoria, para o financeiro classificar o tipo novo.
+    expect(collectUnknownReceiptTypes([inst])).toEqual(["Dação em Pagamento"])
+  })
+
+  it("grafia sem acento, em caixa alta e com espaço extra é reconhecida", async () => {
+    const inst = await statusFor("  ABATIMENTO  DE ADIANTAMENTO ")
+    expect(inst.status).toBe("PAGO")
+    expect(inst.receiptValue).toBe(1000)
+  })
+
+  it("adiantamento + abatimento na mesma parcela: só o abatimento conta", async () => {
+    // O dinheiro do adiantamento entra uma única vez, no momento em que quita a
+    // parcela. Contar os dois dobraria o valor.
+    mockStatementResponse([
+      makeInstallment({
+        currentBalance: 0,
+        originalValue: 5000,
+        receipts: [
+          { receiptDate: "2026-01-05", receiptValue: 5000, receiptType: "Adiantamento" },
+          {
+            receiptDate: "2026-02-05",
+            receiptValue: 5000,
+            receiptType: "Abatimento de Adiantamento",
+          },
+        ],
+      }),
+    ])
+
+    const [inst = null!] = await getFinancialStatement(1469)
+    expect(inst.status).toBe("PAGO")
+    expect(inst.receiptValue).toBe(5000)
+    expect(inst.nonCashReceipts).toHaveLength(1)
+  })
+
+  it("recebimento + repactuação: só o recebimento entra no total pago", async () => {
+    // Caso mais comum da base: 1.601 repactuações, todas acompanhando um
+    // recebimento na mesma parcela — é ajuste, não um segundo pagamento.
+    mockStatementResponse([
+      makeInstallment({
+        currentBalance: 0,
+        originalValue: 2795.95,
+        receipts: [
+          { receiptDate: "2007-01-23", receiptValue: 2795.95, receiptType: "Recebimento" },
+          { receiptDate: "2007-01-23", receiptValue: 35.15, receiptType: "Repactuação" },
+        ],
+      }),
+    ])
+
+    const [inst = null!] = await getFinancialStatement(1469)
+    expect(inst.status).toBe("PAGO")
+    expect(inst.receiptValue).toBe(2795.95)
+  })
+
+  it("informe do ano soma abatimento de adiantamento e ignora o adiantamento", async () => {
+    mockStatementResponse([
+      makeInstallment({
+        installmentId: 1,
+        currentBalance: 0,
+        originalValue: 8000,
+        receipts: [
+          { receiptDate: "2026-01-15", receiptValue: 8000, receiptType: "Adiantamento" },
+        ],
+      }),
+      makeInstallment({
+        installmentId: 2,
+        currentBalance: 0,
+        originalValue: 8000,
+        receipts: [
+          {
+            receiptDate: "2026-02-15",
+            receiptValue: 8000,
+            receiptType: "Abatimento de Adiantamento",
+          },
+        ],
+      }),
+    ])
+
+    const installments = await getFinancialStatement(1469)
+    const informe = computeInformeFromStatements(installments, 2026)
+
+    expect(informe.totalPaidInYear).toBe(8000)
+    expect(informe.monthlyBreakdown).toHaveLength(1)
+    expect(informe.monthlyBreakdown[0]).toMatchObject({ month: 2, value: 8000 })
+  })
+})
+
+describe("getNonCashLabel — rótulo pelo tipo real da baixa", () => {
+  beforeEach(() => {
+    vi.stubEnv("SIENGE_SUBDOMAIN", "trifold")
+    vi.stubEnv("SIENGE_USERNAME", "user")
+    vi.stubEnv("SIENGE_PASSWORD", "pass")
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.unstubAllGlobals()
+  })
+
+  it.each([
+    ["Reparcelamento", "Renegociada"],
+    ["Substituição", "Substituída"],
+    ["Cancelamento", "Cancelada"],
+    ["Adiantamento", "Adiantamento"],
+    ["Distrato", "Distratada"],
+    ["Bonificação", "Bonificada"],
+    ["Repactuação", "Repactuada"],
+    ["Outros", "Baixada"],
+    ["Outros com Resíduo", "Baixada"],
+    ["Dação em Pagamento", "Baixada"],
+  ])("%s → %s", async (tipo, esperado) => {
+    mockStatementResponse([
+      makeInstallment({
+        currentBalance: 0,
+        receipts: [{ receiptDate: "2026-03-10", receiptValue: 100, receiptType: tipo }],
+      }),
+    ])
+    const [inst = null!] = await getFinancialStatement(1469)
+    expect(getNonCashLabel(inst)).toBe(esperado)
   })
 })

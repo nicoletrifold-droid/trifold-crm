@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>@view-transition{navigation:auto}</style>
+<title>Design System — Trifold Engenharia</title>
+<meta name="description" content="Design system institucional da marca Trifold Engenharia.">
+<link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-variable.woff2" crossorigin>
+<script src="./support.js" defer></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<link href="assets/fonts/fonts.css" rel="stylesheet">
+<style>
+  html{scroll-behavior:smooth}
+  ::view-transition-old(root),::view-transition-new(root){animation-duration:.38s;animation-timing-function:cubic-bezier(.4,0,.2,1)}
+  body{margin:0;background:#000;color:#fff;font-family:'Space Grotesk',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  ::selection{background:#F27A5E;color:#000}
+  a{color:inherit}
+</style>
+</helmet>
+
+<div style="background:#000;color:#fff;font-family:'Space Grotesk',system-ui,sans-serif">
+
+  <!-- ============ TOP NAV ============ -->
+  <div style="position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-content:space-between;padding:18px 48px;background:rgba(0,0,0,0.72);backdrop-filter:blur(14px);border-bottom:1px solid rgba(255,255,255,0.08)">
+    <dc-import name="Logo" tone="dark" size="{{ 22 }}" hint-size="180px,28px"></dc-import>
+    <div style="display:flex;align-items:center;gap:34px;font-size:13px;letter-spacing:0.04em;color:#9A9A9A">
+      <a href="#logo" style="text-decoration:none">Logo</a>
+      <a href="#tipografia" style="text-decoration:none">Tipografia</a>
+      <a href="#cores" style="text-decoration:none">Cores</a>
+      <a href="#componentes" style="text-decoration:none">Componentes</a>
+      <span style="font-family:'Space Mono',monospace;font-size:12px;color:#F27A5E">trifold.eng.br</span>
+    </div>
+  </div>
+
+  <!-- ============ HERO ============ -->
+  <section style="padding:120px 48px 100px;max-width:1120px;margin:0 auto">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:34px">
+      <span style="width:8px;height:8px;background:#F27A5E"></span>
+      <span style="font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.28em;text-transform:uppercase;color:#9A9A9A">Manual da Marca · Design System v1.0</span>
+    </div>
+    <h1 style="margin:0;font-size:clamp(56px,9vw,132px);font-weight:600;line-height:0.92;letter-spacing:-0.035em">Trifold<span style="color:#F27A5E">.</span></h1>
+    <p style="max-width:640px;margin:38px 0 0;font-size:19px;line-height:1.65;font-weight:300;color:#C9C9C9">A identidade da Trifold traduz, com elegância e robustez, a essência da engenharia civil. Formas geométricas, cantos retos e cores vibrantes constroem uma presença visual sólida e memorável.</p>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:44px">
+      <span style="padding:9px 16px;border:1px solid rgba(255,255,255,0.15);font-family:'Space Mono',monospace;font-size:12px;color:#C9C9C9">Space Grotesk</span>
+      <span style="padding:9px 16px;border:1px solid rgba(255,255,255,0.15);font-family:'Space Mono',monospace;font-size:12px;color:#C9C9C9">#000000 / #F27A5E</span>
+      <span style="padding:9px 16px;border:1px solid rgba(255,255,255,0.15);font-family:'Space Mono',monospace;font-size:12px;color:#C9C9C9">Engenharia Civil</span>
+    </div>
+  </section>
+
+  <!-- ============ 01 LOGO ============ -->
+  <section id="logo" style="padding:88px 48px;border-top:1px solid rgba(255,255,255,0.08);max-width:1120px;margin:0 auto;scroll-margin-top:80px">
+    <div style="display:flex;align-items:baseline;gap:18px;margin-bottom:56px">
+      <span style="font-family:'Space Mono',monospace;font-size:15px;color:#F27A5E">01</span>
+      <h2 style="margin:0;font-size:40px;font-weight:500;letter-spacing:-0.02em">Logo</h2>
+    </div>
+
+    <!-- variations -->
+    <p style="max-width:620px;margin:0 0 40px;font-size:15px;line-height:1.6;color:#9A9A9A">Duas variações principais: <strong style="color:#fff;font-weight:500">ícone + Trifold</strong> para comunicação institucional, e <strong style="color:#fff;font-weight:500">ícone + Trifold + Engenharia</strong> para contextos técnicos e B2B.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:64px">
+      <div style="display:flex;flex-direction:column;justify-content:space-between;min-height:220px;padding:36px;background:#0D0D0D;border:1px solid rgba(255,255,255,0.08);border-radius:6px">
+        <span style="font-family:'Space Mono',monospace;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:#6A6A6A">Institucional</span>
+        <dc-import name="Logo" tone="dark" size="{{ 34 }}" hint-size="320px,36px"></dc-import>
+      </div>
+      <div style="display:flex;flex-direction:column;justify-content:space-between;min-height:220px;padding:36px;background:#0D0D0D;border:1px solid rgba(255,255,255,0.08);border-radius:6px">
+        <span style="font-family:'Space Mono',monospace;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:#6A6A6A">Técnico / B2B</span>
+        <dc-import name="Logo" tone="dark" size="{{ 48 }}" eng="{{ true }}" hint-size="260px,50px"></dc-import>
+      </div>
+    </div>
+
+    <!-- backgrounds -->
+    <h3 style="margin:0 0 8px;font-size:20px;font-weight:500">Backgrounds sólidos</h3>
+    <p style="max-width:620px;margin:0 0 28px;font-size:14px;line-height:1.6;color:#9A9A9A">O fundo <strong style="color:#fff;font-weight:500">preto</strong> deve ser priorizado. O <strong style="color:#F27A5E;font-weight:500">laranja</strong> reforça energia em peças promocionais; branco e cinza são alternativas neutras.</p>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:64px">
+      <div style="display:flex;align-items:center;justify-content:center;height:150px;background:#000;border:1px solid rgba(255,255,255,0.12)"><dc-import name="Logo" tone="dark" size="{{ 22 }}" hint-size="200px,26px"></dc-import></div>
+      <div style="display:flex;align-items:center;justify-content:center;height:150px;background:#2E2E2E"><dc-import name="Logo" tone="dark" size="{{ 22 }}" hint-size="200px,26px"></dc-import></div>
+      <div style="display:flex;align-items:center;justify-content:center;height:150px;background:#F27A5E"><dc-import name="Logo" tone="onOrange" size="{{ 22 }}" hint-size="200px,26px"></dc-import></div>
+      <div style="display:flex;align-items:center;justify-content:center;height:150px;background:#F2F2F2"><dc-import name="Logo" tone="light" size="{{ 22 }}" hint-size="200px,26px"></dc-import></div>
+    </div>
+
+    <!-- icon meaning + clear space -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:64px">
+      <div style="padding:40px;background:#0D0D0D;border:1px solid rgba(255,255,255,0.08);border-radius:6px">
+        <img src="assets/icon-white.svg" alt="Ícone Trifold" style="display:block;height:68px;width:auto;margin-bottom:26px" />
+        <h3 style="margin:0 0 12px;font-size:20px;font-weight:500">O ícone</h3>
+        <p style="margin:0;font-size:14px;line-height:1.65;color:#9A9A9A">Forma geométrica que remete à força estrutural e, sutilmente, a uma pomba — símbolo de paz e propósito. Mais que um símbolo visual, um lembrete de ética e compromisso com o bem coletivo.</p>
+      </div>
+      <div style="position:relative;display:flex;align-items:center;justify-content:center;padding:40px;background:#0D0D0D;border:1px solid rgba(255,255,255,0.08);border-radius:6px;overflow:hidden">
+        <span style="position:absolute;top:20px;left:20px;font-family:'Space Mono',monospace;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:#6A6A6A">Área de proteção</span>
+        <div style="padding:32px;border:1px dashed rgba(242,122,94,0.5)">
+          <dc-import name="Logo" tone="dark" size="{{ 30 }}" hint-size="280px,34px"></dc-import>
+        </div>
+      </div>
+    </div>
+
+    <!-- don'ts -->
+    <h3 style="margin:0 0 24px;font-size:20px;font-weight:500">Como <span style="color:#F27A5E">NÃO</span> aplicar</h3>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px">
+      <sc-for list="{{ donts }}" as="d" hint-placeholder-count="6">
+        <div style="display:flex;align-items:center;gap:14px;padding:20px;background:#0D0D0D;border:1px solid rgba(255,255,255,0.08);border-radius:6px">
+          <span style="flex:none;display:flex;align-items:center;justify-content:center;width:26px;height:26px;background:rgba(242,122,94,0.14);color:#F27A5E;font-size:15px;font-weight:700">✕</span>
+          <span style="font-size:14px;color:#C9C9C9">{{ d }}</span>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <!-- ============ 02 TIPOGRAFIA ============ -->
+  <section id="tipografia" style="padding:88px 48px;border-top:1px solid rgba(255,255,255,0.08);max-width:1120px;margin:0 auto;scroll-margin-top:80px">
+    <div style="display:flex;align-items:baseline;gap:18px;margin-bottom:56px">
+      <span style="font-family:'Space Mono',monospace;font-size:15px;color:#F27A5E">02</span>
+      <h2 style="margin:0;font-size:40px;font-weight:500;letter-spacing:-0.02em">Tipografia</h2>
+    </div>
+
+    <div style="display:grid;grid-template-columns:0.9fr 1.1fr;gap:24px;align-items:stretch;margin-bottom:56px">
+      <div style="display:flex;align-items:center;justify-content:center;background:#F27A5E;color:#000;min-height:300px">
+        <span style="font-size:220px;font-weight:500;line-height:1">Aa</span>
+      </div>
+      <div style="display:flex;flex-direction:column;justify-content:center;padding:12px 4px">
+        <h3 style="margin:0 0 16px;font-size:32px;font-weight:600;letter-spacing:-0.02em">Space Grotesk</h3>
+        <p style="margin:0;font-size:15px;line-height:1.7;color:#9A9A9A">Fonte contemporânea, geométrica e versátil que reflete os pilares da marca: modernidade, solidez e sofisticação. Traços limpos garantem legibilidade em qualquer aplicação, sem abrir mão da elegância.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:28px">
+          <span style="padding:7px 13px;border:1px solid rgba(255,255,255,0.15);font-family:'Space Mono',monospace;font-size:11px;color:#C9C9C9">Light 300</span>
+          <span style="padding:7px 13px;border:1px solid rgba(255,255,255,0.15);font-family:'Space Mono',monospace;font-size:11px;color:#C9C9C9">Regular 400</span>
+          <span style="padding:7px 13px;border:1px solid rgba(255,255,255,0.15);font-family:'Space Mono',monospace;font-size:11px;color:#C9C9C9">Medium 500</span>
+          <span style="padding:7px 13px;border:1px solid rgba(255,255,255,0.15);font-family:'Space Mono',monospace;font-size:11px;color:#C9C9C9">SemiBold 600</span>
+          <span style="padding:7px 13px;border:1px solid rgba(255,255,255,0.15);font-family:'Space Mono',monospace;font-size:11px;color:#C9C9C9">Bold 700</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- charset -->
+    <div style="padding:32px 36px;background:#0D0D0D;border:1px solid rgba(255,255,255,0.08);border-radius:6px;margin-bottom:56px">
+      <p style="margin:0 0 14px;font-size:26px;font-weight:400;letter-spacing:0.02em;color:#fff;word-spacing:2px">ABCDEFGHIJKLMNOPQRSTUVWXYZ</p>
+      <p style="margin:0 0 14px;font-size:26px;font-weight:400;letter-spacing:0.02em;color:#C9C9C9;word-spacing:2px">abcdefghijklmnopqrstuvwxyz</p>
+      <p style="margin:0;font-size:26px;font-weight:400;letter-spacing:0.02em;color:#F27A5E">1234567890 (!@#$%^&*)</p>
+    </div>
+
+    <!-- highlight rule -->
+    <div style="display:flex;gap:20px;align-items:flex-start;padding:28px 32px;background:#0D0D0D;border:1px solid rgba(255,255,255,0.08);border-radius:6px;border-left:3px solid #F27A5E;margin-bottom:56px">
+      <span style="flex:none;font-family:'Space Mono',monospace;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:#6A6A6A;padding-top:4px">Destaques</span>
+      <p style="margin:0;font-size:16px;line-height:1.7;font-weight:300;color:#C9C9C9">Palavras em destaque podem usar o peso <strong style="font-weight:600;color:#fff">SemiBold (600)</strong> para criar ênfase — como em <strong style="font-weight:600;color:#fff">engenharia estrutural</strong> ou <strong style="font-weight:600;color:#F27A5E">solicite um orçamento</strong>. Use com parcimônia, mantendo o corpo de texto em Light/Regular.</p>
+    </div>
+
+    <!-- type scale -->
+    <h3 style="margin:0 0 24px;font-size:20px;font-weight:500">Escala tipográfica</h3>
+    <div style="display:flex;flex-direction:column">
+      <sc-for list="{{ typeScale }}" as="t" hint-placeholder-count="5">
+        <div style="display:flex;align-items:baseline;gap:24px;padding:22px 0;border-top:1px solid rgba(255,255,255,0.08)">
+          <span style="flex:none;width:110px;font-family:'Space Mono',monospace;font-size:11px;color:#6A6A6A">{{ t.meta }}</span>
+          <span style="{{ t.style }}">{{ t.label }}</span>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <!-- ============ 03 CORES ============ -->
+  <section id="cores" style="padding:88px 48px;border-top:1px solid rgba(255,255,255,0.08);max-width:1120px;margin:0 auto;scroll-margin-top:80px">
+    <div style="display:flex;align-items:baseline;gap:18px;margin-bottom:24px">
+      <span style="font-family:'Space Mono',monospace;font-size:15px;color:#F27A5E">03</span>
+      <h2 style="margin:0;font-size:40px;font-weight:500;letter-spacing:-0.02em">Cores</h2>
+    </div>
+    <p style="max-width:620px;margin:0 0 48px;font-size:15px;line-height:1.6;color:#9A9A9A">Preto e laranja como cores principais — o preto transmite sofisticação e solidez, o laranja reforça inovação e energia. Cinza e branco entram como apoio, garantindo equilíbrio e clareza.</p>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+      <sc-for list="{{ colors }}" as="c" hint-placeholder-count="5">
+        <div style="border:1px solid rgba(255,255,255,0.1);border-radius:6px;overflow:hidden">
+          <div style="height:150px;background:{{ c.swatch }};border-bottom:1px solid rgba(255,255,255,0.1)"></div>
+          <div style="padding:22px 20px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+              <span style="font-size:16px;font-weight:600">{{ c.name }}</span>
+              <span style="font-family:'Space Mono',monospace;font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#F27A5E">{{ c.role }}</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:6px;font-family:'Space Mono',monospace;font-size:12px;color:#9A9A9A">
+              <div style="display:flex;justify-content:space-between"><span>HEX</span><span style="color:#E6E6E6">{{ c.hex }}</span></div>
+              <div style="display:flex;justify-content:space-between"><span>RGB</span><span style="color:#E6E6E6">{{ c.rgb }}</span></div>
+              <div style="display:flex;justify-content:space-between"><span>PANTONE</span><span style="color:#E6E6E6">{{ c.pantone }}</span></div>
+            </div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <!-- ============ 04 COMPONENTES ============ -->
+  <section id="componentes" style="padding:88px 48px;border-top:1px solid rgba(255,255,255,0.08);max-width:1120px;margin:0 auto;scroll-margin-top:80px">
+    <div style="display:flex;align-items:baseline;gap:18px;margin-bottom:24px">
+      <span style="font-family:'Space Mono',monospace;font-size:15px;color:#F27A5E">04</span>
+      <h2 style="margin:0;font-size:40px;font-weight:500;letter-spacing:-0.02em">Componentes</h2>
+    </div>
+    <p style="max-width:620px;margin:0 0 48px;font-size:15px;line-height:1.6;color:#9A9A9A">Blocos de UI aplicando a identidade — prontos para montar o site trifold.eng.br.</p>
+
+    <!-- buttons -->
+    <h3 style="margin:0 0 20px;font-size:16px;font-weight:500;color:#9A9A9A;letter-spacing:0.02em">Botões</h3>
+    <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin-bottom:56px">
+      <button style="padding:14px 28px;background:#F27A5E;color:#000;border:none;border-radius:2px;font-family:inherit;font-size:14px;font-weight:600;letter-spacing:0.01em;cursor:pointer">Solicitar orçamento</button>
+      <button style="padding:14px 28px;background:transparent;color:#fff;border:1px solid rgba(255,255,255,0.35);border-radius:2px;font-family:inherit;font-size:14px;font-weight:500;cursor:pointer">Ver projetos</button>
+      <button style="padding:14px 28px;background:#fff;color:#000;border:none;border-radius:2px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">Fale conosco</button>
+      <button style="display:inline-flex;align-items:center;gap:8px;padding:14px 6px;background:none;color:#F27A5E;border:none;font-family:inherit;font-size:14px;font-weight:500;cursor:pointer">Saiba mais <span style="font-size:16px">→</span></button>
+    </div>
+
+    <!-- cards -->
+    <h3 style="margin:0 0 20px;font-size:16px;font-weight:500;color:#9A9A9A;letter-spacing:0.02em">Cards</h3>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:32px">
+      <sc-for list="{{ services }}" as="s" hint-placeholder-count="3">
+        <div style="padding:30px;background:#0D0D0D;border:1px solid rgba(255,255,255,0.08);border-radius:6px">
+          <span style="font-family:'Space Mono',monospace;font-size:12px;color:#F27A5E">{{ s.num }}</span>
+          <h4 style="margin:20px 0 10px;font-size:19px;font-weight:600">{{ s.title }}</h4>
+          <p style="margin:0;font-size:14px;line-height:1.6;color:#9A9A9A">{{ s.desc }}</p>
+        </div>
+      </sc-for>
+    </div>
+
+    <!-- project card w/ placeholder image -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:56px">
+      <sc-for list="{{ projects }}" as="p" hint-placeholder-count="3">
+        <div style="border:1px solid rgba(255,255,255,0.08);border-radius:6px;overflow:hidden">
+          <div style="position:relative;aspect-ratio:4/3;background-image:repeating-linear-gradient(135deg,#161616 0 12px,#111 12px 24px);display:flex;align-items:center;justify-content:center">
+            <span style="font-family:'Space Mono',monospace;font-size:11px;letter-spacing:0.1em;color:#5A5A5A">[ foto da obra ]</span>
+          </div>
+          <div style="padding:22px 20px">
+            <span style="font-family:'Space Mono',monospace;font-size:11px;color:#F27A5E">{{ p.tag }}</span>
+            <h4 style="margin:12px 0 4px;font-size:17px;font-weight:600">{{ p.title }}</h4>
+            <p style="margin:0;font-size:13px;color:#9A9A9A">{{ p.loc }}</p>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+
+    <!-- chips + input -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:40px">
+      <div>
+        <h3 style="margin:0 0 20px;font-size:16px;font-weight:500;color:#9A9A9A;letter-spacing:0.02em">Tags</h3>
+        <div style="display:flex;flex-wrap:wrap;gap:10px">
+          <sc-for list="{{ tags }}" as="tg" hint-placeholder-count="5">
+            <span style="padding:8px 15px;background:rgba(242,122,94,0.12);color:#F27A5E;font-size:13px;font-weight:500">{{ tg }}</span>
+          </sc-for>
+        </div>
+      </div>
+      <div>
+        <h3 style="margin:0 0 20px;font-size:16px;font-weight:500;color:#9A9A9A;letter-spacing:0.02em">Campo de formulário</h3>
+        <label style="display:block;font-size:12px;letter-spacing:0.04em;color:#9A9A9A;margin-bottom:8px">E-mail</label>
+        <div style="display:flex;gap:10px">
+          <input placeholder="voce@empresa.com" style="flex:1;padding:14px 16px;background:#0D0D0D;border:1px solid rgba(255,255,255,0.18);border-radius:2px;color:#fff;font-family:inherit;font-size:14px;outline:none" />
+          <button style="padding:14px 24px;background:#F27A5E;color:#000;border:none;border-radius:2px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">Enviar</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ FOOTER ============ -->
+  <footer style="padding:72px 48px 56px;border-top:1px solid rgba(255,255,255,0.08);background:#0A0A0A">
+    <div style="max-width:1120px;margin:0 auto;display:flex;flex-wrap:wrap;gap:32px;justify-content:space-between;align-items:flex-end">
+      <div>
+        <dc-import name="Logo" tone="dark" size="{{ 32 }}" hint-size="300px,36px"></dc-import>
+        <p style="margin:24px 0 0;max-width:360px;font-size:13px;line-height:1.6;color:#6A6A6A">Se ainda houver dúvidas em relação ao uso da marca, consulte o setor de marketing da Trifold.</p>
+      </div>
+      <span style="font-family:'Space Mono',monospace;font-size:13px;color:#F27A5E">trifold.eng.br</span>
+    </div>
+  </footer>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{}">
+class Component extends DCLogic {
+  renderVals() {
+    const mono = "'Space Mono',monospace";
+    return {
+      donts: [
+        'Evite remover elementos da marca',
+        'Evite inclinar a marca',
+        'Evite distorcer a marca',
+        'Evite reorganizar os elementos',
+        'Evite mudança de cores',
+        'Evite sobreposição sobre imagens',
+      ],
+      typeScale: [
+        { meta: 'Display · 132/600', label: 'Construímos', style:{fontSize:'56px',fontWeight:600,letterSpacing:'-0.03em',lineHeight:1} },
+        { meta: 'Título · 40/500',   label: 'Engenharia que sustenta', style:{fontSize:'34px',fontWeight:500,letterSpacing:'-0.02em'} },
+        { meta: 'Subtítulo · 24/500',label: 'Projetos estruturais e obras', style:{fontSize:'22px',fontWeight:500} },
+        { meta: 'Corpo · 16/300',    label: 'Texto de leitura para parágrafos e descrições técnicas do site.', style:{fontSize:'16px',fontWeight:300,color:'#C9C9C9'} },
+        { meta: 'Legenda · 12/400',  label: 'ANOTAÇÃO · METADADOS · CAPTION', style:{fontFamily:mono,fontSize:'12px',letterSpacing:'0.14em',color:'#9A9A9A'} },
+      ],
+      colors: [
+        { name:'Preto',   role:'Primária',   swatch:'#000000', hex:'#000000', rgb:'0 / 0 / 0',      pantone:'P 179-16 C' },
+        { name:'Grafite', role:'Primária',   swatch:'#2E2E2E', hex:'#2E2E2E', rgb:'46 / 46 / 46',   pantone:'P 45-5 C' },
+        { name:'Laranja', role:'Secundária', swatch:'#F27A5E', hex:'#F27A5E', rgb:'242 / 122 / 94', pantone:'P 179-15 C' },
+        { name:'Cinza',   role:'Apoio',      swatch:'#9A9A9A', hex:'#9A9A9A', rgb:'154 / 154 / 154',pantone:'Cool Gray 7 C' },
+        { name:'Branco',  role:'Apoio',      swatch:'#FFFFFF', hex:'#FFFFFF', rgb:'255 / 255 / 255',pantone:'—' },
+      ],
+      services: [
+        { num:'01', title:'Projetos estruturais', desc:'Cálculo e dimensionamento de estruturas em concreto, aço e madeira com precisão técnica.' },
+        { num:'02', title:'Gestão de obras', desc:'Planejamento, orçamento e execução com controle rigoroso de prazos e qualidade.' },
+        { num:'03', title:'Consultoria & laudos', desc:'Pareceres técnicos, laudos estruturais e acompanhamento de patologias.' },
+      ],
+      projects: [
+        { tag:'Residencial', title:'Edifício Meridiano', loc:'Vitória · ES' },
+        { tag:'Corporativo', title:'Centro Empresarial Norte', loc:'Serra · ES' },
+        { tag:'Infraestrutura', title:'Ponte do Canal', loc:'Vila Velha · ES' },
+      ],
+      tags: ['Estrutural','Concreto armado','Gestão','Laudos','BIM','Sustentável'],
+    };
+  }
+}
+</script>
+</body>
+</html>

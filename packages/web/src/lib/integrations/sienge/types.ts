@@ -28,6 +28,18 @@ export interface SiengeCustomersResponse {
 export interface SiengeReceipt {
   receiptDate: string
   receiptValue: number
+  /**
+   * Natureza da baixa. O Sienge registra 11 tipos, e só dois são pagamento do
+   * cliente: "Recebimento" e "Abatimento de Adiantamento" (definição do
+   * financeiro, 28/08/2026). Os outros nove são baixas contábeis — reparcelamento,
+   * substituição, cancelamento, adiantamento, distrato, outros, bonificação,
+   * repactuação e outros com resíduo — em que nenhum dinheiro do cliente entrou.
+   * Ver `CASH_RECEIPT_TYPES` e `isCashReceipt()` em installments.ts.
+   */
+  receiptType?: string | null
+  netReceiptValue?: number
+  discountValue?: number
+  interestValue?: number
 }
 
 export interface SiengeInstallment {
@@ -83,7 +95,17 @@ export interface SiengeReceivableBill {
 
 // PARCIAL = parcela com baixa(s) mas saldo devedor > 0 (Story 75-284). Nunca
 // tratar como quitada: o cliente ainda deve o currentBalance.
-export type InstallmentStatus = "PAGO" | "PARCIAL" | "BOLETO_GERADO" | "EM_ABERTO"
+// RENEGOCIADA = parcela baixada sem pagamento (reparcelamento, substituição,
+// cancelamento, distrato, adiantamento…). Não foi paga nem é devida: ou a dívida
+// vive nas parcelas novas que o Sienge gerou no lugar dela, ou deixou de existir.
+// Não entra em "pago" nem em "em aberto" — senão é contada em dobro.
+// O rótulo exibido ao cliente vem de `getNonCashLabel()`, pelo tipo real da baixa.
+export type InstallmentStatus =
+  | "PAGO"
+  | "PARCIAL"
+  | "RENEGOCIADA"
+  | "BOLETO_GERADO"
+  | "EM_ABERTO"
 
 export interface FormattedInstallment {
   billReceivableId: number
@@ -97,11 +119,21 @@ export interface FormattedInstallment {
   generatedBillet: boolean
   status: InstallmentStatus
   hasBoleto: boolean
-  /** Todas as baixas da parcela (data + valor), em ordem cronológica. */
+  /**
+   * Baixas que são pagamento (`isCashReceipt`), em ordem cronológica. É o que
+   * pode ser mostrado ao cliente como pago e somado em totais.
+   */
   receipts: SiengeReceipt[]
-  /** Data da última baixa. */
+  /**
+   * Baixas que NÃO são pagamento do cliente — tudo que está fora de
+   * `CASH_RECEIPT_TYPES`, incluindo tipos novos ainda não classificados.
+   * Mantidas separadas para auditoria e para explicar a parcela na tela; nunca
+   * somar junto de `receiptValue`.
+   */
+  nonCashReceipts: SiengeReceipt[]
+  /** Data da última baixa em dinheiro. */
   receiptDate?: string
-  /** Somatório das baixas. */
+  /** Somatório das baixas em dinheiro. */
   receiptValue?: number
 }
 

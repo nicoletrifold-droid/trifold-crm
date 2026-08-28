@@ -204,6 +204,7 @@ describe("enforced — regra anti-'botão que mente' (75-301, AC1)", () => {
         "leads.ia_retomar",
         "leads.ia_resumo",
         "leads.ia_analisar",
+        "leads.live_coach",
         "conversas.enviar",
         "conversas.enviar_qualquer",
         "conversas.abrir_template",
