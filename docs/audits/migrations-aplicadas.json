@@ -1,0 +1,1628 @@
+{
+  "_aviso": "O BANCO É A VERDADE; este arquivo é o retrato que aparece no diff de PR. Regenerado por `pnpm db:status`, uma chave por ambiente — cada execução só reescreve a chave do ambiente que ela consultou, para que um `db:status` contra teste não apague o retrato de produção. `aplicada_em` NÃO entra aqui de propósito: ele muda a cada reset e afogaria o diff.",
+  "teste": {
+    "gerado_em": "2026-08-29T18:24:17.405Z",
+    "projeto_ref": "xnxvygyfyyyzwhiuoehz",
+    "totais": {
+      "aplicada": 268,
+      "PENDENTE": 0,
+      "ALTERADA-APÓS-APLICAR": 0,
+      "ÓRFÃ-no-banco": 0
+    },
+    "arquivos": [
+      {
+        "arquivo": "001_base_schema.sql",
+        "estado": "aplicada",
+        "sha256": "84bcde0cc5e616a505ae74b697df2af5b7dc2c62b1bdde72d0531043a522b449",
+        "via": "reset"
+      },
+      {
+        "arquivo": "002_property_schema.sql",
+        "estado": "aplicada",
+        "sha256": "a6127df4c090e5217a9a80450fcf50b658e979fce487caf82b51b439c8f40d25",
+        "via": "reset"
+      },
+      {
+        "arquivo": "003_whatsapp_config.sql",
+        "estado": "aplicada",
+        "sha256": "0f865dc5e8be9269b1f6fcc3aa090bb3eff2dd8577c9e0ef71b6569c49e35fab",
+        "via": "reset"
+      },
+      {
+        "arquivo": "004_rls_policies.sql",
+        "estado": "aplicada",
+        "sha256": "e07b9a75cd1f7338e4a0d932a860547cdeef84adfdcf4fb3744aabcec5053e63",
+        "via": "reset"
+      },
+      {
+        "arquivo": "005_rag_search_function.sql",
+        "estado": "aplicada",
+        "sha256": "9ef6c3085dd350555c27bb640a6b4e7da1fb463f29a240ffb09d7107eef55738",
+        "via": "reset"
+      },
+      {
+        "arquivo": "006_appointments.sql",
+        "estado": "aplicada",
+        "sha256": "1f6fdcab95d63c23854a7bd53b80c85bb9628543a83986fd962f7c291dcc550a",
+        "via": "reset"
+      },
+      {
+        "arquivo": "007_unit_sales.sql",
+        "estado": "aplicada",
+        "sha256": "ab23d7d9320ef5b739b951d75ab5a71c7d916df98685438f346a524f91938ed0",
+        "via": "reset"
+      },
+      {
+        "arquivo": "008_followup.sql",
+        "estado": "aplicada",
+        "sha256": "e3322f0c23253e93f629e51f7fc2e799c0972450dcdb79aab36e09d6811b3f39",
+        "via": "reset"
+      },
+      {
+        "arquivo": "009_system_events.sql",
+        "estado": "aplicada",
+        "sha256": "a9eddf916a931547eed500fbe8a343a834b701d2192803b06e08ecc03efe01c4",
+        "via": "reset"
+      },
+      {
+        "arquivo": "010_conversations_last_enriched_at.sql",
+        "estado": "aplicada",
+        "sha256": "251821e4388d031e8886a3a80c12e4580f778e526ee77b663af443e1c6ca7851",
+        "via": "reset"
+      },
+      {
+        "arquivo": "011_noshow_stage.sql",
+        "estado": "aplicada",
+        "sha256": "60d8a22f3ee41e83ddcf333ab474f73cc8984affb1303085937ed627da15e403",
+        "via": "reset"
+      },
+      {
+        "arquivo": "012_lead_memory_system.sql",
+        "estado": "aplicada",
+        "sha256": "df75d639e11758ef5aee72416dafd9345553a03c179273e2f2197ab02d7aefe1",
+        "via": "reset"
+      },
+      {
+        "arquivo": "013_campaign_engine.sql",
+        "estado": "aplicada",
+        "sha256": "82edf889b1e9536adeb4ee58c1eded75d3e5875d43cf755232b30f8204bb7d88",
+        "via": "reset"
+      },
+      {
+        "arquivo": "014_fix_campaign_rls.sql",
+        "estado": "aplicada",
+        "sha256": "c236b88514fa465a7473e598fc770198d5d181e1e0178b9f2b018b7412220f73",
+        "via": "reset"
+      },
+      {
+        "arquivo": "015_meta_marketing_api.sql",
+        "estado": "aplicada",
+        "sha256": "0759af6c9dffb0411cc780887660e8be5f247ee02c0313f61aab69c5e8eaabbe",
+        "via": "reset"
+      },
+      {
+        "arquivo": "016_meta_campaign_roas_view.sql",
+        "estado": "aplicada",
+        "sha256": "7610a2ba7d0aecacd80d755ae1e65829db7af73ebc8e9ba9e4f8dfe133376fef",
+        "via": "reset"
+      },
+      {
+        "arquivo": "017_campaign_email_clicked.sql",
+        "estado": "aplicada",
+        "sha256": "95d22db363fea80b5514e001b8c38bd3b064b317ad163d1874da52a1d49e3a6b",
+        "via": "reset"
+      },
+      {
+        "arquivo": "018_email_central.sql",
+        "estado": "aplicada",
+        "sha256": "9ce40ca7d5cf4233be8f0111aaf45f674e503289e3d8407887a8c472a89722b9",
+        "via": "reset"
+      },
+      {
+        "arquivo": "019_portal_cliente_enum.sql",
+        "estado": "aplicada",
+        "sha256": "8b91fd764cc4f9a5b9ce233c6ba0b94ca27f36e09b3104b98a882cb30e0f3fad",
+        "via": "reset"
+      },
+      {
+        "arquivo": "020_portal_cliente.sql",
+        "estado": "aplicada",
+        "sha256": "84a70c8fa7def448d5f36b1874179c0bc9738c3049c021cda2b11b518e2c75c7",
+        "via": "reset"
+      },
+      {
+        "arquivo": "021_obras_storage_policies.sql",
+        "estado": "aplicada",
+        "sha256": "8ee87681b8ddadb784f6edadb6d11005fac115d50d59c48be2caf57b3a76d3b1",
+        "via": "reset"
+      },
+      {
+        "arquivo": "021_phone_normalization_part1.sql",
+        "estado": "aplicada",
+        "sha256": "713fa7afe0569d02819d082810458179567b49b1d1dd0101a2286756789b4c0f",
+        "via": "reset"
+      },
+      {
+        "arquivo": "021_phone_normalization_part2.sql",
+        "estado": "aplicada",
+        "sha256": "aa469c80f68fefe4e11234f0ee26efb4ba6d1052d7dd6ce584180e9ee9f340f3",
+        "via": "reset"
+      },
+      {
+        "arquivo": "022_portal_docs_mensagens_storage.sql",
+        "estado": "aplicada",
+        "sha256": "9374be986cbee695a8b7c4e5879672229452124861fc32fd171c845acf6e5dab",
+        "via": "reset"
+      },
+      {
+        "arquivo": "023_push_notifications.sql",
+        "estado": "aplicada",
+        "sha256": "b6b93c942aaf8037acf7aa6cdd11849c397d5a08886887a4615e51375b786837",
+        "via": "reset"
+      },
+      {
+        "arquivo": "024_phone_normalization_part1_remote_only.sql",
+        "estado": "aplicada",
+        "sha256": "f66e0992d46af38df76d7896991df183f6b004ba054a4bf2358d8f6ad0d8a67e",
+        "via": "reset"
+      },
+      {
+        "arquivo": "024_phone_normalization_part1.sql",
+        "estado": "aplicada",
+        "sha256": "705d814d594f20195d7424eeb6d76415c4af25a6d05c2f9bd60dd0fd714c8c06",
+        "via": "reset"
+      },
+      {
+        "arquivo": "024b_mensagens_sender_display_name.sql",
+        "estado": "aplicada",
+        "sha256": "6b95f34fa0a29a6ad50f23fcfd76c00ea89f75ce4611ff6a47b9f71f54dc464a",
+        "via": "reset"
+      },
+      {
+        "arquivo": "025_phone_normalization_part2_remote_only.sql",
+        "estado": "aplicada",
+        "sha256": "c7c3e6733f3590d5d387e9d7017ca379b3b9367d2ed06467b7397343c3a1e17b",
+        "via": "reset-falha-conhecida"
+      },
+      {
+        "arquivo": "025_phone_normalization_part2.sql",
+        "estado": "aplicada",
+        "sha256": "5416dabc8255bb7440d30243251ccc3223d3719f7edea9ff21d7ec80cefaeff2",
+        "via": "reset-falha-conhecida"
+      },
+      {
+        "arquivo": "026_email_settings.sql",
+        "estado": "aplicada",
+        "sha256": "2921ed6c290419c7f15209e81ba40e61759e72b1e7bd9f482fffa4a4c49c21f4",
+        "via": "reset"
+      },
+      {
+        "arquivo": "027_placeholder.sql",
+        "estado": "aplicada",
+        "sha256": "c2cb7a4cf2aef9a801009abe1589ff5803e66f83174a6b1f848be0ab48afc9a4",
+        "via": "reset"
+      },
+      {
+        "arquivo": "027_property_id_obras.sql",
+        "estado": "aplicada",
+        "sha256": "463dc560e28fb8e7415c6d99ffaeb85a395016e38c2abebc9e9e4a6963361ef9",
+        "via": "reset"
+      },
+      {
+        "arquivo": "028a_fix_v_mensagens_admin_grant.sql",
+        "estado": "aplicada",
+        "sha256": "35c732af5fa1f4d296be65de7d8abc61931a8e422f323675bb8f1bd11a5b30cf",
+        "via": "reset"
+      },
+      {
+        "arquivo": "028b_meta_campaign_actions.sql",
+        "estado": "aplicada",
+        "sha256": "f06b159abb0e1ba4064f19f6679924e5a6b68467643f4c404b7beb6ca568d531",
+        "via": "reset"
+      },
+      {
+        "arquivo": "029a_cliente_id_obra_mensagens.sql",
+        "estado": "aplicada",
+        "sha256": "f3c868d7796b59adb6f92d00b65a97de8b45cd4cf56ae1a537112dd42910fbd3",
+        "via": "reset"
+      },
+      {
+        "arquivo": "029b_privacy_acceptance.sql",
+        "estado": "aplicada",
+        "sha256": "4f11621c029c4553970edafbaadc376197fb034353c37303e75ee0644986cc14",
+        "via": "reset"
+      },
+      {
+        "arquivo": "030_role_obras.sql",
+        "estado": "aplicada",
+        "sha256": "78f861539f98e9d5e6176f81852cdc90ce3e56b4f50ae16a3eda795918f8f4e1",
+        "via": "reset"
+      },
+      {
+        "arquivo": "031_controle_brindes.sql",
+        "estado": "aplicada",
+        "sha256": "491d2fea0091a36052bdec5dda8d814091d0e28dd6890dac703183b77924bfeb",
+        "via": "reset"
+      },
+      {
+        "arquivo": "031_fk_indexes_critical_remote_only.sql",
+        "estado": "aplicada",
+        "sha256": "a35f277f19776e0c6cc95f7975037fd5f2f4c25113cc171c1b8b2ba19b6716d4",
+        "via": "reset"
+      },
+      {
+        "arquivo": "032_composite_indexes_hot_remote_only.sql",
+        "estado": "aplicada",
+        "sha256": "a810936127738cd4a0c047773e323898e2ba410766e99dcf32247d40844754e5",
+        "via": "reset"
+      },
+      {
+        "arquivo": "032_user_theme.sql",
+        "estado": "aplicada",
+        "sha256": "0e9b22db0d58e96308af691452fad6f643f9ef213ff36a520062a87b748a7ef1",
+        "via": "reset"
+      },
+      {
+        "arquivo": "033_obra_upload_aprovacoes.sql",
+        "estado": "aplicada",
+        "sha256": "1e76a43bebe8f1903bcac606ee467c4f19e1f206fe907608b0b91ea806635932",
+        "via": "reset"
+      },
+      {
+        "arquivo": "033_vector_index_knowledge_base_remote_only.sql",
+        "estado": "aplicada",
+        "sha256": "dd794fc8dd280e5f3b541ab420b7b13e7b5a496b2c891ebf895874e26a29a61d",
+        "via": "reset"
+      },
+      {
+        "arquivo": "034_cliente_obras_numero_unidade.sql",
+        "estado": "aplicada",
+        "sha256": "fb0dc103dbdfe53b53387c4bec00ffb14027449def392c77577a9f31296a18af",
+        "via": "reset"
+      },
+      {
+        "arquivo": "034_partial_indexes_queues_remote_only.sql",
+        "estado": "aplicada",
+        "sha256": "de43d15d55abc36d70e4e68bb61c631de1a9c8214342f62868d5911f540c25b1",
+        "via": "reset"
+      },
+      {
+        "arquivo": "035_materialize_meta_campaign_roas_remote_only.sql",
+        "estado": "aplicada",
+        "sha256": "e752c840052d8051919a494c449507714443ecdf91b8b6c735c34922a9d11426",
+        "via": "reset"
+      },
+      {
+        "arquivo": "036_brindes_tipos.sql",
+        "estado": "aplicada",
+        "sha256": "1ae6ba106ac54013c7d186248e9fe6c3ecaa95d533d52c10445e8c8ba0a0caae",
+        "via": "reset"
+      },
+      {
+        "arquivo": "036_pg_cron_cleanup_jobs_remote_only.sql",
+        "estado": "aplicada",
+        "sha256": "17edebb8a2ca0ed286c9f044d6f9c92ea62dd5fb90f9c98028f7b3c22ecbe313",
+        "via": "reset"
+      },
+      {
+        "arquivo": "037_dashboard_rpcs_remote_only.sql",
+        "estado": "aplicada",
+        "sha256": "d6a2d9cba043453463d5b21532a47adabbaa248e4e5d2882dc01c54b2d4bb5ac",
+        "via": "reset"
+      },
+      {
+        "arquivo": "038_conversations_last_message_preview_remote_only.sql",
+        "estado": "aplicada",
+        "sha256": "838a4f328738992cfcc3c2aaa9138f7a95fb2398e1beb1315a66fa3e05106313",
+        "via": "reset"
+      },
+      {
+        "arquivo": "039_admin_mensagens_rpc_remote_only.sql",
+        "estado": "aplicada",
+        "sha256": "7d3b29ae29205afc56f26b25dc169cca31e8cd2334c2037f51a0b733ec11acd5",
+        "via": "reset"
+      },
+      {
+        "arquivo": "040_brinde_tipo_id_destinatario.sql",
+        "estado": "aplicada",
+        "sha256": "8c501579d6a40e78b3dc99262beacfa217231da52b1551c46ca12ebee1fd81f2",
+        "via": "reset"
+      },
+      {
+        "arquivo": "041_clientes_crm.sql",
+        "estado": "aplicada",
+        "sha256": "481132cf601967a5f0028fddb129104cb231071e8f85a95f61aa34140096a8f0",
+        "via": "reset"
+      },
+      {
+        "arquivo": "042_cliente_id_destinatario.sql",
+        "estado": "aplicada",
+        "sha256": "6a3539fd0f7672a93115a8b1107a7c54aef40d3619c28da57719bdf943d424ed",
+        "via": "reset"
+      },
+      {
+        "arquivo": "043_property_commercial_rules_v2.sql",
+        "estado": "aplicada",
+        "sha256": "854b81924f795c0e483de85209f6c2bd746db3dce4951f1bf86435e76ee7af1a",
+        "via": "reset"
+      },
+      {
+        "arquivo": "044_email_automations_birthday_trigger.sql",
+        "estado": "aplicada",
+        "sha256": "618bf6a837b3df4f88715eb551ac0b685e82a91cf23ca1cb3cbb48c6618b8bd5",
+        "via": "reset"
+      },
+      {
+        "arquivo": "044_email_templates_editor_design.sql",
+        "estado": "aplicada",
+        "sha256": "f9836c59dac3515f988e1450ca9c8acfdf13dcd27cd5a288883e676f5bbe002f",
+        "via": "reset"
+      },
+      {
+        "arquivo": "045_meta_insights_synced_at.sql",
+        "estado": "aplicada",
+        "sha256": "c670db2d7de32c342548ff868f30070f58612fe6f0b5165b55f9f901416d23a5",
+        "via": "reset"
+      },
+      {
+        "arquivo": "046_represamento_stage_type.sql",
+        "estado": "aplicada",
+        "sha256": "c81ddaba9c5e4e100512415f699ef12c76836e363f28e0dfcc90f134d6b9f820",
+        "via": "reset"
+      },
+      {
+        "arquivo": "047_roles_permissions.sql",
+        "estado": "aplicada",
+        "sha256": "f31e0c32937cb58ac4494a6369acbc90932504ecf5cc679e15a4d2d574228774",
+        "via": "reset"
+      },
+      {
+        "arquivo": "048_allow_admin_delete_system_roles.sql",
+        "estado": "aplicada",
+        "sha256": "d7dfab3251084bed70f4e172d9779f40d6d97b9731d1550ebd35b9e81d9881ab",
+        "via": "reset"
+      },
+      {
+        "arquivo": "048_supremo_sync.sql",
+        "estado": "aplicada",
+        "sha256": "9a4b41eb65867a0267e0431ed97fdfceca8d95d36bd2bcd5a7bef201cb1c168a",
+        "via": "reset"
+      },
+      {
+        "arquivo": "049_user_permission_exceptions.sql",
+        "estado": "aplicada",
+        "sha256": "c33e27f217ef536295c36b6ef47dfae45622ea9a28f9f3582affa66c6eee0f50",
+        "via": "reset"
+      },
+      {
+        "arquivo": "050_obra_fase_templates.sql",
+        "estado": "aplicada",
+        "sha256": "685b656d424f4c3c6b461a72e508e566397386da79da28ece355c2b55cc0d661",
+        "via": "reset"
+      },
+      {
+        "arquivo": "051_obra_progress_auto.sql",
+        "estado": "aplicada",
+        "sha256": "3b2883854956ad20c9de7683c180fe1fd0132c62da4fb573df755448560b0085",
+        "via": "reset"
+      },
+      {
+        "arquivo": "052_appointments_calendly_uri.sql",
+        "estado": "aplicada",
+        "sha256": "e7691aef44caefd93f9fb73bd4cbe1a2952155876a8e0d0dd605e8a8788b324e",
+        "via": "reset"
+      },
+      {
+        "arquivo": "053_lead_tasks.sql",
+        "estado": "aplicada",
+        "sha256": "cb45526db46d7e115b1002fc44452b9ab5926bf72027562ec434157fb47f3d8b",
+        "via": "reset"
+      },
+      {
+        "arquivo": "054_mensagens_document_type.sql",
+        "estado": "aplicada",
+        "sha256": "18346e5dea4110d9c2402d9adfad69043d712cc80b5c9404141180ce6bd6c805",
+        "via": "reset"
+      },
+      {
+        "arquivo": "055_revert_obra_progress_by_status.sql",
+        "estado": "aplicada",
+        "sha256": "76b3830d4f4a4d6dde9eac5ccdefa6778130229b7d1f7ded3412d16bb0abafc0",
+        "via": "reset"
+      },
+      {
+        "arquivo": "056_manual_obra_progress.sql",
+        "estado": "aplicada",
+        "sha256": "6f225055dcb1a2cac20a8127924bf4a1a72b87b940edadf7093eeb0b18648336",
+        "via": "reset"
+      },
+      {
+        "arquivo": "057_supremo_history_synced_at.sql",
+        "estado": "aplicada",
+        "sha256": "00d9ed31b36102e02716af451859e7750699b7fecf14b4d286f90c4e88ed7673",
+        "via": "reset"
+      },
+      {
+        "arquivo": "058_obras_soft_delete.sql",
+        "estado": "aplicada",
+        "sha256": "0a2224aec7fcf700a5cceaf0a20afdc69904904706abc9b04c51abe733c9e833",
+        "via": "reset"
+      },
+      {
+        "arquivo": "059_audit_logs.sql",
+        "estado": "aplicada",
+        "sha256": "fee844e6763ef09fc864dfbde942d6f2c34f0fefec77d82634242f0e5952f502",
+        "via": "reset"
+      },
+      {
+        "arquivo": "060_property_available_units.sql",
+        "estado": "aplicada",
+        "sha256": "110831b204125303d9c406eeba1ded916fe96d2bb3fe5f7f87c9798724f86be9",
+        "via": "reset"
+      },
+      {
+        "arquivo": "061_appointments_metadata.sql",
+        "estado": "aplicada",
+        "sha256": "ba64add45d3ef8c64f7b332a8c1d32b61cad01921e55b549b8ee964778e10364",
+        "via": "reset"
+      },
+      {
+        "arquivo": "062_users_role_enum_to_text.sql",
+        "estado": "aplicada",
+        "sha256": "4760ca252046b6970bf95fc94b9bc94d7d7aa40e19c8059e7f342a9c8536ea46",
+        "via": "reset"
+      },
+      {
+        "arquivo": "063_add_proposta_represamento_stages.sql",
+        "estado": "aplicada",
+        "sha256": "2ee840d164c4d88f06c4fa4653c90db05d908213e13faf74778b83aa4f6748d5",
+        "via": "reset"
+      },
+      {
+        "arquivo": "063_users_role_check_constraint.sql",
+        "estado": "aplicada",
+        "sha256": "0ea2a09c0f61a9441c2d91ea715ac80edb4f2ac570527bb940a6cac0ef0e7d11",
+        "via": "reset"
+      },
+      {
+        "arquivo": "064_sienge_customer_id.sql",
+        "estado": "aplicada",
+        "sha256": "d4cec12a577e527823d1bd108c4e16fca8c4cb83b5857e52d4ddf4e991341d34",
+        "via": "reset"
+      },
+      {
+        "arquivo": "065_create_chamados.sql",
+        "estado": "aplicada",
+        "sha256": "ab7b9158d6a74c7225735d467af11debe69b699a8aab2339ffd246c69d3195d9",
+        "via": "reset"
+      },
+      {
+        "arquivo": "066_seed_chamados_permissions.sql",
+        "estado": "aplicada",
+        "sha256": "7a42926453ee030a1c94e736fbad7879ed7e943d009a091ed1fc44e811d9466c",
+        "via": "reset"
+      },
+      {
+        "arquivo": "066_sienge_enterprise_link.sql",
+        "estado": "aplicada",
+        "sha256": "6da5e4858a5da477281fc0b9aa590db743ca1eedffce2aea3e642a41cebf7923",
+        "via": "reset"
+      },
+      {
+        "arquivo": "067_privacy_consents.sql",
+        "estado": "aplicada",
+        "sha256": "689971c5a0abd400c3e6a9b6e0404492072ed6eb1f79193bc040e4c9b55d31ea",
+        "via": "reset"
+      },
+      {
+        "arquivo": "068_roleta_leads.sql",
+        "estado": "aplicada",
+        "sha256": "15b32887da59520191cd617aec109a3631cb2cd5836b840153b40b6294e02818",
+        "via": "reset"
+      },
+      {
+        "arquivo": "069_roleta_fixes.sql",
+        "estado": "aplicada",
+        "sha256": "c86d304dc200234fece9e1e0e166d68d0255da568f39dbf2a7b7d5dd7b1a9a27",
+        "via": "reset"
+      },
+      {
+        "arquivo": "070_seed_roleta_permissions.sql",
+        "estado": "aplicada",
+        "sha256": "35c201076d491f0c4484bcff839adf58940ff392a5ef027edb818e98421addad",
+        "via": "reset"
+      },
+      {
+        "arquivo": "071_roleta_config_novos_campos.sql",
+        "estado": "aplicada",
+        "sha256": "3b9c08130c576c41d9af1a4e8e8843ddaada15e978b2d5662340ecc8c020aef9",
+        "via": "reset"
+      },
+      {
+        "arquivo": "072_roleta_weekend_hours.sql",
+        "estado": "aplicada",
+        "sha256": "60cb8b118fda7116206b023af0fbea21bc390c55eef32b1e78f4b76a7d5cdb98",
+        "via": "reset"
+      },
+      {
+        "arquivo": "073_appointments_cancel_token.sql",
+        "estado": "aplicada",
+        "sha256": "125b3eba21c0297b5b0f934c4c73cd8b68466e6c8f5dccdd4fb2fcb02356980e",
+        "via": "reset"
+      },
+      {
+        "arquivo": "074_brokers_manage_gerente_comercial.sql",
+        "estado": "aplicada",
+        "sha256": "8b966dc7a1c845c858772ae5beb8ac9bbb67ece8139114e2aafb95266090b60f",
+        "via": "reset"
+      },
+      {
+        "arquivo": "075_leads_metadata.sql",
+        "estado": "aplicada",
+        "sha256": "18ffe6165c91f22ab3f6b23cc6f69ce5b071fe026fb3d2a8bc101123d653ff32",
+        "via": "reset"
+      },
+      {
+        "arquivo": "075_meta_insights_quality_video_lp.sql",
+        "estado": "aplicada",
+        "sha256": "9688fde8b7adb6f9cee2e09adfb8bba8b87ca6864ae71d1f1cb48c054803a4e3",
+        "via": "reset"
+      },
+      {
+        "arquivo": "076_meta_insights_placement_daily.sql",
+        "estado": "aplicada",
+        "sha256": "330cba1782995f55c25d7daa8658435578e32fbe2acbf226ea37cab8fd72a29b",
+        "via": "reset"
+      },
+      {
+        "arquivo": "077_meta_alerts.sql",
+        "estado": "aplicada",
+        "sha256": "71060f966f9d98d00255b45f29d724058ff42f9fba2825507ee5756b72f88035",
+        "via": "reset"
+      },
+      {
+        "arquivo": "078_agent_chat.sql",
+        "estado": "aplicada",
+        "sha256": "c068273b950f62ebb32804dd1921e2a7aef665eb7b0995fac37e05fd97c8af44",
+        "via": "reset"
+      },
+      {
+        "arquivo": "079_gerente_comercial_roleta_access.sql",
+        "estado": "aplicada",
+        "sha256": "db6e18e5db16fe7d4bef304d9d4ab6bf2ce30685c3f05bf4cbb926ec279aeac2",
+        "via": "reset"
+      },
+      {
+        "arquivo": "080_fix_dashboard_stage_counts_lost_reason.sql",
+        "estado": "aplicada",
+        "sha256": "0e660fbe2d039a5f3dbdb3384ab256305cb64dd64d24da7783b486d4181c6cf5",
+        "via": "reset"
+      },
+      {
+        "arquivo": "081_fix_analytics_summary_lost_reason.sql",
+        "estado": "aplicada",
+        "sha256": "d56a3a3a3d8c54f7b76b803a4e550cf0fdce53564a8f62cf13f6f79ba4d13596",
+        "via": "reset"
+      },
+      {
+        "arquivo": "082_obras_notifications_seen_at.sql",
+        "estado": "aplicada",
+        "sha256": "984168c7a655f8bd3321b5d14d1d106cf5704ece23521a63adefe59933b94905",
+        "via": "reset"
+      },
+      {
+        "arquivo": "083_alertas_notifications_seen_at.sql",
+        "estado": "aplicada",
+        "sha256": "36be1756ee6594fcb218c74185c76d50d108cf9c6f6725cf49bc75441c2a56a3",
+        "via": "reset"
+      },
+      {
+        "arquivo": "084_is_admin_or_supervisor_gerente_comercial.sql",
+        "estado": "aplicada",
+        "sha256": "2881564786b17a1c87a5dd305de1ebf52f94e7b11f420d4841acd8fb1fc02ea1",
+        "via": "reset"
+      },
+      {
+        "arquivo": "085_fix_broker_rls_leads_only_own.sql",
+        "estado": "aplicada",
+        "sha256": "1635318ed291da41cb05335506de6aacb6e142ba31c6dbb6a405f85267d3750c",
+        "via": "reset"
+      },
+      {
+        "arquivo": "086_fix_kanban_stages_is_default.sql",
+        "estado": "aplicada",
+        "sha256": "148f4b89087c4434b76b717362f1cda5c12d42ec436de943cd78bf6fc6a87e17",
+        "via": "reset"
+      },
+      {
+        "arquivo": "087_chamados_bucket_public.sql",
+        "estado": "aplicada",
+        "sha256": "ae187b106a575e521b565f2a8b0ebb66d29ea48e674b94e69ac575e23a456895",
+        "via": "reset"
+      },
+      {
+        "arquivo": "088_chamados_image_urls.sql",
+        "estado": "aplicada",
+        "sha256": "b685b220e89c7f48eba10eda83c33f87be72681425526ce2365579d6418b01fa",
+        "via": "reset"
+      },
+      {
+        "arquivo": "089_chamados_admin_response.sql",
+        "estado": "aplicada",
+        "sha256": "b2080c1dfb33bd5dc2f0dd81e07c0696450fcad402629115a5c37f8a706b1e53",
+        "via": "reset"
+      },
+      {
+        "arquivo": "090_broker_dashboard_rpcs.sql",
+        "estado": "aplicada",
+        "sha256": "0e2049f64b4f72bbe8e0017c8b0c1f54e2fd1e1e27ee2c6196ebf9866bbf750d",
+        "via": "reset"
+      },
+      {
+        "arquivo": "091_fix_broker_novos_leads.sql",
+        "estado": "aplicada",
+        "sha256": "7d73efb1d412e546e205d56fdcd4c3341a36f62c7503bbe34a7f3454d4f8c7d2",
+        "via": "reset"
+      },
+      {
+        "arquivo": "092_campaign_email_visual_editor.sql",
+        "estado": "aplicada",
+        "sha256": "4feb3a6c95cbdc08050a515f23a19072aa802cb6d9f40c09d48fae3c69ccade2",
+        "via": "reset"
+      },
+      {
+        "arquivo": "093_chamados_reporter_seen_response.sql",
+        "estado": "aplicada",
+        "sha256": "a2379214e1352b69f2023b04268056d017b49c8aadc0b5c83572ee6318a16c5a",
+        "via": "reset"
+      },
+      {
+        "arquivo": "094_obras_aprovacoes_reminder.sql",
+        "estado": "aplicada",
+        "sha256": "c3ade4fbc96fb3bb22ef8ae05ebc42d5d36e9b0856cdf826da78661cca5de0cf",
+        "via": "reset"
+      },
+      {
+        "arquivo": "095_knowledge_base_null_empreendimento_global.sql",
+        "estado": "aplicada",
+        "sha256": "5573ac05838c20e0edd65b3d12ed9ba488a751b3c1ad62ea47d97cd5c72dfb99",
+        "via": "reset"
+      },
+      {
+        "arquivo": "096_crm_pipeline_readonly_layer.sql",
+        "estado": "aplicada",
+        "sha256": "a02f9739063ea3187adbc7bd84be07c9697c64db81ef0ac995747993c9c46dde",
+        "via": "reset"
+      },
+      {
+        "arquivo": "097_agent_pii_access_log.sql",
+        "estado": "aplicada",
+        "sha256": "171e20a928a7c49a936d597b30263a790943a8ea9733f13fe51b0062ddbe2a13",
+        "via": "reset"
+      },
+      {
+        "arquivo": "098_harden_rls_agent_prompts_admin_only.sql",
+        "estado": "aplicada",
+        "sha256": "d64c2f5074d7547ec03e7a7045c8a030a7f6beecbce1cc792274390639f7a602",
+        "via": "reset"
+      },
+      {
+        "arquivo": "099_agent_media_assets.sql",
+        "estado": "aplicada",
+        "sha256": "3249190570123d6a9915bdc648cb1f9d6371629edf2c58939b8e497ccbb9c239",
+        "via": "reset"
+      },
+      {
+        "arquivo": "100_creative_performance_fn.sql",
+        "estado": "aplicada",
+        "sha256": "e3c9ebbaafd21448ad30a9950b1446cc8422a62d43652a27b7e1ccc6ee32cf74",
+        "via": "reset"
+      },
+      {
+        "arquivo": "101_creative_performance_with_crm.sql",
+        "estado": "aplicada",
+        "sha256": "0da735c1da0908a6f904b3227d0ca350978a049e91d33a6dd5fe8df5c347a9a3",
+        "via": "reset"
+      },
+      {
+        "arquivo": "102_realtime_messages.sql",
+        "estado": "aplicada",
+        "sha256": "19b8371a29a2e97e1b427fe3705276c07b19637f221bed6a8d5b124dfd3ccfe6",
+        "via": "reset"
+      },
+      {
+        "arquivo": "102_roleta_pick_and_advance_idempotent.sql",
+        "estado": "aplicada",
+        "sha256": "40f28d050a9a6d1e5f4b266750e83257465076a7a8231ec017ea98f7398be360",
+        "via": "reset"
+      },
+      {
+        "arquivo": "103_messages_wamid_unique.sql",
+        "estado": "aplicada",
+        "sha256": "2fdfcf5085d7735f0c3fbcdb00e0e14e2fb880026474e6e91667c5f4aa2b157a",
+        "via": "reset"
+      },
+      {
+        "arquivo": "104_agent_daterange_rpcs.sql",
+        "estado": "aplicada",
+        "sha256": "32582b9913a8a2c409f8f1bc7a12ecf6865cd2e8b5e37635edd4c78db28e89d7",
+        "via": "reset"
+      },
+      {
+        "arquivo": "104_conversations_broker_last_read_at.sql",
+        "estado": "aplicada",
+        "sha256": "c3b0671b6a220e591115c51c2d0cb73516ba47df438dc0e82789ae56076aae13",
+        "via": "reset"
+      },
+      {
+        "arquivo": "104_obra_documentos_cliente_obra.sql",
+        "estado": "aplicada",
+        "sha256": "f7c0c833b002c99fd4e5d9f8b748978d7fe224ab58b2d11c7df00da775eb81ad",
+        "via": "reset"
+      },
+      {
+        "arquivo": "105_users_leads_notifications_seen_at.sql",
+        "estado": "aplicada",
+        "sha256": "ec24b1cf43d3251cd0cdf3d35e91fe6fc5aca9bc1f4c4d95ac1659102368603c",
+        "via": "reset"
+      },
+      {
+        "arquivo": "106_aprovacoes_exclusao_foto.sql",
+        "estado": "aplicada",
+        "sha256": "e0d5117b3be5e2b39160a5856aaa4ff2369ebbcaaa63181557c76d4dc94ebab9",
+        "via": "reset"
+      },
+      {
+        "arquivo": "107_portal_atendimento_conversas.sql",
+        "estado": "aplicada",
+        "sha256": "c5c2fb729b4da2a0266e30ac6920a81135fe30c9bd4cc62e28ee607127180a55",
+        "via": "reset"
+      },
+      {
+        "arquivo": "108_users_update_gerente_comercial.sql",
+        "estado": "aplicada",
+        "sha256": "4aac4fc1d0e7e23b28c8d556d2c533017ab1efffd9827bc03810aaa5f9828478",
+        "via": "reset"
+      },
+      {
+        "arquivo": "109_get_analytics_summary_ranged.sql",
+        "estado": "aplicada",
+        "sha256": "d8bb5a4ca027c1da7dc48439b7fd54fc433e71fdff56f0479484366d6ecd2478",
+        "via": "reset"
+      },
+      {
+        "arquivo": "110_conversations_relationship.sql",
+        "estado": "aplicada",
+        "sha256": "70b904347825085dac365bf4784ab3f04f7a4fa54c7b1f771c9922b62b1d75c0",
+        "via": "reset"
+      },
+      {
+        "arquivo": "111_gerente_relacionamento_rls.sql",
+        "estado": "aplicada",
+        "sha256": "5a3cf3b2543c89176a0819b3e3d16bae979ab07d34053dec1cc2244561695bff",
+        "via": "reset"
+      },
+      {
+        "arquivo": "112_leads_primeiro_atendimento.sql",
+        "estado": "aplicada",
+        "sha256": "032b38ab43fa2b275efa9f35487a0ee15b21dada756a957af2b0d5a743e34698",
+        "via": "reset"
+      },
+      {
+        "arquivo": "113_sla_alertas_config.sql",
+        "estado": "aplicada",
+        "sha256": "f9a8afc7da34013c85fce7ef395080dbeb9eb2329679a5932111d9a420a28dcb",
+        "via": "reset"
+      },
+      {
+        "arquivo": "114_datafix_nicole_stage_para_novo.sql",
+        "estado": "aplicada",
+        "sha256": "2d0cbc27eaf612a8cc0989c8e6b4a33421739cd46c8d43257b42d7c96ba29337",
+        "via": "reset"
+      },
+      {
+        "arquivo": "115_roleta_schedule.sql",
+        "estado": "aplicada",
+        "sha256": "0477888d239a5e073cf8d604a536c9f8c05e416cdba43dd3d5efbc42c406d942",
+        "via": "reset"
+      },
+      {
+        "arquivo": "116_distrato_sienge_contrato_cancelado.sql",
+        "estado": "aplicada",
+        "sha256": "85d51ed6b52036b853218d81f7e0a77eb0b5b936c31c59d95355a5c7b64e76a3",
+        "via": "reset"
+      },
+      {
+        "arquivo": "117_whatsapp_volume_rpc.sql",
+        "estado": "aplicada",
+        "sha256": "7044600f7d3e3d3fc2924e0a37239bd5033fea15d08ad0405fa36e20fea105a4",
+        "via": "reset"
+      },
+      {
+        "arquivo": "118_fix_idx_cov_distrato_predicate.sql",
+        "estado": "aplicada",
+        "sha256": "0661c7bce97ce831a893ab1a90e3b0b1b046ceb10e4d09d4642e0edf3b2cbd42",
+        "via": "reset"
+      },
+      {
+        "arquivo": "119_whatsapp_send_log.sql",
+        "estado": "aplicada",
+        "sha256": "45b8074ed484c83e1623cf01cf29d136c560d0ff16ab380435d92421c7696696",
+        "via": "reset"
+      },
+      {
+        "arquivo": "120_phone_normalization_zero_fix.sql",
+        "estado": "aplicada",
+        "sha256": "52eaea14dd2c85843d52167cdaa63e25c263ba11783eb3ee275a67da14b9b336",
+        "via": "reset"
+      },
+      {
+        "arquivo": "121_nicole_copy_escassez_property_presentation.sql",
+        "estado": "aplicada",
+        "sha256": "fa588b2ab489ebee85780632989fa21c8454ade25c20096fd2f623441488c7c2",
+        "via": "reset"
+      },
+      {
+        "arquivo": "122_nicole_copy_lancamento.sql",
+        "estado": "aplicada",
+        "sha256": "18fb6537bedba5fde12eff3b68a6f37aee9e1de363c2f5c60fb1a2dbfa013f41",
+        "via": "reset"
+      },
+      {
+        "arquivo": "123_obra_notif_dedup_coalescing.sql",
+        "estado": "aplicada",
+        "sha256": "9c869a5390c6853f1acd6e462c2d266b07429fce9709edee9c1453953bde962f",
+        "via": "reset"
+      },
+      {
+        "arquivo": "124_stage_change_activity_trigger.sql",
+        "estado": "aplicada",
+        "sha256": "ae5c6f64193017752c5bb2c64c421d50a81e7d372a704364a54ea4f86d947e20",
+        "via": "reset"
+      },
+      {
+        "arquivo": "125_fix_stage_change_trigger_user_fk.sql",
+        "estado": "aplicada",
+        "sha256": "d7e3cb7df91ebb8404c46b1549a524cb9017c8dd9b0cb147322cab09e5f76b50",
+        "via": "reset"
+      },
+      {
+        "arquivo": "126_sienge_webhook_dedup.sql",
+        "estado": "aplicada",
+        "sha256": "b5070c5dbe4a50b332f9371e2a0d246c175585d533dde88e8c204945aab0a6bc",
+        "via": "reset"
+      },
+      {
+        "arquivo": "127_bolsao_estado.sql",
+        "estado": "aplicada",
+        "sha256": "b38c03f8626aa9da437e30e83a92dacff7456899446e0197a30bbe4948896b03",
+        "via": "reset"
+      },
+      {
+        "arquivo": "128_pegar_lead_bolsao.sql",
+        "estado": "aplicada",
+        "sha256": "23c9272796a857eed86ae735a1435f0732cab53afa5c68be60ad9f9adb07e7db",
+        "via": "reset"
+      },
+      {
+        "arquivo": "129_imob_kanban.sql",
+        "estado": "aplicada",
+        "sha256": "3a4ddde898666333bbd60d3cddc0a5ba57c7a10f7b0ec074bb0aaf5ed1ede078",
+        "via": "reset"
+      },
+      {
+        "arquivo": "130_roleta_pick_no_bolsao.sql",
+        "estado": "aplicada",
+        "sha256": "17dd3ad44ea0e3df5074fbefa723c6dd457c499c5fa0f0ea7027091bb2617980",
+        "via": "reset"
+      },
+      {
+        "arquivo": "131_imobiliarias.sql",
+        "estado": "aplicada",
+        "sha256": "91e1c10f135be365edf8be4d751f018d72ed8f8cc20263908d5261e0a37320f8",
+        "via": "reset"
+      },
+      {
+        "arquivo": "132_seed_modules_imob_bolsao_fluxo.sql",
+        "estado": "aplicada",
+        "sha256": "fcba6f49f03e7d28cd9a2e20c60cb44ccb1ee0e1de807ba403331b42963f12c8",
+        "via": "reset"
+      },
+      {
+        "arquivo": "133_imobiliarias_socio_gerente_produto.sql",
+        "estado": "aplicada",
+        "sha256": "5faf1ed292e11cd11bb30d8f240deb20b1a1089384575a5341b4043eba173f7c",
+        "via": "reset"
+      },
+      {
+        "arquivo": "134_imobiliarias_engajamento.sql",
+        "estado": "aplicada",
+        "sha256": "cd32b1a0a94d6fbfe62fba751fbd9a400d2abc69bb962bb449d1dcec4109bdde",
+        "via": "reset"
+      },
+      {
+        "arquivo": "135_leads_segmento.sql",
+        "estado": "aplicada",
+        "sha256": "c470c40609771aa239792889927275ea5d1b9bacb75f0dd478a646ee7cdd055b",
+        "via": "reset"
+      },
+      {
+        "arquivo": "136_rpcs_segmento_principal.sql",
+        "estado": "aplicada",
+        "sha256": "7b584360caf71a6738bf3cad10febb8477a3419d5f0e021b2c7ead5e2fc84f17",
+        "via": "reset"
+      },
+      {
+        "arquivo": "137_dashboard_stage_counts_segmento.sql",
+        "estado": "aplicada",
+        "sha256": "4c9b33f2135dd4e273f5345183fc5f1f1fb8641e329bb9ed52de54005ded1224",
+        "via": "reset"
+      },
+      {
+        "arquivo": "138_role_dashboard_imob_consultoria.sql",
+        "estado": "aplicada",
+        "sha256": "5e4e8f83ca67d04d06acea7ad937fbab181d3aec39ba3f5b2d678815a2ddcb95",
+        "via": "reset"
+      },
+      {
+        "arquivo": "139_pastas.sql",
+        "estado": "aplicada",
+        "sha256": "f21036365f140e7ccda3a1f8d15e9fbb4d58d271521ea3049141f740cf7cf760",
+        "via": "reset"
+      },
+      {
+        "arquivo": "140_seed_module_pastas.sql",
+        "estado": "aplicada",
+        "sha256": "d4feea3e776ea6029bc6d72ad049a38368db63498b78897b9180ba45fbb6a92c",
+        "via": "reset"
+      },
+      {
+        "arquivo": "141_pastas_roles.sql",
+        "estado": "aplicada",
+        "sha256": "70afe2f1eca480db27b7457c6643aa421371ca25a8e1421c90c43602711f3f89",
+        "via": "reset"
+      },
+      {
+        "arquivo": "142_leads_distribuido_em_atomic.sql",
+        "estado": "aplicada",
+        "sha256": "d663a9d8d45b6368a72c4045c95b39e7662f7e949f45126b1e878e73e6493e03",
+        "via": "reset"
+      },
+      {
+        "arquivo": "143_obra_notif_prefs_default_tudo_ligado.sql",
+        "estado": "aplicada",
+        "sha256": "ea83f439465eef27bf96581aabbfb060b0c5691f75cd72197f2fb471581d02db",
+        "via": "reset"
+      },
+      {
+        "arquivo": "144_seed_module_lancamentos.sql",
+        "estado": "aplicada",
+        "sha256": "31d9cf393b2d5ded7c0bf60ca4b6655a34050ab9f4cae5738d1161e7d69cbe0d",
+        "via": "reset"
+      },
+      {
+        "arquivo": "145_lancamentos.sql",
+        "estado": "aplicada",
+        "sha256": "0ae8812dda8e793663211caacc9df6ec3afb95972534769dea3b78a5e1245843",
+        "via": "reset"
+      },
+      {
+        "arquivo": "146_lancamento_kanban.sql",
+        "estado": "aplicada",
+        "sha256": "00f8cd7c749262b5d08c6a3431940ec30c34f01b5e22185a5125ccbbaa6fa83a",
+        "via": "reset"
+      },
+      {
+        "arquivo": "147_lancamento_cards_rich.sql",
+        "estado": "aplicada",
+        "sha256": "bf46ce8da19c0ad2536e2cdaaa6513b2051679511c266657e14594873186fbd8",
+        "via": "reset"
+      },
+      {
+        "arquivo": "148_lancamento_card_extras.sql",
+        "estado": "aplicada",
+        "sha256": "5481c32d285aaaec6ae1e6cacb30317e142811f3c07932c97cb4fbaf04f81e36",
+        "via": "reset"
+      },
+      {
+        "arquivo": "149_fornecedores.sql",
+        "estado": "aplicada",
+        "sha256": "c252f081161c871fbc863c618982e226bf38cb229a57cb151601eba8a43e0eab",
+        "via": "reset"
+      },
+      {
+        "arquivo": "150_lancamento_card_fornecedores.sql",
+        "estado": "aplicada",
+        "sha256": "f1e6429c1af1d72a515424653f8bbc1c7af3334f7f7cfe06dda661a462591bb6",
+        "via": "reset"
+      },
+      {
+        "arquivo": "151_imobiliarias_engajamento_nota.sql",
+        "estado": "aplicada",
+        "sha256": "fb8795d8da10fd0173161fafd6087a69d92170f0f445e11a7009d10af5fdbd9c",
+        "via": "reset"
+      },
+      {
+        "arquivo": "152_leads_last_contact_at.sql",
+        "estado": "aplicada",
+        "sha256": "d6fa8dd5b30989a4d7d96801652cc2cdc65a86d098610ed212c4a922e1d7d616",
+        "via": "reset"
+      },
+      {
+        "arquivo": "153_lead_source_broker_sponsored.sql",
+        "estado": "aplicada",
+        "sha256": "26a95bfdd0c3808e62124c92bf616937e5b165e9cffd9e3b10019f2c004326e3",
+        "via": "reset"
+      },
+      {
+        "arquivo": "154_leads_enriquecimento.sql",
+        "estado": "aplicada",
+        "sha256": "cf9b00d9e1714e7c781dd33783c9b7e109273ef02ab0c5cb8a0f48b3477a5598",
+        "via": "reset"
+      },
+      {
+        "arquivo": "155_materiais_module_seed.sql",
+        "estado": "aplicada",
+        "sha256": "c4c566203f1b31086aac04228c2c547d2b367d9faa36eef7405ef67068912df6",
+        "via": "reset"
+      },
+      {
+        "arquivo": "156_roleta_pick_no_perdido.sql",
+        "estado": "aplicada",
+        "sha256": "81cba3f6b30d28545f86e062cb4faac995fb51e57eb4ee8d6ebc41ff8ba3679d",
+        "via": "reset"
+      },
+      {
+        "arquivo": "157_signature_envelopes.sql",
+        "estado": "aplicada",
+        "sha256": "c381b384e642cb606600ee331da3869f044562ebadf0bcd9e51e22ddf7478329",
+        "via": "reset"
+      },
+      {
+        "arquivo": "158_pastas_wizard_campos.sql",
+        "estado": "aplicada",
+        "sha256": "d272d63cbfc03692981668f852267b3fd3f5968c1d265cd28ec0db4c440f3094",
+        "via": "reset"
+      },
+      {
+        "arquivo": "159_pastas_uniao_estavel.sql",
+        "estado": "aplicada",
+        "sha256": "3630a5c95ddeb64a44af8981b9d8199de55d7c69d2ef94d8d81f9bdbe514206e",
+        "via": "reset"
+      },
+      {
+        "arquivo": "160_pastas_fluxo_pagamento.sql",
+        "estado": "aplicada",
+        "sha256": "61110dce1bb03b8b15750da7a8ddd79ede6a929c75c7962d8f076fabf58bd5c9",
+        "via": "reset"
+      },
+      {
+        "arquivo": "161_pasta_links.sql",
+        "estado": "aplicada",
+        "sha256": "015469b76f9bce7aceb93e972f77a4da2aa7bf48cce4e6017e60fdeb9e358f96",
+        "via": "reset"
+      },
+      {
+        "arquivo": "162_password_reset_throttle.sql",
+        "estado": "aplicada",
+        "sha256": "58991eabd327920e5c1e7d8f6a1acd6a6770fbfce6a39736ff238985aa562357",
+        "via": "reset"
+      },
+      {
+        "arquivo": "163_pastas_imobiliaria_fk.sql",
+        "estado": "aplicada",
+        "sha256": "5395c2337709f5035df6317f9279a532fc3b7051a22ad6812c35f6c7a3395404",
+        "via": "reset"
+      },
+      {
+        "arquivo": "164_pegar_lead_bolsao_bloqueia_ex_dono.sql",
+        "estado": "aplicada",
+        "sha256": "ca3d0eecc9ba27fd75d1843e43ff95f65c524437ca6522940f67bd053d518adc",
+        "via": "reset"
+      },
+      {
+        "arquivo": "164_platform_services_billing.sql",
+        "estado": "aplicada",
+        "sha256": "ba26dc3d259558578734c99aadbf9b1ac95449cb99ec72bb757d43b34e9d8bdd",
+        "via": "reset"
+      },
+      {
+        "arquivo": "165_brindes_tipos_unicidade_variacao.sql",
+        "estado": "aplicada",
+        "sha256": "53e13e7d6881325590ae0fa005ce8d595ac8018c26d3e3fda6fb352ddde19275",
+        "via": "reset"
+      },
+      {
+        "arquivo": "166_brindes_rls_acesso_modulo.sql",
+        "estado": "aplicada",
+        "sha256": "4c8585c6ca6721f6d88af863a40cbf4f0e27d2cb70189224e589acc5b4ce3b1c",
+        "via": "reset"
+      },
+      {
+        "arquivo": "167_financial_notification_log.sql",
+        "estado": "aplicada",
+        "sha256": "c96f1926b0c2ac4edeba31907ece75f150df2a08571d960493edcfb2fbc004c2",
+        "via": "reset"
+      },
+      {
+        "arquivo": "168_supervisor_notificacoes_financeiras.sql",
+        "estado": "aplicada",
+        "sha256": "e71ab52cb612a4282d2aa90cf647795eb52d4e3670833f88b8388f85b430377d",
+        "via": "reset"
+      },
+      {
+        "arquivo": "169_service_billing_reminders_last_alerted.sql",
+        "estado": "aplicada",
+        "sha256": "661d1bbe63211ebef026ba912274e6f83a548a3b693956de316e4f3db6982d85",
+        "via": "reset"
+      },
+      {
+        "arquivo": "170_broker_counts_excluir_perdidos.sql",
+        "estado": "aplicada",
+        "sha256": "0a11b89ac6cde81fccabb2d96aa64b1a67a8dfa89312f011afb312de30026225",
+        "via": "reset"
+      },
+      {
+        "arquivo": "170_email_blast_ab_test_assunto.sql",
+        "estado": "aplicada",
+        "sha256": "3d9757ba1322e3897ef29ddf8f85a2c032693219d74ccab843faac6d6976aab7",
+        "via": "reset"
+      },
+      {
+        "arquivo": "171_billing_cost_alerts_summary.sql",
+        "estado": "aplicada",
+        "sha256": "04636b31d9adfb1786896ded7f59ca94143f17532200233e4aa9ab47c4acd1d2",
+        "via": "reset"
+      },
+      {
+        "arquivo": "172_service_billing_fixed_subscriptions.sql",
+        "estado": "aplicada",
+        "sha256": "baacc3f1a222734fa7377e2f946e8c8378c2ecf15ca66fcd653af00098baa60c",
+        "via": "reset"
+      },
+      {
+        "arquivo": "173_imobiliarias_creci_juridico.sql",
+        "estado": "aplicada",
+        "sha256": "989f8a1608ba6263f2be519a883e9c6e128e3057f3eb5c223da11e3ef8888276",
+        "via": "reset"
+      },
+      {
+        "arquivo": "174_lead_search_unaccent_trgm.sql",
+        "estado": "aplicada",
+        "sha256": "9a330a18e8e0bc5cbc29d618feddd80eae3cd27fa990e9d25834b5c5ae9e43ee",
+        "via": "reset"
+      },
+      {
+        "arquivo": "175_appointments_team_house_imob.sql",
+        "estado": "aplicada",
+        "sha256": "ad38758777600e2ffe701b1b27b4f0cfbc132ca0b38cffe4f58fd8d228ab67d5",
+        "via": "reset"
+      },
+      {
+        "arquivo": "176_imobiliarias_booking_token.sql",
+        "estado": "aplicada",
+        "sha256": "c8e7267decd5a7f5554cb39681100fe9c46efa36a4acc54c84369b1c8b5cfb05",
+        "via": "reset"
+      },
+      {
+        "arquivo": "177_messages_content_fts.sql",
+        "estado": "aplicada",
+        "sha256": "bdb528693eabd3f5944d6f0dad0134be49c2f76dfbe72625864b8afd2f64f569",
+        "via": "reset"
+      },
+      {
+        "arquivo": "178_analytics_total_leads_entradas.sql",
+        "estado": "aplicada",
+        "sha256": "b52a5549baaff17db9375a64c845833ff346ce3dd558fe99594d999d20fa4515",
+        "via": "reset"
+      },
+      {
+        "arquivo": "179_lead_perfil_marketing.sql",
+        "estado": "aplicada",
+        "sha256": "817e0f561a352f0a93ad38086197fbe4187f3e04ae4a1f10e4742cd63542fa40",
+        "via": "reset"
+      },
+      {
+        "arquivo": "180_visit_feedback_appointment_org.sql",
+        "estado": "aplicada",
+        "sha256": "0cb1660e40783d3d85c438d8a969c5be6a38eb172aa7c7e4734d3f7e8eb07f60",
+        "via": "reset"
+      },
+      {
+        "arquivo": "181_lead_source_imob_link.sql",
+        "estado": "aplicada",
+        "sha256": "a2987bc7b9ec902bf1e5af9029f167f9c21d1b6de324ee5f2e4c8edf8a3cbf0c",
+        "via": "reset"
+      },
+      {
+        "arquivo": "182_leads_behavior_analysis.sql",
+        "estado": "aplicada",
+        "sha256": "f6f59e86a3bc57cb4dfa0e7b9a4fb6fa4d02ace6ca30739e9bad505c7aaed688",
+        "via": "reset"
+      },
+      {
+        "arquivo": "183_email_blast_ab_test_corpo.sql",
+        "estado": "aplicada",
+        "sha256": "32d0f7738477eff07e771a5960e5d92069e2cdd602b6e541791284647e207adb",
+        "via": "reset"
+      },
+      {
+        "arquivo": "184_backfill_imob_link_stage.sql",
+        "estado": "aplicada",
+        "sha256": "e93834454682157c7034a1a145cd96938c7bad112d5e22ba76bb7991c005a76a",
+        "via": "reset"
+      },
+      {
+        "arquivo": "185_teto_leads_exclui_perdidos.sql",
+        "estado": "aplicada",
+        "sha256": "f9a689bf0912e025bf1594263295d8ffb1edb56b3d3f7b5595d32e6419af74b5",
+        "via": "reset"
+      },
+      {
+        "arquivo": "186_lancamentos_bucket_file_size_limit.sql",
+        "estado": "aplicada",
+        "sha256": "a28fd34263fab07c9fa6df9047cd1b27a160b2f7b3da252dd4ab8284a6cce63e",
+        "via": "reset"
+      },
+      {
+        "arquivo": "187_leads_rls_imob_segmento.sql",
+        "estado": "aplicada",
+        "sha256": "037cc64ab6f5e470db02df91cc8efe9f1709a1d6ca48b346310c526b5461f1f4",
+        "via": "reset"
+      },
+      {
+        "arquivo": "188_backfill_visit_feedback_description.sql",
+        "estado": "aplicada",
+        "sha256": "3be8b391ebf3abd167aa2b5360743d6bec7a62e52667a7a7ae15e0a1fd949a1f",
+        "via": "reset"
+      },
+      {
+        "arquivo": "189_is_admin_or_supervisor_sdr.sql",
+        "estado": "aplicada",
+        "sha256": "ce3f7622b897bb6afb94c935c77876823767941969d0faa5d733d07054b3d3fb",
+        "via": "reset"
+      },
+      {
+        "arquivo": "190_obra_docs_bucket_file_size_limit.sql",
+        "estado": "aplicada",
+        "sha256": "227b61fa404663ca644e6521e9dd628d35b2b8fb632d266cf9d88443c66a8115",
+        "via": "reset"
+      },
+      {
+        "arquivo": "191_users_notif_obra_aprovacao_email.sql",
+        "estado": "aplicada",
+        "sha256": "d8a9d3b37ca7cb2ee3b3578a580b00da55b2c597849237b0ebe2a8cef2d2971f",
+        "via": "reset"
+      },
+      {
+        "arquivo": "192_stamp_primeiro_atendimento_ignora_sdr.sql",
+        "estado": "aplicada",
+        "sha256": "606ac438b18c7cf16805a003c9e726c16c67378333a4a9241657a8d959df450a",
+        "via": "reset"
+      },
+      {
+        "arquivo": "193_marketing_posts.sql",
+        "estado": "aplicada",
+        "sha256": "af14bc6bc6056b805dc530b6789d52639e8aaf462e7f16b73eba48133b7db65f",
+        "via": "reset"
+      },
+      {
+        "arquivo": "194_webhook_logs_sources_imoveis_sync_landing_page.sql",
+        "estado": "aplicada",
+        "sha256": "95780e85930747e7cc8f665e1d56b77529e4dab3a8681401433374861cfd5808",
+        "via": "reset"
+      },
+      {
+        "arquivo": "195_sdr_na_roleta.sql",
+        "estado": "aplicada",
+        "sha256": "338eae23da4124326d5a2caa9b4c2e68f40a16f56abd19c2861ad267a334fb1a",
+        "via": "reset"
+      },
+      {
+        "arquivo": "196_brindes_destinatarios_cargo.sql",
+        "estado": "aplicada",
+        "sha256": "919af5b9cd14a48d7b5f5bf22b36f124929adb3e0a4a16afe4b88288f3a6940a",
+        "via": "reset"
+      },
+      {
+        "arquivo": "197_marketing_brands.sql",
+        "estado": "aplicada",
+        "sha256": "c00623c29fa3bdaf707e5edc7dab177c16dcc5ec4511d771f90066e0d6390848",
+        "via": "reset"
+      },
+      {
+        "arquivo": "198_marketing_brands_v2.sql",
+        "estado": "aplicada",
+        "sha256": "1ea018290d0a8a5158c5099e41462ddea40669c980fc54da72efa90d19975475",
+        "via": "reset"
+      },
+      {
+        "arquivo": "199_marketing_brands_fonte_arquivo.sql",
+        "estado": "aplicada",
+        "sha256": "0fc0174f4d1c434cf8ff5d6a16794f39eeb8c2b1e1cd047d6e04f0c16a3e23fd",
+        "via": "reset"
+      },
+      {
+        "arquivo": "200_marketing_brand_assets_icone.sql",
+        "estado": "aplicada",
+        "sha256": "28a08ea54eda753241d4b6b5601260fe68f7b7fed7a151ecef0d4b85db2c155d",
+        "via": "reset"
+      },
+      {
+        "arquivo": "201_leads_interest_level_manual.sql",
+        "estado": "aplicada",
+        "sha256": "b4bcf7477b3b74a86ec31549e9c271ef9b07c25933fe5565128abdd4ebdb2fa2",
+        "via": "reset"
+      },
+      {
+        "arquivo": "202_marketing_brands_briefing.sql",
+        "estado": "aplicada",
+        "sha256": "f3ef87fe517cc8fa82d65fe3d067481761cb234dc1c8412620741e5a90dcafb8",
+        "via": "reset"
+      },
+      {
+        "arquivo": "203_marketing_posts_formato_pedido.sql",
+        "estado": "aplicada",
+        "sha256": "0816e5e3c1b62ef061e52d87d0ad40e14e68c65badfe32115a568d5c453912df",
+        "via": "reset"
+      },
+      {
+        "arquivo": "204_marketing_artes_bucket.sql",
+        "estado": "aplicada",
+        "sha256": "bd15ac76f93713f7f8668354ba5c3c8d47080d075e7b07cfd5f17f7f7a5ee271",
+        "via": "reset"
+      },
+      {
+        "arquivo": "205_marketing_posts_arte_cta.sql",
+        "estado": "aplicada",
+        "sha256": "ad51486d9d4b57fe84073ca6dc8bc29bb0afa4467a6e7d5a1a99fc05f648e802",
+        "via": "reset"
+      },
+      {
+        "arquivo": "206_hotfix_p3_system_events_anon.sql",
+        "estado": "aplicada",
+        "sha256": "d3adab678394b0cc01ac58ab85a11a78eaede6c81e6d2938d4a5de5719ce9bb9",
+        "via": "reset"
+      },
+      {
+        "arquivo": "208_marketing_posts_artes.sql",
+        "estado": "aplicada",
+        "sha256": "8c692f5e8bcb94608e13c1d136a6aaa08720fcc88a97e1930229460aaea484bb",
+        "via": "reset"
+      },
+      {
+        "arquivo": "209_hotfix_rls_org_scope.sql",
+        "estado": "aplicada",
+        "sha256": "94e59a1c57374fe8edce3558683bb545a4444aa17426ec80c34874d0ffb68011",
+        "via": "reset"
+      },
+      {
+        "arquivo": "210_hotfix_revoke_authenticated_roleta.sql",
+        "estado": "aplicada",
+        "sha256": "f4ba19e7df66b3c6fce84932f9167c847ae8d7ea6f15c26ccc48e688a195db47",
+        "via": "reset"
+      },
+      {
+        "arquivo": "211_meta_rankings_sem_constraint_fechada.sql",
+        "estado": "aplicada",
+        "sha256": "42a06c1773021d95beeed8cfa8a694be396af2c47558cde1cfa4da3d56cf1996",
+        "via": "reset"
+      },
+      {
+        "arquivo": "212_lost_reason_estruturado.sql",
+        "estado": "aplicada",
+        "sha256": "59478173453e6cb3df20ce1c78f83c87a9afb36c9024bca83cb807fb9edb83d1",
+        "via": "reset"
+      },
+      {
+        "arquivo": "213_analytics_motivos_de_perda_por_grupo.sql",
+        "estado": "aplicada",
+        "sha256": "c68cd86e4a43bc8dae97330f019b3f7dfdb7dc86a4d7a9d13f65bc6150fcecd2",
+        "via": "reset"
+      },
+      {
+        "arquivo": "214_hotfix_revoke_anon_bolsao_pii_log.sql",
+        "estado": "aplicada",
+        "sha256": "5d9e1e9fae0d89f2efe1aa6a47c92b34b4335983415bd1f2967deda8155cf439",
+        "via": "reset"
+      },
+      {
+        "arquivo": "215_meta_capi_outbox.sql",
+        "estado": "aplicada",
+        "sha256": "86efba9e2ac490fc3cddc9a2260705ae21f14f7f2c846d39bdd7cd563840c40c",
+        "via": "reset"
+      },
+      {
+        "arquivo": "216_clientes_cpf_normalizado.sql",
+        "estado": "aplicada",
+        "sha256": "a1c9388200dbad543038bb2049ebdc8e6fb7468c48e573ba90db4b1a3b6305d5",
+        "via": "reset"
+      },
+      {
+        "arquivo": "217_leads_qualificacao_comercial.sql",
+        "estado": "aplicada",
+        "sha256": "57bc97e2e0d5b83e6e00e6bdde311fb491f957f45a7486ce0e456a5869e90ea4",
+        "via": "reset"
+      },
+      {
+        "arquivo": "218_system_events_dedupe_nicole.sql",
+        "estado": "aplicada",
+        "sha256": "cac282b08b9bc4d08ce81956ac5edfcfbe2174af13ccb3f53495474dad9769a3",
+        "via": "reset"
+      },
+      {
+        "arquivo": "219_fvs_fundacao.sql",
+        "estado": "aplicada",
+        "sha256": "4b0549658cc9644e9fa2ecdba7046ed478115bf681aa00d0ffaff2ef8a563945",
+        "via": "reset"
+      },
+      {
+        "arquivo": "220_marketing_posts_trafego_pago.sql",
+        "estado": "aplicada",
+        "sha256": "413916337711e0408564eebf600ed0ae3a90d9c2869c41e1210e125675bd92a0",
+        "via": "reset"
+      },
+      {
+        "arquivo": "222_agent_prompts_historico_versoes.sql",
+        "estado": "aplicada",
+        "sha256": "7b811f9c669fd663ed54e214c0a3515a494a1439d4e852135d9ddac3b509e854",
+        "via": "reset"
+      },
+      {
+        "arquivo": "223_properties_nicole_enabled.sql",
+        "estado": "aplicada",
+        "sha256": "00a5c3986fe54a2750ffaae12f2fe34655b018d800a0130184d49c6d93a45903",
+        "via": "reset-falha-conhecida"
+      },
+      {
+        "arquivo": "224_properties_restaura_is_active.sql",
+        "estado": "aplicada",
+        "sha256": "ee5e9be19eaad357281fa13afdc5c7e97379cc08b65fdfbc637b6ab49a241733",
+        "via": "reset-falha-conhecida"
+      },
+      {
+        "arquivo": "225_capabilities_fundacao.sql",
+        "estado": "aplicada",
+        "sha256": "32f05b09c415252d808c4fe63462cb08dc2d8dec1cf9526c5c05901b47532b56",
+        "via": "reset"
+      },
+      {
+        "arquivo": "226_capability_imoveis_tipologias.sql",
+        "estado": "aplicada",
+        "sha256": "0e275748c7b3408e1f3d915f1b7b51179a0707bf96f750ea6c43de6ed2582d44",
+        "via": "reset"
+      },
+      {
+        "arquivo": "227_capability_obras_ver.sql",
+        "estado": "aplicada",
+        "sha256": "f4bf89ca5433ad635fe39bacfc5c1f4a596197dc1993667cce91a9b3c599fd0b",
+        "via": "reset"
+      },
+      {
+        "arquivo": "228_f4_furos_e_decisoes.sql",
+        "estado": "aplicada",
+        "sha256": "88644961d12fa7c68644d6ce8883e1f000ad4851eaca2372d07ddc5282a6cb14",
+        "via": "reset"
+      },
+      {
+        "arquivo": "229_f4_god_gate_fatiado.sql",
+        "estado": "aplicada",
+        "sha256": "440aeb7ba4c806a79983aea2a876b3507c381f4e4c4fc08decbf181c0b20f9a7",
+        "via": "reset"
+      },
+      {
+        "arquivo": "230_appointment_status_closed.sql",
+        "estado": "aplicada",
+        "sha256": "fe5171c0cdcd7229e59cf1164dc48adbd392b5ea5d33f9d74c26741172bdf347",
+        "via": "reset"
+      },
+      {
+        "arquivo": "230_f4_rpcs_views_unificacao.sql",
+        "estado": "aplicada",
+        "sha256": "f6f85e6f867a01baadb56c5df48a1a3be36042fa8a488e5d029496cf19bd409d",
+        "via": "reset"
+      },
+      {
+        "arquivo": "231_lead_source_form_qualificacao.sql",
+        "estado": "aplicada",
+        "sha256": "b1dd253916c4e1c33a41eb02dbe44b5398e931c17311f7c840bb9282359d1f9d",
+        "via": "reset"
+      },
+      {
+        "arquivo": "232_lead_forms.sql",
+        "estado": "aplicada",
+        "sha256": "4fb913920aa8327ff4f9def6d5a5d4c1f08304f42f6fa80de354151603ec581e",
+        "via": "reset"
+      },
+      {
+        "arquivo": "233_follow_up_log_metadata.sql",
+        "estado": "aplicada",
+        "sha256": "4f520ef76e1ad3b283e3f7d3fc320e9eeb6863012df677d5e31ce710498f2058",
+        "via": "reset"
+      },
+      {
+        "arquivo": "234_cron_lock_e_claim_atomico.sql",
+        "estado": "aplicada",
+        "sha256": "6e58318bd0af0e18a2c27c90c1ac941a3c159ba656c23b873b4dc00a78e5584f",
+        "via": "reset"
+      },
+      {
+        "arquivo": "235_followup_template_hsm_e_optout.sql",
+        "estado": "aplicada",
+        "sha256": "6043883f71ead0628f129161513db22e47d10ac47d3fd10dfcb8f7aa505d2e04",
+        "via": "reset"
+      },
+      {
+        "arquivo": "236_noshow_etapa_propria.sql",
+        "estado": "aplicada",
+        "sha256": "e119d64ef41b8380851af69302a928ff653c2d4e5aae903d5aad75699843efbf",
+        "via": "reset"
+      },
+      {
+        "arquivo": "237_slug_noshow_limpo.sql",
+        "estado": "aplicada",
+        "sha256": "7ae3cf03386922d8e524bea17b5321f290abef7cd1827d3742e16ae965f22ffe",
+        "via": "reset"
+      },
+      {
+        "arquivo": "238_storage_policies_org_scoped.sql",
+        "estado": "aplicada",
+        "sha256": "08ba8519d12d22a992a56166784bdea8b2458bf62c35dd14353a690097081886",
+        "via": "reset"
+      },
+      {
+        "arquivo": "239_obra_fotos_policy_por_papel.sql",
+        "estado": "aplicada",
+        "sha256": "863dae5fa1efdae886493678118c6dc466713b856aaf639fcef600e67a3cf396",
+        "via": "reset"
+      },
+      {
+        "arquivo": "240_followup_nicole_por_lead.sql",
+        "estado": "aplicada",
+        "sha256": "b8b91ba57d2190d9a3a7de0eee433b8dd5841cea8730f8c3b86675513bf3c6b7",
+        "via": "reset"
+      },
+      {
+        "arquivo": "240_provision_org.sql",
+        "estado": "aplicada",
+        "sha256": "d17771a403e510e66935376fdb83cdec1242150ae1a75a23791737c250d44c38",
+        "via": "reset"
+      },
+      {
+        "arquivo": "241_capability_followup_nicole.sql",
+        "estado": "aplicada",
+        "sha256": "82053df1727dcae83ae1393cf8a91389b5bea57710e83971cca74e2f689fadbe",
+        "via": "reset"
+      },
+      {
+        "arquivo": "242_coach_suggestions.sql",
+        "estado": "aplicada",
+        "sha256": "1f2cacb640bb74a36c58c42411ebfb103c4f2cb9875d054c01d1612bbbd69451",
+        "via": "reset"
+      },
+      {
+        "arquivo": "243_capability_live_coach.sql",
+        "estado": "aplicada",
+        "sha256": "9a7463479de23146cc3864121188d24493ce2fd617221122f4b81d1da655b5a3",
+        "via": "reset"
+      },
+      {
+        "arquivo": "244_org_admin_invite_email.sql",
+        "estado": "aplicada",
+        "sha256": "6e97bcc6b8948db66cd6ea31924338ca9f0ae340cd5396793a49ec247cf41583",
+        "via": "reset"
+      },
+      {
+        "arquivo": "245_registro_de_migrations.sql",
+        "estado": "aplicada",
+        "sha256": "cc88e5aff20a4edac84bbc82ae3eedd2d16fbdf9664ed110ddde49bda1ed9b6a",
+        "via": "apply"
+      }
+    ]
+  },
+  "producao": {
+    "_estado": "AINDA NÃO MEDIDO",
+    "_por_que": "A migration 245 ainda não foi aplicada em produção — isso é passo de runbook do @devops (docs/runbooks/aplicar-245-registro-migrations.md), não do @dev. Enquanto ela não existir lá, `TRIFOLD_ENV=producao pnpm db:status` sai 1 nomeando a tabela ausente, e esta chave permanece com este marcador. A primeira execução bem-sucedida a substitui inteira.",
+    "projeto_ref": "dsopqkqjkmhytudaaolv"
+  }
+}

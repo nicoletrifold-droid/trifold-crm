@@ -192,3 +192,167 @@ jobs:
             } else {
               await github.rest.issues.createComment({ owner, repo, issue_number, body: corpo });
             }
+
+  # ---------------------------------------------------------------------------
+  # Story 900-3c — aviso de migration não aplicada no banco de teste.
+  #
+  # LEITURA PURA SOBRE O BANCO. O job roda `pnpm db:status` (só SELECT, via Management API)
+  # e compara o veredito com as migrations que ESTE PR traz. Ele não aplica migration, não
+  # roda `reset:testdb`, não usa `--confirmar` e não escreve uma linha no banco de teste —
+  # que é o mesmo projeto onde as pessoas rodam `pnpm dev`.
+  #
+  # A versão anterior deste job escrevia (reset + apply a cada execução) para dar uma
+  # garantia que o fluxo manual — `pnpm db:status` / `pnpm db:apply` — já dava, e pagava por
+  # isso destruindo o banco de desenvolvimento compartilhado dezenas de vezes por dia. O job
+  # de escrita foi removido pela raiz, não mitigado. Sem escrita não há estado a herdar entre
+  # PRs, então também NÃO HÁ `concurrency` de banco aqui: duas execuções de PRs diferentes
+  # podem rodar ao mesmo tempo sem se atrapalhar.
+  #
+  # ⚠️ "Leitura pura" vale para o BANCO, não para a árvore de trabalho: `pnpm db:status`
+  # regenera `docs/audits/migrations-aplicadas.json`, que é rastreado. O job NÃO commita esse
+  # arquivo e NÃO falha por causa de árvore suja. A escrita local é efêmera e inofensiva.
+  #
+  # O comentário no PR é publicado SEMPRE (`if: always()`), com três estados nomeados —
+  # pendente / limpo / não-foi-possível-verificar. A razão é medida: `git diff --name-only`
+  # devolve vazio com exit 0 tanto para "este PR não traz migration" quanto para "não
+  # consegui resolver as refs", e sem o terceiro estado cinco situações (três delas falhas)
+  # ficariam visualmente idênticas. Com ele, ausência de comentário significa uma coisa só:
+  # o job não rodou.
+  # ---------------------------------------------------------------------------
+  migrations-do-pr:
+    name: migrations deste PR (aviso, não-bloqueante)
+    # Guard de fork: este job entrega o SUPABASE_MANAGEMENT_PAT (PAT global de conta) ao
+    # runner. PR vindo de fork não roda — é a única superfície nova que este job abre.
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Mesma razão do tenancy-gate acima, e por DOIS comandos aqui: o cruzamento compara
+          # as migrations deste PR com a base, e a régua de não-reescrita usa
+          # `origin/main...HEAD`. `actions/checkout@v4` traz `fetch-depth: 1` por padrão, e um
+          # checkout raso faz as duas se absterem em silêncio e ninguém notar.
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.8.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Instala dependências
+        run: pnpm install --frozen-lockfile
+
+      # Apura QUAIS migrations este PR traz. O ponto delicado está aqui: "lista vazia" e "não
+      # consegui apurar" precisam sair por caminhos diferentes, senão viram o mesmo silêncio.
+      - name: Migrations que este PR traz
+        id: diff
+        # `github.base_ref` é nome de branch e entra por `env:`, não por interpolação dentro
+        # do `run:` — mesmo motivo do passo "Monta o aviso" abaixo, e mesmo padrão que o job
+        # `tenancy-gate` já usa com `GATE_TENANCY_BASE`. (CONCERNS-3 do @qa.)
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+        run: |
+          set +e
+          BASE="origin/$BASE_REF"
+          if ! git rev-parse --verify --quiet "$BASE" >/dev/null; then
+            echo "motivo=nao consegui resolver a ref base $BASE (checkout raso? fetch-depth: 0 ausente?)" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          MB=$(git merge-base "$BASE" HEAD)
+          if [ -z "$MB" ]; then
+            echo "motivo=nao ha merge-base entre $BASE e HEAD (historico incompleto: checkout raso?)" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff --name-only "$MB" HEAD -- supabase/migrations/ > /tmp/pr-migrations.txt
+          if [ $? -ne 0 ]; then
+            echo "motivo=git diff --name-only falhou contra $BASE" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Base: $BASE (merge-base $MB)"
+          echo "Migrations do PR:"; cat /tmp/pr-migrations.txt
+
+      # `db:status` contra o banco de TESTE. O ref não é segredo — ele já é literal e
+      # versionado em packages/shared/src/constants/supabase-refs.ts, que é a fonte única.
+      # E a duplicação aqui é GUARDADA, não livre: se alguém trocar esta URL pelo ref de
+      # produção, `resolverAmbiente()` aborta (guarda 3 de scripts/lib/db-env.ts) em vez de
+      # obedecer. Só o PAT é secret.
+      - name: Relatório do banco de teste (leitura)
+        id: status
+        env:
+          TRIFOLD_ENV: teste
+          SUPABASE_URL: https://xnxvygyfyyyzwhiuoehz.supabase.co
+          SUPABASE_MANAGEMENT_PAT: ${{ secrets.SUPABASE_MANAGEMENT_PAT }}
+        run: |
+          set +e
+          pnpm db:status --json /tmp/db-status.json 2>&1 | tee /tmp/db-status.log
+          CODE=${PIPESTATUS[0]}
+          echo "exit_code=$CODE" >> "$GITHUB_OUTPUT"
+          if [ "$CODE" != "0" ]; then
+            echo "motivo=pnpm db:status saiu $CODE (tabela trifold_migrations_aplicadas ausente no banco de teste? veja o log do job)" >> "$GITHUB_OUTPUT"
+          fi
+          # Nunca falha o passo: quem carrega o veredito é o comentário, não o exit code.
+          exit 0
+
+      # Monta o corpo do comentário. Roda mesmo se os passos acima falharam — é o passo que
+      # transforma "falhei" num estado NOMEADO em vez de silêncio.
+      # Os dois motivos entram por `env:`, NUNCA interpolados dentro do `run:`.
+      # `${{ … }}` é substituído no texto do script ANTES de o bash existir: uma string entre
+      # aspas duplas ainda expande `$(…)` e crase, e o motivo carrega `github.base_ref`, que
+      # é nome de branch e aceita os dois caracteres. Por `env:`, o valor chega como dado —
+      # o shell nunca vê o conteúdo como código. (CONCERNS-3 do @qa; o guard de fork é a
+      # segunda camada, não a única.)
+      - name: Monta o aviso
+        if: always()
+        env:
+          MOTIVO_DIFF: ${{ steps.diff.outputs.motivo }}
+          MOTIVO_STATUS: ${{ steps.status.outputs.motivo }}
+        run: |
+          args=(--diff /tmp/pr-migrations.txt --status /tmp/db-status.json)
+          [ -n "$MOTIVO_DIFF" ]   && args+=(--motivo-diff   "$MOTIVO_DIFF")
+          [ -n "$MOTIVO_STATUS" ] && args+=(--motivo-status "$MOTIVO_STATUS")
+          args+=(--saida /tmp/aviso-migrations.md)
+          npx tsx scripts/aviso-migrations-do-pr.ts "${args[@]}"
+
+      # O comentário é publicado SEMPRE. Se nem o passo anterior conseguiu produzir o corpo,
+      # este passo escreve o ⛔ ele mesmo — "nenhum comentário" nunca é desfecho válido.
+      - name: Publica o aviso no PR
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const marca = '## Migrations deste PR';
+            let corpo;
+            try {
+              corpo = fs.readFileSync('/tmp/aviso-migrations.md', 'utf8');
+            } catch {
+              corpo = [
+                marca,
+                '',
+                '⛔ **Não foi possível verificar** — o job não conseguiu nem montar o relatório ' +
+                'do aviso (o passo anterior falhou antes de produzir o arquivo).',
+                '',
+                'Veja o log do job. Isto **não** é "está tudo certo".',
+              ].join('\n');
+            }
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const existentes = await github.rest.issues.listComments({ owner, repo, issue_number });
+            const meu = existentes.data.find(c => c.body.startsWith(marca) && c.user.type === 'Bot');
+            if (meu) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: meu.id, body: corpo });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body: corpo });
+            }
