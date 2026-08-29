@@ -28,6 +28,7 @@ import {
   OFF_HOURS_PROMPT,
   buildSystemPromptText,
 } from "../packages/ai/src/prompts"
+import { resolverAmbiente } from "./lib/db-env"
 
 // AC2-b: o gate roda ANTES de qualquer coisa — antes até do createClient, para que a
 // mensagem seja sobre o bloqueio e não sobre uma credencial faltando.
@@ -36,9 +37,12 @@ if (!bootstrapLiberado()) {
   process.exit(1)
 }
 
+// Story 900-3b (AC3): alvo por `scripts/lib/db-env.ts` — allowlist que falha FECHADA,
+// default TESTE. Escrever em produção exige TRIFOLD_ENV=producao E TRIFOLD_ALLOW_PROD=1.
+const ALVO = resolverAmbiente({ escreve: true })
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  ALVO.url,
+  ALVO.serviceRoleKey,
   { auth: { autoRefreshToken: false, persistSession: false } }
 )
 

@@ -382,9 +382,33 @@ npm run trace -- workflow-name
 ## Project-Specific Context
 
 ### Environments
-- **Produção:** `.env.local` → Supabase `dsopqkqjkmhytudaaolv` + Vercel `trifold-crm.vercel.app`
-- **Dev local:** `packages/web/.env.development` → Supabase `xnxvygyfyyyzwhiuoehz` (projeto dev isolado)
-- Nunca deixar `.env.local` apontando para o projeto dev após testes
+
+**O default do repositório é TESTE** (desde a Story 900-3b). Antes dela era o contrário, e
+`.env.local` — que vencia qualquer outro arquivo de env no Next — apontava para produção.
+
+- **Teste (default):** `packages/web/.env.development` → Supabase `xnxvygyfyyyzwhiuoehz`
+  (projeto `trifold-crm-dev`, isolado). É o que `pnpm dev` usa. Para os scripts de
+  `scripts/`, o par é `.env.teste` (raiz), lido por `scripts/lib/db-env.ts`.
+- **Produção:** `packages/web/.env.producao.local` → Supabase `dsopqkqjkmhytudaaolv` + Vercel
+  `trifold-crm.vercel.app`. Só é lido por `pnpm dev:prod`, nunca por `pnpm dev`. Para os
+  scripts, o par é `.env.producao` (raiz), e só sob `TRIFOLD_ENV=producao` **mais**
+  `TRIFOLD_ALLOW_PROD=1` quando o script escreve.
+- **`.env.local` não existe mais** (renomeado para `.env.producao.local`). Nunca reapontar
+  `packages/web/.env.development` para produção, nem `.env.producao.local` para o projeto de
+  teste — o banner impresso no boot denuncia os dois casos.
+- ⚠️ **A CLI do `supabase` é a exceção — o repositório não governa o alvo dela.** Quem
+  governa é o projeto linkado em `supabase/.temp/project-ref`, que vence o `project_id` do
+  `supabase/config.toml` versionado. Medido: um subcomando remoto sem flag resolvia para
+  `dsopqkqjkmhytudaaolv` (produção).
+  - Até a Story 900-3b esses arquivos de `supabase/.temp/` estavam **rastreados** em
+    `origin/main` com o ref de produção — então **todo clone vinha linkado em produção**.
+    A regra `supabase/.temp/` do `.gitignore` já existia, mas é **inerte para caminho já no
+    índice**, e `git check-ignore` sem `--no-index` **mente** para arquivo rastreado.
+  - A 900-3b removeu os 4 do índice (`git rm --cached`, sem apagar do disco). Daí em diante
+    o link é por máquina de verdade, e **clone novo não tem link**: os subcomandos remotos
+    falham fechado ("Cannot find project ref"), que é o estado seguro.
+  - Rode uma vez, por máquina: `supabase link --project-ref xnxvygyfyyyzwhiuoehz`.
+    Confira quando quiser com `pnpm supabase:check` (sai `1` se estiver em produção).
 
 ### Integrações Ativas
 - **Meta Lead Forms:** `packages/web/src/app/api/webhooks/meta-ads/route.ts` — recebe eventos `leadgen` via HMAC-SHA256. App "Ações Trifold" (ID: `1249990980457973`), Página Trifold (ID: `132027046650861`). Requer coluna `leads.metadata` (migration 075).

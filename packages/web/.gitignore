@@ -32,6 +32,10 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# Story 900-3b (AC1): a negação precisa vir DEPOIS da regra ampla e morar NESTE
+# arquivo — negação equivalente no `.gitignore` da raiz não vence o `.gitignore`
+# mais próximo do arquivo.
+!.env.development.example
 
 # vercel
 .vercel

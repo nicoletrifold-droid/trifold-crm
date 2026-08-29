@@ -50,6 +50,17 @@ package-lock.json
 e2e-results/
 playwright-report/
 test-results/
-.env*
+# Story 900-3b (AC1): a linha `.env*` que morava aqui anulava o `!.env.example` da
+# linha 4 — a última regra que casa vence. Removida: as linhas 2 (`.env`) e 3
+# (`.env.*`) já cobrem `.env.producao`/`.env.teste`, e a negação da linha 4 volta a
+# valer. Não acrescentar aqui negação para caminho dentro de `packages/web/`: o
+# `.gitignore` mais profundo vence, então a negação tem que morar nele.
 
 .claude/worktrees/
+
+# Story 900-3b (AC5, S6/S13): medição de duração do reset. DEFAULT = gitignored.
+# `docs/audits/` é diretório rastreado e a precedência da casa é rastrear, então deixar a
+# escolha "em aberto" faria o arquivo nascer tracked por inércia — e ele é REGRAVADO a
+# cada execução do reset, gerando diff em todo PR que rodasse o reset. Rastreá-lo exige
+# decisão explícita, com o tamanho do diff medido depois da primeira execução.
+docs/audits/reset-testdb-duracao.json

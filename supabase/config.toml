@@ -1,0 +1,85 @@
+# Story 900-3b · AC4 — o projeto que a CLI do Supabase assume quando ninguém diz nada.
+#
+# `project_id` aponta para o projeto de TESTE (`trifold-crm-dev`). É o mesmo default do
+# `pnpm dev` depois desta story: um comando digitado sem flag não pode cair em produção.
+# Para falar com produção, passe `--project-ref` explicitamente — nunca editando este
+# arquivo, que é versionado e vale para todo mundo.
+project_id = "xnxvygyfyyyzwhiuoehz"
+
+# ============================================================================
+# ⚠️  ESTE ARQUIVO **NÃO** BASTA — leia antes de confiar nele
+# ============================================================================
+#
+# Medido em 2026-08-29, com este `project_id` já valendo:
+#
+#     Um subcomando remoto sem flag (medido com `db dump --dry-run`) resolve o host para
+#     o projeto de PRODUÇÃO `dsopqkqjkmhytudaaolv` — não para o `project_id` acima.
+#     ⚠️ NÃO cole aqui a saída desse comando: ela inclui `PGPASSWORD` de produção em texto
+#     claro. Para conferir o alvo, use `pnpm supabase:check`, que imprime só o ref.
+#
+# O `project_id` daqui **não** controla o alvo dos comandos remotos. Quem controla é o
+# projeto LINKADO, gravado em `supabase/.temp/project-ref`.
+#
+# ⚠️ HISTÓRICO QUE IMPORTA: até a Story 900-3b, esses 4 arquivos de `supabase/.temp/`
+# (`project-ref`, `pooler-url`, `postgres-version`, `storage-migration`) estavam
+# **RASTREADOS** no git, em `origin/main`, com `project-ref = dsopqkqjkmhytudaaolv`.
+# Ou seja: **todo clone deste repositório vinha com PRODUÇÃO como projeto linkado da CLI**.
+# Não era estado de máquina — era conteúdo do repositório.
+#
+# Ninguém pegou isso em três rodadas de revisão porque `supabase/.temp/` **está** no
+# `.gitignore` (linha 36) desde sempre, mas **regra de .gitignore é inerte para caminho já
+# no índice** — o mesmo defeito que esta story consertou para o `.env.example`. E
+# `git check-ignore` (sem `--no-index`) **mente** para arquivo rastreado: sai `1`, "não
+# ignorado". Medido: com `--no-index` sai `0`, provando que a regra sempre casou.
+#
+# A Story 900-3b rodou `git rm --cached supabase/.temp/` — os arquivos saíram do índice e
+# **permanecem no disco** de quem já os tinha. Daí em diante o link é, de fato, por máquina.
+#
+# Consequência: quem clonar o repositório depois disso **não terá projeto linkado**, e os
+# subcomandos remotos vão falhar fechado ("Cannot find project ref"), que é o estado seguro.
+# Cada desenvolvedor roda, uma vez:
+#
+#     supabase link --project-ref xnxvygyfyyyzwhiuoehz
+#
+# ...e usa `--project-ref dsopqkqjkmhytudaaolv` explicitamente quando quiser produção.
+# Confira o estado a qualquer momento com `pnpm supabase:check`.
+#
+# O default seguro que ESTA story de fato entrega vale para o que vive no repositório:
+# `pnpm dev` (via `.env.development`) e todo `scripts/*.ts` (via `scripts/lib/db-env.ts`,
+# allowlist que falha fechada). A CLI do Supabase fica de fora, e isso está registrado
+# como divergência da AC4 no Dev Agent Record da Story 900-3b.
+
+# ============================================================================
+# ⛔  NÃO use `supabase db push` NESTE REPOSITÓRIO
+# ============================================================================
+#
+# Três razões, todas medidas em 2026-08-29 contra o `HEAD` (267 migrations, maior
+# prefixo `244`):
+#
+# 1. PREFIXOS DUPLICADOS — 22 deles hoje:
+#      021 024 025 027 028 029 031 032 033 034 036 044 048 063 066 075 102 104 164
+#      170 230 240
+#    O `db push` casa migrations pelo nome de arquivo contra
+#    `supabase_migrations.schema_migrations`. Com prefixo repetido, a ordenação e o
+#    "já aplicada?" ficam ambíguos, e o resultado depende de qual arquivo o
+#    `readdir` devolveu primeiro. `scripts/reset-tenancy-testdb.ts` contorna
+#    reaplicando tudo em ordem lexicográfica explícita.
+#
+# 2. O LEDGER DE PRODUÇÃO ESTÁ CONGELADO NA 168.
+#    O que produção realmente tem aplicado não está refletido em
+#    `schema_migrations`. Um `db push` contra produção tentaria reaplicar tudo a
+#    partir dali e bateria em objetos que já existem. (Fato herdado da Story 900-3;
+#    não remedido aqui — esta story não toca produção.)
+#
+# 3. OS ARQUIVOS `_remote_only.sql` — 11 no total, dos quais 4 usam
+#    `CREATE INDEX CONCURRENTLY`.
+#    `CONCURRENTLY` não roda dentro de bloco transacional, e o `db push` envolve a
+#    migration em transação. Esses 4 falhariam por artefato do método, não por
+#    defeito da migration.
+#    ⚠️ A Story 900-3b mediu 4, e não 11: a redação anterior confundia "quantos
+#    arquivos `_remote_only` existem" com "quantos usam CONCURRENTLY".
+#
+# COMO FAZER, ENTÃO:
+#   • Trazer o banco de TESTE ao HEAD:  pnpm reset:testdb --confirmar
+#   • Promover para produção:            Story 900-3c (`pnpm db:status` / `pnpm db:apply`),
+#                                        que ainda não existe. Até lá, runbook manual.

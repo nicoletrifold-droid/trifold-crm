@@ -10,17 +10,17 @@
 import { readFileSync } from "fs"
 import { resolve } from "path"
 import { createClient } from "@supabase/supabase-js"
+import { resolverAmbiente } from "./lib/db-env"
 
-const envPath = resolve(__dirname, "../packages/web/.env.local")
-for (const line of readFileSync(envPath, "utf-8").split("\n")) {
-  const match = line.match(/^([^#=]+)=(.*)$/)
-  if (match && !process.env[match[1].trim()]) {
-    process.env[match[1].trim()] = match[2].trim()
-  }
-}
+// Story 900-3b (AC3): o alvo vem de `scripts/lib/db-env.ts` — allowlist que falha
+// FECHADA. Default: TESTE. Escrever em produção exige TRIFOLD_ENV=producao E
+// TRIFOLD_ALLOW_PROD=1. Isto substitui o carregador de `packages/web/.env.local`
+// que existia aqui: aquele arquivo foi renomeado para `.env.producao.local`.
+const ALVO = resolverAmbiente({ escreve: true })
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
+
+const SUPABASE_URL = ALVO.url
+const SERVICE_ROLE_KEY = ALVO.serviceRoleKey
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.trifold.eng.br"
 
 const YARDEN_OBRA_ID = "ba344a5e-6bd6-4a08-8f9f-0405992b0b34"

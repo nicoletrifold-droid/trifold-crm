@@ -6,6 +6,238 @@ Tarefas operacionais, configurações e ajustes pendentes que não requerem uma 
 
 ## Pendente
 
+### [SEC-002] 🟠 `packages/web/scripts/*.mjs` tem default de PRODUÇÃO e escreve — próxima superfície a migrar para `resolverAmbiente()`
+
+**Adicionado em:** 2026-08-29
+**Prioridade:** **P1** — não é hipótese: é um script que já existe, já escreve e já tem produção como default.
+**Origem:** `@qa` na 3ª rodada da Story `900-3b` (`docs/qa/gates/900.3b-ambiente-de-teste.yml`, `SEC-002`, medium). Pré-existente; **fora do escopo** da fatia por decisão consciente e registrada.
+
+`packages/web/scripts/fix-campaign-lead-names.mjs:12`:
+
+```js
+const SUPABASE_URL = process.env.SUPABASE_URL || "https://dsopqkqjkmhytudaaolv.supabase.co"
+```
+
+`|| <produção>` como default, e o script **escreve**: `method: "PATCH"` em `leads` (linha 34).
+Rodar sem `SUPABASE_URL` no ambiente não falha — **acerta produção em silêncio**. É exatamente a
+classe que a AC3 da `900-3b` existe para matar, num diretório **irmão** ao qual essa mesma story
+acabou de acrescentar um arquivo (`next-com-env.mjs`).
+
+**Por que a `900-3b` não pegou:** o denominador da AC3 é explicitamente `scripts/*.ts`, e
+`scripts/README.md` diz "todo `scripts/*.ts`" — preciso e verdadeiro. `packages/web/scripts/*.mjs`
+é outra superfície, e ninguém tinha olhado para ela.
+
+**Escopo medido por `@devops` em 2026-08-29, antes de abrir este item** — 9 arquivos em
+`packages/web/scripts/`:
+
+| | |
+|---|---|
+| com o ref de produção hardcoded | **1** — `fix-campaign-lead-names.mjs` |
+| que escrevem (`PATCH`/`POST`/`DELETE`/`update`/`upsert`) | **1** — o mesmo arquivo |
+| que passam por `resolverAmbiente()` | **0** |
+
+Os outros 7 desestruturam `SUPABASE_URL` de `process.env` **sem default**, então falham com
+`undefined` em vez de acertar produção — ruins, mas fail-closed por acidente. O único que combina as
+duas propriedades é o do `SEC-002`.
+
+**Ação:** migrar `packages/web/scripts/*.mjs` para a mesma allowlist
+(`packages/shared/src/constants/supabase-refs.ts` + `resolverAmbiente()`) ou, no mínimo imediato,
+**remover o default de produção** e exigir `SUPABASE_URL` explícita. Ao migrar, estender o
+denominador da régua estática para cobrir `packages/web/scripts/**` — senão a próxima superfície
+irmã repete a história.
+
+---
+
+### [TEST-002 / TEST-003] ✅ FECHADOS na 3ª rodada da `900-3b` — a lição: **de-duplicar cria colinearidade**
+
+**Adicionado em:** 2026-08-29 · **Estado:** corrigidos em `ca898dfe`, registrados aqui pela lição, não por trabalho pendente.
+**Origem:** `@qa` na 3ª rodada da Story `900-3b` (gate `TEST-002` e `TEST-003`, ambos low).
+
+Consertar o achado do CodeRabbit sobre **duas definições de "o que é produção"** (o banner tinha seu
+próprio `REF_PRODUCAO`) foi certo — e **cegou a régua que vigiava exatamente isso**.
+
+`env-banner.test.ts` passou a montar as URLs esperadas a partir da fonte que deveria vigiar
+(`URL_PROD = https://${REF_PRODUCAO}…`). Mutar a fonte movia **código e expectativa juntos**: 22/22
+verde com o ref de produção trocado. Consequência medida: sob a mutação o banner devolvia `"ok"`
+para `https://DSOPQ….supabase.co` em dev — o instrumento da AC2 **mudo exatamente sobre produção**,
+que é o defeito que a AC2 existe para não ter. `TEST-003` é a mesma cegueira um nível acima:
+`supabase-refs.test.ts` derivava `PROD`/`TESTE` dos próprios `Set`s.
+
+**A lição, que vale além desta story:** quando se elimina duplicação entre **código e teste**, a
+régua para de ser independente do que mede. Toda fonte única precisa de pelo menos uma **âncora
+literal, escrita à mão** — `expect([...REFS_PERMITIDOS_PRODUCAO]).toEqual(["dsopq…"])` — e não
+derivada. E a mutação tem de ser remedida **depois** de qualquer de-duplicação: foi ao remedir que
+apareceu a segunda célula muda.
+
+Fechados com URLs literais (incluindo maiúsculas e caixa mista), uma guarda contra o conserto
+preguiçoso (caixa alta sob `NODE_ENV=production` tem de seguir `"ok"`, não virar `"ausente"`) e a
+âncora de identidade na suíte da própria fonte. Matriz final: **12 células, nenhuma muda**.
+
+---
+
+### [MNT-003] 🟡 A regra `logs/` do `.gitignore` casa código-fonte rastreado — arquivo novo naquele diretório seria silenciosamente inadicionável
+
+**Adicionado em:** 2026-08-29
+**Prioridade:** **P2** — não quebra nada hoje; quebra em silêncio no dia em que alguém criar um arquivo ali.
+**Origem:** `@qa` na 2ª rodada da Story `900-3b` (`docs/qa/gates/900.3b-ambiente-de-teste.yml`, `MNT-003`), generalizando o método que produziu o `DOC-001` daquela story. Pré-existente, não introduzido pela `900-3b`, fora do escopo da fatia.
+
+`.gitignore:20` tem a regra ampla `logs/`, pensada para diretórios de log. Ela casa também
+`packages/web/src/app/dashboard/sistema/logs/layout.tsx` e `.../logs/page.tsx` — **código-fonte de
+uma rota do dashboard**. Os dois arquivos sobrevivem só porque já estão no índice: uma regra de
+ignore é **inerte para caminho já rastreado**.
+
+Reproduzido por `@devops` em 2026-08-29, antes de abrir este item:
+
+```
+$ git check-ignore --no-index -v packages/web/src/app/dashboard/sistema/logs/nova-rota.tsx
+.gitignore:20:logs/	packages/web/src/app/dashboard/sistema/logs/nova-rota.tsx     ← seria ignorado
+
+$ git check-ignore -v packages/web/src/app/dashboard/sistema/logs/page.tsx
+(exit 1 — o índice mascara a regra; é por isso que ninguém viu)
+```
+
+Ou seja: um `loading.tsx`, um `error.tsx` ou qualquer rota nova criada nesse diretório **não
+apareceria no `git status`** e não iria para o PR. É o mesmo modo de falha do `.env.example` que a
+AC1 da `900-3b` consertou, e o mesmo do `supabase/.temp/` (DOC-001) — terceira ocorrência da mesma
+classe.
+
+**Ação:** restringir a regra (`/logs/` ancorado na raiz) ou negar o caminho de código-fonte no
+`packages/web/.gitignore`. Conferir se algum arquivo já foi perdido por isso antes de mexer.
+
+**A ferramenta, que vale mais que o item:**
+
+```bash
+git ls-files | git check-ignore --no-index --stdin -v
+```
+
+Lista **toda** regra de ignore inerte do repositório — todo arquivo rastreado que as regras
+mandariam ignorar. Custa uma linha e teria pego o `supabase/.temp/` (que entregava o ref de
+**produção** a todo clone) três rodadas de validação antes. Hoje dá 6 casamentos: 4 benignos (as 2
+negações intencionais de `.env*.example` e 2 `package-lock.json` sob `.aios-core/`) e os 2 deste
+item. **Candidato a gate de CI** — com os 4 benignos numa allowlist, qualquer casamento novo é
+regressão.
+
+---
+
+### [SEGURANÇA] 🔴 `supabase db dump` imprime a senha do banco de PRODUÇÃO em texto claro — e uma AC mandava colar essa saída em arquivo rastreado
+
+**Adicionado em:** 2026-08-29
+**Prioridade:** **P1**
+**Origem:** Validação `@po` da `900-3b`, Rodada 3 (`docs/qa/po-validation-900-3b.md`). Encontrado ao
+reproduzir a medição da AC4. Procedência: **execução direta**, não leitura.
+
+Qualquer subcomando remoto da CLI do Supabase, com o projeto linkado apontando para
+produção (`supabase/.temp/project-ref`), imprime no stdout um bloco `export` de variáveis
+`PG*` do banco de **produção** — host, porta, usuário, database e **`PGPASSWORD` com a
+senha em texto claro**.
+
+> Correção de premissa (achada no gate do `@qa`): `supabase/.temp/project-ref` **não era**
+> estado de máquina — estava **rastreado** em `origin/main` com o ref de produção, então
+> *todo clone* vinha linkado em produção. A Story 900-3b o removeu do índice
+> (`git rm --cached`, sem apagar do disco).
+
+> A saída literal **não é reproduzida aqui**, por R6/E3: nem o bloco, nem a linha de host
+> truncada. Truncar não é mitigação — mantê-la ensinaria que truncar é aceitável, que é
+> justamente o quase-acidente que originou a regra. Para conferir o alvo da CLI use
+> `pnpm supabase:check`, que imprime só o project ref (identificador público).
+
+**Contenção verificada em 2026-08-29 — está limpa:** a senha **não** aparece em nenhum arquivo
+rastreado (`git grep -l -F`), **não** aparece no histórico (`git log -S --all`), **não** existe em
+nenhum arquivo do repositório fora de `.git`/`node_modules`, e **não** está em
+`supabase/.temp/pooler-url`. Ela vem do credential store da CLI, não do repo.
+
+🔴 **O risco não é o vazamento — é o procedimento.** A AC4 da `900-3b` mandava *"confirmar por
+`supabase status` (ou qualquer subcomando que resolva o projeto-alvo)"*, e o padrão de evidência
+daquela story (repetido em 7 ACs e na DoD) é **"colar a saída no Dev Agent Record"** — arquivo
+rastreado. Subcomando que resolve o projeto-alvo **é** subcomando remoto, e subcomando remoto imprime
+a senha. O `@dev` truncou a saída em `PGHOST` por disciplina própria. A distância entre esta story e
+um segredo de produção commitado foi o bom senso de um agente, não uma regra.
+
+**Ações:**
+1. **(feito)** A AC4 foi reescrita pelo `@po` com regra explícita: *é proibido colar em arquivo
+   rastreado a saída de qualquer subcomando remoto do `supabase`*. Ver E1-E3 da Rodada 3.
+2. **Avaliar rotação da senha do Postgres de produção** com o dono do produto — ela é recuperável em
+   texto claro por qualquer pessoa/agente com a CLI linkada. Mesma classe do item de `SUPREMO_TOKEN`.
+3. **Confirmar que nenhum job de CI roda subcomando remoto do `supabase` com saída capturada** em
+   log ou artefato. Medido hoje: **zero** invocações de `supabase` em `*package.json` e em
+   `.github/workflows/*` — a base está limpa, e a régua AC4a da `900-3b` passa a proteger isso.
+4. Considerar `supabase link --project-ref xnxvygyfyyyzwhiuoehz` (teste) nas máquinas de
+   desenvolvimento. Medido: sem `supabase/.temp/project-ref`, a CLI **falha fechada**
+   (*"Cannot find project ref"*) — ela **não** cai no `project_id` do `config.toml`.
+
+---
+
+### [CI] 🟡 `MNT-001` — `pnpm type-check` não cobre `scripts/`, e a `900-3b` aumentou o ponto cego
+
+**Adicionado em:** 2026-08-29 · **Origem:** gate `@qa` da Story `900-3b` (`MNT-001`)
+**Prioridade:** **P2** — não quebra nada hoje; encurta a rede que pega o próximo erro.
+
+`pnpm type-check` é `turbo type-check`, que roda **por pacote**. Nenhum `tsconfig.json` de
+pacote inclui o diretório `scripts/` da raiz, então **nada type-checa esses arquivos** — e o
+job `static` do `ci.yml`, que roda o mesmo comando, tem o mesmo ponto cego.
+
+Hoje um erro de tipo em `scripts/*.ts` só aparece se algum `*.test.ts` importar o arquivo.
+A Story `900-3b` **ampliou** a superfície descoberta: criou `scripts/lib/db-env.ts` e
+`scripts/supabase-check.ts` e migrou 17 scripts para eles. Os que têm teste estão cobertos
+por tabela; os demais, não.
+
+Medido durante a implementação: rodando `tsc` à mão sobre `scripts/*.ts` aparecem erros
+pré-existentes de resolução de módulo (`@supabase/supabase-js`, `@trifold/shared`) e
+`noImplicitAny` — ou seja, **não basta apontar o `tsconfig` da raiz para `scripts/`**: seria
+preciso um `tsconfig` próprio com `paths`/`types` do workspace, e triar os erros herdados.
+Por isso é item de backlog e não conserto de oportunidade.
+
+**Sugestão:** `scripts/tsconfig.json` estendendo o da raiz, com `paths` do workspace, mais
+um `type-check:scripts` no `package.json` da raiz encadeado no job `static`.
+
+**Comando que reproduz o ponto cego:**
+```bash
+pnpm type-check                 # verde
+npx tsc --noEmit --strict --typeRoots packages/web/node_modules/@types scripts/lib/db-env.ts
+```
+
+---
+
+### [EPIC-900] 🟡 O §461 do epic recomenda o `sync-schema.sh` que a `900-3c` vai deletar — texto superado pelo próprio resultado da `900-3`
+
+**Adicionado em:** 2026-08-29
+**Prioridade:** **P2** — não bloqueia nenhuma story; bloqueia a *confiança* no epic como fonte.
+**Origem:** Validação `@po` da `900-3c` (`docs/qa/po-validation-900-3c.md`, §2). O `@sm` encontrou a
+contradição e a reportou corretamente — editar o epic está **fora da autoridade** dele e do executor
+(precedente já registrado pela `900-2c`). Gestão de contexto de epic é autoridade do `@po`, então o
+encaminhamento fica aqui, num artefato monitorado, e não só no Dev Agent Record de uma story.
+**Endereçado a:** `@pm` (dono do epic) com `@architect` em cópia.
+
+`docs/stories/epics/epic-900-saas-multi-tenant.md` §461 diz, textualmente:
+
+> **O que NÃO muda, para evitar correção excessiva:** `scripts/sync-schema.sh` **é** corretamente
+> reaproveitável em `900-3`, para aplicar as 222 migrations num projeto Supabase novo.
+
+A `900-3c` (AC5) **deleta esse script**. A contradição é real, mas o mérito já está resolvido — e a
+prova está na própria `900-3`:
+
+- A `900-3` está `InReview` declarando *"os 6 ACs cumpridos"*, mas as tarefas **T1.1 a T1.4 estão
+  todas desmarcadas** (`[ ]`) — e a T1.3 era literalmente *"rodar `supabase db push --db-url ...`
+  (reusar o padrão de `scripts/sync-schema.sh`, adaptado)"*.
+- A própria story registra que *"a decisão de ambiente mudou em relação ao draft"*. O que existe
+  hoje é `scripts/reset-tenancy-testdb.ts`, via Management API — construído porque `db push` é
+  estruturalmente inutilizável neste repositório (prefixos duplicados como chave `version` + os 11
+  `_remote_only.sql` com `CREATE INDEX CONCURRENTLY`, que aborta com `25001` dentro da transação
+  por arquivo).
+
+Ou seja: o §461 era verdadeiro como **plano** e foi **superado pelo resultado da própria `900-3`**.
+O script nunca chegou a ser usado. Verificado em 2026-08-29: nenhum workflow o invoca, e as
+variáveis que ele exige (`SUPABASE_DB_URL_STAGING`/`SUPABASE_DB_URL_PROD`) não existem em `.env`
+nenhum do repositório.
+
+**Ação:** corrigir §461 (e conferir §457, que já corrige a alegação de snapshot mas mantém a de
+reuso) para registrar que a `900-3` **não** usou `db push`/`sync-schema.sh`, e que a ferramenta de
+promoção passa a ser `pnpm db:status` / `pnpm db:apply` (`900-3c`).
+
+**Não bloqueia a `900-3c`:** a deleção do script é segura e correta. O que fica errado é o epic.
+
+---
+
 ### [Epic 900] 🟡 `900-16` (`platform_admins` + `platform_audit_log`/`platform_audit()`) é dependência declarada de `900-21`/`900-22` e não foi entregue
 
 **Adicionado em:** 2026-08-28

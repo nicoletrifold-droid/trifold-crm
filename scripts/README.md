@@ -15,10 +15,107 @@ barata de causar um incidente:
 | `trifold-crm-dev` | **teste de isolamento** (Epic 900) | **NUNCA** |
 | `remanager` | pausado, alheio a este projeto | — |
 
-**O estado padrão do repositório é `.env.local` apontando para PRODUÇÃO.** Um script
-destrutivo rodado sem conferir o alvo atinge dados reais. Todo script que escreve deve
-declarar o alvo explicitamente e falhar quando ele não for o esperado — nunca herdar o
-alvo de um `.env` carregado por acidente.
+**O estado padrão do repositório aponta para TESTE** (`trifold-crm-dev`), desde a Story
+900-3b. Isto é o inverso do que valia antes dela, quando `.env.local` apontava para
+PRODUÇÃO e um script destrutivo rodado sem conferir o alvo atingia dados reais.
+
+### Onde mora cada ambiente, depois da Story 900-3b
+
+| Arquivo (todos **gitignored**) | Ambiente | Quem lê |
+|---|---|---|
+| `packages/web/.env.development` | **TESTE** | `pnpm dev` (default do Next em modo development) |
+| `packages/web/.env.producao.local` | PRODUÇÃO | só `pnpm dev:prod`, via `packages/web/scripts/next-com-env.mjs` |
+| `packages/web/.env.production.local.bak` | PRODUÇÃO | ninguém — é o original preservado para reversão |
+| `.env.teste` (raiz) | **TESTE** | `scripts/lib/db-env.ts`, como *fallback* |
+| `.env.producao` (raiz) | PRODUÇÃO | `scripts/lib/db-env.ts`, só sob `TRIFOLD_ENV=producao` |
+| `packages/web/.env.development.example` | — | **rastreado**, só nomes, nunca valores |
+
+`packages/web/.env.vercel.check` tem propósito distinto e não foi tocado. O `.env` /
+`.env.example` da raiz são config do instalador AIOS, sem relação com Supabase.
+
+**Precedência:** para os scripts, `process.env` **sempre vence** o arquivo dotenv; o
+arquivo é fallback. Todo script que escreve deve declarar o alvo por
+`resolverAmbiente({ escreve: true })` e falhar quando ele não for o esperado — nunca
+herdar o alvo de um `.env` carregado por acidente.
+
+**Escrever em produção exige duas chaves, não uma:** `TRIFOLD_ENV=producao` **e**
+`TRIFOLD_ALLOW_PROD=1`. E o ref precisa estar na **allowlist** de
+`scripts/lib/db-env.ts` (`REFS_PERMITIDOS_PRODUCAO`) — que falha *fechada*: um ref de
+produção novo, ainda não cadastrado, é recusado. A denylist anterior
+(`REFS_PROIBIDOS`, de tamanho 1) falhava *aberta*.
+
+### Como reverter o split de ambiente
+
+Os arquivos envolvidos são gitignored — o passo é invisível ao git e desfeito por `mv`:
+
+```bash
+mv packages/web/.env.producao.local packages/web/.env.local
+mv packages/web/.env.production.local.bak packages/web/.env.production.local
+mv .env.producao .env.local   # raiz, se também precisar reverter
+```
+
+Ressalva medida: a reversão devolve `packages/web/.env.production.local` **byte a byte**
+(é rename puro), mas o `.env.local` restaurado carrega, ao final, o bloco mesclado a
+partir do `.env.production.local` (24 chaves de `VERCEL_*`/`TURBO_*`/`CRON_SECRET`, sob
+um marcador comentado). Nenhum valor original foi perdido ou sobrescrito — as chaves
+coincidentes mantiveram o valor do antigo `.env.local`. Para reversão byte-exata, apague
+também o bloco após o marcador `--- Story 900-3b: mesclado de …`.
+
+### ⚠️ A CLI do `supabase` é a exceção — `pnpm supabase:check`
+
+O default seguro descrito acima vale para o que **vive no repositório**: `pnpm dev` (via
+`.env.development`) e todo `scripts/*.ts` (via `scripts/lib/db-env.ts`). **A CLI do
+`supabase` fica de fora, e o repositório não consegue governá-la.**
+
+O alvo dos subcomandos remotos vem do projeto **linkado**, gravado em
+`supabase/.temp/project-ref` — arquivo **gitignored, por máquina**. O `project_id` de
+`supabase/config.toml` (versionado, apontando para teste) **não vence** esse arquivo, e
+**não é fallback**: apagar o `project-ref` não redireciona para teste, faz o comando errar
+com *"Cannot find project ref. Have you run `supabase link`?"*.
+
+Por isso existe o comando, que torna o estado audível em vez de fingir que está resolvido:
+
+```bash
+pnpm supabase:check
+```
+
+| Estado de `supabase/.temp/project-ref` | Saída | Leitura |
+|---|---|---|
+| ref de **teste** | `0` | ok |
+| ref de **produção** | **`1`**, nomeando o ref | qualquer subcomando remoto sem `--project-ref` vai para produção |
+| **ausente** | `0`, com aviso | estado **seguro**: os comandos falham fechado, não resolvem para produção |
+
+"O que é produção" vem da **mesma** `REFS_PERMITIDOS_PRODUCAO` de `scripts/lib/db-env.ts` —
+importada, nunca reimplementada. Conserto, uma vez por máquina:
+
+```bash
+supabase link --project-ref xnxvygyfyyyzwhiuoehz
+```
+
+Para falar com produção de propósito, passe `--project-ref` explícito.
+
+### 🔒 Regra de evidência: nunca cole saída de subcomando remoto do `supabase`
+
+**Proibido colar em arquivo rastreado** (story, Dev Agent Record, PR, issue) a saída de
+`supabase db dump`, `db push`, `db pull` ou qualquer subcomando remoto. Medido na Story
+900-3b: **`supabase db dump --dry-run` imprime a senha do banco de produção (`PGPASSWORD`)
+em texto claro no stdout.** A senha vem do credential store da CLI, não do repositório.
+
+A evidência válida sobre "para onde a CLI aponta" é a saída de `pnpm supabase:check`, que
+imprime **apenas o project ref** — identificador público, já presente em arquivos
+versionados.
+
+### ⚠️ Enquanto a Story `900-3c` não mergear, **não existe `pnpm db:apply`**
+
+Não há, nesta fatia, ledger de migrations nem `pnpm db:status`/`pnpm db:apply` — eles são
+a Fatia B. Para trazer o banco de teste ao `HEAD` atual, use o reset que **já existe**:
+
+```bash
+pnpm reset:testdb --confirmar
+```
+
+Se você bater em erro de "coluna/tabela não existe" contra o banco de teste, é quase
+certo que seja isto — não um bug de código.
 
 ---
 
@@ -35,7 +132,9 @@ Por consequência, sem exceção:
 
 - **Não** copie, restaure ou importe dump de produção para lá — nem "só para depurar".
 - **Não** use esse projeto para investigar dado real de cliente.
-- **Não** aponte `.env.local` para lá, nem o contrário.
+- **Não** reaponte `packages/web/.env.producao.local` para lá, nem `.env.development` para
+  produção. (Antes da Story 900-3b esta linha dizia `.env.local`, arquivo que não existe
+  mais.)
 
 Qualquer PII que apareça nesse banco é **vazamento**, não conveniência.
 
