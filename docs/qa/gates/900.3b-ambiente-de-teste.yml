@@ -3,15 +3,17 @@ story: "900.3b"
 story_title: "Ambiente de teste (Fatia A de 2 — Onda 1)"
 gate: PASS
 status_reason: >-
-  Reavaliado após f736355e. Os 6 achados estão fechados, incluindo o DOC-001 (high):
-  `supabase/.temp/` saiu do índice e um CLONE NOVO DE VERDADE já não recebe link
-  nenhum — fail-closed, exit 0. As 7 ACs seguem cumpridas e as mutações continuam
-  discriminando depois da mudança de estado do índice.
+  3ª rodada, pós-CodeRabbit (PR #524). O PASS anterior foi dado sobre uma guarda de
+  produção que falhava ABERTA por caixa alta — meu erro de cobertura, não do @dev.
+  Os 6 achados estão corrigidos e reverificados: ponto único de extração varrido
+  (1 regex no repo inteiro), fonte única em @trifold/shared, fail-closed nos dois
+  lados provado por matriz de 12 células, e o veredito da Task 6.4 confirmado intacto.
+  Fuzz de 15 formas de URL: zero falha aberta.
 reviewer: "Quinn (Test Architect)"
-rodadas: 2  # 1ª CONCERNS (f3f978e8) · 2ª PASS (f736355e)
-updated: "2026-08-29T18:05:00Z"
+rodadas: 3  # 1ª CONCERNS (f3f978e8) · 2ª PASS (f736355e) · 3ª PASS pós-CodeRabbit (8587f4fa)
+updated: "2026-08-29T20:40:00Z"
 branch: "story/900-3b-ambiente-teste-e-promocao"
-commits_revisados: ["9d104e73", "8295b814", "f3f978e8", "f736355e"]
+commits_revisados: ["9d104e73", "8295b814", "f3f978e8", "f736355e", "8cd1f724", "8587f4fa"]
 base: "255e645a"
 
 evidencia_reproduzida_pelo_qa:
@@ -270,13 +272,134 @@ achado_novo_da_reavaliacao:
       código-fonte no `packages/web/.gitignore`. O comando da varredura cabe num gate futuro.
 
 para_o_devops_carregar_no_pr:
-  - "docs/qa/gates/900.3b-ambiente-de-teste.yml (atualizado para PASS nesta rodada)"
-  - "docs/stories/900-3b-ambiente-de-teste.story.md (seção QA Results, 2ª rodada)"
-  - "SQUASH obrigatório no merge: a linha crua `export PGHOST=...` continua no histórico da branch (9d104e73→f3f978e8). Squash apaga; merge-commit preserva."
-  - "Os 4 arquivos de supabase/.temp/ ficam no disco de quem já os tem e somem para todo clone novo — nenhuma ação de máquina é necessária."
-  - "Abrir no backlog: MNT-003 (regra `logs/` casando código-fonte rastreado)."
-  - "Higiene: `git worktree prune` (wt-900-3, prunable, de outra branch, poluiu o cache do turbo)."
+  - "docs/qa/gates/900.3b-ambiente-de-teste.yml (PASS da 3ª rodada)"
+  - "docs/stories/900-3b-ambiente-de-teste.story.md (QA Results, 3ª rodada)"
+  - "SQUASH obrigatorio no merge: a linha crua `export PGHOST=...` continua no historico da branch (9d104e73 a f3f978e8). Squash apaga; merge-commit preserva."
+  - "Backlog: TEST-002, TEST-003 (uma linha cada) e SEC-002 (fix-campaign-lead-names.mjs com default de producao e PATCH)."
+  - "Backlog: MNT-003 (regra `logs/` casando codigo-fonte rastreado)."
+  - "Higiene: `git worktree prune` (wt-900-3, de outra branch, poluiu o cache do turbo)."
+
+rodada_3_codereabbit:
+  contexto: >-
+    O CodeRabbit achou, no PR #524, um furo que passou por mim em DUAS rodadas de gate:
+    `reset-tenancy-testdb.ts` extraía o ref com regex case-INsensitive e comparava com
+    `Set.has()` case-SENSITIVE. `https://DSOPQ….supabase.co` produzia `ehProducao=false`
+    e o script SEGUIA para `drop schema ... cascade` CONTRA PRODUÇÃO. Todos nós — @dev,
+    @po e eu, duas vezes — exercitamos a allowlist só com refs em minúsculas, a forma
+    como eles aparecem na vida real. Registro como falha minha de cobertura: eu havia
+    rodado uma matriz de guardas sem nunca variar a CAIXA do insumo.
+  verificacoes:
+    ponto_unico_de_extracao:
+      varredura: "git grep de regex de URL supabase em todo .ts/.tsx/.mjs rastreado"
+      resultado: >-
+        UMA única ocorrência, em packages/shared/src/constants/supabase-refs.ts:46.
+        Nenhum caminho extrai ref por conta própria. `extrairRef` de db-env.ts e de
+        env-banner.ts são wrappers que delegam.
+    reproducao_ponta_a_ponta:
+      reset_maiusculo: "ABORTADO, exit 1, ref normalizado na mensagem"
+      reset_caixa_mista: "ABORTADO, exit 1"
+      db_env_teste_com_prod_maiusculo: "ABORTADO (guarda 3)"
+      db_env_producao_maiusculo_sem_flag: "ABORTADO (guarda 1)"
+      banner_em_dev: "alerta para minúscula, MAIÚSCULA e mista (as três)"
+    fonte_unica_derivacao:
+      resolucao: >-
+        packages/shared/package.json main = src/index.ts, SEM dist — logo os testes leem
+        a FONTE, não build velho. packages/web importa por `@trifold/shared`; scripts/
+        importam por caminho relativo. Nenhuma segunda definição sobrevive.
+      mutacao_MUT1_troca_o_ref_de_producao:
+        supabase-refs.test.ts: "9 passed — NÃO acende"
+        env-banner.test.ts: "22 passed — NÃO acende"
+        db-env.test.ts: "7 failed"
+        supabase-check.test.ts: "3 failed"
+      mutacao_MUT2_remove_a_normalizacao:
+        supabase-refs.test.ts: "3 failed — ACENDE"
+        env-banner.test.ts: "22 passed — NÃO acende"
+        db-env.test.ts: "3 failed"
+        supabase-check.test.ts: "1 failed"
+      leitura: >-
+        A regressão que causou o incidente ESTÁ guardada repo-wide (3 suítes acendem em
+        MUT2). Mas o pedido literal do coordenador — "mexa só na fonte e veja o OUTRO
+        LADO acender" — NÃO se cumpre para a ponta web: env-banner.test.ts fica verde nas
+        duas mutações. Ver TEST-002.
+    fail_closed_dois_lados:
+      metodo: "matriz de 12 células (2 ambientes x 3 classes de ref x flag x escreve)"
+      resultado: >-
+        Só 3 das 12 combinações com escreve=true liberam: teste+ref de teste (2, com e sem
+        flag) e producao+ref de producao+flag=1. Ref DESCONHECIDO é recusado em TODAS as
+        combinações, lendo e escrevendo. Nenhum caminho de escape.
+    supabase_check_desconhecido: "exit 1; exit 0 reservado a ref de teste declarado e a não-linkado"
+    ac6_fallback:
+      correcao: "reset:527 — FALHAS_CONHECIDAS passa a ser consultada no ramo de sucesso do fallback"
+      confirmacao_pedida: >-
+        CONFIRMADO. FALHAS_CONHECIDAS tem 4 entradas (025 x2, 223, 224). Os 6 arquivos que
+        de fato tomam o fallback (011, 030, 031-034) têm INTERSEÇÃO VAZIA com ela — logo a
+        cegueira nunca mascarou nada na run real e o veredito da Task 6.4 sobre 236/237
+        continua de pé. Nota de método: meu primeiro grep misturou FALHAS_CONHECIDAS com
+        ASSERCOES (mesma indentação) e sugeriu 6 entradas; a extração por BLOCO corrige.
+    minor_serviceRoleKey: >-
+      Não é cosmético: `AmbienteParaEscrita` estreita para `string` e `resolverAmbiente`
+      lança quando escreve && !serviceRoleKey. A asserção non-null virou guarda real.
+    fuzz_do_regex:
+      formas_testadas: 15
+      falha_aberta: 0
+      leitura: >-
+        Toda forma contendo o ref de produção é classificada como PRODUÇÃO ou recusada
+        (e recusa faz o chamador lançar = fechado). Domínio maiúsculo, esquema maiúsculo,
+        porta, caminho, http, sufixo hostil (`.supabase.co.evil.com`) e ponto final: todos
+        recusados.
+    mnt_001_verificado_por_mim: >-
+      Type-checkei `scripts/` à mão (tsconfig próprio): 17 erros, todos pré-existentes
+      (noImplicitAny/unknown) e NENHUM em arquivo escrito por esta story. A justificativa
+      do backlog para não consertar de passagem confere.
+  numeros_medidos_por_mim:
+    suite: "272 arquivos · 3474 passed | 6 expected fail (3480)"
+    baseline_remedida: "267 arquivos · 3403 passed | 6 expected fail (3409)"
+    aritmetica: "3409 + 71 = 3480 — fecha exato (71 = 4+22+23+13+9 nas 5 suítes novas)"
+    lint_forcado: "0 errors, 36 warnings, 0 cached"
+    type_check_forcado: "8/8, 0 cached"
+
+achados_da_rodada_3:
+  - id: "TEST-002"
+    severity: low
+    finding: >-
+      `env-banner.test.ts` não discrimina a fonte única. Fica 22/22 verde tanto quando o
+      ref de produção é trocado quanto quando a normalização é removida — porque monta as
+      URLs esperadas a partir das próprias constantes (`URL_PROD = https://${REF_PRODUCAO}…`)
+      e não tem nenhum caso de variação de caixa. Medi a consequência: sob a mutação, o
+      banner devolve "ok" para `https://DSOPQ….supabase.co` em dev, ou seja, o instrumento
+      da AC2 ficaria MUDO sobre produção — o defeito exato que a AC2 existe para não ter.
+    por_que_low: >-
+      A classe está guardada repo-wide: supabase-refs.test.ts (3), db-env.test.ts (3) e
+      supabase-check.test.ts (1) acendem na mesma mutação, então uma regressão deixaria a
+      suíte vermelha. O que falta é o carrasco na ponta certa.
+    suggested_action: >-
+      Um caso em env-banner.test.ts: avaliarRefDoAmbiente(URL_PROD.toUpperCase(),
+      "development") === "alerta". Uma linha.
+  - id: "TEST-003"
+    severity: low
+    finding: >-
+      Nenhum teste fixa os VALORES da fonte única por literal. `supabase-refs.test.ts`
+      deriva `PROD`/`TESTE` dos próprios Sets (verde na MUT1); a única âncora literal está
+      em db-env.test.ts/supabase-check.test.ts. Trocar os dois conjuntos entre si é pego
+      (10 vermelhos), mas pela periferia, não pelo carrasco do próprio arquivo.
+    suggested_action: "Uma asserção literal em supabase-refs.test.ts: ehRefDeProducao('dsopq…') === true."
+  - id: "SEC-002"
+    severity: medium
+    fora_do_escopo_desta_story: true
+    finding: >-
+      `packages/web/scripts/fix-campaign-lead-names.mjs:12` faz
+      `process.env.SUPABASE_URL || "https://dsopqkqjkmhytudaaolv.supabase.co"` — default
+      PRODUÇÃO — e ESCREVE (`method: "PATCH"` em leads). É a mesma classe que a AC3 existe
+      para matar, num diretório irmão ao qual esta story acabou de acrescentar um arquivo
+      (`next-com-env.mjs`).
+    nao_bloqueia: >-
+      O denominador da AC3 é explicitamente `scripts/*.ts`, e `scripts/README.md` diz
+      "todo `scripts/*.ts`" — preciso e verdadeiro. O arquivo é pré-existente e não foi
+      tocado por esta story.
+    suggested_action: >-
+      Backlog: migrar `packages/web/scripts/*.mjs` para a mesma allowlist, ou ao menos
+      remover o default de produção (exigir SUPABASE_URL explícita).
 
 waiver: { active: false }
 
-recommended_status: "PASS — liberado para push. Ver `para_o_devops_carregar_no_pr`; o squash no merge é o único item obrigatório."
+recommended_status: "PASS — liberado para push. O squash no merge segue sendo o unico item obrigatorio; TEST-002/TEST-003/SEC-002/MNT-003 vao para o backlog."
