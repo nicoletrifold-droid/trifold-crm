@@ -612,7 +612,20 @@ async function main(): Promise<number> {
     codigo = 1
   }
 
-  // OBS-5 — alto, mas fora do exit code (decisão registrada acima).
+  // A LINHA FINAL VEM ANTES DO BLOCO DE ERRO, e é QUALIFICADA quando há falha de ledger.
+  //
+  // Depois de ~7,5 minutos, a última linha da tela é onde o olho pousa. Um
+  // "Banco de teste reconstruído." solto, impresso DEPOIS do aviso de ledger não gravado,
+  // tranquiliza sem qualificação e apaga o aviso que acabou de subir (achado do @qa).
+  if (codigo === 0) {
+    console.log(
+      falhasDeRegistro.length
+        ? "\nSchema reconstruído — MAS o ledger NÃO foi gravado. Leia o bloco abaixo antes de usar este banco."
+        : "\nBanco de teste reconstruído.",
+    )
+  }
+
+  // OBS-5 — alto, e DELIBERADAMENTE fora do exit code.
   if (falhasDeRegistro.length) {
     console.error(
       `\n⚠️ O SCHEMA FOI RECONSTRUÍDO, MAS O LEDGER NÃO FOI GRAVADO ` +
@@ -627,18 +640,36 @@ async function main(): Promise<number> {
         `  Rode \`pnpm db:status\` agora — ele vai listar tudo como PENDENTE — e refaça o\n` +
         `  registro (Passo 2 de docs/runbooks/aplicar-245-registro-migrations.md) antes de\n` +
         `  usar \`pnpm db:apply\` neste banco.\n` +
-        `  O exit code NÃO reflete isto por decisão: o trabalho central do reset (reconstruir\n` +
-        `  o schema) foi concluído. Este bloco é o sinal.`,
+        `\n` +
+        `  POR QUE O EXIT CODE NÃO REFLETE ISTO — decisão registrada, com dois motivos:\n` +
+        `  1. Um reset de ~7,5 min que sai 1 porque um INSERT auxiliar falhou é o sinal que as\n` +
+        `     pessoas aprendem a ignorar. É a patologia da régua sempre-vermelha, que esta onda\n` +
+        `     já documentou duas vezes: régua que quase sempre acende é descartada por quem a\n` +
+        `     roda, e aí ela deixa de pegar a vez em que importava.\n` +
+        `  2. A objeção certa é "automação lê exit code, não stderr" — e a resposta é que a\n` +
+        `     DETECÇÃO NÃO DEPENDE DE NINGUÉM LER ESTE LOG, nem deste processo: o próximo\n` +
+        `     \`pnpm db:status\` lista tudo como PENDENTE (exit 0, mas o relatório é explícito)\n` +
+        `     e o job \`migrations-do-pr\` comenta ⚠️ no PR. A detecção é redundante e vem de\n` +
+        `     FORA do reset, que é onde ela sobrevive a alguém ignorar esta tela.`,
     )
   }
 
-  if (codigo === 0) console.log("\nBanco de teste reconstruído.")
   return codigo
 }
 
+/**
+ * `process.exitCode` em vez de `process.exit()`: o segundo encerra o processo **sem esperar** o
+ * dreno de `process.stdout`, e saída grande em pipe (o caso deste script) sai truncada. Com
+ * `exitCode`, o Node sai sozinho quando o event loop esvazia, depois do flush. Mesmo código de
+ * saída, sem a perda. (CodeRabbit, PR #525.)
+ */
 if (process.argv[1]?.includes("reset-tenancy-testdb")) {
-  main().then((c) => process.exit(c)).catch((e) => {
-    console.error(e instanceof Error ? e.message : e)
-    process.exit(1)
-  })
+  main()
+    .then((c) => {
+      process.exitCode = c
+    })
+    .catch((e) => {
+      console.error(e instanceof Error ? e.message : e)
+      process.exitCode = 1
+    })
 }

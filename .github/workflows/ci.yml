@@ -357,7 +357,11 @@ jobs:
             const existentes = await github.paginate(github.rest.issues.listComments, {
               owner, repo, issue_number, per_page: 100,
             });
-            const meu = existentes.find(c => c.body.startsWith(marca) && c.user.type === 'Bot');
+            // `c.user` é nullable na API do GitHub (comentário de conta apagada vem com user:null),
+            // e `c.body` também. Sem o optional chaining, o job estoura no `find` e o passo de
+            // publicar cai no fallback ⛔ — barulho por um comentário de terceiro, não por defeito
+            // desta branch.
+            const meu = existentes.find(c => c.body?.startsWith(marca) && c.user?.type === 'Bot');
             if (meu) {
               await github.rest.issues.updateComment({ owner, repo, comment_id: meu.id, body: corpo });
             } else {

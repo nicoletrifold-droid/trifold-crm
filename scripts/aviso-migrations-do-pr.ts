@@ -314,11 +314,17 @@ function main(): number {
   return 0
 }
 
+/**
+ * `process.exitCode` em vez de `process.exit()`: o segundo encerra o processo **sem esperar** o
+ * dreno de `process.stdout`, e saída grande em pipe (o caso deste script) sai truncada. Com
+ * `exitCode`, o Node sai sozinho quando o event loop esvazia, depois do flush. Mesmo código de
+ * saída, sem a perda. (CodeRabbit, PR #525.)
+ */
 if (process.argv[1]?.includes("aviso-migrations-do-pr")) {
   try {
-    process.exit(main())
+    process.exitCode = main()
   } catch (e) {
     console.error(e instanceof Error ? e.message : e)
-    process.exit(1)
+    process.exitCode = 1
   }
 }

@@ -6,7 +6,7 @@
 - **Story:** 900-3c — **Fatia B** do split decidido pelo `@po` na validação de 2026-08-29
   (`docs/qa/po-validation-900-3b.md`) e autorizado pelo dono do produto. A irmã é `900-3b` (Fatia A —
   Ambiente), que precisa estar mergeada antes desta (ver Dependencies).
-- **Status:** Ready for Review (rodada 5) — **gate PASS do `@qa`, com a última correção aplicada.** A régua de **forma do diff** que criei na rodada 4 misturava duas revisões: `BASE` saía do **tip** de `origin/main`, o hunk vem do **merge-base**. Reproduzi o falso-vermelho (main avança tocando o `ci.yml`, branch intocada → `exit 1` com a branch impecável) e a correção (`BASE` do merge-base → `exit 0`), confirmando que ela **não perde poder discriminante**: contra o commit do defeito segue `exit 1` nos dois estados da main. `git fetch --prune origin` virou **pré-condição escrita das três réguas** — sem ele medem contra uma main velha, o mesmo modo de falha que a AC1 fecha para o número da migration. O DoD passou a listar as três com a razão de cada uma. **As três, verdes sobre os commits finais:** `numstat 171 0` → exit 0 · forma `@@ -194,0 +195,171 @@` com `BASE=194` do merge-base → exit 0 · jobs `== 2`. **Segue aberto e nomeado:** `MNT-001` (as ~1.400 linhas de `scripts/*.ts` fora do `lint`/`type-check` do CI), a paginação do `tenancy-gate` (story própria, deliberadamente **não** feita aqui) e a **AC1 parcial** — a `245` em produção é passo de runbook do `@devops`, com a versão deste commit e backfill gerado na hora. 274 arquivos de teste, **3520 passed**. Pronta para o push do `@devops`.
+- **Status:** Ready for Review (rodada 6) — **os três achados fora do range do diff, fechados.** O bloqueante era irônico: **as três réguas de não-reescrita aprovavam por vacuidade** (sem `set -euo pipefail`, `awk` de entrada vazia sai `0`) — o mesmo defeito que elas existem para pegar, dentro do instrumento, e a segunda vez nesta story que uma régua nova nasce com o furo que fecha. A AC4 agora traz o bloco **endurecido** (o mesmo que o `@devops` roda pós-squash), com a forma solta marcada `❌` e um **controle de vivacidade** obrigatório: caminho inexistente ⇒ `exit 1`. As cinco células medidas, cada régua acendendo na sua. **Mantida** a decisão do `exit 0` do reset com ledger incompleto — e o argumento que faltava (a detecção vem de **fora** do reset: `db:status` e o job do PR a repetem) foi para o **código**, não só para o parecer; a ordem das mensagens foi invertida para a última linha não tranquilizar sem qualificação depois de 7,5 min. **Minors:** `c.user`/`c.body` com optional chaining (só no job desta story) e `process.exit()` → `process.exitCode` nos cinco scripts, contra truncamento de stdout em pipe. **Segue aberto e nomeado:** `MNT-001` (agora **P1** no backlog, "duas fatias seguidas"), a paginação do `tenancy-gate` (story própria, deliberadamente não feita aqui), a catraca de tenancy vermelha (escalada ao `@pm`; não é regressão de nenhuma fatia — `R3: 0` nos três PRs) e a **AC1 parcial** — a `245` em produção é passo de runbook do `@devops`, com a versão deste commit e backfill gerado na hora. 274 arquivos de teste, **3520 passed**. Pronta para o push do `@devops`.
 - **Priority:** P0 — sem esta fatia não existe registro auditável de migration aplicada, nem forma de
   levar migration nova ao ambiente de teste sem `supabase db push` (que é estruturalmente
   inutilizável neste repositório — ver Dev Notes).
@@ -350,14 +350,15 @@ o registro que a substitui.
     de stories com poder discriminante zero** (depois do `grep -rc` do bundle na `900-3b`/S12 e do
     predicado colinear do `236`/`237`/C3), a primeira das três pelo lado do sempre-vermelho em vez
     do sempre-verde. Corrigida, com tratamento explícito do caso "arquivo intocado" (saída vazia):
+    ⚠️ **A forma solta abaixo APROVA POR VACUIDADE — não é a que vai para o repositório.**
+    Sem `set -euo pipefail`, um `fetch` que falhe deixa a base velha, e um `diff` que falhe (ou
+    um caminho errado) entrega **entrada vazia** ao `awk`, que sai `0` porque nunca executa o
+    corpo do padrão. Medido: `printf '' | awk '$2 != 0 { exit 1 }'` → **exit 0**;
+    `git diff --numstat … -- .github/workflows/NAO-EXISTE.yml | awk …` → **exit 0**. É o defeito
+    que estas réguas existem para pegar, **dentro do instrumento**. A versão obrigatória é a do
+    bloco único mais abaixo.
     ```bash
-    # PRÉ-CONDIÇÃO DAS TRÊS RÉGUAS. Sem ela, `origin/main` é só tão fresca quanto o último
-    # fetch, e as três medem contra uma main velha — o MESMO modo de falha que a AC1 desta
-    # story fecha para o número da migration, deslocado da varredura de refs para aqui.
-    git fetch --prune origin
-
-    # exit 1 se QUALQUER linha tiver deleções != 0; saída vazia (arquivo intocado) também passa,
-    # porque awk sem linhas de entrada nunca executa o corpo do padrão e sai 0
+    # ❌ FORMA SOLTA — aprova o vazio. Mantida só para o leitor reconhecer o padrão.
     git diff --numstat origin/main...HEAD -- .github/workflows/ci.yml | awk '$2 != 0 { exit 1 }'
     ```
   - **A régua acima é NECESSÁRIA e INSUFICIENTE — medido pelo `@qa` (R3-1, rodada 3).** Ela é
@@ -368,24 +369,52 @@ o registro que a substitui.
     story (a paginação do `listComments` foi parar no `tenancy-gate` em vez do job novo, e a
     régua não acusou). **Régua complementar, obrigatória junto com a de cima:**
     ```bash
-    git fetch --prune origin   # mesma pré-condição das outras duas
-
-    # O diff tem de ser UM hunk só, começando DEPOIS da última linha da base — acréscimo puro.
+    #!/usr/bin/env bash
+    # AS TRÊS RÉGUAS DE NÃO-REESCRITA DO ci.yml — forma OBRIGATÓRIA, com as pré-condições.
     #
-    # ⚠️ `BASE` sai do MERGE-BASE, nunca do tip de `origin/main`. As duas coisas são a mesma
-    # só enquanto a main não anda. `git diff A...B` já compara contra o merge-base, então
-    # tirar `BASE` do tip MISTURA DUAS REVISÕES: se a main ganhar um commit que toque este
-    # arquivo, o número de linhas muda e o hunk não — a régua acende com a branch impecável.
-    # Medido pelo `@qa` (rodada 4): main 194→200 sem tocar na branch ⇒ `BASE(tip)=200`, hunk
-    # segue `@@ -194,0` ⇒ exit 1 FALSO-VERMELHO. Com o merge-base, `BASE=194` ⇒ exit 0.
-    # Não é risco distante: a paginação do `tenancy-gate` virou story própria e vai mexer
-    # neste arquivo na main, e o `@devops` faz merge de main na branch antes do push — é o
-    # cenário exato, na hora exata em que esta AC manda repetir a régua.
-    ARQ=.github/workflows/ci.yml
-    BASE=$(git show "$(git merge-base origin/main HEAD)":$ARQ | wc -l | tr -d ' ')
-    test "$(git diff --unified=0 origin/main...HEAD -- $ARQ | grep -c '^@@')" = 1 &&
-    git diff --unified=0 origin/main...HEAD -- $ARQ | grep -q "^@@ -${BASE},0 +"
+    # `set -euo pipefail`: sem ele, falha de `fetch`/`diff` vira silêncio e a régua aprova sem
+    # medir. `[ -n "$OUT" ]`: sem ele, `awk` de entrada vazia sai 0 — a vacuidade que estas
+    # réguas existem para pegar, dentro do próprio instrumento.
+    set -euo pipefail
+    ARQ="${1:-.github/workflows/ci.yml}"
+
+    # PRÉ-CONDIÇÃO 1 — main fresca, e o fetch ABORTA se falhar. Sem ele, as três medem contra
+    # uma main velha: o MESMO modo de falha que a AC1 desta story fecha para o número da
+    # migration, deslocado da varredura de refs para aqui.
+    git fetch --prune origin
+
+    # PRÉ-CONDIÇÃO 2 — o arquivo existe nos DOIS lados. É o que dá VIVACIDADE à régua:
+    # `git diff` de caminho inexistente devolve vazio com exit 0, e as três aprovariam.
+    MB="$(git merge-base origin/main HEAD)"
+    git cat-file -e "$MB:$ARQ"  2>/dev/null || { echo "SEM MEDIR: $ARQ não existe no merge-base"; exit 1; }
+    git cat-file -e "HEAD:$ARQ" 2>/dev/null || { echo "SEM MEDIR: $ARQ não existe no HEAD"; exit 1; }
+
+    # `BASE` sai do MERGE-BASE, nunca do tip de `origin/main` — ver a nota logo abaixo.
+    BASE="$(git show "$MB:$ARQ" | wc -l | tr -d ' ')"
+
+    # RÉGUA 1 — nenhuma deleção.
+    OUT="$(git diff --numstat "origin/main...HEAD" -- "$ARQ")"
+    [ -n "$OUT" ] || { echo "SEM MEDIR: numstat vazio"; exit 1; }
+    printf '%s\n' "$OUT" | awk '$2 != 0 { exit 1 }' || { echo "REPROVADO: há deleções"; exit 1; }
+
+    # RÉGUA 2 — forma: UM hunk só, começando depois da última linha do merge-base.
+    HUNKS="$(git diff --unified=0 "origin/main...HEAD" -- "$ARQ" | grep '^@@' || true)"
+    [ -n "$HUNKS" ] || { echo "SEM MEDIR: nenhum hunk"; exit 1; }
+    [ "$(printf '%s\n' "$HUNKS" | wc -l | tr -d ' ')" = 1 ] || { echo "REPROVADO: mais de um hunk"; exit 1; }
+    printf '%s\n' "$HUNKS" | grep -q "^@@ -${BASE},0 +" || { echo "REPROVADO: o diff toca o MEIO"; exit 1; }
+
+    # RÉGUA 3 — os jobs pré-existentes continuam lá, e não nasceu header duplicado.
+    N="$(grep -c '^  static:\|^  tenancy-gate:' "$ARQ")"
+    [ "$N" = 2 ] || { echo "REPROVADO: contagem de jobs = $N (esperado 2)"; exit 1; }
     ```
+    **Por que `BASE` sai do MERGE-BASE e não do tip de `origin/main`.** `git diff A...B` já
+    compara contra o merge-base; tirar `BASE` de outro lugar mistura duas revisões, e as duas
+    só coincidem enquanto a main não anda. Medido pelo `@qa` (rodada 4): main 194→200 tocando
+    este arquivo, **sem tocar na branch** ⇒ `BASE(tip)=200`, hunk segue `@@ -194,0` ⇒ exit 1
+    **falso-vermelho**. Com o merge-base, `BASE=194` ⇒ exit 0. Não é risco distante: a
+    paginação do `tenancy-gate` virou story própria e vai mexer neste arquivo na main, e o
+    `@devops` faz merge de main na branch antes do push — é o cenário exato, na hora exata em
+    que esta AC manda repetir a régua.
     Medido nos dois estados: no commit com o defeito, `numstat` `170 0` (verde) e hunk
     `@@ -187,0 +188,170 @@` → a régua de forma **acende**; no commit corrigido, `numstat`
     `171 0` e hunk `@@ -194,0 +195,171 @@` (194 = última linha da base) → as duas verdes.
@@ -435,6 +464,24 @@ o registro que a substitui.
     Com `BASE` tirado do tip de `origin/main` ela dá `1` (falso-vermelho); com `BASE` tirado do
     merge-base, `0`. Uma régua que acende quando a main anda é descartada por quem a roda —
     mesmo desfecho da régua sempre-vermelha do `--numstat` que esta AC já corrigiu uma vez.
+  - **(rodada 5) CONTROLE DE VIVACIDADE, obrigatório junto com os outros:** rodar o bloco das
+    três réguas contra um **caminho inexistente** (`.github/workflows/NAO-EXISTE.yml`) tem de
+    dar **exit 1**, com a mensagem `SEM MEDIR`. Sem este caso, nada impede que a régua volte a
+    aprovar o vazio numa edição futura — e a forma solta faz exatamente isso hoje:
+    `git diff --numstat … -- <caminho inexistente> | awk '$2 != 0 { exit 1 }'` → **exit 0**.
+    As quatro medições que fecham o quadrado, todas executadas:
+
+    | Entrada | Célula que exercita | Esperado | Medido |
+    |---|---|---|---|
+    | `ci.yml` real, branch correta | controle positivo | `0` | `0` (`171 0` · `@@ -194,0 +195,171 @@` · jobs 2) |
+    | caminho inexistente | **vivacidade** | `1` | `1` — `SEM MEDIR: … não existe no merge-base` |
+    | commit com linha movida verbatim | régua 2 (a de forma) | `1` | `1` — `REPROVADO: o diff toca o MEIO` |
+    | commit que apaga o passo `lint` do `static` | régua 1 (`numstat`) | `1` | `1` — `REPROVADO: há deleções` |
+    | commit com header `static:` duplicado no fim | régua 3 (contagem) | `1` | `1` — `REPROVADO: contagem de jobs = 3` |
+
+    As três não são redundantes: a de forma **subsume** a de `numstat` (forma verde ⇒ zero
+    deleções em qualquer lugar), mas a contagem de jobs pega uma célula que nenhuma das outras
+    pega — header duplicado **dentro** do bloco novo, que é acréscimo puro e sem deleção.
   - PR que adiciona `supabase/migrations/246_algo.sql` e **não** aplica no teste → comentário
     `⚠️` nomeando `246_algo.sql` como `PENDENTE`.
   - **(G5) PR que edita uma migration já aplicada no teste** (byte alterado num arquivo cujo
@@ -776,10 +823,12 @@ Agent Record.
   exit code corrigido (C6)
 - [ ] `pnpm reset:testdb --confirmar` popula o ledger (`via='reset'`)
 - [ ] Job de CI novo presente em `.github/workflows/ci.yml`, arquivo não reescrito — **as três
-  réguas verdes, depois de `git fetch --prune origin`**: `awk '$2 != 0 { exit 1 }'` (corrigida
-  pelo CodeRabbit), **forma do diff** (um hunk só, começando na última linha do **merge-base** —
-  é ela que pega linha movida verbatim, que a de `numstat` não pega) e contagem de jobs `== 2`
-  (só ela pega header duplicado dentro do bloco novo); `fetch-depth: 0` presente (B2)
+  réguas verdes, no bloco `set -euo pipefail` da AC4** (que traz `git fetch --prune origin` como
+  pré-condição que aborta, e a checagem de existência do arquivo nos dois lados): `numstat` sem
+  deleções, **forma do diff** (um hunk só, começando na última linha do **merge-base** — é ela
+  que pega linha movida verbatim) e contagem de jobs `== 2` (só ela pega header duplicado dentro
+  do bloco novo). **Com o controle de vivacidade rodado:** o mesmo bloco contra um caminho
+  inexistente tem de sair `1`, não `0`. `fetch-depth: 0` presente (B2)
 - [ ] Job de CI **não escreve** no banco de teste — só `pnpm db:status` (leitura) + comentário no
   PR quando a migration da própria PR ainda não estiver aplicada no teste (`PENDENTE` **e**
   `ALTERADA-APÓS-APLICAR`, G5); sem `concurrency` de banco (não é mais necessária)
@@ -817,6 +866,7 @@ Agent Record.
 | 2026-08-29 | 0.8 | **Rodada 3 — CodeRabbit no PR #525 (`CHANGES_REQUESTED`, 4 Major + 4 minor), todos tratados, nenhum descartado.** **Major 1:** a guarda de indeterminação era `casados.length === 0` — com 2 migrations no PR e 1 no relatório, a segunda saía **sem veredito** debaixo de um `✅ limpo`. Virou guarda de **cobertura** (`semVeredito.length > 0`), nomeando quem ficou de fora; controle positivo é o próprio caso do achado, e virou teste. **Major 2:** o `ON CONFLICT DO UPDATE` regravava o `sha256` e apagava a detecção de `ALTERADA-APÓS-APLICAR` — a razão de o ledger existir. Um construtor virou três, cada um com a **precondição escrita**: `db:apply` usa `DO NOTHING RETURNING` e **nunca sobrescreve** (conflito vira anomalia nomeada); o reset declara `sobrescrever: true` porque o `drop schema cascade` acabou de recriar a tabela vazia; o backfill declara `sobrescrever: false` e o SQL vem com `RAISE EXCEPTION` que o aborta se o ledger não estiver vazio — guarda exercida contra o banco povoado, `P0001`, ledger intacto. `sobrescrever` não tem default: quem chama declara em qual mundo está. **Major 3:** o fallback autocommit seguia executando statements depois do erro, aplicando DDL sem registrar; agora para no primeiro `!s.ok` e imprime "K de N statement(s) aplicaram", com o aviso de que não há rollback. **Major 4:** o aviso mandava apagar linha do ledger — isso tira o sinal sem tirar o efeito do banco; agora manda restaurar o arquivo ou criar migration nova. **Minors:** `CHECK` de domínio na `245` (`sha256` hex de 64 e os quatro valores de `via`, com bloco `DO $$` idempotente porque `CREATE TABLE IF NOT EXISTS` pula as constraints), os dois reprovando de verdade contra o banco (`23514`) com controle positivo; `--excluir` inválido agora falha antes de gerar SQL (0 bytes, exit 1) e nasceu `--sobrescrever` opt-in; `listComments` paginado (`per_page: 100`) para o update in-place não virar comentário novo a cada push em PR longo; e o passo do runbook que "validava o projeto" com `current_database()` — medido: responde `postgres`/`main` nos **dois** projetos — trocado por três conferências reais (banner `[db-env] ref=`, `supabase:check`, ref na URL do SQL Editor) mais um discriminador de conteúdo (`organizations`). **A `245` foi editada duas vezes na série e as duas vezes a própria ferramenta acusou `ALTERADA-APÓS-APLICAR` e o `db:apply` recusou** — atravessei pelo Procedimento de exceção do runbook, nunca por atalho. **Registrado que esta fatia aumenta o `MNT-001`**: ~1.400 linhas de `scripts/*.ts` fora do `lint`/`type-check` do CI (o `--force` derruba cache, não amplia denominador); quem cobre é a suíte, e eu rodo `tsc` dedicado à mão em toda rodada. 3 mutações novas (M6/M7/M8) provadas em disco. Gates: **3520 passed**, lint 0 errors, type-check 8/8. | @dev (Dex) |
 | 2026-08-29 | 0.9 | **Rodada 4 — R3-1 do gate do `@qa` (o único bloqueante) fechado.** Na rodada 3 apliquei a paginação do `listComments` com um `replace(..., 1)` sobre um bloco que existe **duas vezes** no `ci.yml`; `replace` pega a primeira ocorrência e o `tenancy-gate` vem antes — paginei o job da `900-2c` e deixei o **desta story** sem paginar. Reproduzido byte a byte a partir do commit `f6c21b21`: `github.paginate` na linha 192 (tenancy-gate) e `existentes.data.find` na 359 (migrations-do-pr, que começa na 228). **Escolhi remover, não declarar** — o conserto do `tenancy-gate` é bom, mas é de outra story, e declará-lo aqui alargaria o escopo desta fatia para acomodar um engano de execução. O `tenancy-gate` voltou a ser **byte a byte** o de `origin/main` (`diff` sem diferença nas linhas 105-194) e o job desta story ganhou a paginação onde a AC4 a exige. **E o achado que vale mais que a correção: a régua de não-reescrita da AC4 era CEGA para linha movida verbatim** — as duas linhas retiradas do `tenancy-gate` continuavam existindo idênticas dentro do job novo, o LCS do `git diff` casou as duas e representou a modificação como **inserção pura** (`170 0`, verde, com o arquivo modificado no meio); o item de DoD estava satisfeito **por vacuidade**. Acrescentei à AC4 uma régua **complementar de forma do diff** — um hunk só, começando depois da última linha da base — medida nos dois estados reais: no commit com o defeito, `numstat` verde e forma **exit 1** (`@@ -187,0 +188,170 @@`); no corrigido, as duas verdes (`@@ -194,0 +195,171 @@`, e 194 é a última linha da base). Confirmei também o contrafactual do `@qa` (paginar os dois jobs → `175 2` → exit 1). Nada de `scripts/`, `supabase/` ou banco nesta rodada. Gates: **3520 passed**, lint 0 errors, type-check 8/8, `tsc` dedicado de `scripts/` limpo. | @dev (Dex) |
 | 2026-08-29 | 1.0 | **Rodada 5 — gate PASS do `@qa`, com uma correção de uma linha na régua que eu mesmo criei na rodada 4.** A régua de **forma do diff** tirava o `BASE` do **tip** de `origin/main` enquanto o hunk vem do **merge-base** — misturava duas revisões, e as duas só coincidem enquanto a main não anda. Reproduzi o falso-vermelho em clone descartável (main 194→200 tocando o `ci.yml`, **branch intocada**): com `BASE` do tip, `exit 1` com a branch impecável; com `BASE` do merge-base, `exit 0`. E a correção **não perde poder discriminante** — contra o commit do defeito (`f6c21b21`) segue `exit 1` nos **dois** estados da main, enquanto a régua de `numstat` dá `exit 0` em todos eles. **Não é risco distante:** a paginação do `tenancy-gate` virou story própria e vai mexer neste arquivo na main, e o `@devops` faz merge de main na branch antes do push — é o cenário exato, na hora exata em que a AC manda repetir a régua. **`git fetch --prune origin` virou pré-condição escrita das três**, porque sem ele elas medem contra uma main velha, que é **o mesmo modo de falha que a AC1 desta story fecha** para o número da migration. O **Definition of Done** passou a listar as três réguas com a razão de cada uma (a de forma subsume a de `numstat`; a contagem de jobs pega a célula que nenhuma das outras pega — header duplicado dentro do bloco novo). Nada de código, `ci.yml`, `scripts/` ou banco nesta rodada: só a régua e a documentação dela. Gates: **3520 passed**, lint 0 errors, type-check 8/8. | @dev (Dex) |
+| 2026-08-29 | 1.1 | **Rodada 6 — os três achados fora do range do diff.** **Bloqueante:** as três réguas de não-reescrita **aprovavam por vacuidade** — sem `set -euo pipefail`, `fetch` que falha deixa a base velha e `diff` que falha entrega entrada vazia ao `awk`, que sai `0` (`printf '' | awk '$2 != 0 { exit 1 }'` → exit 0, medido). É a **segunda vez nesta story** que a régua nova nasce com o furo que existe para fechar. A AC4 passou a trazer o bloco **endurecido** — o mesmo que o `@devops` roda na conferência pós-squash: `set -euo pipefail`, `fetch` que aborta, `git cat-file -e` nos dois lados e `[ -n "$OUT" ]` antes do `awk` —, com a forma solta marcada `❌` e um **controle de vivacidade** obrigatório (caminho inexistente ⇒ exit 1, medido). Quadro completo executado: cada régua acende na sua célula e nenhuma cobre a do vizinho. **Mantida** a decisão do exit 0 do reset com ledger incompleto, agora com o argumento que faltava escrito no código: a detecção **não depende de ninguém ler o log** — o próximo `db:status` e o job do PR a repetem de fora. E a ordem das mensagens foi invertida: `"Banco de teste reconstruído."` não pode ser a última linha depois de 7,5 min quando o ledger falhou; ela passa a ser qualificada. **Minors:** `c.user`/`c.body` com optional chaining (só no job desta story; o `tenancy-gate` segue intocado) e `process.exit()` → `process.exitCode` nos cinco scripts, porque o primeiro trunca stdout grande em pipe (medido: 281 linhas do gerador de backfill preservadas em pipe, exit codes intactos). Gates: **3520 passed**, lint 0 errors, type-check 8/8, `tsc` de `scripts/` limpo. | @dev (Dex) |
 
 ---
 
@@ -1536,6 +1586,75 @@ Buracos aceitos e nomeados, herdados do parecer dele: as três olham só o `ci.y
 e não conteúdo**, e dependem de `origin/main` fresca — daí o `fetch` virar pré-condição em vez de
 recomendação.
 
+#### RODADA 6 — os três achados fora do range do diff (CodeRabbit + @devops)
+
+**🔴 As três réguas aprovavam por vacuidade — dentro do instrumento criado para pegar vacuidade.**
+Sem `set -euo pipefail`, um `fetch` que falhe deixa a base velha; e um `diff` que falhe, ou um
+caminho errado, entrega **entrada vazia** ao `awk`, que sai `0` porque nunca executa o corpo do
+padrão. Reproduzido:
+
+```
+$ printf '' | awk '$2 != 0 { exit 1 }'                                              → exit 0
+$ git diff --numstat origin/main...HEAD -- .github/workflows/NAO-EXISTE.yml | awk … → exit 0
+```
+
+É a **segunda vez nesta story** que a régua nova nasce com o furo que ela existe para fechar (a
+primeira foi o teste do banner derivando o alvo da própria fonte, na Fatia A). A AC4 agora traz o
+bloco **endurecido** — o mesmo que o `@devops` vai rodar na conferência pós-squash, para a régua
+escrita no repositório ser a régua que a pessoa executa: `set -euo pipefail`, `git fetch --prune
+origin` como pré-condição que **aborta**, `git cat-file -e` do arquivo nos **dois** lados, e
+`[ -n "$OUT" ]` antes do `awk`. A forma solta ficou no documento marcada `❌`, para o leitor
+reconhecer o padrão — e não para ser copiada.
+
+**Controle de vivacidade, acrescentado ao mesmo bullet e executado.** O quadro completo, todas as
+células medidas com o bloco endurecido:
+
+| Entrada | Célula | Medido |
+|---|---|---|
+| `ci.yml` real, branch correta | controle positivo | **exit 0** — `171 0` · `@@ -194,0 +195,171 @@` · jobs 2 |
+| caminho inexistente | **vivacidade** | **exit 1** — `SEM MEDIR: … não existe no merge-base` |
+| `f6c21b21` (linha movida verbatim) | régua 2 (forma) | **exit 1** — `REPROVADO: o diff toca o MEIO` |
+| apagar o passo `lint` do `static` | régua 1 (`numstat`) | **exit 1** — `REPROVADO: há deleções` |
+| header `static:` duplicado no fim | régua 3 (contagem) | **exit 1** — `REPROVADO: contagem de jobs = 3` |
+
+Cada régua acende na sua célula e nenhuma cobre a do vizinho: a de forma **subsume** a de
+`numstat`, mas só a contagem pega header duplicado dentro do bloco novo — que é acréscimo puro,
+sem deleção, e com um hunk só.
+
+**🟡 O exit 0 do reset com ledger incompleto — decisão mantida, com o argumento que faltava.**
+O CodeRabbit tinha uma ponta que a minha nota não respondia: *o bloco no stderr é sinal para
+gente, não para script* — quem lê exit code é automação, e ela lê `0` enquanto a mensagem declara
+que a invariante da AC3 não vale. A decisão fica, e agora os **dois** motivos moram no código, não
+só no parecer:
+
+1. um reset de ~7,5 min que sai `1` porque um `INSERT` auxiliar falhou é o sinal que as pessoas
+   aprendem a ignorar — a patologia da régua sempre-vermelha, que esta onda já documentou duas
+   vezes;
+2. **a detecção não depende de ninguém ler este log, nem deste processo:** o próximo
+   `pnpm db:status` lista tudo como `PENDENTE` e o job `migrations-do-pr` comenta `⚠️` no PR. A
+   detecção é redundante e vem **de fora** do reset — que é onde ela sobrevive a alguém ignorar a
+   tela.
+
+**E o de graça que o `@qa` achou: a ordem das mensagens.** O bloco de erro imprimia **antes** de
+`"Banco de teste reconstruído."`, então depois de 7,5 minutos a última linha da tela — onde o olho
+pousa — tranquilizava sem qualificação e apagava o aviso que acabara de subir. Invertido **e**
+qualificado: com falha de ledger, a linha final passa a ser
+`"Schema reconstruído — MAS o ledger NÃO foi gravado. Leia o bloco abaixo antes de usar este banco."`,
+e o bloco vem depois.
+
+**Os dois Minor.**
+- `c.user` é **nullable** na API do GitHub (comentário de conta apagada vem com `user: null`), e
+  `c.body` também. Sem optional chaining, o `find` estoura e o passo de publicar cai no fallback
+  `⛔` — barulho causado por comentário de terceiro, não por defeito da branch. Corrigido **só no
+  job desta story** (linha 364); o `tenancy-gate` (linha 189) segue byte a byte o de `origin/main`,
+  pelo mesmo motivo da rodada 4.
+- `process.exit()` encerra o processo **sem esperar** o dreno de `process.stdout`, e saída grande
+  em pipe sai truncada. Trocado por `process.exitCode` nos **cinco** scripts (`db-status`,
+  `db-apply`, `gerar-backfill-ledger`, `aviso-migrations-do-pr`, `reset-tenancy-testdb`), com a
+  razão em comentário. O caso real é o gerador de backfill, que escreve 281 linhas em pipe:
+  medido `281` linhas em redirecionamento **e** em pipe, e os exit codes preservados
+  (`--excluir` sem valor → `1`; `db:status` contra produção → `1`; contra teste → `0`).
+
 ### Completion Notes List
 
 1. **Migration `245` reconfirmada no dia, não herdada do documento.** `245` livre em todas as
@@ -1646,7 +1765,7 @@ recomendação.
 - `scripts/aviso-migrations-do-pr.test.ts` — 11 testes, G2 e G5 (AC4)
 
 **Modificados**
-- `.github/workflows/ci.yml` — **+171 linhas, 0 deleções**: job `migrations-do-pr` (AC4). O
+- `.github/workflows/ci.yml` — **+175 linhas, 0 deleções**: job `migrations-do-pr` (AC4). O
   `tenancy-gate` e o `static` ficaram **byte a byte** iguais aos de `origin/main` — conferido por
   `diff` nas linhas 105-194 na rodada 4, depois de eu ter alterado o `tenancy-gate` por engano na
   rodada 3.
