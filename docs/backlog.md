@@ -6,6 +6,75 @@ Tarefas operacionais, configurações e ajustes pendentes que não requerem uma 
 
 ## Pendente
 
+### [SEC-002] 🟠 `packages/web/scripts/*.mjs` tem default de PRODUÇÃO e escreve — próxima superfície a migrar para `resolverAmbiente()`
+
+**Adicionado em:** 2026-08-29
+**Prioridade:** **P1** — não é hipótese: é um script que já existe, já escreve e já tem produção como default.
+**Origem:** `@qa` na 3ª rodada da Story `900-3b` (`docs/qa/gates/900.3b-ambiente-de-teste.yml`, `SEC-002`, medium). Pré-existente; **fora do escopo** da fatia por decisão consciente e registrada.
+
+`packages/web/scripts/fix-campaign-lead-names.mjs:12`:
+
+```js
+const SUPABASE_URL = process.env.SUPABASE_URL || "https://dsopqkqjkmhytudaaolv.supabase.co"
+```
+
+`|| <produção>` como default, e o script **escreve**: `method: "PATCH"` em `leads` (linha 34).
+Rodar sem `SUPABASE_URL` no ambiente não falha — **acerta produção em silêncio**. É exatamente a
+classe que a AC3 da `900-3b` existe para matar, num diretório **irmão** ao qual essa mesma story
+acabou de acrescentar um arquivo (`next-com-env.mjs`).
+
+**Por que a `900-3b` não pegou:** o denominador da AC3 é explicitamente `scripts/*.ts`, e
+`scripts/README.md` diz "todo `scripts/*.ts`" — preciso e verdadeiro. `packages/web/scripts/*.mjs`
+é outra superfície, e ninguém tinha olhado para ela.
+
+**Escopo medido por `@devops` em 2026-08-29, antes de abrir este item** — 9 arquivos em
+`packages/web/scripts/`:
+
+| | |
+|---|---|
+| com o ref de produção hardcoded | **1** — `fix-campaign-lead-names.mjs` |
+| que escrevem (`PATCH`/`POST`/`DELETE`/`update`/`upsert`) | **1** — o mesmo arquivo |
+| que passam por `resolverAmbiente()` | **0** |
+
+Os outros 7 desestruturam `SUPABASE_URL` de `process.env` **sem default**, então falham com
+`undefined` em vez de acertar produção — ruins, mas fail-closed por acidente. O único que combina as
+duas propriedades é o do `SEC-002`.
+
+**Ação:** migrar `packages/web/scripts/*.mjs` para a mesma allowlist
+(`packages/shared/src/constants/supabase-refs.ts` + `resolverAmbiente()`) ou, no mínimo imediato,
+**remover o default de produção** e exigir `SUPABASE_URL` explícita. Ao migrar, estender o
+denominador da régua estática para cobrir `packages/web/scripts/**` — senão a próxima superfície
+irmã repete a história.
+
+---
+
+### [TEST-002 / TEST-003] ✅ FECHADOS na 3ª rodada da `900-3b` — a lição: **de-duplicar cria colinearidade**
+
+**Adicionado em:** 2026-08-29 · **Estado:** corrigidos em `ca898dfe`, registrados aqui pela lição, não por trabalho pendente.
+**Origem:** `@qa` na 3ª rodada da Story `900-3b` (gate `TEST-002` e `TEST-003`, ambos low).
+
+Consertar o achado do CodeRabbit sobre **duas definições de "o que é produção"** (o banner tinha seu
+próprio `REF_PRODUCAO`) foi certo — e **cegou a régua que vigiava exatamente isso**.
+
+`env-banner.test.ts` passou a montar as URLs esperadas a partir da fonte que deveria vigiar
+(`URL_PROD = https://${REF_PRODUCAO}…`). Mutar a fonte movia **código e expectativa juntos**: 22/22
+verde com o ref de produção trocado. Consequência medida: sob a mutação o banner devolvia `"ok"`
+para `https://DSOPQ….supabase.co` em dev — o instrumento da AC2 **mudo exatamente sobre produção**,
+que é o defeito que a AC2 existe para não ter. `TEST-003` é a mesma cegueira um nível acima:
+`supabase-refs.test.ts` derivava `PROD`/`TESTE` dos próprios `Set`s.
+
+**A lição, que vale além desta story:** quando se elimina duplicação entre **código e teste**, a
+régua para de ser independente do que mede. Toda fonte única precisa de pelo menos uma **âncora
+literal, escrita à mão** — `expect([...REFS_PERMITIDOS_PRODUCAO]).toEqual(["dsopq…"])` — e não
+derivada. E a mutação tem de ser remedida **depois** de qualquer de-duplicação: foi ao remedir que
+apareceu a segunda célula muda.
+
+Fechados com URLs literais (incluindo maiúsculas e caixa mista), uma guarda contra o conserto
+preguiçoso (caixa alta sob `NODE_ENV=production` tem de seguir `"ok"`, não virar `"ausente"`) e a
+âncora de identidade na suíte da própria fonte. Matriz final: **12 células, nenhuma muda**.
+
+---
+
 ### [MNT-003] 🟡 A regra `logs/` do `.gitignore` casa código-fonte rastreado — arquivo novo naquele diretório seria silenciosamente inadicionável
 
 **Adicionado em:** 2026-08-29
