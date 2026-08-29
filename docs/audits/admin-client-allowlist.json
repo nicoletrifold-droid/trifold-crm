@@ -1,67 +1,112 @@
 {
   "_aviso": "Allowlist da regra aios/no-unscoped-admin-client. NÃO acrescente arquivo novo aqui sem justificativa real. `legado` é uma CATRACA: são os arquivos que já usavam createAdminClient quando a regra nasceu (Story 900-14) e serão migrados pela 900-15. A lista só DIMINUI — arquivo novo que precise do client cru vai para `legitimos`, com motivo, e isso aparece em diff.",
   "congeladoEm": "2026-08-23",
+  "reclassificadoEm": "2026-08-29",
+  "plataforma": {
+    "src/app/api/cron/billing-collect-anthropic/route.ts": "cross-org de plataforma: dado da própria Trifold, sem dimensão de org, permanente — não migra para forEachActiveOrg",
+    "src/app/api/cron/billing-collect-resend/route.ts": "cross-org de plataforma: dado da própria Trifold, sem dimensão de org, permanente — não migra para forEachActiveOrg",
+    "src/app/api/cron/billing-collect-supabase/route.ts": "cross-org de plataforma: dado da própria Trifold, sem dimensão de org, permanente — não migra para forEachActiveOrg",
+    "src/app/api/cron/billing-collect-vercel/route.ts": "cross-org de plataforma: dado da própria Trifold, sem dimensão de org, permanente — não migra para forEachActiveOrg",
+    "src/app/api/cron/billing-collection-health/route.ts": "cross-org de plataforma: dado da própria Trifold, sem dimensão de org, permanente — não migra para forEachActiveOrg (o próprio código já diz: billing-collection-health/route.ts:145)",
+    "src/app/api/cron/billing-cost-anomaly/route.ts": "cross-org de plataforma: dado da própria Trifold, sem dimensão de org, permanente — não migra para forEachActiveOrg (o próprio código já diz: billing-cost-anomaly/route.ts:156)",
+    "src/app/api/cron/billing-monthly-summary/route.ts": "cross-org de plataforma: dado da própria Trifold, sem dimensão de org, permanente — não migra para forEachActiveOrg (o próprio código já diz: billing-monthly-summary/route.ts:222)",
+    "src/app/api/cron/billing-monthly-summary/route.test.ts": "teste do item acima — classificação segue o arquivo de implementação (billing-monthly-summary/route.ts:222)",
+    "src/app/api/cron/billing-reminders/route.ts": "cross-org de plataforma: dado da própria Trifold, sem dimensão de org, permanente — não migra para forEachActiveOrg (o próprio código já diz: billing-reminders/route.ts:27,190)",
+    "src/app/api/cron/billing-subscription-enrich/route.ts": "cross-org de plataforma: dado da própria Trifold, sem dimensão de org, permanente — não migra para forEachActiveOrg",
+    "src/app/api/cron/keep-alive/route.ts": "cross-org de plataforma: dado da própria Trifold, sem dimensão de org, permanente — não migra para forEachActiveOrg — só verifica conectividade (SELECT id FROM organizations LIMIT 1, keep-alive/route.ts:24), não processa org nenhuma",
+    "src/app/api/cron/webhook-health/route.ts": "cross-org de plataforma: dado da própria Trifold, sem dimensão de org, permanente — não migra para forEachActiveOrg — monitora a saúde da própria infraestrutura de webhook da Trifold",
+    "src/app/api/cron/purge-rejected-uploads/route.ts": "cross-org de plataforma: dado da própria Trifold, sem dimensão de org, permanente — não migra para forEachActiveOrg — retention policy sem filtro de org por desenho, varre obra_upload_aprovacoes inteira (purge-rejected-uploads/route.ts:29-33)",
+    "src/lib/supabase/admin-helpers.ts": "definição do próprio client cru",
+    "src/lib/supabase/admin.ts": "definição do próprio client cru",
+    "src/lib/supabase/org-scoped-admin.ts": "É o próprio wrapper: encapsula createAdminClient para injetar o escopo de org. Sinalizá-lo seria a regra acusando a solução que ela existe para promover."
+  },
+  "itera-orgs": {
+    "src/app/api/cron/analytics-report/route.ts": "itera as orgs de fato: for (const org of orgs), lido de organizations (analytics-report/route.ts:117). Não migra para forEachActiveOrg (Passo 2 da Onda 2, 900-23): itera linhas que existem e deriva a org delas — o que falta é isolamento de erro por org, não a forma.",
+    "src/app/api/cron/appointment-email-reminders/route.ts": "itera as orgs de fato: for (const appointment of appointments ?? []), org_id por linha (appointment-email-reminders/route.ts:51). Não migra para forEachActiveOrg (Passo 2 da Onda 2, 900-23): itera linhas que existem e deriva a org delas — o que falta é isolamento de erro por org, não a forma.",
+    "src/app/api/cron/appointment-whatsapp-reminders/route.ts": "itera as orgs de fato: for (const appointment of appointments ?? []), org_id por linha (appointment-whatsapp-reminders/route.ts:109). Não migra para forEachActiveOrg (Passo 2 da Onda 2, 900-23): itera linhas que existem e deriva a org delas — o que falta é isolamento de erro por org, não a forma.",
+    "src/app/api/cron/aprovacoes-digest/route.ts": "itera as orgs de fato: for (const [orgId, obras] of byOrg) (aprovacoes-digest/route.ts:52). Não migra para forEachActiveOrg (Passo 2 da Onda 2, 900-23): itera linhas que existem e deriva a org delas — o que falta é isolamento de erro por org, não a forma.",
+    "src/app/api/cron/boleto-scan/route.ts": "itera as orgs de fato: for (const cliente of clientes ?? []), org via obra.org_id (boleto-scan/route.ts:130). Não migra para forEachActiveOrg (Passo 2 da Onda 2, 900-23): itera linhas que existem e deriva a org delas — o que falta é isolamento de erro por org, não a forma.",
+    "src/app/api/cron/boleto-scan/route.test.ts": "teste do item acima — classificação segue o arquivo de implementação (boleto-scan/route.ts:130)",
+    "src/app/api/cron/bolsao-rebalance/route.ts": "itera as orgs de fato: for (const cfg of configs ?? []), orgId = cfg.org_id (bolsao-rebalance/route.ts:70-71). Não migra para forEachActiveOrg (Passo 2 da Onda 2, 900-23): itera linhas que existem e deriva a org delas — o que falta é isolamento de erro por org, não a forma.",
+    "src/app/api/cron/bolsao-rebalance/route.test.ts": "teste do item acima — classificação segue o arquivo de implementação (bolsao-rebalance/route.ts:70-71)",
+    "src/app/api/cron/campaign-poll/route.ts": "itera as orgs de fato: for (const campaign of campaigns), org via campaign.org_id (campaign-poll/route.ts:158). Não migra para forEachActiveOrg (Passo 2 da Onda 2, 900-23): itera linhas que existem e deriva a org delas — o que falta é isolamento de erro por org, não a forma.",
+    "src/app/api/cron/email-automations/route.ts": "itera as orgs de fato: for (const automation of automations ?? []), org_id por linha (email-automations/route.ts:61). Não migra para forEachActiveOrg (Passo 2 da Onda 2, 900-23): itera linhas que existem e deriva a org delas — o que falta é isolamento de erro por org, não a forma.",
+    "src/app/api/cron/email-queue/route.ts": "itera as orgs de fato: for (const orgId of orgIds), distinct de pendingOrgs (email-queue/route.ts:53). Não migra para forEachActiveOrg (Passo 2 da Onda 2, 900-23): itera linhas que existem e deriva a org delas — o que falta é isolamento de erro por org, não a forma.",
+    "src/app/api/cron/enrich-leads/route.ts": "itera as orgs de fato: for (const conv of conversations), org via conv.org_id (enrich-leads/route.ts:60). Não migra para forEachActiveOrg (Passo 2 da Onda 2, 900-23): itera linhas que existem e deriva a org delas — o que falta é isolamento de erro por org, não a forma.",
+    "src/app/api/cron/enrich-leads/route.test.ts": "teste do item acima — classificação segue o arquivo de implementação (enrich-leads/route.ts:60)",
+    "src/app/api/cron/meta-leads-retry/route.ts": "itera as orgs de fato: for (const event of events ?? []), org resolvida por evento (meta-leads-retry/route.ts:63). Não migra para forEachActiveOrg (Passo 2 da Onda 2, 900-23): itera linhas que existem e deriva a org delas — o que falta é isolamento de erro por org, não a forma.",
+    "src/app/api/cron/meta-leads-retry/route.test.ts": "teste do item acima — classificação segue o arquivo de implementação (meta-leads-retry/route.ts:63)",
+    "src/app/api/cron/meta-sync-entities/route.ts": "itera as orgs de fato: for (const account of accounts), org via account.org_id (meta-sync-entities/route.ts:58). Não migra para forEachActiveOrg (Passo 2 da Onda 2, 900-23): itera linhas que existem e deriva a org delas — o que falta é isolamento de erro por org, não a forma.",
+    "src/app/api/cron/meta-sync-health/route.ts": "itera as orgs de fato: for (const orgId of orgIds), distinct de meta_ad_accounts (meta-sync-health/route.ts:111). Não migra para forEachActiveOrg (Passo 2 da Onda 2, 900-23): itera linhas que existem e deriva a org delas — o que falta é isolamento de erro por org, não a forma.",
+    "src/app/api/cron/meta-sync-insights/route.ts": "itera as orgs de fato: for (const account of accounts), org via account.org_id (meta-sync-insights/route.ts:159). Não migra para forEachActiveOrg (Passo 2 da Onda 2, 900-23): itera linhas que existem e deriva a org delas — o que falta é isolamento de erro por org, não a forma.",
+    "src/app/api/cron/meta-sync-placement/route.ts": "itera as orgs de fato: for (const account of accounts), org via account.org_id (meta-sync-placement/route.ts:81). Não migra para forEachActiveOrg (Passo 2 da Onda 2, 900-23): itera linhas que existem e deriva a org delas — o que falta é isolamento de erro por org, não a forma.",
+    "src/app/api/cron/obras-approval-reminder/route.ts": "itera as orgs de fato: for (const [orgId, { count, ids }] of byOrg.entries()) (obras-approval-reminder/route.ts:52). Não migra para forEachActiveOrg (Passo 2 da Onda 2, 900-23): itera linhas que existem e deriva a org delas — o que falta é isolamento de erro por org, não a forma.",
+    "src/app/api/cron/roleta-retry/route.ts": "itera as orgs de fato: for (const lead of leads ?? []), org via lead.org_id (roleta-retry/route.ts:74). Não migra para forEachActiveOrg (Passo 2 da Onda 2, 900-23): itera linhas que existem e deriva a org delas — o que falta é isolamento de erro por org, não a forma.",
+    "src/app/api/cron/roleta-retry/route.test.ts": "teste do item acima — classificação segue o arquivo de implementação (roleta-retry/route.ts:74)",
+    "src/app/api/cron/sienge-customer-sync/route.ts": "itera as orgs de fato: for (const c of clientes ?? []), org via c.org_id (sienge-customer-sync/route.ts:44). Não migra para forEachActiveOrg (Passo 2 da Onda 2, 900-23): itera linhas que existem e deriva a org delas — o que falta é isolamento de erro por org, não a forma.",
+    "src/app/api/cron/sla-alerts/route.ts": "itera as orgs de fato: for (const cfg of configs ?? []), orgId = cfg.org_id (sla-alerts/route.ts:110-111). Não migra para forEachActiveOrg (Passo 2 da Onda 2, 900-23): itera linhas que existem e deriva a org delas — o que falta é isolamento de erro por org, não a forma."
+  },
+  "alvos-onda-2": {
+    "src/app/api/cron/daily-report/route.ts": {
+      "motivo": "travado: DEFAULT_ORG_ID (daily-report/route.ts:16), só sobrescrito por DAILY_REPORT_ORG_ID (:33) — processa uma org só. Correção no Passo 5 da Onda 2 (900-20). ARMADILHA: DAILY_REPORT_RECIPIENTS é global; sob forEachActiveOrg ingênuo esses telefones receberiam o relatório de TODAS as orgs — a env só vale para a org do DAILY_REPORT_ORG_ID, que sobrevive como override nomeado da Trifold.",
+      "alvosExpiramEm": "2026-09-30"
+    },
+    "src/app/api/cron/daily-report/route.test.ts": {
+      "motivo": "teste do item acima — classificação segue o arquivo de implementação (daily-report/route.ts:16)",
+      "alvosExpiramEm": "2026-09-30"
+    },
+    "src/app/api/cron/nicole-agenda-reconcile/route.ts": {
+      "motivo": "travado: DEFAULT_ORG_ID (nicole-agenda-reconcile/route.ts:30), usado em :76 — processa uma org só. Correção no Passo 5 da Onda 2 (900-20).",
+      "alvosExpiramEm": "2026-09-30"
+    },
+    "src/app/api/cron/nicole-agenda-reconcile/route.test.ts": {
+      "motivo": "teste do item acima — classificação segue o arquivo de implementação (nicole-agenda-reconcile/route.ts:30)",
+      "alvosExpiramEm": "2026-09-30"
+    },
+    "src/app/api/cron/nicole-health/route.ts": {
+      "motivo": "travado por DEFAULT_ORG_ID (nicole-health/route.ts:31, usado em :117,:126,:157,:166) — mas NÃO migra para forEachActiveOrg: avisa o admin da Trifold que a API de IA parou, é vigia de plataforma; migrar criaria N alertas para o mesmo incidente, o oposto do que o arquivo existe para evitar. Correção correta: remover os filtros por DEFAULT_ORG_ID para ver erros de todas as orgs, incluir org no corpo do alerta. Quem pegar o Passo 5 (900-20) tem que ler esta ressalva antes de envolvê-lo num loop. Achado da 900-21b: criado em 51d21d1e (2026-08-28), DEPOIS do congeladoEm 2026-08-23, nunca esteve na allowlist.",
+      "alvosExpiramEm": "2026-09-30"
+    },
+    "src/app/api/cron/meta-ads-intelligence/route.ts": {
+      "motivo": "defeituoso: accounts[0]!.org_id (meta-ads-intelligence/route.ts:231) vira \"a org\" para as chamadas seguintes — com 2+ orgs processa e registra êxito só para a primeira. Correção no Passo 5 da Onda 2 (900-20): agrupar accounts por org_id, um meta_sync_log por org.",
+      "alvosExpiramEm": "2026-09-30"
+    },
+    "src/app/api/cron/meta-capi-dispatch/route.ts": {
+      "motivo": "defeituoso: o select de leads (meta-capi-dispatch/route.ts:101-103) usa só .in(\"id\", leadIds), sem .eq(\"org_id\", ...) — a outbox de todas as orgs é processada como se fosse uma. Correção no Passo 5 da Onda 2 (900-20).",
+      "alvosExpiramEm": "2026-09-30"
+    },
+    "src/app/api/cron/meta-capi-dispatch/route.test.ts": {
+      "motivo": "teste do item acima — classificação segue o arquivo de implementação (meta-capi-dispatch/route.ts:101-103)",
+      "alvosExpiramEm": "2026-09-30"
+    },
+    "src/app/api/cron/followup/route.ts": {
+      "motivo": "defeituoso: o lookup de whatsapp_config (followup/route.ts:168) roda ANTES do for (const rule of rules) (:192) e filtra só por status=\"active\", sem org_id nenhum — não é \"usa a config errada\", é \"usa qualquer linha ativa que o banco devolver primeiro\", para todas as regras. Correção no Passo 5 da Onda 2 (900-20): mover para dentro do loop com .eq(\"org_id\", rule.org_id).",
+      "alvosExpiramEm": "2026-09-30"
+    },
+    "src/app/api/cron/calendly-sync/route.ts": {
+      "motivo": "órfão não agendado: ausente de packages/web/vercel.json (37 crons agendados, 40 diretórios em src/app/api/cron/) — não roda hoje. Decisão (manter ou apagar) adiada para a Onda 3.",
+      "alvosExpiramEm": "2026-09-30"
+    },
+    "src/app/api/cron/supremo-history-sync/route.ts": {
+      "motivo": "órfão não agendado: ausente de packages/web/vercel.json (37 agendados, 40 diretórios) — usa SUPREMO_ORG_ID fixo, mesmo padrão de travamento, mas nem roda hoje. Decisão adiada para a Onda 3.",
+      "alvosExpiramEm": "2026-09-30"
+    },
+    "src/app/api/cron/supremo-sync/route.ts": {
+      "motivo": "órfão não agendado: ausente de packages/web/vercel.json (37 agendados, 40 diretórios) — mesmo padrão do supremo-history-sync, mas nem roda hoje. Decisão adiada para a Onda 3.",
+      "alvosExpiramEm": "2026-09-30"
+    }
+  },
   "legitimos": {
-    "src/app/api/cron/analytics-report/route.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
-    "src/app/api/cron/appointment-email-reminders/route.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
-    "src/app/api/cron/appointment-whatsapp-reminders/route.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
-    "src/app/api/cron/aprovacoes-digest/route.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
-    "src/app/api/cron/billing-collect-anthropic/route.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
-    "src/app/api/cron/billing-collect-resend/route.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
-    "src/app/api/cron/billing-collect-supabase/route.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
-    "src/app/api/cron/billing-collect-vercel/route.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
-    "src/app/api/cron/billing-collection-health/route.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
-    "src/app/api/cron/billing-cost-anomaly/route.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
-    "src/app/api/cron/billing-monthly-summary/route.test.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
-    "src/app/api/cron/billing-monthly-summary/route.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
-    "src/app/api/cron/billing-reminders/route.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
-    "src/app/api/cron/billing-subscription-enrich/route.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
-    "src/app/api/cron/boleto-scan/route.test.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
-    "src/app/api/cron/boleto-scan/route.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
-    "src/app/api/cron/bolsao-rebalance/route.test.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
-    "src/app/api/cron/bolsao-rebalance/route.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
-    "src/app/api/cron/calendly-sync/route.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
-    "src/app/api/cron/campaign-poll/route.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
-    "src/app/api/cron/daily-report/route.test.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
-    "src/app/api/cron/daily-report/route.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
-    "src/app/api/cron/email-automations/route.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
-    "src/app/api/cron/email-queue/route.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
-    "src/app/api/cron/enrich-leads/route.test.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
-    "src/app/api/cron/enrich-leads/route.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
-    "src/app/api/cron/followup/route.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
-    "src/app/api/cron/keep-alive/route.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
-    "src/app/api/cron/meta-ads-intelligence/route.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
-    "src/app/api/cron/meta-capi-dispatch/route.test.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
-    "src/app/api/cron/meta-capi-dispatch/route.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
-    "src/app/api/cron/meta-leads-retry/route.test.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
-    "src/app/api/cron/meta-leads-retry/route.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
-    "src/app/api/cron/meta-sync-entities/route.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
-    "src/app/api/cron/meta-sync-health/route.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
-    "src/app/api/cron/meta-sync-insights/route.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
-    "src/app/api/cron/meta-sync-placement/route.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
-    "src/app/api/cron/nicole-agenda-reconcile/route.test.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
-    "src/app/api/cron/nicole-agenda-reconcile/route.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
-    "src/app/api/cron/obras-approval-reminder/route.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
-    "src/app/api/cron/purge-rejected-uploads/route.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
-    "src/app/api/cron/roleta-retry/route.test.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
-    "src/app/api/cron/roleta-retry/route.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
-    "src/app/api/cron/sienge-customer-sync/route.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
-    "src/app/api/cron/sla-alerts/route.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
-    "src/app/api/cron/supremo-history-sync/route.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
-    "src/app/api/cron/supremo-sync/route.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
-    "src/app/api/cron/webhook-health/route.ts": "cron cross-org: itera todas as orgs por desenho (900-23 formaliza com forEachActiveOrg)",
+    "src/app/api/platform/orgs/route.ts": "Rota do painel /platform que provisiona empresa cliente (Story 900-21/PR #498): chama provision_org() com service-role; a autorização acontece na rota (platform-guard.ts), não no SQL (platform/orgs/route.ts:75-76)",
     "src/app/api/webhook/resend/route.ts": "webhook: resolve a org pelo payload, não tem sessão de usuário (900-24)",
     "src/app/api/webhook/whatsapp/route.ts": "webhook: resolve a org pelo payload, não tem sessão de usuário (900-24)",
     "src/app/api/webhooks/clicksign/route.ts": "webhook: resolve a org pelo payload, não tem sessão de usuário (900-24)",
-    "src/app/api/webhooks/imoveis-sync/route.test.ts": "webhook: resolve a org pelo payload, não tem sessão de usuário (900-24)",
     "src/app/api/webhooks/imoveis-sync/route.ts": "webhook: resolve a org pelo payload, não tem sessão de usuário (900-24)",
+    "src/app/api/webhooks/imoveis-sync/route.test.ts": "webhook: resolve a org pelo payload, não tem sessão de usuário (900-24)",
     "src/app/api/webhooks/landing-page/route.ts": "webhook: resolve a org pelo payload, não tem sessão de usuário (900-24)",
     "src/app/api/webhooks/meta-ads/route.ts": "webhook: resolve a org pelo payload, não tem sessão de usuário (900-24)",
-    "src/app/api/webhooks/sienge/route.test.ts": "webhook: resolve a org pelo payload, não tem sessão de usuário (900-24)",
     "src/app/api/webhooks/sienge/route.ts": "webhook: resolve a org pelo payload, não tem sessão de usuário (900-24)",
-    "src/lib/supabase/admin-helpers.ts": "definição do próprio client cru",
-    "src/lib/supabase/admin.ts": "definição do próprio client cru",
-    "src/lib/supabase/org-scoped-admin.ts": "É o próprio wrapper: encapsula createAdminClient para injetar o escopo de org. Sinalizá-lo seria a regra acusando a solução que ela existe para promover.",
+    "src/app/api/webhooks/sienge/route.test.ts": "webhook: resolve a org pelo payload, não tem sessão de usuário (900-24)",
     "src/lib/tenancy/admin-invite.ts": "Convite do admin de uma empresa CLIENTE (Story 900-22b): a Trifold escreve em users/organizations de uma org que não é a dela, então não existe org do chamador para injetar. O escopo é o orgId devolvido por provision_org() (nunca vindo do corpo da requisição — AC-A6), aplicado explicitamente em cada .eq('org_id'/'id').",
     "src/lib/tenancy/platform-query.ts": "É o caminho cross-org SANCIONADO do painel /platform (Story 900-22b): o platform admin precisa enxergar TODAS as orgs e a RLS de organizations escopa por org do usuário, então createOrgScopedAdminClient(orgId) quebraria a listagem. O escopo aqui não é .eq('org_id') manual, é a lista fechada PLATFORM_READABLE_TABLES + recusa de \"*\" em runtime. Endurecido pela 900-42a."
   },

@@ -6,6 +6,84 @@ Tarefas operacionais, configurações e ajustes pendentes que não requerem uma 
 
 ## Pendente
 
+### [ARCH-001] 🟠 O `CHECK whatsapp_sem_identificador_proprio` morde **só a grafia** — `phoneNumberId` passa
+
+**Adicionado em:** 2026-08-29 · **Origem:** gate `@qa` da Story `900-21b` (`ARCH-001`, medium).
+**Prioridade:** P1 · **Dona: `900-24`** (a story dos webhooks) — não é dívida órfã, tem destino.
+
+A migration `246` cria
+`CONSTRAINT whatsapp_sem_identificador_proprio CHECK (provider <> 'whatsapp' OR NOT (config ? 'phone_number_id'))`
+e a própria migration afirma que reabrir a decisão "custa uma migration". **Custa uma troca de
+grafia.** O operador `?` do `jsonb` testa **chave de topo, string exata** — qualquer outra forma de
+escrever o mesmo identificador entra sem tocar o `CHECK`.
+
+Medido por `@devops` em 2026-08-29 contra o Postgres de produção (avaliação de expressão pura,
+**read-only**, nenhuma tabela lida):
+
+| valor de `config` | o `CHECK` bloqueia? |
+|---|---|
+| `{"phone_number_id":"1"}` | **sim** |
+| `{"phoneNumberId":"1"}` | **não** |
+| `{"meta":{"phone_number_id":"1"}}` | **não** |
+| `{"phone_number":"1"}` | **não** |
+
+**Por que importa:** a invariante que a `900-21b` quis travar é *"o WhatsApp resolve por
+`whatsapp_config.phone_number_id`, nunca por `org_integrations`, para não haver duas fontes de
+verdade do mesmo identificador"*. Um `CHECK` que só reconhece uma grafia não trava a invariante —
+trava um literal. A segunda fonte de verdade nasce no dia em que alguém escrever a chave em
+camelCase, e nasce **em silêncio**.
+
+**Ação (`900-24`):** decidir entre (a) normalizar a forma de `config` por provider com um schema
+validado, (b) alargar o `CHECK` para as grafias plausíveis — sabendo que continua enumerando
+literais —, ou (c) aceitar e mover a garantia para a camada que escreve, com teste. A opção (b)
+sozinha é a mais fraca das três e não deve ser escolhida por ser a mais barata.
+
+---
+
+### [REL-001] 🟡 `whatsapp_config.status` não tem `CHECK` em produção — `'Active'` evade os índices parciais
+
+**Adicionado em:** 2026-08-29 · **Origem:** gate `@qa` da Story `900-21b` (`REL-001`, low). **Prioridade:** P2.
+
+As duas UNIQUE parciais da migration `246` são condicionadas ao `status`. Como a coluna não tem
+`CHECK` de domínio em produção, `'Active'` ou `'ACTIVE'` **não casam com o predicado parcial** e a
+linha escapa da unicidade — exatamente o estado que os índices existem para tornar impossível.
+
+**Ação:** `CHECK` de domínio em `whatsapp_config.status` (conferindo antes os valores distintos já
+gravados em produção), ou predicado dos índices insensível a caixa. A primeira é melhor: normaliza
+na origem em vez de acomodar a sujeira.
+
+---
+
+### [TEST-001] 🟡 A regra AST não vê `import * as admin` — `admin.createAdminClient()` passa
+
+**Adicionado em:** 2026-08-29 · **Origem:** gate `@qa` da Story `900-21b` (`TEST-001`, low). **Pré-existente da `900-14`**, não introduzido aqui. **Prioridade:** P2.
+
+A regra ESLint `no-unscoped-admin-client` casa a chamada pelo identificador importado. Com
+`import * as admin from '…'` seguido de `admin.createAdminClient()`, o nó tem outra forma e a regra
+**não acende**. A catraca fica verde sobre um caminho que ela existe para barrar.
+
+**Ação:** cobrir `MemberExpression` sobre namespace importado, e acrescentar o caso à suíte da
+regra — uma catraca sem célula que acenda para essa forma é indistinguível de uma catraca morta.
+
+---
+
+### [DOC-001] 🟡 A Regra 3 da allowlist fica vermelha em **2026-10-01** — a data **nunca** deve ser renovada
+
+**Adicionado em:** 2026-08-29 · **Origem:** gate `@qa` da Story `900-21b` (`DOC-001`, low). **Prioridade:** P2, com data.
+
+A re-triagem da allowlist de `createAdminClient` marcou como `alvos-onda-2` as entradas que a Onda 2
+tem de consertar, com **prazo em 2026-10-01**. Depois dessa data a Regra 3 fica vermelha se a seção
+ainda tiver entradas.
+
+**O ponto do item é o que NÃO se deve fazer:** a data existe para forçar a conversa, então
+**renová-la é derrotar o mecanismo**. Se 2026-10-01 chegar com a seção não vazia, a saída é esvaziar
+a seção (consertando ou reclassificando com justificativa por entrada), **nunca** empurrar o prazo.
+Um prazo renovável é um prazo que não existe — e esta é a segunda vez neste repositório que um
+artefato de governança sancionava por escrito o que devia consertar: a própria `900-21b` nasceu de
+achar **48 de 62** entradas da allowlist com a mesma string copiada.
+
+---
+
 ### [SEC-002] 🟠 `packages/web/scripts/*.mjs` tem default de PRODUÇÃO e escreve — próxima superfície a migrar para `resolverAmbiente()`
 
 **Adicionado em:** 2026-08-29
@@ -260,6 +338,17 @@ lacuna de accountability, não só de estilo.
 **Ação:** draftar `900-16` (`platform_admins` com níveis `owner/operator/support`,
 `platform_audit_log` append-only, `platform_audit()`, `requirePlatformAdmin` evoluindo para
 consultar a tabela) antes de mais rotas de `/platform` acumularem em cima do buraco.
+
+**Reforço (2026-08-29, dono do produto, ao decidir Supabase Vault na Story `900-21b`):** a dívida
+ganhou uma consequência direta e concreta, não só de estilo. Quando `org_integrations.secret_ref`
+apontar para o Vault (Onda 7, provavelmente `900-47`), a leitura de um segredo de tenant
+(`resolveIntegration()`) passa a ser algo que um platform admin pode fazer sobre **qualquer**
+cliente. Sem `platform_audit_log`, essa leitura não deixa rastro nenhum — um platform admin lê o
+token de WhatsApp (ou qualquer outra credencial) de qualquer empresa cliente sem que isso apareça em
+lugar nenhum. A `900-21b` não popula `secret_ref` (fica nulo, por desenho), então não abre essa
+superfície agora — mas a tabela que a `900-21b` cria já é o destino final da coluna, o que torna
+esta dependência **bloqueante de fato**, não só declarada, para qualquer story que preencha
+`secret_ref`. Draftar `900-16` antes disso, não depois.
 
 ---
 
