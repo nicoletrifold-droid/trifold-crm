@@ -6,6 +6,46 @@ Tarefas operacionais, configurações e ajustes pendentes que não requerem uma 
 
 ## Pendente
 
+### [EPIC-900] 🟡 O §461 do epic recomenda o `sync-schema.sh` que a `900-3c` vai deletar — texto superado pelo próprio resultado da `900-3`
+
+**Adicionado em:** 2026-08-29
+**Prioridade:** **P2** — não bloqueia nenhuma story; bloqueia a *confiança* no epic como fonte.
+**Origem:** Validação `@po` da `900-3c` (`docs/qa/po-validation-900-3c.md`, §2). O `@sm` encontrou a
+contradição e a reportou corretamente — editar o epic está **fora da autoridade** dele e do executor
+(precedente já registrado pela `900-2c`). Gestão de contexto de epic é autoridade do `@po`, então o
+encaminhamento fica aqui, num artefato monitorado, e não só no Dev Agent Record de uma story.
+**Endereçado a:** `@pm` (dono do epic) com `@architect` em cópia.
+
+`docs/stories/epics/epic-900-saas-multi-tenant.md` §461 diz, textualmente:
+
+> **O que NÃO muda, para evitar correção excessiva:** `scripts/sync-schema.sh` **é** corretamente
+> reaproveitável em `900-3`, para aplicar as 222 migrations num projeto Supabase novo.
+
+A `900-3c` (AC5) **deleta esse script**. A contradição é real, mas o mérito já está resolvido — e a
+prova está na própria `900-3`:
+
+- A `900-3` está `InReview` declarando *"os 6 ACs cumpridos"*, mas as tarefas **T1.1 a T1.4 estão
+  todas desmarcadas** (`[ ]`) — e a T1.3 era literalmente *"rodar `supabase db push --db-url ...`
+  (reusar o padrão de `scripts/sync-schema.sh`, adaptado)"*.
+- A própria story registra que *"a decisão de ambiente mudou em relação ao draft"*. O que existe
+  hoje é `scripts/reset-tenancy-testdb.ts`, via Management API — construído porque `db push` é
+  estruturalmente inutilizável neste repositório (prefixos duplicados como chave `version` + os 11
+  `_remote_only.sql` com `CREATE INDEX CONCURRENTLY`, que aborta com `25001` dentro da transação
+  por arquivo).
+
+Ou seja: o §461 era verdadeiro como **plano** e foi **superado pelo resultado da própria `900-3`**.
+O script nunca chegou a ser usado. Verificado em 2026-08-29: nenhum workflow o invoca, e as
+variáveis que ele exige (`SUPABASE_DB_URL_STAGING`/`SUPABASE_DB_URL_PROD`) não existem em `.env`
+nenhum do repositório.
+
+**Ação:** corrigir §461 (e conferir §457, que já corrige a alegação de snapshot mas mantém a de
+reuso) para registrar que a `900-3` **não** usou `db push`/`sync-schema.sh`, e que a ferramenta de
+promoção passa a ser `pnpm db:status` / `pnpm db:apply` (`900-3c`).
+
+**Não bloqueia a `900-3c`:** a deleção do script é segura e correta. O que fica errado é o epic.
+
+---
+
 ### [Agendamento público] 🔴 Erro de consulta zera a lista de OCUPADOS e abre o portão antes do `INSERT` — story `87-19`
 
 **Adicionado em:** 2026-08-27
