@@ -12,8 +12,10 @@ project_id = "xnxvygyfyyyzwhiuoehz"
 #
 # Medido em 2026-08-29, com este `project_id` já valendo:
 #
-#     $ supabase db dump --dry-run          # sem nenhuma flag
-#     export PGHOST="db.dsopqkqjkmhytudaaolv.supabase.co"      ← PRODUÇÃO
+#     Um subcomando remoto sem flag (medido com `db dump --dry-run`) resolve o host para
+#     o projeto de PRODUÇÃO `dsopqkqjkmhytudaaolv` — não para o `project_id` acima.
+#     ⚠️ NÃO cole aqui a saída desse comando: ela inclui `PGPASSWORD` de produção em texto
+#     claro. Para conferir o alvo, use `pnpm supabase:check`, que imprime só o ref.
 #
 # O `project_id` daqui **não** controla o alvo dos comandos remotos. Quem controla é o
 # projeto LINKADO, gravado em `supabase/.temp/project-ref` — arquivo **gitignored, por

@@ -15,6 +15,7 @@
     "gate:tenancy": "tsx scripts/gate-tenancy.ts",
     "gate:tenancy:snapshot": "tsx scripts/generate-schema-snapshot.ts",
     "reset:testdb": "tsx scripts/reset-tenancy-testdb.ts",
+    "supabase:check": "tsx scripts/supabase-check.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",

@@ -61,6 +61,50 @@ um marcador comentado). Nenhum valor original foi perdido ou sobrescrito — as 
 coincidentes mantiveram o valor do antigo `.env.local`. Para reversão byte-exata, apague
 também o bloco após o marcador `--- Story 900-3b: mesclado de …`.
 
+### ⚠️ A CLI do `supabase` é a exceção — `pnpm supabase:check`
+
+O default seguro descrito acima vale para o que **vive no repositório**: `pnpm dev` (via
+`.env.development`) e todo `scripts/*.ts` (via `scripts/lib/db-env.ts`). **A CLI do
+`supabase` fica de fora, e o repositório não consegue governá-la.**
+
+O alvo dos subcomandos remotos vem do projeto **linkado**, gravado em
+`supabase/.temp/project-ref` — arquivo **gitignored, por máquina**. O `project_id` de
+`supabase/config.toml` (versionado, apontando para teste) **não vence** esse arquivo, e
+**não é fallback**: apagar o `project-ref` não redireciona para teste, faz o comando errar
+com *"Cannot find project ref. Have you run `supabase link`?"*.
+
+Por isso existe o comando, que torna o estado audível em vez de fingir que está resolvido:
+
+```bash
+pnpm supabase:check
+```
+
+| Estado de `supabase/.temp/project-ref` | Saída | Leitura |
+|---|---|---|
+| ref de **teste** | `0` | ok |
+| ref de **produção** | **`1`**, nomeando o ref | qualquer subcomando remoto sem `--project-ref` vai para produção |
+| **ausente** | `0`, com aviso | estado **seguro**: os comandos falham fechado, não resolvem para produção |
+
+"O que é produção" vem da **mesma** `REFS_PERMITIDOS_PRODUCAO` de `scripts/lib/db-env.ts` —
+importada, nunca reimplementada. Conserto, uma vez por máquina:
+
+```bash
+supabase link --project-ref xnxvygyfyyyzwhiuoehz
+```
+
+Para falar com produção de propósito, passe `--project-ref` explícito.
+
+### 🔒 Regra de evidência: nunca cole saída de subcomando remoto do `supabase`
+
+**Proibido colar em arquivo rastreado** (story, Dev Agent Record, PR, issue) a saída de
+`supabase db dump`, `db push`, `db pull` ou qualquer subcomando remoto. Medido na Story
+900-3b: **`supabase db dump --dry-run` imprime a senha do banco de produção (`PGPASSWORD`)
+em texto claro no stdout.** A senha vem do credential store da CLI, não do repositório.
+
+A evidência válida sobre "para onde a CLI aponta" é a saída de `pnpm supabase:check`, que
+imprime **apenas o project ref** — identificador público, já presente em arquivos
+versionados.
+
 ### ⚠️ Enquanto a Story `900-3c` não mergear, **não existe `pnpm db:apply`**
 
 Não há, nesta fatia, ledger de migrations nem `pnpm db:status`/`pnpm db:apply` — eles são

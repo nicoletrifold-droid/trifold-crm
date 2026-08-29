@@ -4,7 +4,7 @@
 - **Epic:** 900 — Trifold CRM → SaaS Multi-Tenant com Cobrança Modular
 - **Onda:** 1 — Isolamento. Como a `900-3` original, esta story entrega infraestrutura de teste/promoção (o critério de saída da Onda 1 do plano de 3 ondas aprovado), não uma story de policy (`900-4`…`900-18`).
 - **Story:** 900-3b — **Fatia A** de um split em duas, decidido pelo `@po` na validação de 2026-08-29 (`docs/qa/po-validation-900-3b.md`) e autorizado pelo dono do produto. A irmã é `900-3c` (Fatia B — Promoção).
-- **Status:** Ready for Review — implementada pelo `@dev` em 2026-08-29. **6 de 7 ACs cumpridas** (AC1, AC2, AC3, AC5, AC6, AC7), com mutação executada e vermelho medido em cada uma. A **AC2 foi fechada** em 2026-08-29 com a Task 2.7 (`.claude/CLAUDE.md`), autorizada pelo dono do produto; as três linhas do bloco `### Environments` ficaram verdadeiras **juntas** — inclusive a 386, que já era falsa antes desta story. **Só a AC4 fica desmarcada**, por divergência substantiva: a verificação dela é falsa por construção (medido: com o `config.toml` novo, `supabase db dump` sem flag ainda resolve para PRODUÇÃO, porque quem manda é `supabase/.temp/project-ref`). O destino da AC4 está com o `@po`.
+- **Status:** Ready for Review — implementada pelo `@dev` em 2026-08-29. **As 7 ACs cumpridas** (AC1, AC2, AC3, AC4 na forma reescrita AC4a/b/c, AC5, AC6, AC7), cada uma com mutação executada, vermelho observado e reversão registrada. A AC4 foi arbitrada pelo `@po` na Rodada 3 depois de eu recusar marcá-la; o remédio virou `pnpm supabase:check`, no mesmo padrão do banner da AC2 — tornar audível o que o repositório não governa. **A régua da AC4b nasce vermelha nesta máquina** (a CLI está linkada em produção) e está certa em nascer: o conserto (`supabase link`) é do dono da máquina, não meu. Pronta para o `@qa`.
 - **Priority:** P0 — sem esta fatia, `pnpm dev` continua apontando para produção por padrão e o banco de teste continua sem forma segura de ser reconstruído.
 - **Complexity:** L — 7 ACs, ~20 arquivos, **zero migration, zero toque em produção**. Não disputa número com o PR #522.
 - **Created:** 2026-08-29 (v0.1 original); **reescrita em 2026-08-29** como Fatia A do split.
@@ -316,14 +316,78 @@ e confirmou.
     `process.env` injetado pelo próprio teste, nunca do arquivo (S9).
   [Source: parecer `@po`, C2, S9; plano aprovado, Passo 2; medição direta desta story]
 
-- [ ] **AC4 — `supabase/config.toml` versionado, teste por padrão (Passo 3, sem alteração do parecer):**
-  - Arquivo novo (não existe hoje) com `project_id = "xnxvygyfyyyzwhiuoehz"` e comentário
-    explicando as três razões contra `supabase db push` neste repositório (prefixos duplicados —
-    hoje 21; ledger de produção congelado na 168; os 11 `_remote_only.sql` com `CREATE INDEX
-    CONCURRENTLY`).
-  **Verificação:** `supabase status` (ou subcomando equivalente) sem flag/env explícita resolve
-  para `xnxvygyfyyyzwhiuoehz`.
-  [Source: plano aprovado, Passo 3]
+- [x] **AC4 — `supabase/config.toml` + `pnpm supabase:check`: o que o repo governa vs. o que só a máquina governa, tornado audível (Passo 3, REESCRITA na Rodada 3 do parecer `@po` — E1/E2/E3):**
+
+  **Por que a AC mudou de forma, não só de número.** A redação original ("`supabase <cmd>` sem
+  flag resolve para teste") mede um comportamento que **o repositório não controla**: comandos
+  remotos do `supabase` CLI resolvem pelo projeto **linkado** em `supabase/.temp/project-ref`
+  (gitignored, por máquina), não pelo `project_id` do `config.toml`. Medido pelo `@dev`: com o
+  `config.toml` já valendo, `supabase db dump --dry-run` sem flag resolveu para
+  **`db.dsopqkqjkmhytudaaolv.supabase.co` — PRODUÇÃO**. Três opções foram testadas e descartadas
+  pelo `@po` (Rodada 3): apagar `.temp/project-ref` não redireciona para teste, **faz o comando
+  errar** ("Cannot find project ref"); reescrever a AC para exigir só a instrução de `supabase
+  link` documentada mede o documento, não o comportamento; mover a AC para a `900-3c` move uma AC
+  falsa para uma story bloqueada — mover não a torna verdadeira. **O remédio é o mesmo que a AC2
+  já usou para o mesmo tipo de problema** (`.env.local` também é estado de máquina que o repo não
+  garante): não afirmar, não apagar — **tornar o estado errado audível no momento do uso**.
+
+  **AC4a — o que o repositório de fato governa (estático, em `pnpm test`):**
+  - `supabase/config.toml` (já criado) com `project_id = "xnxvygyfyyyzwhiuoehz"` (ref de teste) e
+    comentário com as razões, **corrigidas**: prefixos duplicados são **22**, não 21 (medido —
+    `021 024 025 027 028 029 031 032 033 034 036 044 048 063 066 075 102 104 164 170 230 240`);
+    ledger de produção congelado na 168; dos **11** arquivos `_remote_only.sql`, apenas **4**
+    (`031`, `032`, `033`, `034`) usam `CREATE INDEX CONCURRENTLY` — a redação anterior confundia
+    "quantos `_remote_only` existem" com "quantos usam `CONCURRENTLY`". A conclusão (três razões
+    contra `db push`) não muda — prefixos duplicados na chave `version` e ledger congelado seguem
+    de pé sozinhos — mas o argumento tem que estar correto onde estiver escrito, inclusive no
+    comentário do arquivo. Régua: `grep` do `project_id` — protege contra alguém "consertar" o
+    arquivo para produção depois.
+  - **Nenhum `package.json` nem workflow do repositório invoca subcomando remoto do `supabase`.**
+    Régua: `grep -rn "supabase db\|supabase link\|supabase status\|supabase migration" **/package.json .github/workflows/*` — esperado **zero**. **Escopo restrito a essa população**
+    (`*package.json` + `.github/workflows/*`) — varrer o repositório inteiro traria
+    `.aios-core/` (templates do framework), `.claude/hooks/`, `.coderabbit.yaml` e comentários
+    dentro de `scripts/*.ts`, população grande e ruidosa pela qual esta story não responde.
+
+  **AC4b — tornar audível o que o repositório não governa (mesmo padrão do banner da AC2):**
+  `pnpm supabase:check` — lê `supabase/.temp/project-ref` e classifica o ref pela **mesma
+  allowlist de `scripts/lib/db-env.ts`** (reuso **obrigatório**: duas definições de "o que é
+  produção" no repositório é exatamente o defeito que a AC3 existiu para matar). Três desfechos:
+  - ref de **teste** → sai `0`.
+  - ref de **produção** → sai **`1`**, nomeando o ref e imprimindo o comando de correção:
+    `supabase link --project-ref xnxvygyfyyyzwhiuoehz`.
+  - arquivo **ausente** (não linkado) → sai `0` com aviso "não linkado — comandos remotos do
+    `supabase` vão falhar ("Cannot find project ref")" — esse é o estado **seguro**, medido pelo
+    `@po` na Opção 1 descartada (falha fechada é melhor que resolver para produção).
+  Documentado em `scripts/README.md`, ao lado da nota do `reset-tenancy-testdb.ts`.
+
+  **AC4c — a afirmação falsa sai de todo lugar onde está escrita:** "`supabase <cmd>` sem flag
+  resolve para teste" sai desta AC (substituída pela redação acima), da seção Testing (item 4) e
+  da Definition of Done. **Também sai do critério de saída da Onda 1 do plano aprovado** — isso é
+  correção de plano/épico, não desta story: encaminhado pelo `@po` junto do item `[EPIC-900]` já
+  aberto em `docs/backlog.md` (fora da autoridade do @sm e do executor).
+
+  **Regra de evidência, obrigatória nas três partes (E3 — risco de segurança achado nesta
+  rodada):** **é proibido colar em arquivo rastreado (Dev Agent Record incluído) a saída de
+  qualquer subcomando remoto do `supabase`** (`db dump`, `db push`, `status` contra projeto
+  remoto, etc.). Medido pelo `@po`: `supabase db dump --dry-run` — o próprio comando que a AC
+  mandava rodar na redação anterior — imprime `PGPASSWORD` de produção **em texto claro** no
+  stdout. A evidência válida da AC4b é a saída de `pnpm supabase:check`, que imprime só o ref
+  (identificador público), nunca a de um subcomando remoto de verdade.
+
+  **Verificação (mutação que reprova):**
+  - `grep -rn "supabase db\|supabase link\|supabase status\|supabase migration" **/package.json
+    .github/workflows/*` → nenhuma ocorrência (AC4a).
+  - `pnpm supabase:check` com `supabase/.temp/project-ref` contendo o ref de **teste** → sai `0`.
+  - `pnpm supabase:check` com o arquivo contendo o ref de **produção** (simulado, sem tocar a
+    máquina real) → sai `1`, nomeia o ref, imprime o comando `supabase link --project-ref
+    xnxvygyfyyyzwhiuoehz` (AC4b — exercita o mesmo caminho de allowlist já testado em
+    `db-env.test.ts`, prova de reuso e não duplicação).
+  - `pnpm supabase:check` com o arquivo **ausente** → sai `0` com o aviso de "não linkado"
+    (estado seguro, não erro).
+  - `grep -rn "PGPASSWORD\|db dump\|db push" docs/stories/900-3b-ambiente-de-teste.story.md`
+    (Dev Agent Record incluído) → nenhuma saída bruta de subcomando remoto colada (E3).
+  [Source: parecer `@po`, Rodada 3 (E1, E2, E3); Dev Agent Record desta story (medição do `@dev`
+  que motivou a arbitragem); plano aprovado, Passo 3]
 
 - [x] **AC5 — Reset endurecido: itens 1-3 e 5 do Passo 6 (sem o item de popular o ledger, que é `900-3c`):**
   - `reset:testdb` (script `pnpm` novo): **default `--dry-run`**; destruir exige `--confirmar`.
@@ -476,9 +540,21 @@ listada por último por conveniência)*
   - [x] 3.5 Escrever `scripts/db-env.test.ts` com o controle negativo (ref fictício recusado) e o
     controle positivo **corrigido** (chamada direta a `resolverAmbiente()`, sem script destrutivo).
 
-- [x] **Task 4 — `supabase/config.toml` (AC4)**
-  - [x] 4.1 Criar o arquivo com `project_id` de teste + comentário das 3 razões contra `db push`.
-  - [ ] 4.2 Confirmar por `supabase status` que resolve para teste sem flag.
+- [x] **Task 4 — `supabase/config.toml` + `pnpm supabase:check` (AC4, REESCRITA na Rodada 3 — E1; depende da Task 3, já concluída, para a allowlist reusada em 4.3)**
+  - [x] 4.1 Criar o arquivo com `project_id` de teste + comentário das 3 razões contra `db push`,
+    **com os números corrigidos** (22 prefixos duplicados, não 21; 4 dos 11 `_remote_only.sql`
+    usam `CREATE INDEX CONCURRENTLY`, não os 11) — já feito, números já corretos no arquivo
+    conforme Dev Agent Record.
+  - [x] 4.2 Régua de zero invocação remota: `grep -rn "supabase db\|supabase link\|supabase
+    status\|supabase migration" **/package.json .github/workflows/*` (esperado: nenhuma
+    ocorrência), restrita a `*package.json` + `.github/workflows/*` — não varrer o repo inteiro.
+  - [x] 4.3 Implementar `pnpm supabase:check`: lê `supabase/.temp/project-ref`, classifica pela
+    **mesma allowlist de `scripts/lib/db-env.ts`** (importar, não reimplementar); sai `0` para
+    teste ou arquivo ausente (com aviso), `1` para produção (nomeando o ref + o comando de
+    correção). Escrever teste cobrindo os três desfechos.
+  - [x] 4.4 Documentar `pnpm supabase:check` em `scripts/README.md`, ao lado da nota do
+    `reset-tenancy-testdb.ts` — e a regra de evidência (nunca colar saída de subcomando remoto do
+    `supabase` em arquivo rastreado).
 
 - [x] **Task 5 — Endurecer o reset, itens 1-3 e 5 (AC5, depende da Task 3)**
   - [x] 5.1 Trocar `REFS_PROIBIDOS` por importação de `scripts/lib/db-env.ts`.
@@ -615,9 +691,10 @@ padrão da Story 900-3.
 ## Testing
 
 ### Abordagem
-Mista: 3 suítes Vitest novas (`gitignore-env.test.ts`, `db-env.test.ts`, `env-banner.test.ts`) —
-todas testam lógica pura ou invocam o instrumento real, nunca reimplementam uma regra externa.
-O resto é infraestrutura validada por execução real.
+Mista: 4 suítes Vitest (`gitignore-env.test.ts`, `db-env.test.ts`, `env-banner.test.ts` — já
+entregues — e `supabase-check.test.ts`, novo pela AC4b, Rodada 3) — todas testam lógica pura ou
+invocam o instrumento real, nunca reimplementam uma regra externa. O resto é infraestrutura
+validada por execução real.
 
 ### Cenários de teste (resumo — detalhe completo em cada AC)
 1. `.gitignore`: 4 casos via `execFileSync("git", ["check-ignore", ...])`, 2 positivos + 2
@@ -626,7 +703,7 @@ O resto é infraestrutura validada por execução real.
    `pnpm build` (negativo) e `pnpm build:teste` (positivo) para o bundle.
 3. `db-env.ts`: ref fictício recusado (negativo); `resolverAmbiente()` chamada direta com flag
    (positivo, sem script destrutivo).
-4. `config.toml`: `supabase status` resolve para teste sem flag.
+4. `config.toml` + `supabase:check` (E1/E2, Rodada 3): régua estática de zero invocação remota em `package.json`/workflows (AC4a) + `pnpm supabase:check` exercitando a mesma allowlist de `db-env.ts` nos três desfechos — teste (0), produção (1, nomeando o ref), ausente (0, aviso) (AC4b). Nunca a saída de um subcomando remoto de verdade (E3).
 5. Reset: dry-run não apaga nada; `--confirmar` reconstrói e `pnpm gate:tenancy:snapshot` +
    `sha256sum` de `docs/audits/schema-snapshot.json` produz hash idêntico em 2 execuções (S11).
 6. `FALHAS_CONHECIDAS`: teto de 6; verificação nos dois sentidos; predicados ancorados por `id`
@@ -644,6 +721,7 @@ O resto é infraestrutura validada por execução real.
 | R3 | `236`/`237` pré-adicionadas ao `FALHAS_CONHECIDAS` sem medição real, por pressa de fechar a story | Média (é o modo de falha que a AC6 nomeia) | AC6 exige saída bruta colada no Dev Agent Record como evidência |
 | R4 | Entre esta fatia e a `900-3c`, alguém tenta usar `pnpm db:apply` (que não existe ainda) e fica bloqueado sem saber por quê | Baixa | `scripts/README.md` (Task 2.6) documenta a alternativa (`reset-tenancy-testdb.ts`) explicitamente |
 | R5 | `pnpm build:teste` bakear valores de teste no bundle se alguém rodar `next start` a partir dele por engano | Baixa | Nome do script (`build:teste`) é explícito; `.next/` já é gitignored/efêmero, não versionado nem deployado |
+| R6 | **(E3, achado na Rodada 3 do parecer `@po`)** Subcomando remoto do `supabase` (ex.: `db dump`, `db push`) imprime a senha do banco de produção em texto claro no stdout; o padrão de evidência desta story (colar saída no Dev Agent Record) é arquivo rastreado — qualquer paste de um subcomando remoto vaza segredo | **Alta** | Regra de evidência obrigatória (AC4): proibido colar em arquivo rastreado a saída de qualquer subcomando remoto do `supabase`; a evidência válida é `pnpm supabase:check`, que só imprime o ref. Item de segurança já aberto pelo `@po` em `docs/backlog.md` (P1), incluindo avaliar rotação da senha |
 
 ---
 
@@ -662,7 +740,7 @@ O resto é infraestrutura validada por execução real.
 
 ## Definition of Done
 
-- [ ] AC1-AC7 cumpridos, com evidência de comando colada no Dev Agent Record
+- [x] AC1-AC7 cumpridos, com evidência de comando colada no Dev Agent Record — **nunca a saída de subcomando remoto do `supabase`** (E3; a evidência da AC4b é a saída de `pnpm supabase:check`, que só imprime o ref)
 - [x] `pnpm test` verde, incluindo as 3 suítes novas — **270 arquivos, 3445 passed | 6 expected fail** (baseline pré-story: 267 / 3407 | 6; total `passed + expected fail` foi de 3413 → 3451, +42 = 4+22+16 das três suítes)
 - [x] `pnpm dev` aponta para teste por padrão; `pnpm dev:prod` funciona com banner vermelho;
   `pnpm build` não vaza nenhum ref; `pnpm build:teste` vaza o ref de teste (esperado)
@@ -670,6 +748,8 @@ O resto é infraestrutura validada por execução real.
 - [x] `FALHAS_CONHECIDAS` reestruturada; veredito sobre `236`/`237` baseado em execução real — **as duas APLICAM COM SUCESSO; NÃO entram na lista** (ver Dev Agent Record)
 - [x] `scripts/README.md`, `.claude/CLAUDE.md` (385-387), `reference_ci_surface_trifold.md`
   corrigidos
+- [x] `pnpm supabase:check` implementado, testado nos três desfechos, e documentado em
+  `scripts/README.md`; zero invocação remota do `supabase` em `package.json`/workflows (AC4a/AC4b)
 - [x] Nenhum valor de segredo em arquivo versionado — grep de `eyJ…|sbp_…|service_role=…` sobre os 32 arquivos tocados: **zero ocorrências**
 - [ ] @architect executou quality gate com verdict PASS ou CONCERNS aceitos
 - [ ] @devops fez push do commit final
@@ -696,6 +776,8 @@ O resto é infraestrutura validada por execução real.
 | 2026-08-29 | 1.1 | **Revalidação `@po` (Rodada 2): GO condicional 8/10 → GO.** Aplicada a emenda **D1** (bloqueante): `avaliarRefDoAmbiente` ganha terceiro estado `"ausente"` — sem ele, a decisão do C1 trocava "assa produção em silêncio" por "assa `undefined` em silêncio", e o banner ficava cego para o próprio estado que a decisão criou. Aplicadas as recomendações **S8** (teste do `.gitignore` afirma `status === 1` explícito, não "lançou"; os dois controles negativos documentados como guarda de vivacidade do instrumento contra o `128` de erro fatal do `git`), **S9** (declarada a precedência `process.env` > dotenv em `resolverAmbiente()`, e que `db-env.test.ts` injeta por `process.env`, nunca depende de `.env.teste`/`.env.producao` — ausentes no runner de CI), **S10** (predicado vermelho de `236` por ausência de `…0009`, se `011` falhar por FK, é informação para a Task 6.4, não defeito automático), **S11** (mecanismo do SHA-256 de idempotência nomeado — `pnpm gate:tenancy:snapshot` + hash de `docs/audits/schema-snapshot.json`, já que não existe `createHash` em `scripts/`), **S12** (`grep -rc` trocado por `grep -rl` na verificação do bundle — `grep -rc` não imprime número solo com múltiplos arquivos), **S6/S13** (default nomeado para `docs/audits/reset-testdb-duracao.json`: gitignored, rastrear exige decisão registrada). Status avança para `Ready`. | @sm (River) |
 | 2026-08-29 | 1.2 | **Implementação (@dev, Dex).** 7 Tasks executadas; **AC1, AC3, AC5, AC6, AC7 cumpridas**, com mutação executada e vermelho medido em cada uma. **AC2 e AC4 ficam desmarcadas**, por motivos distintos e registrados: a AC2 depende da Task 2.7 (`.claude/CLAUDE.md`), que exige autorização do dono do produto (diff pronto no Dev Agent Record); a **AC4 tem verificação falsa por construção** — medido que, mesmo com o `config.toml` novo, `supabase db dump --dry-run` sem flag resolve para `db.dsopqkqjkmhytudaaolv.supabase.co` (PRODUÇÃO), porque quem manda é `supabase/.temp/project-ref` (gitignored, por máquina), não o `project_id`. **Task 6.4 medida: `236`/`237` APLICAM COM SUCESSO e NÃO entram em `FALHAS_CONHECIDAS`**; `REGRESSÕES: 0` entre a `237` e a `244`; `011` aplicou, afastando o confundidor do S10. Outras divergências medidas contra a story, todas corrigidas ou registradas: (a) `node --env-file` **não funciona** para `dev:prod`/`build:teste` (o Next propaga `execArgv` via `NODE_OPTIONS`, onde a flag é proibida) — substituído por `packages/web/scripts/next-com-env.mjs`, sem dependência nova; (b) `compiler.removeConsole` do `next.config.ts` **apaga o `console.log`** também em dev, o que deixava o estado `"ok"` do banner mudo — trocado por `process.stderr.write`; (c) o controle negativo da allowlist tabelado no parecer é **colinear** com a guarda da flag — corrigido rodando-o *com* `TRIFOLD_ALLOW_PROD=1`, e a colinearidade foi comprovada empiricamente; (d) a régua de idempotência da **S11 é insatisfazível** (`capturedAt` + ordem instável do array `functions`) — o reset **é** idempotente, provado por hash normalizado; (e) `gate:tenancy:snapshot` sobrescreve **dois arquivos rastreados** com estado do banco de teste, por isso o encadeamento da Task 5.5 **não** foi automatizado; (f) prefixos duplicados são **22**, não 21, e só **4** dos 11 `_remote_only` usam `CONCURRENTLY`; (g) 12 scripts liam `packages/web/.env.local` por caminho literal e quebrariam com o rename (um deles com `ENOENT` garantido) — todos migrados. `pnpm lint` 0 errors · `pnpm type-check` 8/8 · `pnpm test` **3445 passed \| 6 expected fail**. | @dev (Dex) |
 | 2026-08-29 | 1.3 | **Task 2.7 executada e AC2 fechada.** O dono do produto autorizou explicitamente a edição do `.claude/CLAUDE.md` (autorização retransmitida pelo coordenador; procedência registrada no Dev Agent Record). O bloco `### Environments` foi reescrito de modo que as **três** linhas fiquem verdadeiras ao mesmo tempo — exigência do `@po` na Rodada 1 (S1), e não um detalhe: a linha 386 (`packages/web/.env.development` → `xnxvygyfyyyzwhiuoehz`) **já era falsa antes desta story**, porque o arquivo não existia; é esta fatia que a torna verdadeira. Consertar só a 385 deixaria o documento misturando uma verdade nova com duas mentiras velhas. Cada afirmação do bloco foi conferida contra o disco (4 arquivos de env, ausência de `.env.local`, scripts de `package.json`, linhas 47-48 de `db-env.ts`). Acrescentado ao bloco o aviso da CLI do `supabase` (achado da AC4), para o `CLAUDE.md` não prometer um default que a CLI não honra. **Régua da AC2 executada e comprovadamente discriminante:** `grep -c 'Produção:.*\.env\.local' .claude/CLAUDE.md` → **0**; reintroduzindo a linha antiga → **1**; revertido → **0**. **AC4 permanece intocada e desmarcada**, por decisão do dono do produto de deixá-la com o `@po`. | @dev (Dex) |
+| 2026-08-29 | 1.4 | **AC4 fechada (AC4a/AC4b/AC4c), Tasks 4.2-4.4.** Implementado `pnpm supabase:check` (`scripts/supabase-check.ts` + 11 casos em `scripts/supabase-check.test.ts`), que lê `supabase/.temp/project-ref` e classifica pela **mesma** `REFS_PERMITIDOS_PRODUCAO` de `scripts/lib/db-env.ts` — importada, nunca reimplementada. Três desfechos rodados de verdade pela CLI contra **raízes de mentira** em `os.tmpdir()`, sem tocar o arquivo real da máquina (SHA-256 idêntico antes e depois). O ref sugerido no conserto vem do `project_id` do `config.toml`, para não criar um terceiro lugar nomeando o ref de teste. Régua estática da AC4a verde e **não vazia** (9 `package.json` + 1 workflow; os 3 restantes que o `@po` contou estão sob `.aios-core/`, excluído de propósito pela própria AC — os números fecham) e **discriminante**: mutação `supabase db push` em `packages/db/package.json` acende. Reuso da allowlist provado por mutação — acrescentar um ref em `db-env.ts` muda o veredito do `supabase-check` (1 failed); esvaziá-la derruba 5 casos. **Regra E3 aplicada retroativamente**: removi do `config.toml` e do Dev Agent Record a linha `export PGHOST=…` que eu havia colado da saída de `db dump --dry-run` — mesmo sem senha, é saída de subcomando remoto, e mantê-la ensinaria que truncar é aceitável. Os números corrigidos pelo `@sm` (22 prefixos duplicados; 4 de 11 `_remote_only` com `CONCURRENTLY`) conferem com os meus. | @dev (Dex) |
+| 2026-08-29 | 1.4 | **Arbitragem da AC4 (Rodada 3, `docs/qa/po-validation-900-3b.md`) aplicada — E1, E2, E3.** O dono do produto delegou ao `@po` a decisão sobre o destino da AC4 (bloqueada pelo `@dev`, achado real). Nenhuma das três opções levantadas serviu: apagar `.temp/project-ref` faz o comando **errar**, não redirecionar (testado); reescrever para exigir só documentação mede o documento, não o comportamento; mover para a `900-3c` move uma AC falsa para uma story bloqueada. **AC4 reescrita em três partes, no mesmo padrão que a AC2 já usou** para o mesmo tipo de problema (estado de máquina que o repo não governa → tornar audível, não afirmar nem apagar): **AC4a** (estático — `config.toml` com os números corrigidos + zero invocação remota em `package.json`/workflows, restrita a essa população); **AC4b** (`pnpm supabase:check`, reusando a allowlist de `db-env.ts`, nos três desfechos — teste/produção/ausente); **AC4c** (a afirmação falsa sai da AC, do Testing, da DoD — a parte do plano/épico é do `@po`, já encaminhada junto do item `[EPIC-900]`). **E3 — risco novo, o mais grave da rodada:** `supabase db dump --dry-run` (o comando que a AC anterior mandava rodar) imprime a senha de produção em texto claro no stdout, e o padrão de evidência desta story é colar em arquivo rastreado — contenção verificada e limpa pelo `@po` (nenhum vazamento ocorreu; o `@dev` truncou por disciplina própria), mas a regra agora é explícita: proibido colar saída de subcomando remoto do `supabase` em qualquer arquivo rastreado. Risco R6 acrescentado (severidade Alta). Números corrigidos onde citados: **22** prefixos duplicados (não 21); **4** dos 11 `_remote_only.sql` usam `CREATE INDEX CONCURRENTLY` (não os 11) — as outras duas razões contra `db push` (prefixos duplicados na chave `version`; ledger congelado) seguem de pé, a conclusão não muda. Tasks 4.2/4.3/4.4 acrescentadas; Task 4 volta a `[ ]` para o `@dev` retomar. | @sm (River) |
 
 ---
 
@@ -907,10 +989,11 @@ Arquivo criado. **Números remedidos contra o `HEAD`, e dois divergem da story:*
 >    falha aqui com "Cannot connect to the Docker daemon". Não é o instrumento certo.
 > 2. **Com o `config.toml` novo já valendo**, o alvo real de um comando remoto sem flag é
 >    **PRODUÇÃO**:
->    ```
->    $ supabase db dump --dry-run          # sem nenhuma flag
->    export PGHOST="db.dsopqkqjkmhytudaaolv.supabase.co"
->    ```
+>    Um subcomando remoto sem flag (medido com `db dump --dry-run`) resolveu o host para o
+>    projeto de **produção** `dsopqkqjkmhytudaaolv`, e não para o `project_id` do
+>    `config.toml`. **A saída bruta NÃO é reproduzida aqui**: ela inclui `PGPASSWORD` de
+>    produção em texto claro (regra E3, Rodada 3). O instrumento de evidência correto é
+>    `pnpm supabase:check`, que imprime só o ref.
 >    Quem manda é o projeto **linkado**, em `supabase/.temp/project-ref` (gitignored, por
 >    máquina), que contém `dsopqkqjkmhytudaaolv`; `supabase/.temp/pooler-url` idem. O
 >    `project_id` do `config.toml` **não** controla o alvo dos comandos remotos.
@@ -921,6 +1004,87 @@ Arquivo criado. **Números remedidos contra o `HEAD`, e dois divergem da story:*
 > o achado e o comando. **Não alterei `supabase/.temp/` — é estado local, não versionado, e
 > mexer nele por conta própria mudaria a máquina do dono do produto sem pedido.** Fica como
 > ação nomeada para o operador / follow-up da `900-3c`.
+
+---
+
+#### AC4a/AC4b/AC4c — reescrita da Rodada 3 (E1/E2/E3)
+
+**AC4a — régua estática, população restrita a `*package.json` + `.github/workflows/*`:**
+
+```
+$ grep -rn "supabase db\|supabase link\|supabase status\|supabase migration" **/package.json .github/workflows/*
+exit=1   (nenhuma ocorrência)
+```
+
+Verde **e não vazia**: a população existe e é varrida — **9** `package.json` + **1**
+workflow (`.github/workflows/ci.yml`). Continua zero depois de eu acrescentar
+`supabase:check` ao `package.json` da raiz (o script se chama `supabase-check`, não casa com
+os quatro subcomandos remotos).
+
+> **Reconciliação de contagem com o parecer:** o `@po` mediu **12** `package.json`; o glob do
+> enunciado devolve **9**. Não há divergência — o `zsh` não desce em diretórios ocultos, e os
+> **3** que faltam estão todos sob `.aios-core/`, que a própria AC4a exclui de propósito
+> ("população grande e ruidosa pela qual esta story não responde"). Os números fecham:
+> 9 em escopo + 3 deliberadamente fora.
+
+**Mutação (executada):** acrescentei `"push": "supabase db push"` a
+`packages/db/package.json` →
+
+```
+packages/db/package.json:11:    "push": "supabase db push"
+exit=0   (ACENDEU)
+```
+
+Revertido → `exit=1`. A régua discrimina; não é verde por vacuidade.
+
+**AC4b — `pnpm supabase:check`, os três desfechos, rodados de verdade pela CLI.**
+
+Montei **raízes de mentira** em `os.tmpdir()` (cada uma com seu `config.toml` e seu
+`.temp/project-ref`) e rodei o script com `cwd` apontando para elas. O
+`supabase/.temp/project-ref` **real da máquina nunca foi tocado** — conferido por SHA-256
+antes e depois: `e8793fe3d3c6910c` nos dois momentos.
+
+| Simulação | Saída | Exit |
+|---|---|---|
+| ref de **teste** | `✓ linkado no projeto de teste declarado pelo config.toml: xnxvygyfyyyzwhiuoehz` | **0** |
+| ref de **produção** | `⛔ A CLI do supabase está linkada em PRODUÇÃO: dsopqkqjkmhytudaaolv` + `Corrija com: supabase link --project-ref xnxvygyfyyyzwhiuoehz` | **1** |
+| arquivo **ausente** | `NÃO LINKADO … "Cannot find project ref"` (estado seguro) | **0** |
+
+**Estado real desta máquina**, medido com o comando (imprime só o ref, identificador
+público — E3 respeitada): **linkada em `dsopqkqjkmhytudaaolv`, exit `1`.** Ou seja: a régua
+nasce **vermelha aqui**, e está certa em nascer — é exatamente o estado que a AC4 existe
+para tornar audível. Não "consertei" a máquina: o conserto é `supabase link --project-ref
+xnxvygyfyyyzwhiuoehz`, e é decisão do dono da máquina, não minha.
+
+**Mutações do reuso da allowlist (as duas executadas):**
+
+| Mutação em `scripts/lib/db-env.ts` | Efeito em `supabase-check.test.ts` |
+|---|---|
+| acrescentar `"prodfalsoaaaaaaaaaaa"` a `REFS_PERMITIDOS_PRODUCAO` | **1 failed / 10 passed** — o caso "ref fictício NÃO reprova" vira vermelho |
+| esvaziar a allowlist (`new Set([])`) | **5 failed / 6 passed** |
+| restaurado | **27 passed** (11 + 16, junto com `db-env.test.ts`) |
+
+A primeira é a que prova **reuso e não duplicação**: mexer só em `db-env.ts` muda o veredito
+do `supabase-check`. Se ele tivesse a própria cópia da lista, nada aconteceria. A segunda
+mostra que a asserção `REFS_PERMITIDOS_PRODUCAO.size > 0` é guarda de vacuidade — sem ela, o
+laço "todo ref da allowlist reprova" passaria trivialmente sobre um conjunto vazio.
+
+**AC4c — a afirmação falsa saiu.** `grep` por "sem flag resolve para teste" na story, no
+`scripts/README.md`, no `config.toml` e no `CLAUDE.md`: **nenhuma ocorrência viva**. As que
+restam estão em `docs/qa/po-validation-900-3b.md` (documento do `@po`, onde aparecem como
+histórico e como a própria instrução de remoção) — fora da minha autoridade. No meu Dev
+Agent Record a frase aparece só como **citação do que era falso**, na seção que registra a
+divergência.
+
+**Regra de evidência E3 — aplicada retroativamente ao que eu já havia escrito.** Eu havia
+colado, no `config.toml` e no Dev Agent Record, a linha `export PGHOST=…` da saída de
+`supabase db dump --dry-run`. Mesmo sem senha nela, **é saída de subcomando remoto**, e
+mantê-la ensinaria que truncar é aceitável — que é precisamente o quase-acidente que
+originou a R6. Substituída por descrição nos dois lugares. Conferido: nenhum valor de host ou
+senha permanece — as únicas ocorrências de `PGHOST`/`PGPASSWORD` em arquivo rastreado são (i) o
+texto da própria régua da AC4, (ii) esta nota e o Change Log, que citam `export PGHOST=…` com
+reticências, e (iii) o `scripts/README.md`, que nomeia a variável para descrever o risco.
+Nenhuma delas é saída colada.
 
 ---
 
@@ -1152,10 +1316,14 @@ em 6** — a constante a comparar é o total, conforme
    E a régua **discrimina**, não é zero por vacuidade: reintroduzindo a linha antiga ela sobe
    para **1**; removida de novo, volta a **0**.
 
-2. **AC4 desmarcada por divergência substantiva**, não por falta de execução — ver acima. O
-   arquivo foi criado e documenta o próprio limite. Recomendo que o `@architect`/`@po`
-   decidam se a AC4 é reescrita (a régua correta seria sobre `supabase/.temp/project-ref`, que
-   é estado de máquina) ou se o item migra para a `900-3c`.
+2. **AC4 fechada na Rodada 3**, depois de arbitrada pelo `@po` e reescrita pelo `@sm` em
+   AC4a/AC4b/AC4c. O caminho que eu havia sugerido (relinkar a máquina) e o de apagar o
+   `.temp/project-ref` foram os dois testados pelo `@po` e **descartados**: apagar o arquivo
+   não faz a CLI cair para o `config.toml`, faz o comando errar ("Cannot find project ref").
+   O remédio adotado é o mesmo padrão do banner da AC2 — não afirmar nem apagar, e sim tornar
+   o estado errado **audível**. Implementado como `pnpm supabase:check`, reusando a allowlist
+   de `scripts/lib/db-env.ts` (importada, nunca reimplementada). **A régua nasce vermelha
+   nesta máquina** (linkada em produção), e está certa em nascer.
 
 3. **Decisão registrada (S6/S13):** `docs/audits/reset-testdb-duracao.json` ficou
    **gitignored**, o default nomeado pela AC5. Não tomei a decisão de rastreá-lo; o arquivo
@@ -1190,6 +1358,8 @@ em 6** — a constante a comparar é o total, conforme
 - `scripts/lib/db-env.ts` — allowlist `REFS_PERMITIDOS_PRODUCAO` + `resolverAmbiente()`
 - `scripts/db-env.test.ts` — 16 casos
 - `scripts/gitignore-env.test.ts` — 4 casos
+- `scripts/supabase-check.ts` — `pnpm supabase:check` (AC4b), reusa a allowlist de `db-env.ts`
+- `scripts/supabase-check.test.ts` — 11 casos (3 desfechos + prova de reuso da allowlist)
 - `packages/web/src/lib/env-banner.ts` — `avaliarRefDoAmbiente` (3 estados) + `textoDoBanner`
 - `packages/web/src/lib/env-banner.test.ts` — 22 casos
 - `packages/web/scripts/next-com-env.mjs` — carregador de dotenv em processo (contorna o
@@ -1200,7 +1370,7 @@ em 6** — a constante a comparar é o total, conforme
 **Modificados (versionados):**
 - `.gitignore` — removida a linha `.env*`; acrescentado `docs/audits/reset-testdb-duracao.json`
 - `packages/web/.gitignore` — acrescentado `!.env.development.example`
-- `package.json` (raiz) — `reset:testdb`
+- `package.json` (raiz) — `reset:testdb`, `supabase:check`
 - `packages/web/package.json` — `dev:prod`, `build:teste`
 - `packages/web/src/instrumentation.ts` — banner via `process.stderr.write`
 - `scripts/README.md` — estado padrão invertido, tabela de ambientes, reversão, nota sobre
