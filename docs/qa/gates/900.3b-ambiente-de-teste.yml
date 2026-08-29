@@ -1,16 +1,17 @@
 schema: 1
 story: "900.3b"
 story_title: "Ambiente de teste (Fatia A de 2 — Onda 1)"
-gate: CONCERNS
+gate: PASS
 status_reason: >-
-  As 7 ACs estão cumpridas e as 7 mutações alegadas pelo @dev reproduzem com os números
-  exatos, mas a premissa factual da AC4 é falsa: `supabase/.temp/project-ref` NÃO é
-  gitignored — é rastreado em origin/main com o ref de PRODUÇÃO, e a story escreve o
-  contrário em três arquivos rastreados novos/editados.
+  Reavaliado após f736355e. Os 6 achados estão fechados, incluindo o DOC-001 (high):
+  `supabase/.temp/` saiu do índice e um CLONE NOVO DE VERDADE já não recebe link
+  nenhum — fail-closed, exit 0. As 7 ACs seguem cumpridas e as mutações continuam
+  discriminando depois da mudança de estado do índice.
 reviewer: "Quinn (Test Architect)"
-updated: "2026-08-29T15:20:00Z"
+rodadas: 2  # 1ª CONCERNS (f3f978e8) · 2ª PASS (f736355e)
+updated: "2026-08-29T18:05:00Z"
 branch: "story/900-3b-ambiente-teste-e-promocao"
-commits_revisados: ["9d104e73", "8295b814", "f3f978e8"]
+commits_revisados: ["9d104e73", "8295b814", "f3f978e8", "f736355e"]
 base: "255e645a"
 
 evidencia_reproduzida_pelo_qa:
@@ -104,6 +105,9 @@ evidencia_reproduzida_pelo_qa:
 
 top_issues:
   - id: "DOC-001"
+    status: RESOLVIDO
+    resolucao: >-
+      RESOLVIDO em f736355e — `git rm --cached -r supabase/.temp/` (4 arquivos fora do índice, 0 apagados do disco; project-ref com SHA-256 e8793fe3d3c6910c inalterado). REVERIFICADO PELO @qa: `git ls-files supabase/.temp/` vazio; `.gitignore` idêntico entre HEAD~1 e HEAD (logo a diferença é o ÍNDICE, não a regra); `git check-ignore` sem --no-index passa de 1 para 0. CLONE NOVO DE VERDADE (`git clone` da branch): sem `supabase/.temp/`, `supabase:check` responde "NÃO LINKADO", exit 0, fail-closed. Nesta máquina segue exit 1 (arquivo em disco, produção) — o estado audível, correto. As 3 afirmações falsas reescritas; a de `scripts/README.md` passou a ser VERDADEIRA pelo próprio conserto.
     severity: high
     category: requirements
     finding: >-
@@ -131,6 +135,9 @@ top_issues:
       barata). Abrir item para @devops/@po decidir sobre `git rm --cached supabase/.temp/`
       — candidato natural à 900-3c, que é a fatia que mexe em promoção.
   - id: "SEC-001"
+    status: RESOLVIDO
+    resolucao: >-
+      RESOLVIDO em f736355e — `git grep 'PGHOST="db\.'` em toda a árvore rastreada: nenhuma ocorrência, inclusive nos arquivos do @po e no gate do @qa. Varredura das linhas ADICIONADAS por f736355e: zero segredo, zero saída crua. `pooler-url` auditado de forma independente pelo @qa: DSN parseado, grupo de senha AUSENTE (sem separador `:`), comprimento 0 — o pior caso era benigno. RESIDUAL PARA O @devops: a linha crua segue no HISTÓRICO da branch (9d104e73); squash no merge a apaga.
     severity: medium
     category: security
     finding: >-
@@ -150,6 +157,9 @@ top_issues:
       arquivos do @po, decidir antes do commit: substituir por descrição, como o @dev fez
       nos dele — a regra E3 não pode valer só para quem a descobriu.
   - id: "TEST-001"
+    status: RESOLVIDO
+    resolucao: >-
+      RESOLVIDO — baseline MEDIDA pelo @qa de forma independente (as 4 suítes excluídas da árvore): 267 arquivos, 3403 passed | 6 expected fail = 3409. 3409 + 53 = 3462, fecha exato. O 3407 registrado era erro de RÓTULO: já continha os 4 casos de `gitignore-env`.
     severity: low
     category: tests
     finding: >-
@@ -165,6 +175,9 @@ top_issues:
       foi reproduzível. Num repo cuja própria memória de CI manda comparar
       `passed + expected fail`, o número precisa fechar.
   - id: "MNT-001"
+    status: RESOLVIDO
+    resolucao: >-
+      ACEITO COMO DÍVIDA — registrado em docs/backlog.md com a medição de por que não é conserto de passagem (apontar o tsconfig raiz para `scripts/` expõe erros pré-existentes de resolução de módulo e `noImplicitAny`). Fora do escopo desta fatia.
     severity: low
     category: maintainability
     finding: >-
@@ -176,6 +189,9 @@ top_issues:
     suggested_action: >-
       Story derivada: `tsconfig.scripts.json` + um `type-check:scripts` no job `static`.
   - id: "DOC-002"
+    status: RESOLVIDO
+    resolucao: >-
+      RESOLVIDO — `scripts/README.md` não instrui mais `node --env-file`; a tabela nomeia `packages/web/scripts/next-com-env.mjs`. `grep -n "node --env-file"` na árvore: nenhuma.
     severity: low
     category: docs
     finding: >-
@@ -184,6 +200,9 @@ top_issues:
       `next-com-env.mjs`.
     suggested_action: "Trocar por `via packages/web/scripts/next-com-env.mjs`."
   - id: "MNT-002"
+    status: RESOLVIDO
+    resolucao: >-
+      RESOLVIDO — revalidado pelo @qa com `turbo --force`: type-check 8/8 com `0 cached, 8 total`; lint 0 errors / 36 warnings com `0 cached`. O worktree fantasma `wt-900-3` ainda existe (prunable) — higiene do @devops, não da story.
     severity: low
     category: code
     finding: >-
@@ -230,6 +249,34 @@ nota_de_metodo_do_qa: >-
   do arquivo em disco no momento da execução pegou. Mutação sem prova de aplicação é
   alegação, igual à do @dev.
 
+achado_novo_da_reavaliacao:
+  - id: "MNT-003"
+    severity: low
+    fora_do_escopo_desta_story: true
+    finding: >-
+      Generalizei o método que produziu o DOC-001 e varri TODOS os arquivos rastreados
+      contra as regras de ignore (`git ls-files | git check-ignore --no-index --stdin -v`).
+      6 casamentos, dos quais 4 são benignos (as 2 negações intencionais de `.env*.example`
+      e 2 `package-lock.json` sob `.aios-core/`). Sobra 1 caso REAL da mesma classe:
+      `packages/web/src/app/dashboard/sistema/logs/{layout,page}.tsx` são casados pela regra
+      ampla `.gitignore:20 logs/`. Os arquivos existentes sobrevivem porque já estão no
+      índice — mas QUALQUER arquivo novo criado nesse diretório de código-fonte seria
+      silenciosamente inadicionável, exatamente o modo de falha do `.env.example` que a AC1
+      consertou.
+    nao_bloqueia: >-
+      Pré-existente, não introduzido pela 900-3b, e fora do escopo da fatia.
+    suggested_action: >-
+      Item de backlog — restringir a regra (`/logs/` na raiz) ou negar o caminho de
+      código-fonte no `packages/web/.gitignore`. O comando da varredura cabe num gate futuro.
+
+para_o_devops_carregar_no_pr:
+  - "docs/qa/gates/900.3b-ambiente-de-teste.yml (atualizado para PASS nesta rodada)"
+  - "docs/stories/900-3b-ambiente-de-teste.story.md (seção QA Results, 2ª rodada)"
+  - "SQUASH obrigatório no merge: a linha crua `export PGHOST=...` continua no histórico da branch (9d104e73→f3f978e8). Squash apaga; merge-commit preserva."
+  - "Os 4 arquivos de supabase/.temp/ ficam no disco de quem já os tem e somem para todo clone novo — nenhuma ação de máquina é necessária."
+  - "Abrir no backlog: MNT-003 (regra `logs/` casando código-fonte rastreado)."
+  - "Higiene: `git worktree prune` (wt-900-3, prunable, de outra branch, poluiu o cache do turbo)."
+
 waiver: { active: false }
 
-recommended_status: "CONCERNS — liberar após corrigir DOC-001 (edição de texto em 3 arquivos) e decidir SEC-001; DOC-002/TEST-001 no mesmo passe; MNT-001 vira story derivada."
+recommended_status: "PASS — liberado para push. Ver `para_o_devops_carregar_no_pr`; o squash no merge é o único item obrigatório."

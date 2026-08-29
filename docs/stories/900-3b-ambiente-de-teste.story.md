@@ -1609,3 +1609,94 @@ Duas das minhas mutações, escritas por `perl`/`node -e` no Bash, **relataram s
 
 — Quinn, guardião da qualidade 🛡️
 
+---
+
+## QA Results — 2ª rodada (reavaliação após `f736355e`)
+
+### Review Date: 2026-08-29 · Reviewed By: Quinn (Test Architect)
+
+### Gate Status
+
+Gate: **PASS** → `docs/qa/gates/900.3b-ambiente-de-teste.yml`
+
+Os 6 achados estão fechados. Não me limitei a conferir as correções: a árvore mudou (4 arquivos fora do índice, 5 arquivos de doc editados), então repeti a varredura independente — e ela produziu um achado novo, fora do escopo desta fatia.
+
+#### DOC-001 (high) — fechado, e provado com clone de verdade
+
+| Verificação | Resultado |
+|---|---|
+| `git ls-files supabase/.temp/` | **0 arquivos** |
+| `git ls-tree HEAD~1 supabase/.temp/` | 4 (era o estado anterior) |
+| Arquivos em disco | **todos preservados**; `project-ref` com SHA-256 `e8793fe3d3c6910c`, idêntico ao que medi na 1ª rodada |
+| Conteúdo do `project-ref` | inalterado (`dsopqkqjkmhytudaaolv`) |
+| `git check-ignore` (sem `--no-index`) | **1 → 0** |
+| `git diff HEAD~1 HEAD -- .gitignore` | **vazio** — a regra é a mesma; **só o índice mudou** |
+
+Essa última linha é a que fecha o mecanismo: a regra `.gitignore:36` sempre casou; ela era **inerte** porque o caminho estava no índice. `git check-ignore` **sem** `--no-index` responde sobre o índice, não sobre as regras — por isso mentia. **Isso justifica retroativamente o `--no-index` do `scripts/gitignore-env.test.ts`**: sem a flag, aquela régua não enxergaria esta classe de caso.
+
+**Clone novo — testei com `git clone` de verdade, não com mock:**
+
+```
+supabase/.temp existe no clone?  NÃO
+$ (cd clone && tsx scripts/supabase-check.ts)
+[supabase:check] NÃO LINKADO — não há supabase/.temp/project-ref.
+  Este é o estado SEGURO: ... "Cannot find project ref. Have you run `supabase link`?"
+exit=0
+```
+
+**Fail-closed confirmado para todo mundo.** Nesta máquina segue `exit 1` nomeando produção — que é o estado audível, e está certo. Os dois estados se comportam como a AC4b descreve.
+
+**A régua do `gitignore-env.test.ts` continua acendendo** depois da mudança de estado do índice — reexecutei as mutações A e B, cada uma com recibo (`git diff --numstat`) antes de rodar: `1 failed / 3 passed` em cada, derrubando casos diferentes.
+
+#### SEC-001 — fechado, com um residual nomeado para o @devops
+
+`git grep 'PGHOST="db\.'` em toda a árvore rastreada: **nenhuma ocorrência** — inclusive no parecer do `@po` e **no meu próprio gate file**, onde eu havia reproduzido a linha. A regra R6 valendo para quem a escreveu é a leitura certa.
+
+**`pooler-url` auditado por mim, independentemente**, já que era o pior caso possível:
+
+```
+usuário : comprimento 29
+SENHA   : AUSENTE (sem separador ':') | comprimento 0
+host    : comprimento 40
+veredito: SEM COMPONENTE DE SENHA
+```
+
+Confirmado. E nas linhas **adicionadas** por `f736355e`: zero segredo, zero saída crua.
+
+**Residual:** a linha crua segue no **histórico** da branch (`9d104e73`). Squash no merge apaga; merge-commit preserva. Item obrigatório para o `@devops`.
+
+#### TEST-001 — ele tem razão, e eu medi
+
+Excluí as 4 suítes novas da árvore e rodei: **267 arquivos · 3403 passed | 6 expected fail = 3409**. E **3409 + 53 = 3462**, exatamente o total atual. O `3407` registrado era erro de **rótulo**, não de medição — já continha os 4 casos do `gitignore-env.test.ts`, criado antes daquela primeira execução. Aritmética fechada.
+
+#### DOC-002 · MNT-001 · MNT-002
+
+- `scripts/README.md` não instrui mais `node --env-file`; a tabela nomeia `next-com-env.mjs`. `grep` na árvore: nenhuma ocorrência.
+- `MNT-001` foi para o backlog **com a medição** de por que não é conserto de passagem (apontar o tsconfig raiz para `scripts/` expõe erros pré-existentes de resolução de módulo e `noImplicitAny`). Aceito como dívida.
+- `MNT-002`: refiz com `--force` — type-check **8/8, `0 cached, 8 total`**; lint **0 errors / 36 warnings, `0 cached`**; suíte **271 arquivos / 3456 passed | 6 expected fail**.
+
+#### Régua S1 do `@po` — as três linhas verdadeiras ao mesmo tempo
+
+Não me contentei com o `grep -c` = **0**; conferi cada afirmação do bloco contra o disco: `.env.development` tem o ref de teste e **zero** ocorrências do de produção; `.env.producao.local`, `.env.teste` e `.env.producao` conferem; `.env.local` **não existe** em nenhum dos dois lugares; `db-env.ts` lê o par declarado. As três são verdadeiras simultaneamente.
+
+Nota: `scripts/README.md:71` ainda diz "gitignored, por máquina" — e agora isso é **verdade**, produzida pelo próprio conserto. Não é resíduo.
+
+### 🟡 Achado novo — MNT-003 (low, fora do escopo desta fatia)
+
+Generalizei o método que produziu o DOC-001 e varri **todos** os arquivos rastreados contra as regras de ignore:
+
+```bash
+git ls-files | git check-ignore --no-index --stdin -v
+```
+
+6 casamentos. Quatro são benignos (as 2 negações intencionais de `.env*.example`; 2 `package-lock.json` sob `.aios-core/`). **Sobra um caso real da mesma classe:** `packages/web/src/app/dashboard/sistema/logs/{layout,page}.tsx`, casados pela regra ampla `.gitignore:20 logs/`. Os dois sobrevivem porque já estão no índice — mas **qualquer arquivo novo criado nesse diretório de código-fonte seria silenciosamente inadicionável**, que é exatamente o modo de falha do `.env.example` que a AC1 consertou.
+
+Pré-existente, não introduzido por esta story, **não bloqueia**. Vai para o backlog. O comando de varredura acima cabe num gate futuro — custa uma linha e teria pego o `supabase/.temp/` três rodadas antes.
+
+### Veredito
+
+**PASS.** As 7 ACs cumpridas, todas as mutações reproduzidas com recibo de aplicação, suíte/lint/tipos verdes sem cache, aritmética fechada, e o achado de segurança da rodada anterior corrigido na raiz — não no sintoma. A correção do DOC-001 tornou o repositório melhor do que a story prometia: em vez de tornar audível um estado ruim, eliminou o estado ruim para todo clone futuro, e manteve a régua audível para quem já tem o arquivo.
+
+Registro que o `@dev` tomou minha nota de método como vinculante e passou a exigir recibo de aplicação em toda edição. Fiz o mesmo aqui: cada mutação desta rodada foi confirmada por `git diff --numstat` **antes** de eu ler qualquer resultado.
+
+— Quinn, guardião da qualidade 🛡️

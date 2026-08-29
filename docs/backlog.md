@@ -6,6 +6,50 @@ Tarefas operacionais, configurações e ajustes pendentes que não requerem uma 
 
 ## Pendente
 
+### [MNT-003] 🟡 A regra `logs/` do `.gitignore` casa código-fonte rastreado — arquivo novo naquele diretório seria silenciosamente inadicionável
+
+**Adicionado em:** 2026-08-29
+**Prioridade:** **P2** — não quebra nada hoje; quebra em silêncio no dia em que alguém criar um arquivo ali.
+**Origem:** `@qa` na 2ª rodada da Story `900-3b` (`docs/qa/gates/900.3b-ambiente-de-teste.yml`, `MNT-003`), generalizando o método que produziu o `DOC-001` daquela story. Pré-existente, não introduzido pela `900-3b`, fora do escopo da fatia.
+
+`.gitignore:20` tem a regra ampla `logs/`, pensada para diretórios de log. Ela casa também
+`packages/web/src/app/dashboard/sistema/logs/layout.tsx` e `.../logs/page.tsx` — **código-fonte de
+uma rota do dashboard**. Os dois arquivos sobrevivem só porque já estão no índice: uma regra de
+ignore é **inerte para caminho já rastreado**.
+
+Reproduzido por `@devops` em 2026-08-29, antes de abrir este item:
+
+```
+$ git check-ignore --no-index -v packages/web/src/app/dashboard/sistema/logs/nova-rota.tsx
+.gitignore:20:logs/	packages/web/src/app/dashboard/sistema/logs/nova-rota.tsx     ← seria ignorado
+
+$ git check-ignore -v packages/web/src/app/dashboard/sistema/logs/page.tsx
+(exit 1 — o índice mascara a regra; é por isso que ninguém viu)
+```
+
+Ou seja: um `loading.tsx`, um `error.tsx` ou qualquer rota nova criada nesse diretório **não
+apareceria no `git status`** e não iria para o PR. É o mesmo modo de falha do `.env.example` que a
+AC1 da `900-3b` consertou, e o mesmo do `supabase/.temp/` (DOC-001) — terceira ocorrência da mesma
+classe.
+
+**Ação:** restringir a regra (`/logs/` ancorado na raiz) ou negar o caminho de código-fonte no
+`packages/web/.gitignore`. Conferir se algum arquivo já foi perdido por isso antes de mexer.
+
+**A ferramenta, que vale mais que o item:**
+
+```bash
+git ls-files | git check-ignore --no-index --stdin -v
+```
+
+Lista **toda** regra de ignore inerte do repositório — todo arquivo rastreado que as regras
+mandariam ignorar. Custa uma linha e teria pego o `supabase/.temp/` (que entregava o ref de
+**produção** a todo clone) três rodadas de validação antes. Hoje dá 6 casamentos: 4 benignos (as 2
+negações intencionais de `.env*.example` e 2 `package-lock.json` sob `.aios-core/`) e os 2 deste
+item. **Candidato a gate de CI** — com os 4 benignos numa allowlist, qualquer casamento novo é
+regressão.
+
+---
+
 ### [SEGURANÇA] 🔴 `supabase db dump` imprime a senha do banco de PRODUÇÃO em texto claro — e uma AC mandava colar essa saída em arquivo rastreado
 
 **Adicionado em:** 2026-08-29
