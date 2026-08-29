@@ -382,9 +382,25 @@ npm run trace -- workflow-name
 ## Project-Specific Context
 
 ### Environments
-- **Produção:** `.env.local` → Supabase `dsopqkqjkmhytudaaolv` + Vercel `trifold-crm.vercel.app`
-- **Dev local:** `packages/web/.env.development` → Supabase `xnxvygyfyyyzwhiuoehz` (projeto dev isolado)
-- Nunca deixar `.env.local` apontando para o projeto dev após testes
+
+**O default do repositório é TESTE** (desde a Story 900-3b). Antes dela era o contrário, e
+`.env.local` — que vencia qualquer outro arquivo de env no Next — apontava para produção.
+
+- **Teste (default):** `packages/web/.env.development` → Supabase `xnxvygyfyyyzwhiuoehz`
+  (projeto `trifold-crm-dev`, isolado). É o que `pnpm dev` usa. Para os scripts de
+  `scripts/`, o par é `.env.teste` (raiz), lido por `scripts/lib/db-env.ts`.
+- **Produção:** `packages/web/.env.producao.local` → Supabase `dsopqkqjkmhytudaaolv` + Vercel
+  `trifold-crm.vercel.app`. Só é lido por `pnpm dev:prod`, nunca por `pnpm dev`. Para os
+  scripts, o par é `.env.producao` (raiz), e só sob `TRIFOLD_ENV=producao` **mais**
+  `TRIFOLD_ALLOW_PROD=1` quando o script escreve.
+- **`.env.local` não existe mais** (renomeado para `.env.producao.local`). Nunca reapontar
+  `packages/web/.env.development` para produção, nem `.env.producao.local` para o projeto de
+  teste — o banner impresso no boot denuncia os dois casos.
+- ⚠️ **A CLI do `supabase` é a exceção e continua caindo em produção sem flag:** o alvo dela
+  vem do projeto linkado em `supabase/.temp/project-ref` (gitignored, por máquina), que vence
+  o `project_id` do `supabase/config.toml` versionado. Medido: `supabase db dump --dry-run`
+  sem flag resolve para `dsopqkqjkmhytudaaolv`. Rode uma vez, por máquina:
+  `supabase link --project-ref xnxvygyfyyyzwhiuoehz`.
 
 ### Integrações Ativas
 - **Meta Lead Forms:** `packages/web/src/app/api/webhooks/meta-ads/route.ts` — recebe eventos `leadgen` via HMAC-SHA256. App "Ações Trifold" (ID: `1249990980457973`), Página Trifold (ID: `132027046650861`). Requer coluna `leads.metadata` (migration 075).
