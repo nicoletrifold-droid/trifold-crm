@@ -1464,3 +1464,95 @@ manual (a do `@dev` e a minha). Aceitável pelo Testing Standards da própria st
 `@devops`. O item de DoD "migration aplicada em produção" segue **aberto**.
 
 — Quinn, guardião da qualidade 🛡️
+
+---
+
+### Quality Gate — Rodada 2 · 2026-08-29 · Quinn (Test Architect)
+
+**Veredito: PASS** · commit `9e3a80fa` · gate file atualizado.
+Os dois CONCERNS e os três menores estão fechados. Reverifiquei cada um por execução.
+
+#### CONCERNS-1 — fechado, e o controle negativo **tem vivacidade**
+
+| Sonda minha | Medido |
+|---|---|
+| PR apaga `244_…sql` (relatório: `ÓRFÃ-no-banco`) | `estado=pendente` · bloco **⛔ REMOVIDA** com texto próprio ✅ |
+| **Controle negativo:** órfã no relatório que o PR **não toca** | `estado=limpo` · **0** menções ao arquivo alheio · **0** a `REMOVIDA` ✅ |
+| Renumeração (apaga velho + adiciona novo) — classe que eu não havia sondado | `PENDENTE (1)` **e** `REMOVIDA (1)`, blocos separados ✅ |
+
+**A prova que eu quis, e que não estava pedida:** um controle negativo que sobrevive a *todas*
+as mutações é decoração. Rodei os **dois sentidos** e os conjuntos de morte são **disjuntos** —
+`M5` (`removidas = []`) derruba **3** testes, todos do bloco novo, e o controle negativo **passa**;
+a mutação de **ruído** (`removidas` derivada do relatório inteiro em vez de `casados`) derruba
+**1**, **só** o controle negativo, e os três novos passam. Ele mede o que diz medir. NIT-8 caiu
+junto: a manchete virou neutra ("precisam de atenção"), que era falsa para `ALTERADA` e para `ÓRFÃ`.
+
+#### CONCERNS-2 — conferido de **dentro** do banco
+
+`col_description(via)` traz os **quatro** valores · `reset` 263 + `reset-falha-conhecida` 4 +
+`apply` 1 = **268** · `relrowsecurity=true`, `policies=0` · `db:status` 268 aplicada, 0 de tudo o
+mais. **A prova que importa:** o `sha256` do arquivo em disco (`cc88e5aff20a…`) é **idêntico** ao
+gravado no ledger, e o `via` da `245` é **`apply`** — o banco *executou* o arquivo novo (é por
+isso que o `COMMENT ON` novo já está lá dentro). Observação, não declaração.
+
+**A remediação foi pelo caminho certo.** Recusar `UPDATE … SET sha256` foi a decisão correta:
+seria declarar que o SQL novo rodou sem ninguém ver — a mentira exata que o `sha256` fecha. O
+`DELETE` → `PENDENTE` (que **é** a verdade) → `db:apply` observa é o único caminho que mantém o
+ledger honesto, e foi escrito no runbook **antes** de ser executado, com escopo travado e com a
+condição de segurança nomeada (idempotência; se não houver, a regra geral volta a valer).
+
+**A correção do Rollback é achado maior que o item que a originou.** Regerar o backfill inteiro
+fora da janela pós-Passo-2 reescreveria as 268 linhas com `via='backfill-onda-1'` e **apagaria**
+`reset`/`apply`/`reset-falha-conhecida` — converteria observação em declaração, em massa e em
+silêncio. A delimitação da janela está no runbook.
+
+#### CONCERNS-3 · CONCERNS-4 · OBS-6
+
+- **C-3:** varri o bloco separando os corpos de cada `run:` — **0 linhas de `run:` com `${{ }}`**
+  (a única dentro de um `run:` é um comentário explicando o porquê). As 4 interpolações estão em
+  `env:`. Ele achou uma que eu não nomeei (`BASE="origin/${{ github.base_ref }}"`), justamente a de
+  maior superfície. **Rodei de novo o passo pós-hardening, verbatim, nos dois cenários sintéticos**
+  (raso e completo): as guardas continuam intactas.
+- **C-4:** medida por mim no repo real, com o commit existindo: `164  0` → awk **0**; jobs 2+1.
+  Confirma que a vacuidade da rodada 1 era artefato de gatear antes do commit.
+- **OBS-6:** fiz uma verificação que ninguém pediu e que era o risco real — avaliei a constante
+  `AVISO_DO_RELATORIO` do fonte e comparei com o `_aviso` do JSON rastreado: **byte-idênticos**.
+  Se divergissem, a próxima execução legítima do gate produziria um diff fantasma naquele campo,
+  e é assim que um aviso morre. Fixture 10/10 e agnóstica ao campo novo. Não rodar o gate depois
+  foi a decisão certa.
+
+#### OBS-5 — decisão
+
+**Aceito como implementado; a instrução do coordenador prevalece e eu concordo com ela.** Um reset
+de ~7,5 min que sai `1` porque um `INSERT` auxiliar falhou é o sinal que as pessoas aprendem a
+ignorar — a mesma patologia da régua sempre-vermelha que esta onda corrigiu. E o furo não depende
+de alguém ler o log: o próximo `db:status` mostra 268 `PENDENTE` e o job do PR comenta `⚠️`. A
+detecção é redundante e vem de **fora** do reset.
+
+**Fica um resíduo de uma linha, não bloqueante:** o bloco de erro é impresso **antes** de
+`if (codigo === 0) console.log("Banco de teste reconstruído.")` — a **última** linha da tela
+continua tranquilizando sem qualificação, depois de 7,5 minutos, que é onde o olho pousa.
+Qualificá-la quando `falhasDeRegistro.length > 0` não toca no exit code.
+
+#### Gates
+
+`pnpm test` 274 arquivos · **3514 passed** | 6 expected fail · `type-check --force` 8/8 ·
+`lint --force` 0 errors (36 warnings pré-existentes). Produção **não tocada** nas duas rodadas.
+
+#### Liberado — o que o @devops carrega
+
+1. **Pós-squash ou pós-merge de `main`, repetir a régua da AC4** — é a única medição desta revisão
+   que caduca com reescrita de histórico. A forma de três pontos parte do merge-base: se `main`
+   ganhar deleções em `ci.yml` e você a trouxer para a branch, elas entram na conta e a régua fica
+   vermelha por mudança que não é sua.
+2. **No PR**, o job `migrations-do-pr` roda pela primeira vez de verdade (secret
+   `SUPABASE_MANAGEMENT_PAT` confirmado presente). Desfecho esperado: **`✅`** listando
+   `245_registro_de_migrations.sql — aplicada`. Qualquer `⛔` é sinal real, não ruído de estreia.
+3. **Depois do merge**, aplicar a `245` em produção pelo runbook, com **a versão deste commit** (é
+   a que traz o `COMMENT` dos quatro valores); backfill **gerado na hora**; depois
+   `TRIFOLD_ENV=producao pnpm db:status` e commitar o espelho — é o que substitui o marcador
+   `AINDA NÃO MEDIDO`. Só então o item de DoD "aplicada em produção" fecha; hoje ele segue **aberto**.
+4. **Não** rodar `pnpm gate:tenancy` contra ref que não seja produção; se rodar, restaurar
+   `docs/audits/gate-tenancy-report.json` (o arquivo agora avisa sozinho).
+
+— Quinn, guardião da qualidade 🛡️

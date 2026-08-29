@@ -1,481 +1,267 @@
 schema: 1
 story: "900.3c"
 story_title: "Registro de migrations e fluxo de promoção (Fatia B de 2 — Onda 1)"
-gate: CONCERNS
+gate: PASS
 status_reason: >-
-  A fatia entrega o que promete e as guardas novas são load-bearing: reproduzi o
-  ALTERADA-APÓS-APLICAR contra o banco de teste real (db:status exit 0 / db:apply exit 1
-  sem aplicar nada), forcei o terceiro estado do G2 por caminho REAL (checkout raso
-  sintético, não por flag na mão) e medi o falso-verde que ele impede, e verifiquei a
-  régua da AC4 num commit simulado (151/0 verde · 151/2 vermelho sob a mutação nomeada).
-  Dois achados me impedem de dar PASS, ambos baratos: (1) PR que DELETA uma migration já
-  aplicada produz comentário `✅ limpo` cujo próprio corpo lista o arquivo como
-  `ÓRFÃ-no-banco` — a justificativa da AC4 para excluir ÓRFÃ ("não pode ser um arquivo que
-  o PR traz") é empiricamente falsa, porque `git diff --name-only` lista caminho apagado;
-  (2) o `COMMENT ON COLUMN … via` da própria `245` enumera três valores e o código grava
-  quatro (`reset-falha-conhecida`), e o custo de corrigir sobe depois que a `245` for
-  aplicada em produção.
+  Rodada 2. Os dois CONCERNS e os três menores estão fechados, e reverifiquei cada um por
+  execução, não por relato. CONCERNS-1 (a quarta classe: PR que APAGA migration aplicada)
+  agora acende com bloco `⛔ REMOVIDA` próprio — e o controle negativo TEM vivacidade:
+  provei por duas mutações de sentido OPOSTO que matam conjuntos DISJUNTOS de teste (M5
+  `removidas=[]` → 3 falhas, todas do bloco novo; mutação de RUÍDO, `removidas` derivada do
+  relatório inteiro → 1 falha, só o controle negativo). CONCERNS-2 fechado e conferido de
+  DENTRO do banco: `col_description(via)` enumera os quatro valores, `reset` 263 +
+  `reset-falha-conhecida` 4 + `apply` 1 = 268, e o `sha256` do ledger é byte-idêntico ao do
+  arquivo em disco — a `245` consta como `apply`, isto é, OBSERVADA, não declarada. A
+  remediação atravessou a ferramenta desta própria story e foi pelo caminho legítimo,
+  documentado no runbook antes de executado. Régua da AC4 medida por mim com o commit
+  existindo: `164 0` → awk 0. Nenhum achado novo; nenhum bloqueador.
 reviewer: "Quinn (Test Architect)"
-rodadas: 1
-updated: "2026-08-29T18:15:00Z"
+rodadas: 2  # 1ª CONCERNS (árvore de trabalho, pré-commit) · 2ª PASS (commit 9e3a80fa)
+updated: "2026-08-29T19:05:00Z"
 branch: "story/900-3c-registro-migrations"
 base: "77f225d1"
-commits_revisados: []  # nada commitado — revisão sobre a ÁRVORE DE TRABALHO
+commits_revisados: ["9e3a80fa"]
 nota_de_escopo: >-
-  Produção NÃO foi tocada por esta revisão. Todo comando de banco foi contra
-  xnxvygyfyyyzwhiuoehz (teste). O único comando com TRIFOLD_ENV=producao foi
-  `db:apply --yes`, que aborta na guarda de flag ANTES do primeiro fetch (db-apply.ts:82
-  vs. o primeiro `tabelaExiste` na linha 90) — e ainda assim rodei com PAT deliberadamente
-  falso como cinto de segurança. Árvore devolvida byte a byte ao estado do @dev.
+  Produção NÃO foi tocada em nenhuma das duas rodadas. Todo comando de banco foi contra
+  xnxvygyfyyyzwhiuoehz (teste). Árvore de trabalho limpa ao fim desta rodada.
 
-# ---------------------------------------------------------------------------
-evidencia_reproduzida_pelo_qa:
-  gates:
-    test: "274 arquivos · 3511 passed | 6 expected fail (3517) · 0 falhas"
-    lint_forcado: "8/8 successful · 0 errors, 36 warnings (pré-existentes)"
-    type_check_forcado: "8/8 successful"
-    novos: "25 testes em 2 arquivos (migrations-ledger 14 · aviso-migrations-do-pr 11)"
+# ===========================================================================
+# RODADA 2 — reverificação dos achados
+# ===========================================================================
+rodada_2:
+  concerns_1_a_quarta_classe:
+    status: FECHADO
+    o_que_mudou: >-
+      `montarAviso` ganhou `removidas = casados.filter(estado === "ÓRFÃ-no-banco")` e um bloco
+      `⛔ REMOVIDA` com texto próprio; a manchete virou neutra ("precisam de atenção"), o que
+      também fecha o NIT-8. A AC4 traz a justificativa original **riscada** e marcada como
+      falsificada por medição.
+    reproduzido_por_mim:
+      - id: "R2-1 — o estado acende"
+        entrada: "diff=[244_org_admin_invite_email.sql apagada] · relatório=[mesma, ÓRFÃ-no-banco]"
+        medido: "estado=pendente · bloco '⛔ REMOVIDA — este PR apaga migration que consta como aplicada (1)'"
+        antes_do_conserto: "estado=limpo, com o arquivo listado sob '✅ … já estão aplicadas'"
+      - id: "R2-2 — CONTROLE NEGATIVO: órfã alheia continua invisível"
+        entrada: "diff=[999_do_pr.sql] · relatório=[244 ÓRFÃ + 999 aplicada]"
+        medido: "estado=limpo · 0 menções a 244_org_admin_invite_email · 0 menções a REMOVIDA"
+        veredito: "a correção NÃO trocou falso-verde por falso-vermelho — o risco R6 segue fechado"
+      - id: "R2-3 — renumeração (apaga velho + adiciona novo)"
+        medido: "'2 migration(s) … precisam de atenção' · PENDENTE (1) E REMOVIDA (1), blocos separados"
+        nota: "classe que eu não havia sondado na rodada 1; sai correta"
+    vivacidade_do_controle_negativo:
+      porque_eu_insisti: >-
+        Um controle negativo que sobrevive a TODAS as mutações é decoração. Testei os dois
+        sentidos e os conjuntos de morte são DISJUNTOS — é isso que prova que ele mede.
+      mutacao_M5:
+        forma: "`const removidas = [] // MUTACAO-QA-M5` (prova em disco: grep -c 1 → 0)"
+        medido: "3 failed / 11 passed — os três casos do bloco novo. O controle negativo PASSA."
+      mutacao_de_ruido:
+        forma: "`removidas` derivada de `entrada.vereditos` (relatório inteiro) em vez de `casados`"
+        medido: "1 failed / 13 passed — SÓ o controle negativo. Os três casos novos PASSAM."
+      conclusao: "kill sets disjuntos ⇒ o controle negativo não é colinear com os testes do conserto"
+    testes: "aviso-migrations-do-pr 11 → 14 · total dos dois arquivos novos 25 → 28"
 
-  banco_de_teste_real:
-    - id: "DB-1 — estado limpo"
-      comando: "pnpm db:status"
-      medido: "aplicada 268 · PENDENTE 0 · ALTERADA 0 · ÓRFÃ 0 · EXIT 0"
-      confere_com_alegacao: true
-    - id: "DB-2 — ALTERADA-APÓS-APLICAR (o estado que BLOQUEIA o db:apply)"
-      mutacao: "printf -- '-- MUTACAO-QA-900-3C\\n' >> supabase/migrations/245_registro_de_migrations.sql"
-      prova_em_disco: "grep -c → 1 (antes) · 0 (depois de reverter)"
-      medido: >-
-        db:status: aplicada 267 · ALTERADA-APÓS-APLICAR 1 (nomeando
-        245_registro_de_migrations.sql [via=reset]) · EXIT 0 (relatório, não gate).
-        db:apply --yes: EXIT 1, "Nada foi aplicado", nomeando o arquivo.
-      confere_com_alegacao: true
-    - id: "DB-3 — contrato de exit code, lado da tabela AUSENTE"
-      metodo: >-
-        Sem tocar produção: mutei TABELA_LEDGER para um nome inexistente e rodei contra o
-        banco de TESTE. Exercita o mesmo ramo (tabelaExiste → false) que o @dev exercitou
-        contra produção.
-      medido: "EXIT 1, nomeando a tabela, o projeto, o ambiente e o runbook"
-      confere_com_alegacao: true
-    - id: "DB-4 — --yes recusado em produção"
-      medido: >-
-        sem TRIFOLD_ALLOW_PROD → EXIT 1 na guarda da 900-3b;
-        com TRIFOLD_ALLOW_PROD=1 → EXIT 1 na guarda de flag desta story, antes de qualquer rede.
-      confere_com_alegacao: true
-    - id: "DB-5 — espelho é determinístico e não vaza ambiente"
-      medido: >-
-        Duas execuções de db:status contra teste produzem JSON idêntico exceto `gerado_em`;
-        a chave "producao" (marcador AINDA NÃO MEDIDO) sobreviveu intacta às minhas execuções.
-      confere_com_alegacao: true
-    - id: "DB-6 — o sha256 do gerador de backfill bate com o do ledger"
-      medido: >-
-        gerar-backfill-ledger.ts → 268 tuplas (== ls supabase/migrations/*.sql | wc -l),
-        sha256 da 245 = dab5cf88… == o registrado no espelho. Zero referência de rede ou
-        credencial no arquivo (grep por fetch|https|PAT|SUPABASE → nada). SQL determinístico
-        (só o comentário de timestamp muda entre execuções).
-      confere_com_alegacao: true
+  concerns_2_o_comment_do_via:
+    status: FECHADO
+    conferido_de_dentro_do_banco:
+      col_description_via: >-
+        "Proveniência do registro, QUATRO VALORES: backfill-onda-1 (…); apply (pnpm db:apply
+        observou o sucesso); reset (…VIU o arquivo aplicar); reset-falha-conhecida (… NÃO
+        aplicou, e o registro existe só para ele não aparecer como PENDENTE…)" — lido por
+        `col_description('public.trifold_migrations_aplicadas'::regclass, attnum)`.
+      via_no_ledger: "reset 263 + reset-falha-conhecida 4 + apply 1 = 268 ✅"
+      linha_da_245: "arquivo=245_registro_de_migrations.sql · via=apply · sha=cc88e5aff20a…"
+      rls: "relrowsecurity=true · policies=0 ✅"
+      db_status: "aplicada 268 · PENDENTE 0 · ALTERADA 0 · ÓRFÃ 0"
+    a_prova_que_importa: >-
+      `shasum -a 256` do arquivo em disco = **cc88e5aff20a** = o `sha256` gravado no ledger.
+      E o `via` é **`apply`**, não `backfill`: o banco EXECUTOU o arquivo novo (é por isso que
+      o `col_description` já traz o texto novo — o `COMMENT ON` rodou de verdade). O ledger
+      não está declarando; está descrevendo o que foi observado.
+    o_caminho_da_remediacao:
+      veredito: CORRETO
+      analise: >-
+        Ele recusou `UPDATE … SET sha256 = <novo>` — que teria sido declarar que o SQL novo
+        rodou sem ninguém ver, exatamente a mentira que o campo `sha256` fecha — e usou
+        `DELETE` do registro obsoleto → o estado volta a `PENDENTE`, que É a verdade (aquele
+        conteúdo nunca rodou neste banco) → `db:apply` observa e grava `via='apply'`. O
+        procedimento foi escrito no runbook ANTES de executado, com escopo travado ("só antes
+        do merge e antes de produção") e com a condição de segurança nomeada (a migration
+        precisa ser idempotente; se não for, a resposta é a regra geral — migration nova).
+    correcao_extra_do_rollback:
+      veredito: ACHADO REAL, e mais grave que o item que o originou
+      analise: >-
+        A linha 3 do Rollback mandava regerar o backfill inteiro. Fora da janela logo após o
+        Passo 2, isso reescreveria as 268 linhas com `via='backfill-onda-1'` e **apagaria** as
+        proveniências `reset`/`apply`/`reset-falha-conhecida` — transformaria observação em
+        declaração em massa, silenciosamente. A correção delimita a janela e manda usar o
+        procedimento de um arquivo só. Confirmei o texto no runbook.
 
-  g2_terceiro_estado_forcado_por_caminho_real:
-    porque_importa: >-
-      Um terceiro estado que só se alcança passando `--motivo-diff` na mão não vale nada.
-      Reproduzi o checkout raso de verdade, com o passo do ci.yml copiado VERBATIM.
-    montagem: >-
-      upstream sintético (main com 100_base.sql; branch `pr` com 246_nova.sql criada depois),
-      dois work dirs: um com `git fetch --depth=1 origin pr` (imita actions/checkout@v4 com
-      fetch-depth: 1, onde refs/remotes/origin/main NÃO existe) e outro com fetch completo.
-    medido:
-      - "RASO: motivo=nao consegui resolver a ref base origin/main (checkout raso? fetch-depth: 0 ausente?) · /tmp/pr-migrations.txt NEM É CRIADO"
-      - "COMPLETO: sem motivo, diff resolve → supabase/migrations/246_nova.sql"
-      - "aviso alimentado pelo caso raso → estado=indeterminado, corpo ⛔, sem nenhum ✅"
-    controle_negativo: >-
-      Removi as DUAS guardas do passo (rev-parse e merge-base) e rodei no mesmo raso:
-      `git diff --name-only origin/main...HEAD` sai com rc=128 MAS o redirect cria o arquivo
-      VAZIO → o aviso responde `estado=limpo` com "✅ Nenhuma migration deste PR está
-      pendente". É o falso-verde exato que o G2 existe para impedir, medido.
-    defesa_em_profundidade: >-
-      Três camadas independentes: (1) rev-parse; (2) merge-base vazio — sozinha ela já pega o
-      raso, provado removendo só a primeira; (3) readFileSync do arquivo ausente → null →
-      indeterminado. E o step de publicar tem fallback próprio em github-script.
-    cinco_estados_exercidos_por_mim:
-      - "⛔ raso (motivo do diff) → indeterminado"
-      - "⛔ db:status saiu 1 (motivo do status) → indeterminado"
-      - "⛔ parsing sem casamento (relatório de outra árvore) → indeterminado"
-      - "✅ PR SEM migration (diff legitimamente vazio) → limpo"
-      - "✅ migration do PR já aplicada → limpo"
-      - "⚠️ PENDENTE → pendente, nomeando só o arquivo do PR"
-      - "⛔ severo ALTERADA → pendente, texto distinto"
+  concerns_3_interpolacao_em_run:
+    status: FECHADO
+    medido_por_mim: >-
+      Varri o bloco do job separando os corpos de cada `run:`: **0 linhas de `run:` com
+      `${{ }}`** (a única ocorrência dentro de um `run:` está num `#` comentário explicando o
+      porquê). Todas as 4 interpolações do bloco estão em mapeamentos `env:`:
+      `BASE_REF`, `SUPABASE_MANAGEMENT_PAT`, `MOTIVO_DIFF`, `MOTIVO_STATUS`.
+    escopo_maior_que_o_pedido: >-
+      Eu havia nomeado só os dois `motivo`. Ele achou `BASE="origin/${{ github.base_ref }}"`
+      na mesma varredura — a interpolação com a superfície MAIOR das três, porque
+      `github.base_ref` é nome de branch e vinha antes das outras duas no fluxo.
+    regressao_verificada: >-
+      Rodei de novo, VERBATIM, o passo pós-hardening nos dois cenários sintéticos: checkout
+      raso (`git fetch --depth=1`) → `motivo=nao consegui resolver a ref base origin/main`, e
+      o arquivo de diff **nem é criado**; checkout completo → resolve e lista a migration. O
+      refactor para `env:` não quebrou nenhuma das guardas.
 
-  g5_dois_textos_distintos:
-    medido: >-
-      Corpos de PENDENTE e de ALTERADA são DIFERENTES (diff -q: distintos). Só o severo
-      contém "recusar" e "O `pnpm db:apply` vai recusar em bloco (exit 1, sem aplicar nada)";
-      o brando não contém "recusar" nenhuma vez.
-    ressalva_menor: >-
-      O cabeçalho compartilhado diz "N migration(s) não aplicada(s)" também no caso ALTERADA,
-      onde o arquivo FOI aplicado (e depois editado). O bloco abaixo corrige, mas a manchete
-      é imprecisa.
+  concerns_4_regua_pos_commit:
+    status: FECHADO POR MEDIÇÃO
+    medido_por_mim_no_repo_real: >-
+      `git diff --numstat origin/main...HEAD -- .github/workflows/ci.yml` → `164  0` ·
+      `awk '$2 != 0 { exit 1 }'` → exit **0** · `grep -c '^  static:\|^  tenancy-gate:'` → 2 ·
+      jobs = [static, tenancy-gate, migrations-do-pr].
+    confirmacao_da_rodada_1: "a vacuidade era mesmo artefato de gatear antes do commit, como eu havia medido em clone descartável"
+    residuo: "só a repetição pós-squash/pós-merge-de-main — ver `o_que_o_devops_carrega`"
 
-  g1_o_job_nao_commita_nem_falha_por_arvore_suja:
-    medido:
-      - "grep no ci.yml inteiro por `diff --exit-code` / `git status --porcelain` → nenhum"
-      - "grep no BLOCO do job por `git commit` / `git push` → 0"
-      - "docs/audits/migrations-aplicadas.json NÃO está no .gitignore ⇒ é rastreado, e o job de fato suja a árvore do runner — inofensivo, porque nada verifica"
-    confere_com_alegacao: true
+  obs_6_o_aviso_do_gate_tenancy:
+    status: FECHADO, e ancorado no lugar certo
+    o_que_mudou:
+      - "`_aviso` passa a ser EMITIDO pelo gerador (`scripts/gate-tenancy.ts`, no objeto que ele serializa)"
+      - "`_aviso` inserido no arquivo rastreado por edição cirúrgica (`--numstat 1 0`)"
+      - "alerta impresso ANTES de sobrescrever, quando `schema.projectRef !== PROD_REF`"
+    a_verificacao_que_eu_fiz_e_que_ninguem_pediu: >-
+      Avaliei a constante `AVISO_DO_RELATORIO` do fonte e comparei com o `_aviso` do JSON
+      rastreado: **byte-idênticos**. Importa porque, se divergissem, a próxima execução
+      legítima do gate contra produção produziria um diff fantasma naquele campo — e um campo
+      que "some sozinho" é como um aviso morre. Fixture: 10/10, e o teste não menciona
+      `_aviso` (inerte ao campo novo, como deve ser).
+    nao_rodou_o_gate_depois: "correto — rodar reescreveria `geradoEm` e, contra teste, envenenaria o arquivo"
 
-  ausencias_no_job_conferidas_por_mim:
-    metodo: "awk '/^  migrations-do-pr:/,0' .github/workflows/ci.yml, grep restrito ao bloco"
-    concurrency: 0
-    "db:apply": 0
-    "reset:testdb": 0
-    "--confirmar": 0
-    TRIFOLD_ALLOW_PROD: 0
-    "git commit": 0
-    "git push": 0
-    presentes:
-      "fetch-depth: 0": 2
-      "if: always()": 2
-      "head.repo.full_name == github.repository": 1
-      "continue-on-error: true": 1
-      "secrets.*": "1 (só SUPABASE_MANAGEMENT_PAT)"
-    triggers: "pull_request + push:[main]; o job tem if de pull_request ⇒ não roda no push"
-    gatilho_seguro: "`pull_request`, NÃO `pull_request_target` — o guard de fork é a 2ª camada, não a única"
+  obs_5_falha_de_ledger_no_reset:
+    status: ACEITO COMO IMPLEMENTADO — a decisão do coordenador prevalece
+    o_que_foi_implementado: >-
+      Contador próprio no `=== RESUMO ===` (`Falhas ao gravar o ledger: N`) + bloco de erro em
+      `stderr` nomeando que a invariante da AC3 não vale nesta execução, mandando rodar
+      `db:status` e refazer o Passo 2 do runbook antes de usar `db:apply`, e dizendo
+      explicitamente que o exit code não reflete isso e por quê.
+    meu_julgamento: >-
+      Concordo em não virar exit code, e por uma razão que esta própria onda documentou: um
+      reset de ~7,5 min que sai `1` porque um INSERT auxiliar falhou é um sinal que as pessoas
+      aprendem a ignorar — é a mesma patologia da régua sempre-vermelha que a AC4 corrigiu
+      ("ninguém confia num sinal que nunca muda"). E o furo não depende de alguém ler o log: o
+      próximo `pnpm db:status` mostra 268 `PENDENTE`, e o job do PR comenta `⚠️` sobre isso. A
+      detecção é redundante e vem de fora do reset, que é o que torna o resumo suficiente.
+    residuo_de_uma_linha_so: >-
+      O bloco de erro é impresso ANTES de `if (codigo === 0) console.log("Banco de teste
+      reconstruído.")`. A ÚLTIMA linha da tela continua sendo a tranquilizadora, sem
+      qualificação — exatamente o lugar onde o olho pousa depois de 7,5 min. Qualificar essa
+      linha final quando `falhasDeRegistro.length > 0` custa uma linha e não toca no exit
+      code. Recomendação, não bloqueio.
 
-  regua_ac4_medida_em_commit_simulado:
-    problema_declarado_pelo_dev: >-
-      A régua literal da AC (`origin/main...HEAD`) sai VAZIA e verde enquanto nada foi
-      commitado. Verdade: HEAD == origin/main == 77f225d1.
-    o_que_eu_fiz: >-
-      Clone descartável local, copiei a árvore de trabalho do ci.yml, commitei LÁ (nunca aqui)
-      e rodei a régua LITERAL da AC.
-    medido:
-      verde: "git diff --numstat origin/main...HEAD -- .github/workflows/ci.yml → 151  0 · awk exit 0"
-      vermelho: "após apagar o passo lint do job static → 151  2 · awk exit 1"
-      contagem_de_jobs: "grep -c '^  static:\\|^  tenancy-gate:' → 2"
-    veredito: >-
-      A vacuidade é artefato de gatear ANTES do commit, não defeito da régua. A propriedade
-      é real e discriminante — medida por mim, não aceita por alegação. Ver CONCERNS-4 para
-      o encaminhamento.
+# ===========================================================================
+# EVIDÊNCIA DA RODADA 1 (mantida — nada dela foi invalidado)
+# ===========================================================================
+evidencia_rodada_1_ainda_valida:
+  banco_real:
+    - "ALTERADA-APÓS-APLICAR: db:status exit 0 (relatório) · db:apply exit 1 sem aplicar nada"
+    - "contrato C6 lado tabela-ausente: exit 1 nomeando tabela/projeto/ambiente/runbook (mutando TABELA_LEDGER contra TESTE, sem tocar produção)"
+    - "--yes em produção: duas guardas distintas, ambas exit 1, antes de qualquer rede"
+    - "espelho determinístico (só `gerado_em` muda) e a chave `producao` preservada"
+    - "gerador de backfill: 268 tuplas, zero rede/credencial, sha da 245 == o do ledger"
+  g2_terceiro_estado:
+    - "forçado por checkout raso REAL (git fetch --depth=1), passo do ci.yml copiado verbatim"
+    - "controle negativo: sem as guardas, o redirect cria arquivo vazio e o aviso responde ✅ limpo — o falso-verde medido"
+    - "três camadas independentes (rev-parse · merge-base · readFileSync ausente) + fallback no github-script"
+  ancoras_literais:
+    - "mutando SÓ supabase-refs.ts, 11 testes acendem (db-env 7 · supabase-check 4)"
+    - "os testes novos usam literal digitado à mão e não importam a constante — conforme AC2"
+  allowlist_do_gate_de_tenancy:
+    veredito: "razão suficiente, não atalho"
+    resumo: >-
+      mecanismo sancionado pela própria mensagem de erro do gate · grandfather list congelada
+      (com checksum) NÃO tocada · razão verificável (RLS on, 0 policies, 0 ocorrências em
+      packages/) · colateral checado nas quatro regras que compartilham o Set (R2/R3/R6/R8):
+      nenhuma reportaria esta tabela de outra forma.
 
-  extracao_c5:
-    "grep -c 'function runSql|function splitStatements'": "reset-tenancy-testdb.ts:0 · db-status.ts:0 · db-apply.ts:0"
-    exclusao_declarada: "scripts/gate-tenancy.ts:215 `runSql<T>(sql, pat)` — outro transporte, confirmado presente e NÃO afrouxado"
-    verificacao_extra: >-
-      Nenhum arquivo importava `splitStatements` do local antigo (era `export`), então a
-      extração não deixou import quebrado. O User-Agent obrigatório sobreviveu literal.
-
-  ancoras_literais_ac2:
-    metodo: "a mesma mutação da Fatia A — mexer SÓ na fonte única e ver quem acende"
-    mutacao: "REFS_PERMITIDOS_PRODUCAO = new Set(['MUTACAOaaaaaaaaaaaa']) em packages/shared/src/constants/supabase-refs.ts"
-    prova_em_disco: "grep -c → 1 · revertido → 0"
-    medido: "11 testes falham (db-env.test.ts 7 · supabase-check.test.ts 4). Suíte volta a 119 passed ao reverter."
-    veredito: >-
-      A propriedade da Fatia A sobrevive. Os testes NOVOS desta fatia não acendem nessa
-      mutação — e está certo: eles não testam as constantes, só usam os refs como dado, e
-      usam string literal digitada à mão (xnxvygyfyyyzwhiuoehz / dsopqkqjkmhytudaaolv), como
-      a AC2 exige. Nenhum import de supabase-refs.ts nos testes novos.
-
-  mutacoes_dos_testes_novos_reproduzidas:
-    - id: "M-G5"
-      mutacao: "`const alteradas = [] // MUTACAO-QA-G5` (o aviso volta a olhar só PENDENTE)"
-      esperado_pelo_dev: "2 failed"
-      medido: "2 failed / 9 passed — os dois casos de G5"
-      confere: true
-    - id: "M-G2"
-      mutacao: "o ramo `arquivosDoPr === null` passa a devolver estado 'limpo'"
-      medido: "1 failed / 10 passed — 'fetch raso ⇒ ⛔, nunca ✅'"
-      confere: true
-      nota: "mutei só o primeiro dos ramos indeterminados; o @dev mutou os dois e mediu 2 failed. Coerente."
-
-# ---------------------------------------------------------------------------
-top_issues:
-  - id: "CONCERNS-1"
-    severity: medium
-    finding: >-
-      PR que DELETA uma migration já aplicada recebe comentário `✅ limpo` cujo próprio corpo
-      lista o arquivo como `ÓRFÃ-no-banco`, sob a manchete "já estão aplicadas e nenhuma foi
-      alterada depois da aplicação". É o mesmo modo de falha que o G2 e o G5 existem para
-      fechar (estado que parece verde e não foi medido), sobrando numa quarta classe.
-    origem: "Defeito de ESPECIFICAÇÃO, não do @dev — a AC4 manda excluir ÓRFÃ e dá a razão."
-    razao_da_ac_refutada: >-
-      A AC4 diz "ÓRFÃ-no-banco fica de fora com razão: é registro sem arquivo correspondente,
-      não pode ser um arquivo que o PR traz". Medido e falso: `git diff --name-only` LISTA
-      caminho apagado. Reproduzido — commitei uma deleção num repo sintético e o caminho
-      apagado apareceu na saída, e o aviso respondeu `estado=limpo`.
-    evidencia: >-
-      diff = supabase/migrations/244_org_admin_invite_email.sql (apagado);
-      relatório = mesmo arquivo com estado ÓRFÃ-no-banco;
-      aviso = "✅ Nenhuma migration deste PR está pendente… - `244_…sql` — ÓRFÃ-no-banco".
-    suggested_owner: dev
-    suggested_action: >-
-      Uma linha em montarAviso: se algum arquivo do PR casar com ÓRFÃ-no-banco, o estado não
-      pode ser `limpo`. Basta um terceiro bloco (ou promover para `indeterminado`) dizendo
-      "este PR REMOVE uma migration que consta como aplicada no teste — o ledger vai ficar
-      com registro órfão". Custa ~8 linhas e um teste.
-    bloqueia_merge: false
-
-  - id: "CONCERNS-2"
-    severity: low
-    finding: >-
-      O `COMMENT ON COLUMN public.trifold_migrations_aplicadas.via` da própria `245` enumera
-      TRÊS valores (backfill-onda-1, apply, reset). O código grava QUATRO — o
-      `reset-falha-conhecida` que o @dev introduziu como [AUTO-DECISION] na mesma story
-      (reset-tenancy-testdb.ts, lote `["reset-falha-conhecida", conhecidas]`). O bloco de
-      cabeçalho do .sql tem a mesma omissão.
-    porque_nao_e_cosmetico: >-
-      É a autodocumentação que fica DENTRO do banco de produção, e o custo de corrigir sobe
-      depois: a `245` já está aplicada e registrada no teste (via='reset', sha dab5cf88…);
-      editar o arquivo agora faz o db:status marcar ALTERADA-APÓS-APLICAR e o db:apply
-      recusar em bloco — a ferramenta desta própria story. O runbook já prevê o remédio
-      (Rollback, linha 3: regerar o backfill, ON CONFLICT DO UPDATE corrige o hash), mas o
-      caminho precisa ser escolhido de propósito, não descoberto.
-    suggested_owner: dev
-    suggested_action: >-
-      Corrigir o COMMENT (e o bloco de cabeçalho) ANTES de o @devops aplicar a 245 em
-      produção, re-registrando o hash no teste pelo procedimento do runbook. Se a fatia já
-      tiver ido para produção, vira migration nova só com o COMMENT.
-    bloqueia_merge: false
-
-  - id: "CONCERNS-3"
-    severity: low
-    finding: >-
-      O passo "Monta o aviso" interpola `${{ steps.diff.outputs.motivo }}` /
-      `${{ steps.status.outputs.motivo }}` DENTRO de um bloco `run:`. O motivo embute
-      `github.base_ref`, que é nome de branch. `toJSON()` protege aspas, mas o resultado vira
-      string entre aspas DUPLAS em bash, onde `$(…)` e crase ainda expandem — e nome de ref
-      do git aceita os dois.
-    mitigacao_ja_existente: "guard de fork ⇒ só branch de quem já tem push no repositório"
-    suggested_owner: devops
-    suggested_action: >-
-      Passar os dois motivos por `env:` no próprio passo e ler `$MOTIVO_DIFF`/`$MOTIVO_STATUS`
-      entre aspas — é a recomendação padrão de hardening do GitHub e não muda o comportamento.
-    bloqueia_merge: false
-
-  - id: "CONCERNS-4"
-    severity: low
-    finding: >-
-      A régua de não-reescrita da AC4, como escrita (`origin/main...HEAD`), só mede depois
-      que o commit existe. É a quarta régua desta onda que fica verde sem medir no momento
-      em que alguém a roda — mas, ao contrário das três anteriores, aqui a vacuidade é
-      transitória e a propriedade É real (medida por mim em commit simulado: 151/0 verde,
-      151/2 vermelho).
-    suggested_owner: devops
-    suggested_action: >-
-      Rodar a régua LITERAL uma vez depois do commit, antes do push, e colar a saída no PR.
-      Duas linhas. Alternativa (para stories futuras): a AC declarar as duas formas — árvore
-      enquanto não há commit, `origin/main...HEAD` a partir dele — em vez de só a segunda.
-    bloqueia_merge: false
-
-  - id: "OBS-5"
-    severity: low
-    finding: >-
-      O reset registra o ledger em bloco e, se o INSERT falhar, imprime "AVISO: falhou ao
-      registrar N arquivo(s)" e segue com exit 0. Um reset "bem-sucedido" pode terminar com
-      o ledger vazio, e a promessa da AC3 ("nada fica PENDENTE depois de um reset bem-
-      sucedido") deixa de valer sem que o exit code mude.
-    atenuante: "Não é silencioso (a linha AVISO é impressa) e o db:status seguinte denuncia."
-    suggested_owner: dev
-    suggested_action: "Somar a falha do registro ao código de saída, ou ao menos ao bloco de resumo final."
-    bloqueia_merge: false
-
-  - id: "OBS-6"
-    severity: low
-    finding: >-
-      A armadilha que esta story descobriu do jeito caro — `pnpm gate:tenancy` REESCREVE
-      `docs/audits/gate-tenancy-report.json`, que é rastreado E é fixture de
-      `gate-tenancy-auditoria.test.ts` — está registrada só na story e na memória de agente.
-      O repositório não avisa: nem `scripts/gate-tenancy.ts`, nem o teste, nem o próprio
-      JSON (ele não tem campo `_aviso`, ao contrário dos outros arquivos de docs/audits/).
-    verificado: "o report está limpo em `git status` ⇒ o @dev restaurou como declarou"
-    suggested_owner: dev
-    suggested_action: >-
-      Fora do escopo desta story (é do ferramental da 900-2a/2c). Vale um item de backlog:
-      `_aviso` no JSON ou um aviso impresso quando `gate:tenancy` roda contra ref != produção.
-    bloqueia_merge: false
-
-  - id: "OBS-7"
-    severity: low
-    finding: >-
-      `docs/architecture/saas-multi-tenant.md:1134` continua dizendo que o snapshot é
-      "regenerado por `scripts/sync-schema.sh` (já existe)" — script que ESTA story deletou.
-      A referência já era falsa numa das duas metades (quem regenera é
-      `generate-schema-snapshot.ts`); agora é falsa nas duas.
-    encaminhamento_ja_feito: "registrado pelo @dev no item [EPIC-900] de docs/backlog.md, endereçado ao @pm/@architect"
-    suggested_owner: pm
-    bloqueia_merge: false
-
-  - id: "NIT-8"
-    severity: low
-    finding: >-
-      No caso ALTERADA-APÓS-APLICAR, a manchete do comentário diz "N migration(s) não
-      aplicada(s) no banco de teste" — mas essa migration FOI aplicada, e depois editada. O
-      bloco logo abaixo diz a coisa certa; só a manchete generaliza.
-    suggested_owner: dev
-    bloqueia_merge: false
-
-# ---------------------------------------------------------------------------
+# ===========================================================================
 ac_status:
-  AC1:
-    veredito: "CUMPRIDA (parcial por desenho)"
-    nota: >-
-      `245` livre em todas as refs (remedido com fetch); tabela criada com PK por arquivo,
-      sha256, RLS ligada e ZERO policies (conferido no .sql); runbook existe com Passos 0-3
-      e conferência; espelho chaveado por ambiente com a chave "producao" honestamente
-      marcada AINDA NÃO MEDIDO. **Produção não foi tocada, e isso está certo** — é passo de
-      runbook do @devops. O item de DoD "aplicada em produção" segue ABERTO.
-    ressalva: "CONCERNS-2 (COMMENT do `via` incompleto) mora aqui e é mais barato de corrigir ANTES da aplicação em produção."
-  AC2:
-    veredito: "CUMPRIDA"
-    nota: >-
-      Extração (não duplicação) confirmada pela régua ancorada com a exclusão declarada
-      intacta; os quatro estados existem; contrato de exit code C6 exercido POR MIM nos dois
-      lados contra o banco de teste; `--yes` recusado em produção; ALTERADA bloqueia o
-      db:apply inteiro; âncoras literais respeitadas e a propriedade da Fatia A verificada
-      por mutação da fonte única.
-    lacuna_registrada: >-
-      Não há teste automatizado de `db-status.ts`/`db-apply.ts` em si — só da lógica pura em
-      `lib/migrations-ledger.ts`. O contrato de exit code, que é o coração da AC2, só tem
-      prova por execução manual (a minha e a do @dev). Aceitável pelo Testing Standards da
-      própria story (infra validada por execução real), mas é uma regressão que passaria
-      calada se alguém trocasse um `return 1` por `return 0`.
-  AC3:
-    veredito: "CUMPRIDA"
-    nota: >-
-      Reset popula o ledger com duas proveniências; medi o estado final (268 aplicada,
-      0 PENDENTE) e o via='reset' na própria 245. O `reset-falha-conhecida` é a decisão
-      certa (ver julgamento abaixo). Só não registra quando houve regressão — correto.
-    ressalva: "OBS-5."
-  AC4:
-    veredito: "CUMPRIDA com ressalva"
-    nota: >-
-      Job adicionado com +151/-0, fetch-depth: 0, guard de fork, if: always(), sem
-      concurrency e sem NENHUM comando de escrita (conferido por mim, no bloco). G1, G2, G3
-      e G5 verificados por execução. A ressalva é CONCERNS-1 (a quarta classe de PR, ÓRFÃ,
-      ainda sai verde) e CONCERNS-4 (a régua só mede pós-commit).
-  AC5:
-    veredito: "CUMPRIDA"
-    nota: >-
-      `scripts/sync-schema.sh` não existe mais; `deploy-flow.md` reescrito e verificado linha
-      a linha contra o comportamento medido (contrato de exit code, duração do reset,
-      allowlist dos dois lados, ordem migration→deploy); todos os 5 scripts que ele cita
-      existem; nenhuma linha rotula `dsopqkqjkmhytudaaolv` como "Staging". OBS-7 é resíduo
-      fora da autoridade do @dev, já encaminhado.
-
-# ---------------------------------------------------------------------------
-decisoes_autonomas_do_dev_julgadas:
-  - decisao: "via='reset-falha-conhecida' para as 4 entradas de FALHAS_CONHECIDAS"
-    veredito: APROVADA
-    razao: >-
-      As duas alternativas são piores e a story não previa o caso. Registrar como 'reset'
-      seria mentira (o arquivo não aplicou); deixar fora as faria aparecer PENDENTE logo após
-      um reset bem-sucedido, e o db:apply tentaria reaplicá-las para sempre. O campo `via`
-      existe exatamente para carregar proveniência, e aqui ele carrega a diferença em vez de
-      escondê-la. Medido: 264 reset + 4 reset-falha-conhecida = 268, e 0 PENDENTE.
-    condicao: "só falta o COMMENT do banco conhecer o quarto valor — CONCERNS-2."
-  - decisao: "Backfill como GERADOR (scripts/gerar-backfill-ledger.ts) em vez de .sql congelado"
-    veredito: APROVADA
-    razao: >-
-      Um .sql com 268 sha256 do conteúdo do dia passaria a mentir na primeira migration nova,
-      e o sintoma seria ALTERADA-APÓS-APLICAR FALSO — o pior estado possível, porque bloqueia
-      o db:apply por um defeito do artefato. Verifiquei: o gerador não abre conexão nenhuma
-      (zero referência a fetch/URL/PAT), é determinístico salvo o comentário de timestamp, e
-      o hash que ele produz para a 245 bate com o registrado. Mesma lógica pela qual o número
-      da migration é remedido em vez de herdado.
-  - decisao: "aplicada_em fora do espelho"
-    veredito: APROVADA
-    razao: >-
-      Evita 268 linhas de churn em todo PR que rodar o reset, afogando o sinal que interessa
-      (mudou de estado? mudou de hash?). O timestamp continua no banco, que é a fonte, e há
-      teste ancorado nisso (`Object.keys` == arquivo/estado/sha256/via). Sobra 1 linha de
-      churn por `gerado_em`, que é aceitável.
-  - decisao: "--json <caminho> no db:status"
-    veredito: APROVADA
-    razao: >-
-      Raspar texto de terminal seria a forma frágil, e o arquivo vai onde o chamador manda
-      (não se confunde com o espelho rastreado). Efeito colateral bom e verificado: o estado
-      ⛔ "parsing sem casamento" passa a ser exercível de verdade — eu o exercitei.
-
-correcoes_nao_previstas_julgadas:
-  - correcao: "runSql truncava em 800 chars e quebrava a leitura do ledger de 268 linhas"
-    veredito: "BUG REAL, correção certa"
-    analise: >-
-      Herdado do reset, onde `msg` é mensagem de erro e truncar é adequado. A separação
-      runSql (truncado, comportamento idêntico ao de antes para o reset) / runSqlBruto
-      (corpo inteiro, usado pela leitura) preserva o call site antigo e não inventa
-      comportamento novo. O aviso está no JSDoc, no lugar onde o próximo a errar vai ler.
-      runSqlJson devolve `null` tanto para "falhou" quanto para "não é JSON", e quem chama
-      distingue isso de "li e veio vazio" — a distinção certa, verificada em tabelaExiste.
-  - correcao: "entrada de trifold_migrations_aplicadas na allowlist do gate de tenancy (R3)"
-    veredito: "RAZÃO SUFICIENTE — não é atalho"
-    analise: >-
-      Quatro coisas conferidas antes de eu aceitar: (a) é o mecanismo SANCIONADO — a própria
-      mensagem de erro do gate manda "tabela nova legítima sem org_id vai para
-      tenancy-allowlist.yml com reason: preenchido, que é revisável em diff"; (b) o @dev NÃO
-      tocou `tenancy-known-tables.json`, a grandfather list congelada com checksum, que é o
-      atalho de verdade e é o que a guarda `assertKnownTablesIntegro` existe para pegar;
-      (c) a razão é verificável e verifiquei: RLS ligada com zero policies no .sql, nenhuma
-      ocorrência da tabela em `packages/` (só scripts, docs e CI), e a tabela descreve o
-      SCHEMA, que é único para todos os tenants — org_id não seria "esquecido", seria errado;
-      (d) a allowlist é um Set único compartilhado por R2/R3/R6/R8, então investiguei o
-      colateral: R2 exige hasOrgId, R6 exige org_id ou matview, R8 é sobre funções — nenhuma
-      delas reportaria esta tabela de qualquer forma. A isenção não esconde nada além do R3
-      pretendido.
-  - correcao: "gate:tenancy envenenando docs/audits/gate-tenancy-report.json"
-    veredito: "ACHADO LEGÍTIMO, restauração confirmada, conhecimento mal ancorado"
-    analise: >-
-      `git status` do arquivo está limpo ⇒ restaurado como declarado, e a suíte fecha
-      274/274. Mas o conhecimento ficou na story e na memória do agente; o repositório
-      continua sem aviso (ver OBS-6). É a diferença entre "o próximo não repete" e "o
-      próximo descobre do mesmo jeito caro".
-
-# ---------------------------------------------------------------------------
-riscos_da_story_reavaliados:
-  R1_colisao_de_numero: "fechado — 245 livre em todas as refs, remedido com fetch no dia"
-  R2_vazamento_de_PAT_em_fork: "fechado — guard de fork presente, gatilho é pull_request (não _target), 1 secret só"
-  R3_contradicao_com_epic_461: "encaminhado — item [EPIC-900] em docs/backlog.md; ver OBS-7 para o resíduo em saas-multi-tenant.md"
-  R5_job_que_escreve: "dissolvido — 0 ocorrências de db:apply/reset:testdb/--confirmar no bloco do job, conferido por mim"
-  R6_ruido_no_comentario: "fechado por execução — o aviso da 245 listou SÓ o arquivo do PR, não os outros 267 PENDENTE daquele instante"
+  AC1: "CUMPRIDA (parcial por desenho — produção é runbook do @devops; o COMMENT corrigido vai junto)"
+  AC2: "CUMPRIDA"
+  AC3: "CUMPRIDA (OBS-5 aceita como implementada)"
+  AC4: "CUMPRIDA — quatro estados de arquivo do PR cobertos; a exclusão original está riscada e refutada na própria AC"
+  AC5: "CUMPRIDA"
 
 evidence:
-  tests_reviewed: 25
-  mutacoes_executadas_pelo_qa: 6
-  risks_identified: 8
+  tests_reviewed: 28
+  mutacoes_executadas_pelo_qa_rodada_2: 2   # M5 e a mutação de ruído (sentidos opostos)
+  mutacoes_executadas_pelo_qa_rodada_1: 6
   ac_covered: [1, 2, 3, 4, 5]
   ac_gaps: []
+  gates: "pnpm test 274 arquivos · 3514 passed | 6 expected fail · type-check 8/8 · lint 0 errors, 36 warnings pré-existentes"
 
 nfr_validation:
   security:
     status: PASS
     notes: >-
-      RLS ligada com zero policies (deny-all para anon/authenticated); nenhum valor de
-      segredo em arquivo rastreado (varredura por eyJ…/sbp_…/service_role key nos 11
-      arquivos da entrega → nada); o único secret do job é o PAT, atrás do guard de fork;
-      SQL montado com `citarLiteral` que dobra aspas simples, com teste. CONCERNS-3 é
-      hardening, não vulnerabilidade explorável de fora.
+      RLS on / 0 policies confirmado DENTRO do banco. Zero `${{ }}` em bloco `run:` do job
+      novo. Gatilho `pull_request` (não `_target`) + guard de fork + 1 secret. Nenhum valor de
+      segredo em arquivo rastreado.
   reliability:
-    status: CONCERNS
-    notes: >-
-      Guardas fail-closed onde importa (tabela ausente, ALTERADA, produção, diff não
-      resolvido). CONCERNS-1 é o ponto onde o sistema ainda responde verde sem ter medido.
-  maintainability:
     status: PASS
     notes: >-
-      Extração real (uma implementação de transporte), módulo puro testável sem rede,
-      documentação no código explicando o PORQUÊ e não o O QUÊ, runbook e deploy-flow
-      alinhados com o comportamento que eu medi.
-  performance:
-    status: PASS
-    notes: "db:status roda em segundos; o job não reseta mais nada (os 456,6s saíram do custo por execução)."
+      Subiu de CONCERNS para PASS: a quarta classe deixou de responder verde, e o controle
+      negativo tem vivacidade provada por mutação de sentido oposto.
+  maintainability: { status: PASS }
+  performance: { status: PASS }
+
+# ===========================================================================
+o_que_o_devops_carrega:
+  antes_do_push:
+    - "Commit `9e3a80fa` na `story/900-3c-registro-migrations`. Nada mais pendente na árvore."
+    - >-
+      NÃO rode `pnpm gate:tenancy` contra ref que não seja produção. Se rodar, restaure:
+      `git checkout -- docs/audits/gate-tenancy-report.json` (agora o próprio arquivo avisa).
+  pos_squash_ou_pos_merge_de_main:
+    - >-
+      REPETIR a régua literal da AC4 e colar no PR — é a única coisa desta revisão que caduca
+      com reescrita de histórico:
+      `git diff --numstat origin/main...HEAD -- .github/workflows/ci.yml | awk '$2 != 0 { exit 1 }'`
+      (esperado exit 0) e `grep -c '^  static:\|^  tenancy-gate:' .github/workflows/ci.yml`
+      (esperado 2).
+    - >-
+      Motivo concreto, não cerimônia: a forma de três pontos mede a partir do merge-base. Se
+      main ganhar deleções em `ci.yml` e você trouxer main para a branch, elas entram na conta
+      e a régua fica vermelha por mudança que não é sua — melhor descobrir antes do push.
+  no_PR_aberto:
+    - >-
+      O job `migrations-do-pr` roda pela primeira vez de verdade aqui. Secret
+      `SUPABASE_MANAGEMENT_PAT` confirmado presente no repositório (gravado em 2026-08-23).
+    - >-
+      DESFECHO ESPERADO: `✅ Nenhuma migration deste PR está pendente`, listando
+      `245_registro_de_migrations.sql — aplicada` (ela está aplicada no teste, `via=apply`).
+      Qualquer `⛔` é sinal real, não ruído de estreia. **Ausência de comentário significa uma
+      coisa só: o job não rodou.**
+  depois_do_merge_produção:
+    - >-
+      Aplicar a `245` em PRODUÇÃO pelo runbook `docs/runbooks/aplicar-245-registro-migrations.md`
+      — Passo 0 (pré-condições) → 1 (DDL) → 2 (backfill) → 3 (conferência). Use a versão do
+      arquivo que está NESTE commit: é a que traz o `COMMENT` com os quatro valores de `via`.
+    - >-
+      O backfill é GERADO na hora (`npx tsx scripts/gerar-backfill-ledger.ts`), nunca um `.sql`
+      congelado. Confira a contagem antes de colar (`grep -c \"^  ('\"` == `ls supabase/migrations/*.sql | wc -l`).
+    - >-
+      Depois: `TRIFOLD_ENV=producao pnpm db:status` (leitura, não exige TRIFOLD_ALLOW_PROD) e
+      commitar o espelho regenerado — é o que substitui o marcador `AINDA NÃO MEDIDO` da chave
+      `producao` de `docs/audits/migrations-aplicadas.json`.
+    - "Só então o item de DoD 'migration aplicada em produção' fecha. Ele segue ABERTO hoje."
+  nao_carregar:
+    - "Nenhuma correção pendente de código. Nenhum item bloqueante."
 
 recommendations:
-  immediate:
-    - "CONCERNS-1: fechar a quarta classe (ÓRFÃ vindo de deleção no PR) — ~8 linhas + 1 teste."
-    - "CONCERNS-2: corrigir o COMMENT do `via` ANTES de o @devops aplicar a 245 em produção."
-  before_push:
-    - "CONCERNS-4: @devops roda a régua literal `git diff --numstat origin/main...HEAD -- .github/workflows/ci.yml | awk '$2 != 0 { exit 1 }'` DEPOIS do commit e cola a saída no PR."
-    - "CONCERNS-3: mover os dois `motivo` para `env:` no passo `Monta o aviso`."
   future:
-    - "OBS-5: falha ao registrar o ledger deve pesar no exit code do reset."
-    - "OBS-6: backlog — `_aviso` no gate-tenancy-report.json ou alerta quando o gate roda fora de produção."
-    - "Considerar um teste de exit code para db-status/db-apply (hoje só há prova manual)."
+    - "OBS-5 (1 linha, não bloqueia): qualificar a última linha 'Banco de teste reconstruído.' quando `falhasDeRegistro.length > 0`, para a tela não terminar tranquilizando."
+    - "OBS-7 (fora desta story, já em `docs/backlog.md` [EPIC-900]): `docs/architecture/saas-multi-tenant.md:1134` ainda cita o `sync-schema.sh` deletado."
+    - "Considerar teste de exit code para db-status/db-apply — o contrato C6 segue com prova só por execução manual (a do @dev e as minhas duas rodadas)."
 
 waiver:
   active: false
