@@ -57,6 +57,7 @@
 import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { REFS_PERMITIDOS_PRODUCAO } from "./lib/db-env"
+import { ehRefDeProducao, ehRefDeTeste } from "../packages/shared/src/constants/supabase-refs"
 
 export type EstadoDoLink = "nao-linkado" | "teste" | "producao" | "desconhecido"
 
@@ -118,7 +119,7 @@ export function classificar(
     }
   }
 
-  if (REFS_PERMITIDOS_PRODUCAO.has(refLinkado)) {
+  if (ehRefDeProducao(refLinkado)) {
     return {
       codigo: 1,
       estado: "producao",
@@ -132,7 +133,7 @@ export function classificar(
     }
   }
 
-  if (refDesejado !== null && refLinkado === refDesejado) {
+  if (refDesejado !== null && refLinkado === refDesejado && ehRefDeTeste(refLinkado)) {
     return {
       codigo: 0,
       estado: "teste",
@@ -141,14 +142,24 @@ export function classificar(
     }
   }
 
+  // PR #524 — `desconhecido` passa a REPROVAR. Antes saía `0` para todo ref fora de
+  // `REFS_PERMITIDOS_PRODUCAO`, inclusive um projeto de produção recém-criado ainda não
+  // cadastrado: a CLI mandaria comandos remotos para ele e o check diria que estava tudo
+  // bem. Exit `0` fica reservado para o ref de teste declarado e para o estado não-linkado
+  // (que falha fechado sozinho). Allowlist que só conhece um lado libera o outro.
   return {
-    codigo: 0,
+    codigo: 1,
     estado: "desconhecido",
     refLinkado,
     mensagem:
-      `[supabase:check] ✓ linkado em ${refLinkado} — não é produção (não está em\n` +
-      "  REFS_PERMITIDOS_PRODUCAO), então não reprovo. Mas também não é o ref declarado em\n" +
-      `  supabase/config.toml${refDesejado ? ` (${refDesejado})` : ""}. Confira se é o que você quer.`,
+      `[supabase:check] ⛔ linkado em ${refLinkado}, que NÃO é o ref declarado em\n` +
+      `  supabase/config.toml${refDesejado ? ` (${refDesejado})` : " (sem project_id)"} e ` +
+      `não está em nenhuma allowlist conhecida.\n` +
+      "  Não posso afirmar que é seguro: um projeto de PRODUÇÃO recém-criado, ainda não\n" +
+      "  cadastrado, cai exatamente aqui — e receberia todo subcomando remoto sem flag.\n" +
+      `  Se for mesmo o alvo desejado, cadastre o ref em\n` +
+      "  packages/shared/src/constants/supabase-refs.ts. Senão, corrija com:\n" +
+      `  ${sugestao}`,
   }
 }
 

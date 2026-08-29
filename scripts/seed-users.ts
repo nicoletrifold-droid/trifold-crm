@@ -5,7 +5,7 @@ import { resolverAmbiente } from "./lib/db-env"
 // default TESTE. Escrever em produção exige TRIFOLD_ENV=producao E TRIFOLD_ALLOW_PROD=1.
 const ALVO = resolverAmbiente({ escreve: true })
 const supabaseUrl = ALVO.url
-const serviceRoleKey = ALVO.serviceRoleKey!
+const serviceRoleKey = ALVO.serviceRoleKey
 
 const supabase = createClient(supabaseUrl, serviceRoleKey, {
   auth: { autoRefreshToken: false, persistSession: false },

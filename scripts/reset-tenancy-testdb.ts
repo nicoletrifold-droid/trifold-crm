@@ -59,7 +59,8 @@
 
 import { readFileSync, readdirSync, writeFileSync, mkdirSync } from "node:fs"
 import { join } from "node:path"
-import { REFS_PERMITIDOS_PRODUCAO } from "./lib/db-env"
+import { REFS_PERMITIDOS_PRODUCAO, extrairRef } from "./lib/db-env"
+import { ehRefDeProducao } from "../packages/shared/src/constants/supabase-refs"
 
 /**
  * Story 900-3b · AC3/AC5 — allowlist no lugar da denylist.
@@ -69,8 +70,21 @@ import { REFS_PERMITIDOS_PRODUCAO } from "./lib/db-env"
  * e passaria. `REFS_PERMITIDOS_PRODUCAO` (de `scripts/lib/db-env.ts`) é a MESMA definição
  * de "o que é produção" usada por todos os outros scripts: uma implementação só.
  */
+/**
+ * ⚠️ Furo corrigido no PR #524, e ele merece ficar escrito: esta função era
+ * `REFS_PERMITIDOS_PRODUCAO.has(ref)` — lookup de `Set`, **case-sensitive** — enquanto o
+ * ref era extraído por um regex **case-insensitive**. Com
+ * `https://DSOPQKQJKMHYTUDAAOLV.supabase.co`, o `has()` devolvia `false`, a guarda **não
+ * disparava**, e o script seguia para `drop schema if exists public cascade` contra
+ * PRODUÇÃO. Ou seja: a diferença de caixa reintroduziu o "falha aberta" que o comentário
+ * logo acima diz ter sido eliminado — no mesmo arquivo que o descreve.
+ *
+ * O conserto está no **ponto único de extração** (`extrairRef`, que normaliza para
+ * minúsculas), e `ehRefDeProducao` normaliza de novo por garantia. Normalizar em cada
+ * comparador, e não na extração, faria o próximo comparador nascer com o mesmo furo.
+ */
 function ehProducao(ref: string): boolean {
-  return REFS_PERMITIDOS_PRODUCAO.has(ref)
+  return ehRefDeProducao(ref)
 }
 
 /**
@@ -221,13 +235,15 @@ function exigirEnv(nome: string): string {
 /** Deriva o project ref da URL e recusa qualquer ref de produção. */
 function resolverAlvo(): string {
   const url = exigirEnv("TENANCY_TEST_SUPABASE_URL")
-  const m = url.match(/^https:\/\/([a-z0-9]+)\.supabase\.co\/?$/i)
-  if (!m) throw new Error(`TENANCY_TEST_SUPABASE_URL malformada: ${url}`)
-  const ref = m[1]
+  // `extrairRef` é o ponto ÚNICO de extração e já normaliza para minúsculas — ver o furo
+  // de caixa alta documentado em `ehProducao` (PR #524).
+  const ref = extrairRef(url)
+  if (!ref) throw new Error(`TENANCY_TEST_SUPABASE_URL malformada: ${url}`)
   if (ehProducao(ref)) {
     throw new Error(
-      `ABORTADO: ${ref} está em REFS_PERMITIDOS_PRODUCAO (scripts/lib/db-env.ts), ou seja, ` +
-        `é PRODUÇÃO. Este script nunca a toca.`,
+      `ABORTADO: ${ref} está em REFS_PERMITIDOS_PRODUCAO ` +
+        `(packages/shared/src/constants/supabase-refs.ts), ou seja, é PRODUÇÃO. ` +
+        `Este script nunca a toca.`,
     )
   }
   return ref
@@ -485,6 +501,12 @@ async function main(): Promise<number> {
       if (erros.length === 0) {
         okSplit.push(nome)
         r = { ok: true, msg: "" }
+        // AC6 — este ramo estava CEGO (achado do PR #524). Uma migration listada em
+        // FALHAS_CONHECIDAS que falha como arquivo inteiro mas passa no fallback
+        // statement-a-statement caía aqui e ninguém consultava a lista: a entrada ficava
+        // registrada para sempre, sem sinal — que é exatamente a condição que a
+        // "verificação nos dois sentidos" existe para detectar.
+        if (FALHAS_CONHECIDAS.has(nome)) conhecidasQueNaoFalharam.push(nome)
       } else if (FALHAS_CONHECIDAS.has(nome)) {
         conhecidas.push(nome)
         const f = FALHAS_CONHECIDAS.get(nome)!

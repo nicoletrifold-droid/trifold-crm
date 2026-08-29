@@ -18,7 +18,7 @@ import { resolverAmbiente } from "./lib/db-env"
 const ALVO = resolverAmbiente({ escreve: true })
 
 
-const supabase = createClient(ALVO.url, ALVO.serviceRoleKey!, {
+const supabase = createClient(ALVO.url, ALVO.serviceRoleKey, {
   auth: { autoRefreshToken: false, persistSession: false },
 })
 

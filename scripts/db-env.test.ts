@@ -147,6 +147,7 @@ describe("controle POSITIVO — o caminho liberado existe (C2, sem script destru
     vi.stubEnv("TRIFOLD_ENV", "producao")
     vi.stubEnv("TRIFOLD_ALLOW_PROD", "1")
     vi.stubEnv("SUPABASE_URL", urlDe(REF_PROD_REAL))
+    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "chave-de-mentira")
 
     const r = resolverAmbiente({ escreve: true })
     expect(r.ref).toBe(REF_PROD_REAL)
@@ -202,10 +203,64 @@ describe("o teste não depende de .env.teste/.env.producao no disco (S9)", () =>
     vi.stubEnv("SUPABASE_URL", urlDe(REF_TESTE))
     expect(resolverAmbiente().ref).toBe(REF_TESTE)
 
-    // Se o valor viesse do arquivo, trocar o stub não mudaria nada.
+    // Se o valor viesse do arquivo, trocar o stub não mudaria NADA. Troco para o ref de
+    // produção sob TRIFOLD_ENV=teste: o desfecho muda de "ok" para recusa, e a mudança de
+    // desfecho é a prova de que o stub é o que está sendo lido.
     limparCacheDeArquivo()
-    vi.stubEnv("SUPABASE_URL", "https://outroreffictic.supabase.co")
-    expect(resolverAmbiente().ref).toBe("outroreffictic")
+    vi.stubEnv("SUPABASE_URL", urlDe(REF_PROD_REAL))
+    expect(() => resolverAmbiente()).toThrow(/ref de PRODUÇÃO/)
+  })
+})
+
+describe("caixa do ref não pode abrir a guarda (furo do PR #524)", () => {
+  it("URL de produção em MAIÚSCULAS é reconhecida como produção", () => {
+    vi.stubEnv("TRIFOLD_ENV", "teste")
+    vi.stubEnv("SUPABASE_URL", `https://${REF_PROD_REAL.toUpperCase()}.supabase.co`)
+
+    // Sem a normalização no ponto de extração, o Set.has() (case-sensitive) devolvia
+    // false, a guarda não disparava, e o reset seguia para o DROP SCHEMA em produção.
+    expect(() => resolverAmbiente({ escreve: true })).toThrow(/ref de PRODUÇÃO/)
+  })
+
+  it("o ref é normalizado para minúsculas na extração", () => {
+    vi.stubEnv("SUPABASE_URL", `https://${REF_TESTE.toUpperCase()}.supabase.co`)
+    expect(resolverAmbiente().ref).toBe(REF_TESTE)
+  })
+
+  it("caixa mista também não escapa", () => {
+    vi.stubEnv("TRIFOLD_ENV", "teste")
+    vi.stubEnv("SUPABASE_URL", "https://DsOpQkQjKmHyTuDaAoLv.supabase.co")
+    expect(() => resolverAmbiente({ escreve: true })).toThrow(/ref de PRODUÇÃO/)
+  })
+})
+
+describe("ref DESCONHECIDO falha fechado (Guarda 4, PR #524)", () => {
+  it("TRIFOLD_ENV=teste + ref fora das DUAS allowlists ⇒ recusa, mesmo escrevendo", () => {
+    vi.stubEnv("TRIFOLD_ENV", "teste")
+    vi.stubEnv("SUPABASE_URL", "https://refnovodeproducao0.supabase.co")
+    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "chave-de-mentira")
+
+    // É o caso "projeto de produção criado amanhã": não está em REFS_PERMITIDOS_PRODUCAO,
+    // e antes disso era tratado como teste e liberava escrita destrutiva sem flag nenhuma.
+    expect(() => resolverAmbiente({ escreve: true })).toThrow(/não está em REFS_PERMITIDOS_TESTE/)
+  })
+
+  it("também recusa em leitura — o alvo errado é errado nos dois modos", () => {
+    vi.stubEnv("TRIFOLD_ENV", "teste")
+    vi.stubEnv("SUPABASE_URL", "https://refnovodeproducao0.supabase.co")
+    expect(() => resolverAmbiente({ escreve: false })).toThrow(/nenhuma allowlist|REFS_PERMITIDOS_TESTE/)
+  })
+})
+
+describe("escrever exige SUPABASE_SERVICE_ROLE_KEY (PR #524)", () => {
+  it("escreve: true sem a chave ⇒ recusa nomeando a variável", () => {
+    vi.stubEnv("SUPABASE_URL", urlDe(REF_TESTE))
+    expect(() => resolverAmbiente({ escreve: true })).toThrow(/SUPABASE_SERVICE_ROLE_KEY/)
+  })
+
+  it("escreve: false sem a chave ⇒ passa (leitura não precisa)", () => {
+    vi.stubEnv("SUPABASE_URL", urlDe(REF_TESTE))
+    expect(resolverAmbiente({ escreve: false }).serviceRoleKey).toBeUndefined()
   })
 })
 

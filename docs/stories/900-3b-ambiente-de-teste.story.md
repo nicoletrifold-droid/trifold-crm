@@ -741,7 +741,7 @@ validada por execução real.
 ## Definition of Done
 
 - [x] AC1-AC7 cumpridos, com evidência de comando colada no Dev Agent Record — **nunca a saída de subcomando remoto do `supabase`** (E3; a evidência da AC4b é a saída de `pnpm supabase:check`, que só imprime o ref)
-- [x] `pnpm test` verde, incluindo as **4** suítes novas — **271 arquivos, 3456 passed | 6 expected fail (total 3462)**. Baseline pré-story **medida** (as 4 suítes movidas para fora da árvore e a suíte rodada): **267 arquivos, 3403 passed | 6 expected fail (total 3409)**. Aritmética fechada: **3409 + 53 = 3462**, com 53 = 4 (`gitignore-env`) + 22 (`env-banner`) + 16 (`db-env`) + 11 (`supabase-check`), e `expected fail` intacto em 6.
+- [x] `pnpm test` verde, incluindo as **4** suítes novas — **272 arquivos, 3474 passed | 6 expected fail (total 3480)**. Baseline pré-story **medida** (as 4 suítes movidas para fora da árvore e a suíte rodada): **267 arquivos, 3403 passed | 6 expected fail (total 3409)**. Aritmética fechada: **3409 + 71 = 3480**, com 71 = 4 (`gitignore-env`) + 22 (`env-banner`) + 23 (`db-env`) + 13 (`supabase-check`) + 9 (`supabase-refs`), e `expected fail` intacto em 6. (As três primeiras cresceram na rodada do PR #524, com os casos das guardas novas.)
 - [x] `pnpm dev` aponta para teste por padrão; `pnpm dev:prod` funciona com banner vermelho;
   `pnpm build` não vaza nenhum ref; `pnpm build:teste` vaza o ref de teste (esperado)
 - [~] `pnpm reset:testdb --confirmar` + `pnpm gate:tenancy:snapshot`: **o reset É idempotente**, provado por hash NORMALIZADO (`3676fefa…` nas duas execuções). A régua literal da S11 (SHA-256 do arquivo cru) é **insatisfazível** — `capturedAt` + ordem instável do array `functions`. Ver Dev Agent Record.
@@ -778,6 +778,7 @@ validada por execução real.
 | 2026-08-29 | 1.3 | **Task 2.7 executada e AC2 fechada.** O dono do produto autorizou explicitamente a edição do `.claude/CLAUDE.md` (autorização retransmitida pelo coordenador; procedência registrada no Dev Agent Record). O bloco `### Environments` foi reescrito de modo que as **três** linhas fiquem verdadeiras ao mesmo tempo — exigência do `@po` na Rodada 1 (S1), e não um detalhe: a linha 386 (`packages/web/.env.development` → `xnxvygyfyyyzwhiuoehz`) **já era falsa antes desta story**, porque o arquivo não existia; é esta fatia que a torna verdadeira. Consertar só a 385 deixaria o documento misturando uma verdade nova com duas mentiras velhas. Cada afirmação do bloco foi conferida contra o disco (4 arquivos de env, ausência de `.env.local`, scripts de `package.json`, linhas 47-48 de `db-env.ts`). Acrescentado ao bloco o aviso da CLI do `supabase` (achado da AC4), para o `CLAUDE.md` não prometer um default que a CLI não honra. **Régua da AC2 executada e comprovadamente discriminante:** `grep -c 'Produção:.*\.env\.local' .claude/CLAUDE.md` → **0**; reintroduzindo a linha antiga → **1**; revertido → **0**. **AC4 permanece intocada e desmarcada**, por decisão do dono do produto de deixá-la com o `@po`. | @dev (Dex) |
 | 2026-08-29 | 1.4 | **AC4 fechada (AC4a/AC4b/AC4c), Tasks 4.2-4.4.** Implementado `pnpm supabase:check` (`scripts/supabase-check.ts` + 11 casos em `scripts/supabase-check.test.ts`), que lê `supabase/.temp/project-ref` e classifica pela **mesma** `REFS_PERMITIDOS_PRODUCAO` de `scripts/lib/db-env.ts` — importada, nunca reimplementada. Três desfechos rodados de verdade pela CLI contra **raízes de mentira** em `os.tmpdir()`, sem tocar o arquivo real da máquina (SHA-256 idêntico antes e depois). O ref sugerido no conserto vem do `project_id` do `config.toml`, para não criar um terceiro lugar nomeando o ref de teste. Régua estática da AC4a verde e **não vazia** (9 `package.json` + 1 workflow; os 3 restantes que o `@po` contou estão sob `.aios-core/`, excluído de propósito pela própria AC — os números fecham) e **discriminante**: mutação `supabase db push` em `packages/db/package.json` acende. Reuso da allowlist provado por mutação — acrescentar um ref em `db-env.ts` muda o veredito do `supabase-check` (1 failed); esvaziá-la derruba 5 casos. **Regra E3 aplicada retroativamente**: removi do `config.toml` e do Dev Agent Record a linha `export PGHOST=…` que eu havia colado da saída de `db dump --dry-run` — mesmo sem senha, é saída de subcomando remoto, e mantê-la ensinaria que truncar é aceitável. Os números corrigidos pelo `@sm` (22 prefixos duplicados; 4 de 11 `_remote_only` com `CONCURRENTLY`) conferem com os meus. | @dev (Dex) |
 | 2026-08-29 | 1.5 | **Rodada de correção do gate `@qa` (CONCERNS).** O achado que muda a premissa: `supabase/.temp/` **estava RASTREADO** em `origin/main` com o ref de **produção** — verificado por mim (`git ls-files`, `git show origin/main:…`), introduzido em `0b6e1baf`. Logo o `supabase:check` não nascia vermelho por estado desta máquina, e sim **para todo clone**, por conteúdo do repositório; minha frase "o conserto é do dono da máquina" estava errada. Ninguém pegou em 3 rodadas porque a regra `supabase/.temp/` do `.gitignore` é **inerte para caminho já no índice** — o mesmo defeito que a AC1 conserta para o `.env.example` — e `git check-ignore` **sem** `--no-index` **mente** para arquivo rastreado (medido: `1` sem a flag, `0` com ela). Aplicado `git rm --cached -r supabase/.temp/` (4 arquivos fora do índice, **nenhum apagado do disco**; `project-ref` com SHA-256 idêntico antes e depois; `git check-ignore` passa a sair `0`). Pior caso auditado antes de agir: `pooler-url` **sem componente de senha** (DSN parseado, grupo de senha vazio) — nenhum segredo vazou. **DOC-001**: as 3 afirmações de "gitignored, por máquina" (`config.toml`, `supabase-check.ts`, `CLAUDE.md`) reescritas para dizer que os arquivos ESTAVAM rastreados, que esta story os removeu do índice e que o link é por máquina daí em diante; régua S1 reconferida (**0**) e cada afirmação do bloco revalidada contra o disco. **SEC-001**: a linha crua de host substituída por descrição nos **4** arquivos rastreados (backlog, parecer do `@po`, gate do `@qa` e esta story) — `git grep 'PGHOST="db\.'` → nenhuma. **DOC-002**: `scripts/README.md` não instrui mais `node --env-file`. **TEST-001**: baseline **medida** removendo as 4 suítes da árvore — **3403 passed | 6 expected fail (3409)**; **3409 + 53 = 3462**, fecha exato. O erro era de rótulo: minha "baseline" já continha os 4 casos do `gitignore-env`, criado antes daquela primeira execução. **MNT-001** registrado em `docs/backlog.md`. **MNT-002**: validação final com `--force` (`Cached: 0 cached, 8 total`). `pnpm lint --force` 0 errors · `type-check --force` 8/8 · `pnpm test` 3456 passed \| 6 expected fail. | @dev (Dex) |
+| 2026-08-29 | 1.6 | **Rodada CodeRabbit (PR #524) — 4 Major + 2 Minor.** O mais grave: a guarda de produção do `reset-tenancy-testdb.ts` falhava **ABERTA por caixa alta** — regex de extração case-insensitive contra `Set.has()` case-sensitive; com a URL em maiúsculas o script seguia para `drop schema … cascade` **contra produção**. Reproduzido antes de consertar e verificado depois ponta a ponta (`exit=1`). Conserto no **ponto único de extração**. Criada a fonte única `packages/shared/src/constants/supabase-refs.ts`, da qual `scripts/lib/db-env.ts` **e** `packages/web/src/lib/env-banner.ts` derivam — o banner tinha `REF_PRODUCAO` próprio, uma segunda definição de produção (o defeito que a AC3 matou, reintroduzido pela porta dos fundos); `web` não pode importar de `scripts/`, por isso a fonte única foi para `@trifold/shared`. **Fail-closed nos dois lados**: `REFS_PERMITIDOS_TESTE` acrescentada, ref fora das duas listas é recusado (antes, um projeto de produção novo caía como teste e liberava escrita destrutiva sem `TRIFOLD_ALLOW_PROD=1`). `supabase:check` passa a sair **1** em `desconhecido`. `resolverAmbiente({escreve:true})` exige `SUPABASE_SERVICE_ROLE_KEY` e devolve `AmbienteParaEscrita` (12 asserções `!` removidas). `FALHAS_CONHECIDAS` passa a ser consultada **também** no ramo do fallback statement-a-statement, que era cego — a condição exata que a AC6 existe para detectar. 4 mutações executadas com prova de aplicação **por conteúdo em disco** (o `git diff` mentiu para arquivo novo não rastreado — mesma armadilha que o `@qa` reportou). Descartados com razão: os 2 achados em `900-3c` (o `--numstat` lendo o 3º campo, e o isolamento do banco no job de CI) são ACs de outra story — encaminhados ao `@sm`. `pnpm lint --force` 0 errors · `type-check --force` 8/8 (`Cached: 0`) · `pnpm test` **272 arquivos, 3474 passed \| 6 expected fail**. | @dev (Dex) |
 | 2026-08-29 | 1.4 | **Arbitragem da AC4 (Rodada 3, `docs/qa/po-validation-900-3b.md`) aplicada — E1, E2, E3.** O dono do produto delegou ao `@po` a decisão sobre o destino da AC4 (bloqueada pelo `@dev`, achado real). Nenhuma das três opções levantadas serviu: apagar `.temp/project-ref` faz o comando **errar**, não redirecionar (testado); reescrever para exigir só documentação mede o documento, não o comportamento; mover para a `900-3c` move uma AC falsa para uma story bloqueada. **AC4 reescrita em três partes, no mesmo padrão que a AC2 já usou** para o mesmo tipo de problema (estado de máquina que o repo não governa → tornar audível, não afirmar nem apagar): **AC4a** (estático — `config.toml` com os números corrigidos + zero invocação remota em `package.json`/workflows, restrita a essa população); **AC4b** (`pnpm supabase:check`, reusando a allowlist de `db-env.ts`, nos três desfechos — teste/produção/ausente); **AC4c** (a afirmação falsa sai da AC, do Testing, da DoD — a parte do plano/épico é do `@po`, já encaminhada junto do item `[EPIC-900]`). **E3 — risco novo, o mais grave da rodada:** `supabase db dump --dry-run` (o comando que a AC anterior mandava rodar) imprime a senha de produção em texto claro no stdout, e o padrão de evidência desta story é colar em arquivo rastreado — contenção verificada e limpa pelo `@po` (nenhum vazamento ocorreu; o `@dev` truncou por disciplina própria), mas a regra agora é explícita: proibido colar saída de subcomando remoto do `supabase` em qualquer arquivo rastreado. Risco R6 acrescentado (severidade Alta). Números corrigidos onde citados: **22** prefixos duplicados (não 21); **4** dos 11 `_remote_only.sql` usam `CREATE INDEX CONCURRENTLY` (não os 11) — as outras duas razões contra `db push` (prefixos duplicados na chave `version`; ledger congelado) seguem de pé, a conclusão não muda. Tasks 4.2/4.3/4.4 acrescentadas; Task 4 volta a `[ ]` para o `@dev` retomar. | @sm (River) |
 
 ---
@@ -1171,6 +1172,123 @@ não casa **falha alto** em vez de gravar silenciosamente sem efeito.
 
 ---
 
+#### Rodada CodeRabbit / PR #524 — 4 Major + 2 Minor corrigidos
+
+**1. `reset-tenancy-testdb.ts` — a guarda de produção falhava ABERTA por caixa alta (Major).**
+Reproduzi antes de consertar, com o código antigo literal:
+
+```
+url  https://DSOPQKQJKMHYTUDAAOLV.supabase.co
+ANTES   ref extraído: DSOPQKQJKMHYTUDAAOLV  ·  ehProducao -> false   ← não dispara
+DEPOIS  ref extraído: dsopqkqjkmhytudaaolv  ·  ehProducao -> true    ← dispara
+```
+
+`resolverAlvo()` extraía com regex **case-insensitive** (`/…/i`) e `ehProducao()` fazia
+`Set.has()`, **case-sensitive**, contra uma allowlist só em minúsculas. Com `false`, o script
+seguia para `drop schema if exists public cascade` **contra produção**. O agravante é onde
+isso morava: três linhas abaixo do comentário que diz que a allowlist substituiu a denylist
+*porque a denylist falhava aberta*. A diferença de caixa reintroduziu o mesmo modo de falha
+no arquivo que o descreve — e passou por mim, pelo `@po` e por duas rodadas do `@qa`, porque
+todos testamos com refs em minúsculas.
+
+**Conserto no ponto único de extração**, não em cada comparação: a normalização vive em
+`extrairRefDeUrlSupabase()`, e `resolverAlvo()` passou a usá-la em vez do regex próprio.
+Normalizar em cada comparador faria o próximo comparador nascer com o mesmo furo.
+
+Verificação de ponta a ponta, com o comando real:
+
+```
+$ TENANCY_TEST_SUPABASE_URL="https://DSOPQKQJKMHYTUDAAOLV.supabase.co" pnpm reset:testdb --confirmar
+ABORTADO: dsopqkqjkmhytudaaolv está em REFS_PERMITIDOS_PRODUCAO … é PRODUÇÃO.
+exit=1
+```
+
+**2. `db-env.ts` — ref de produção não cadastrado liberava escrita destrutiva (Major).**
+A allowlist protegia o que conhecia e **liberava o desconhecido**: um projeto de produção
+criado amanhã não casaria com `REFS_PERMITIDOS_PRODUCAO`, cairia no ramo `teste` e liberaria
+`escreve: true` **sem** `TRIFOLD_ALLOW_PROD=1`. **Decisão: falhar fechado nos dois lados.**
+Agora existe `REFS_PERMITIDOS_TESTE`, e um ref que não está em nenhuma das duas listas é
+**recusado** — em leitura e em escrita. A razão está escrita no módulo: *allowlist que só
+conhece um lado libera o outro*. Cadastrar um ref é uma linha de diff que alguém revisa; é o
+custo, e é o ponto.
+
+**3. `reset-tenancy-testdb.ts` — `FALHAS_CONHECIDAS` cega no ramo do fallback (Minor).**
+`conhecidasQueNaoFalharam` só era populado quando o arquivo aplicava de primeira. Uma
+migration listada que falha como arquivo inteiro mas **passa no fallback
+statement-a-statement** caía em `okSplit` sem ninguém consultar a lista — a condição exata
+que a AC6 existe para detectar. Prova dirigida dos dois ramos:
+
+```
+SEM a correção: { okSplit: [025…], conhecidasQueNaoFalharam: [],      exit: 0 }
+COM a correção: { okSplit: [025…], conhecidasQueNaoFalharam: [025…],  exit: 1 }
+```
+
+Na execução real desta base, os 6 arquivos que caem no fallback (`011`, `030`, `031`-`034`)
+**não** estão em `FALHAS_CONHECIDAS`, então o veredito medido na Task 6.4 não muda — a
+correção fecha a cegueira para o futuro, não reescreve o passado.
+
+**4. `env-banner.ts` — segunda definição de "o que é produção" (Major).** O banner tinha
+`REF_PRODUCAO` próprio; os scripts, `REFS_PERMITIDOS_PRODUCAO`. Iguais hoje, livres para
+divergir amanhã — o defeito que a AC3 existiu para matar, reintroduzido pela porta dos
+fundos. `packages/web` **não pode** importar de `scripts/`, então a fonte única foi para
+**`packages/shared/src/constants/supabase-refs.ts`** (`@trifold/shared`), de onde `db-env.ts`
+e `env-banner.ts` derivam. `REF_PRODUCAO`/`REF_TESTE` continuam exportados, mas agora são
+**derivados**, não declarados.
+
+**5. `supabase-check.ts` — `desconhecido` saía 0 (Major).** Todo ref fora de
+`REFS_PERMITIDOS_PRODUCAO` passava, inclusive um projeto de produção recém-criado, para o
+qual a CLI mandaria todo subcomando remoto. Agora `desconhecido` **sai 1**; exit 0 fica
+reservado ao ref de teste declarado e ao estado não-linkado (que falha fechado sozinho). O
+teste que exigia `prodfalsoaaaaaaaaaaa` passar foi reescrito: continua provando que a
+classificação **não** é heurística local (`estado === "desconhecido"`, nunca `"producao"`),
+mas agora exige `codigo === 1`.
+
+**6. `serviceRoleKey` — asserção non-null escondia ausência (Minor, 7 arquivos + 5 outros).**
+`resolverAmbiente({ escreve: true })` agora **exige** `SUPABASE_SERVICE_ROLE_KEY` e devolve
+`AmbienteParaEscrita`, com a chave obrigatória por tipo (sobrecarga de assinatura). As **12**
+asserções `!` em `scripts/*.ts` foram removidas — o erro passa a nomear a variável ausente em
+vez de estourar dentro do cliente Supabase, longe da causa.
+
+**Mutações — todas executadas, com prova de aplicação no disco:**
+
+| Mutação | Vermelho |
+|---|---|
+| remover `.toLowerCase()` da extração | 3 failed / 42 passed |
+| remover `.toLowerCase()` de **todos** os pontos (o bug original) | **8 failed** / 37 passed |
+| `Guarda 4` desativada (`else if (false)`) | 2 failed / 21 passed |
+| escrita sem exigir service role (`if (false && …)`) | 1 failed / 22 passed |
+| todas revertidas | **45 passed** |
+
+> **Nota de método, aprendida na hora:** na primeira mutação usei `git diff` como prova de
+> aplicação — e ele veio **vazio**, porque `supabase-refs.ts` é arquivo **novo, não
+> rastreado**. A mutação *tinha* sido aplicada (os 3 vermelhos provam), mas minha prova era
+> inválida. É a mesma armadilha que o `@qa` reportou. Passei a provar por **conteúdo em
+> disco** (`grep -c 'toLowerCase'`: 3 → 0 → 3), que vale para rastreado e não rastreado.
+
+**Cobertura nova:** `packages/shared/src/constants/supabase-refs.test.ts` (9 casos) guarda a
+normalização de caixa no ponto único; `db-env.test.ts` ganhou caixa alta/mista, ref
+desconhecido e service role ausente; `supabase-check.test.ts` ganhou `desconhecido` reprovando
+e produção em maiúsculas.
+
+**Descartado, com razão — não é do meu escopo:** os dois achados em
+`docs/stories/900-3c-…story.md` (o `--numstat` lendo o terceiro campo, Minor; e o isolamento
+do banco no job de CI por PR, Major) são **da story `900-3c`**, cujas ACs eu não tenho
+autoridade para editar (`@sm`). O do `--numstat` é objetivamente certo — `git diff --numstat`
+é `adições \t deleções \t caminho`, e a régua lê o terceiro campo como deleções; o conserto é
+`awk '$2 != 0 { exit 1 }'`. **Encaminhados ao `@sm`**, não silenciados.
+
+**Correção de handoff (registro do `@devops`):** não é verdade que a story tem "zero mudança
+em `packages/web/src`" — são **3** arquivos (`instrumentation.ts` modificado, `lib/env-banner.ts`
+e `lib/env-banner.test.ts` novos), e agora **4**, com `env-banner.ts` passando a importar de
+`@trifold/shared`. Nenhum código de aplicação muda. O "zero migration" confere.
+
+**Sobre `reference_ci_surface_trifold.md` viajar no PR:** **deve** estar aqui — é a **AC7**
+desta story ("manchete corrigida, corpo preservado"), com régua própria
+(`grep -c "passed + expected fail\|packages/ai/tsconfig"` ≥ 1). Não é memória de agente
+carona: é entregável de AC. Mantido de propósito.
+
+---
+
 #### AC5 — reset endurecido
 
 `pnpm reset:testdb` **sem flag** (default dry-run):
@@ -1345,15 +1463,16 @@ vez de apagadas.
 |---|---|
 | `pnpm lint` | **0 errors**, 36 warnings — idêntico ao baseline pré-story (nenhum warning nos arquivos novos) |
 | `pnpm type-check` | 8 tasks successful |
-| `pnpm test` | **271 arquivos · 3456 passed \| 6 expected fail** (total 3462) |
+| `pnpm test` | **272 arquivos · 3474 passed \| 6 expected fail** (total 3480) |
 | `pnpm lint --force` / `type-check --force` | 0 errors · 8/8 · **`Cached: 0 cached, 8 total`** (MNT-002: sem `--force`, o turbo servia cache de outra árvore) |
 
 **Baseline pré-story, MEDIDA e não deduzida** (correção do achado `TEST-001` do gate): movi as
 4 suítes novas para fora da árvore e rodei `pnpm test` — **267 arquivos · 3403 passed | 6
-expected fail (total 3409)**. Com elas de volta: **271 · 3456 | 6 (total 3462)**.
+expected fail (total 3409)**. Com elas de volta, e com a 5ª suíte do PR #524:
+**272 · 3474 | 6 (total 3480)**.
 
-**3409 + 53 = 3462**, exato, com 53 = 4 (`gitignore-env`) + 22 (`env-banner`) + 16 (`db-env`)
-+ 11 (`supabase-check`) — contados suíte a suíte pelo reporter JSON do vitest. `expected fail`
+**3409 + 71 = 3480**, exato, com 71 = 4 (`gitignore-env`) + 22 (`env-banner`) + 23 (`db-env`)
++ 13 (`supabase-check`) + 9 (`supabase-refs`, nova no PR #524) — contados suíte a suíte. `expected fail`
 intacto em **6**, que é a constante a comparar segundo
 `.claude/agent-memory/aios-devops/reference_ci_surface_trifold.md`.
 
@@ -1455,7 +1574,9 @@ foi tocado.
 - `scripts/db-env.test.ts` — 16 casos
 - `scripts/gitignore-env.test.ts` — 4 casos
 - `scripts/supabase-check.ts` — `pnpm supabase:check` (AC4b), reusa a allowlist de `db-env.ts`
-- `scripts/supabase-check.test.ts` — 11 casos (3 desfechos + prova de reuso da allowlist)
+- `scripts/supabase-check.test.ts` — 13 casos (3 desfechos + reuso da allowlist + caixa alta)
+- `packages/shared/src/constants/supabase-refs.ts` — **fonte única** dos refs (PR #524)
+- `packages/shared/src/constants/supabase-refs.test.ts` — 9 casos (normalização de caixa)
 - `packages/web/src/lib/env-banner.ts` — `avaliarRefDoAmbiente` (3 estados) + `textoDoBanner`
 - `packages/web/src/lib/env-banner.test.ts` — 22 casos
 - `packages/web/scripts/next-com-env.mjs` — carregador de dotenv em processo (contorna o
@@ -1469,6 +1590,8 @@ foi tocado.
 - `package.json` (raiz) — `reset:testdb`, `supabase:check`
 - `packages/web/package.json` — `dev:prod`, `build:teste`
 - `packages/web/src/instrumentation.ts` — banner via `process.stderr.write`
+- `packages/web/src/lib/env-banner.ts` — passa a derivar de `@trifold/shared` (PR #524)
+- `packages/shared/src/index.ts` — exporta `constants/supabase-refs`
 - `scripts/README.md` — estado padrão invertido, tabela de ambientes, reversão, nota sobre
   `db:apply` inexistente até a `900-3c`
 - `scripts/reset-tenancy-testdb.ts` — dry-run default, `--confirmar`, retrato informativo,

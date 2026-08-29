@@ -68,6 +68,13 @@ describe("os três desfechos da AC4b", () => {
     expect(r.mensagem).toContain(`supabase link --project-ref ${REF_TESTE}`)
   })
 
+  it("ref DESCONHECIDO ⇒ sai 1 (PR #524: exit 0 é só para o teste declarado e não-linkado)", () => {
+    const r = executar(raizFalsa({ refLinkado: "refnovodeproducao0" }))
+    expect(r.codigo).toBe(1)
+    expect(r.estado).toBe("desconhecido")
+    expect(r.mensagem).toMatch(/produção recém-criado|não está em nenhuma allowlist/)
+  })
+
   it("arquivo AUSENTE ⇒ sai 0 com aviso de 'não linkado' (estado seguro, não erro)", () => {
     const r = executar(raizFalsa({}))
     expect(r.codigo).toBe(0)
@@ -114,13 +121,23 @@ describe("REUSO da allowlist — não há segunda definição de 'produção' (A
     }
   })
 
-  it("um ref de produção FICTÍCIO, fora da allowlist, NÃO reprova — a allowlist é a única juíza", () => {
+  it("um ref fora da allowlist é 'desconhecido', não 'producao' — a allowlist é a única juíza", () => {
     // Se alguém reimplementasse a classificação com heurística própria (p.ex. "contém
     // 'prod'"), este caso viraria `producao` e o teste acenderia. É a guarda contra a
     // segunda fonte de verdade.
+    //
+    // PR #524: ele REPROVA (codigo 1), mas pelo motivo certo — "não sei o que é isto" —, e
+    // não por ter sido adivinhado como produção. Os dois fatos juntos são o que discrimina.
     const r = classificar("prodfalsoaaaaaaaaaaa", REF_TESTE)
+    expect(r.estado).toBe("desconhecido")
     expect(r.estado).not.toBe("producao")
-    expect(r.codigo).toBe(0)
+    expect(r.codigo).toBe(1)
+  })
+
+  it("ref de produção em MAIÚSCULAS ainda é produção (furo de caixa do PR #524)", () => {
+    const r = classificar(REF_PROD.toUpperCase(), REF_TESTE)
+    expect(r.estado).toBe("producao")
+    expect(r.codigo).toBe(1)
   })
 
   it("o veredito de produção acompanha a allowlist, não uma cópia local do ref", () => {

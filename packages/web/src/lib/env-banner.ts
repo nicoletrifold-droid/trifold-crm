@@ -50,11 +50,36 @@
  * verde que não mostra contra o que se está falando é indistinguível de nenhum banner.
  */
 
+import {
+  ehRefDeProducao,
+  ehRefDeTeste,
+  extrairRefDeUrlSupabase,
+  REFS_PERMITIDOS_PRODUCAO,
+  REFS_PERMITIDOS_TESTE,
+} from "@trifold/shared"
+
+/**
+ * ⚠️ PR #524: aqui existiam `REF_PRODUCAO`/`REF_TESTE` como constantes próprias deste
+ * arquivo. Eram iguais às dos scripts **hoje**, e livres para divergir amanhã — uma segunda
+ * definição de "o que é produção", que é o defeito que a AC3 desta story existiu para matar.
+ * Agora as duas pontas derivam de `@trifold/shared`
+ * (`packages/shared/src/constants/supabase-refs.ts`), que é o único lugar onde os refs são
+ * cadastrados. `packages/web` não pode importar de `scripts/`, por isso a fonte única mora
+ * no pacote compartilhado, e não em `scripts/lib/db-env.ts`.
+ *
+ * Os nomes antigos seguem exportados porque os testes e o `textoDoBanner` os usam como
+ * rótulo — mas agora são **derivados**, não declarados.
+ */
+function primeiro(conjunto: ReadonlySet<string>): string {
+  const [v] = conjunto
+  return v ?? ""
+}
+
 /** Ref do projeto Supabase de PRODUÇÃO. Identificador público, não segredo. */
-export const REF_PRODUCAO = "dsopqkqjkmhytudaaolv"
+export const REF_PRODUCAO = primeiro(REFS_PERMITIDOS_PRODUCAO)
 
 /** Ref do projeto Supabase de TESTE (`trifold-crm-dev`). Identificador público. */
-export const REF_TESTE = "xnxvygyfyyyzwhiuoehz"
+export const REF_TESTE = primeiro(REFS_PERMITIDOS_TESTE)
 
 export type EstadoDoAmbiente = "ok" | "alerta" | "ausente"
 
@@ -67,8 +92,7 @@ export function extrairRef(url: string | undefined | null): string | null {
   if (typeof url !== "string") return null
   const limpa = url.trim()
   if (!limpa) return null
-  const m = limpa.match(/^https:\/\/([a-z0-9]+)\.supabase\.co\/?$/i)
-  return m?.[1] ? m[1].toLowerCase() : null
+  return extrairRefDeUrlSupabase(limpa)
 }
 
 /**
@@ -82,7 +106,10 @@ export function avaliarRefDoAmbiente(
   const ref = extrairRef(url)
   if (ref === null) return "ausente"
 
-  const ehProducao = ref === REF_PRODUCAO
+  // Deriva da allowlist compartilhada, não de uma constante local — assim um ref de
+  // produção acrescentado em `@trifold/shared` passa a ser reconhecido pelo banner
+  // automaticamente, em vez de silenciosamente classificado como "não é produção".
+  const ehProducao = ehRefDeProducao(ref)
   const modoProducao = nodeEnv === "production"
 
   if (ehProducao) return modoProducao ? "ok" : "alerta"
@@ -115,7 +142,7 @@ export function textoDoBanner(
 
   if (estado === "alerta") {
     const causa =
-      ref === REF_PRODUCAO
+      ehRefDeProducao(ref)
         ? "Este processo fala com o banco de PRODUÇÃO fora de um deploy de produção."
         : "Um processo em NODE_ENV=production está falando com o banco de TESTE."
     return [
@@ -128,6 +155,6 @@ export function textoDoBanner(
     ].join("\n")
   }
 
-  const rotulo = ref === REF_TESTE ? "TESTE" : ref === REF_PRODUCAO ? "PRODUÇÃO" : "ref não catalogado"
+  const rotulo = ehRefDeTeste(ref) ? "TESTE" : ehRefDeProducao(ref) ? "PRODUÇÃO" : "ref não catalogado"
   return `\x1b[32m✓\x1b[0m Supabase ref: ${ref} (${rotulo}) · NODE_ENV = ${modo}`
 }

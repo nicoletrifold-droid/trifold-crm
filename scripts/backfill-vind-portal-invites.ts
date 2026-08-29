@@ -28,7 +28,7 @@ const ALVO = resolverAmbiente({ escreve: true })
 
 
 const SUPABASE_URL = ALVO.url
-const SERVICE_ROLE_KEY = ALVO.serviceRoleKey!
+const SERVICE_ROLE_KEY = ALVO.serviceRoleKey
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.trifold.eng.br"
 
 const VIND_OBRA_ID = "74bd0414-d978-4f4e-b65c-3e25e6e40877"

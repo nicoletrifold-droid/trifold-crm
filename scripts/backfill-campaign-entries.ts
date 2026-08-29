@@ -22,7 +22,7 @@ const ALVO = resolverAmbiente({ escreve: true })
 
 const supabase = createClient(
   ALVO.url,
-  ALVO.serviceRoleKey!,
+  ALVO.serviceRoleKey,
   { auth: { autoRefreshToken: false, persistSession: false } }
 )
 

@@ -37,11 +37,21 @@
 import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { parseEnv } from "node:util"
+import {
+  REFS_PERMITIDOS_PRODUCAO,
+  REFS_PERMITIDOS_TESTE,
+  extrairRefDeUrlSupabase,
+  ehRefDeProducao,
+  ehRefDeTeste,
+} from "../../packages/shared/src/constants/supabase-refs"
 
 export type Ambiente = "teste" | "producao"
 
-/** Refs de PRODUÇÃO conhecidos. Cadastrar aqui é decisão consciente, revisada em diff. */
-export const REFS_PERMITIDOS_PRODUCAO: ReadonlySet<string> = new Set(["dsopqkqjkmhytudaaolv"])
+// A definição de "que ref é qual" mora em `@trifold/shared`
+// (`packages/shared/src/constants/supabase-refs.ts`), porque o banner de ambiente em
+// `packages/web` precisa da MESMA lista e não pode importar de `scripts/`. Reexportado aqui
+// para não quebrar quem já importa daqui.
+export { REFS_PERMITIDOS_PRODUCAO, REFS_PERMITIDOS_TESTE }
 
 const ARQUIVO_POR_AMBIENTE: Record<Ambiente, string> = {
   teste: ".env.teste",
@@ -54,6 +64,16 @@ export interface AmbienteResolvido {
   url: string
   serviceRoleKey: string | undefined
   anonKey: string | undefined
+}
+
+/**
+ * O que `resolverAmbiente({ escreve: true })` devolve: `serviceRoleKey` é **obrigatória**.
+ * Sem isto, os chamadores usavam `alvo.serviceRoleKey!` e a asserção non-null escondia a
+ * ausência — o cliente só falhava depois, na inicialização ou na autenticação, longe da
+ * causa (achado do PR #524).
+ */
+export interface AmbienteParaEscrita extends Omit<AmbienteResolvido, "serviceRoleKey"> {
+  serviceRoleKey: string
 }
 
 /** Cache por arquivo — evita reler o dotenv a cada variável consultada. */
@@ -99,9 +119,12 @@ function ler(ambiente: Ambiente, ...nomes: string[]): string | undefined {
   return undefined
 }
 
+/**
+ * Extrai o ref, **em minúsculas**. Delega para a fonte única — a normalização vive no ponto
+ * de extração, não em cada comparação (ver o furo de caixa alta corrigido no PR #524).
+ */
 export function extrairRef(url: string): string | null {
-  const m = url.trim().match(/^https:\/\/([a-z0-9]+)\.supabase\.co\/?$/i)
-  return m?.[1] ? m[1].toLowerCase() : null
+  return extrairRefDeUrlSupabase(url)
 }
 
 /** Só para testes: o cache de arquivo não pode vazar entre casos. */
@@ -113,6 +136,9 @@ export function limparCacheDeArquivo(): void {
  * Resolve o ambiente-alvo. Lança `Error` (nunca devolve um alvo duvidoso) quando qualquer
  * guarda barra — a mensagem sempre nomeia qual delas foi.
  */
+export function resolverAmbiente(opcoes: { escreve: true }): AmbienteParaEscrita
+export function resolverAmbiente(opcoes?: { escreve?: false }): AmbienteResolvido
+export function resolverAmbiente(opcoes?: { escreve?: boolean }): AmbienteResolvido
 export function resolverAmbiente(opcoes: { escreve?: boolean } = {}): AmbienteResolvido {
   const escreve = opcoes.escreve === true
   const bruto = process.env.TRIFOLD_ENV?.trim() || "teste"
@@ -142,19 +168,33 @@ export function resolverAmbiente(opcoes: { escreve?: boolean } = {}): AmbienteRe
     }
     // Guarda 2 — a allowlist. Vale para leitura E escrita, e é independente da flag:
     // é ela, e não a flag, que barra um ref de produção não cadastrado.
-    if (!REFS_PERMITIDOS_PRODUCAO.has(ref)) {
+    if (!ehRefDeProducao(ref)) {
       throw new Error(
         `ABORTADO: ${ref} não está em REFS_PERMITIDOS_PRODUCAO (allowlist de ` +
-          `scripts/lib/db-env.ts). A allowlist falha FECHADA de propósito: cadastre o ref ` +
-          `explicitamente se ele for mesmo produção.`,
+          `packages/shared/src/constants/supabase-refs.ts). A allowlist falha FECHADA de ` +
+          `propósito: cadastre o ref explicitamente se ele for mesmo produção.`,
       )
     }
-  } else if (REFS_PERMITIDOS_PRODUCAO.has(ref)) {
+  } else if (ehRefDeProducao(ref)) {
     // Guarda 3 — o ambiente "teste" apontando para um ref de produção. Sem isto, esquecer
     // o TRIFOLD_ENV faz um script destrutivo rodar em produção pelo caminho MAIS curto.
     throw new Error(
       `ABORTADO: TRIFOLD_ENV=teste, mas a URL resolvida é o ref de PRODUÇÃO ${ref}. ` +
         `Confira ${ARQUIVO_POR_AMBIENTE.teste} e as variáveis de ambiente.`,
+    )
+  } else if (!ehRefDeTeste(ref)) {
+    // Guarda 4 (PR #524) — ref DESCONHECIDO sob TRIFOLD_ENV=teste.
+    //
+    // Antes, a allowlist protegia só o que ela conhecia: um projeto de PRODUÇÃO criado
+    // amanhã, ainda não cadastrado, não casava com `REFS_PERMITIDOS_PRODUCAO` e caía aqui
+    // como se fosse teste — liberando escrita destrutiva SEM `TRIFOLD_ALLOW_PROD=1`.
+    // Allowlist que só conhece um lado libera o outro. Agora os dois ambientes têm lista, e
+    // o que não está em nenhuma é recusado.
+    throw new Error(
+      `ABORTADO: ${ref} não está em REFS_PERMITIDOS_TESTE nem em REFS_PERMITIDOS_PRODUCAO ` +
+        `(packages/shared/src/constants/supabase-refs.ts). Ref desconhecido é recusado por ` +
+        `padrão: um projeto de produção novo, ainda não cadastrado, não pode passar por ` +
+        `teste. Cadastre-o na lista do ambiente correto.`,
     )
   }
 
@@ -164,11 +204,22 @@ export function resolverAmbiente(opcoes: { escreve?: boolean } = {}): AmbienteRe
       "\n",
   )
 
+  const serviceRoleKey = ler(ambiente, "SUPABASE_SERVICE_ROLE_KEY")
+  // Quem escreve precisa da service role. Falhar aqui nomeia a variável que falta; deixar
+  // passar empurra o erro para dentro do cliente Supabase, longe da causa (PR #524).
+  if (escreve && !serviceRoleKey) {
+    throw new Error(
+      `ABORTADO: escrever no ambiente "${ambiente}" (${ref}) exige ` +
+        `SUPABASE_SERVICE_ROLE_KEY, que está ausente ou vazia. Defina em process.env ou em ` +
+        `${ARQUIVO_POR_AMBIENTE[ambiente]}.`,
+    )
+  }
+
   return {
     ambiente,
     ref,
     url,
-    serviceRoleKey: ler(ambiente, "SUPABASE_SERVICE_ROLE_KEY"),
+    serviceRoleKey,
     anonKey: ler(ambiente, "SUPABASE_ANON_KEY", "NEXT_PUBLIC_SUPABASE_ANON_KEY"),
   }
 }
