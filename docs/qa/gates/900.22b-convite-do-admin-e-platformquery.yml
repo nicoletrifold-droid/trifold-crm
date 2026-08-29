@@ -1,0 +1,297 @@
+schema: 1
+story: "900.22b"
+story_title: "Convite do admin da empresa nova + platformQuery()/PLATFORM_READABLE_TABLES"
+gate: CONCERNS
+status_reason: >-
+  Todas as 12 ACs foram implementadas e medidas — o par vermelho→verde da varredura estática, as
+  três mutações de deriveAdminInviteStatus e a guarda de vivacidade foram REPRODUZIDOS por mim,
+  não aceitos por relato. Duas pendências de nível médio devem ser fechadas antes do merge: os
+  dois arquivos novos que usam service-role não entraram em admin-client-allowlist.json (o próprio
+  mecanismo prescreve isso para arquivo novo), e a recusa de "*" da AC-B2 não cobre a sintaxe de
+  embedding do PostgREST, o que deixa a lista fechada contornável por um caminho que a 900-42a
+  herdaria sem saber.
+reviewer: "Quinn (Test Architect)"
+updated: "2026-08-28T18:05:00Z"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# O QUE FOI MEDIDO (não relatado pelo @dev — executado neste gate)
+# ─────────────────────────────────────────────────────────────────────────────
+evidence:
+  reproduced_red_green:
+    claim: "@dev alegou 1 failed | 8 passed depois da T8, e 12 passed depois da T9, mesmo arquivo."
+    method: >-
+      Restaurei packages/web/src/app/platform/orgs/page.tsx para a versão de HEAD (pré-story) e
+      rodei platform-query-scan.test.ts; depois restaurei a versão da story e rodei de novo.
+    result: >-
+      CONFIRMADO. Com a page pré-story a varredura acusa
+      [{ arquivo: "app/platform/orgs/page.tsx", tabelas: ["organizations","users"] }] — a MESMA
+      saída literal que o @dev registrou no Debug Log. Com todas as 12 asserções presentes o
+      resultado é 4 failed | 8 passed (o `it` de varredura + os 3 `it` de AC-B3, que não existiam
+      quando o @dev mediu). Os 8 verdes são exatamente os mesmos 8 do relato do @dev, o que fecha a
+      aritmética de "1 failed | 8 passed" no estado pré-T9 (9 testes). Restaurado: 12 passed.
+  fixture_provenance:
+    method: "diff entre `git show HEAD:.../orgs/page.tsx` e __fixtures__/orgs-page-pre-900-22b.txt"
+    result: >-
+      BYTE-IDÊNTICOS. A fixture commitada é o arquivo pré-story de verdade, não um recorte editado
+      para produzir a asserção ["organizations","users"].
+  mutations_sampled:
+    - id: "MUT1 — `||` → `&&` no 2º if de deriveAdminInviteStatus"
+      predicted_by_po: "mata casos 3 e 4"
+      observed: "casos 3 e 4 — CONFERE"
+    - id: "MUT2 — `input.admin?.authId` → `input.admin?.id`"
+      predicted_by_po: "mata casos 2 e 3"
+      observed: "casos 2 e 3 — CONFERE"
+    - id: "MUT3 — remove `input.admin` do 2º if"
+      predicted_by_po: "mata SÓ o caso 3"
+      observed: "só o caso 3 — CONFERE. O campo `admin` é load-bearing, medido."
+    - id: "Guarda de vivacidade — walker retorna [] para todo diretório"
+      expected: "o `it` de varredura fica trivialmente verde; só a guarda cai"
+      observed: >-
+        1 failed | 11 passed. A guarda existe, é o único carrasco, e o `it` de varredura de fato
+        ficaria verde sem ela. CONFERE.
+    - id: "AC-A2 — persist DEPOIS do convite (variante que AINDA EXECUTA, fora do try)"
+      why: >-
+        A variante trivial (persist dentro do try, depois do throw) só provaria ausência. Rodei a
+        variante em que persistAdminInviteEmail executa de fato, apenas depois do convite.
+      observed: >-
+        1 failed — só o `it` de ordem. A asserção é sobre ORDEM, não presença. Mover o UPDATE para
+        lib/tenancy/admin-invite.ts NÃO enfraqueceu a AC-A2.
+    - id: "Controle positivo da régua pós-move — leitura crua injetada na rota de reenvio"
+      why: "provar que a régua ainda acende contra leitura crua de verdade dentro do diretório varrido"
+      observed: >-
+        Injetei `await db\\n.from(\"leads\")\\n.select(...)` (forma dominante do repo) em
+        app/api/platform/orgs/[id]/resend-admin-invite/route.ts → varredura VERMELHA acusando
+        ["leads"] naquele arquivo. A régua continua com poder discriminante. Revertido.
+  suite:
+    com_story: "257 arquivos | 3.146 passed | 6 expected fail — exit 0"
+    baseline_medido: >-
+      253 arquivos | 3.082 passed | 6 expected fail — medido de verdade (movi os 4 arquivos de
+      teste novos para fora e restaurei orgs/route.test.ts de HEAD), não inferido.
+    delta: "+4 arquivos, +64 testes, 0 quebras — CONFERE com a alegação do @dev"
+  typecheck: "npx tsc --noEmit em packages/web → exit 0"
+  lint: "npx eslint src/lib/tenancy src/app/platform src/app/api/platform → 0 erros, 7 warnings"
+  gate_tenancy: "catraca OK, 83 FAIL / 1 WARN, delta +0. Relatório de execução restaurado."
+  migration_244:
+    colisao: >-
+      `git ls-tree origin/main -- supabase/migrations/` → maior número é 243_capability_live_coach.sql;
+      nenhum 244_*. Livre. (origin/main já avançou para 0c2b4eb8, além da base 0a037103 desta branch,
+      e continua sem 244.)
+    aplicada_em_banco: >-
+      NÃO. Consultei os dois projetos Supabase via Management API:
+      prod dsopqkqjkmhytudaaolv e dev xnxvygyfyyyzwhiuoehz. Nos DOIS:
+      information_schema.columns para organizations.admin_invite_email → 0 linhas, e
+      supabase_migrations.schema_migrations version like '244%' → 0. Nenhum DDL foi executado.
+  flake_whatsapp:
+    result: >-
+      NÃO É REGRESSÃO. webhook/whatsapp/__tests__/route.test.ts rodou 12/12 verde em 3 execuções
+      isoladas, verde na suíte completa COM a story e verde na baseline SEM a story. O arquivo não
+      importa nada que esta story toca.
+
+# ─────────────────────────────────────────────────────────────────────────────
+top_issues:
+  - id: "SEC-001"
+    severity: medium
+    finding: >-
+      A recusa de "*" da AC-B2 não cobre a sintaxe de embedding do PostgREST. Medido com sonda:
+      platformQuery("organizations", "*") e ("organizations", "id, *") são recusados (controles
+      positivos verdes), mas platformQuery("organizations", "id, users(*)") PASSA — o split por
+      vírgula nunca vê um elemento igual a "*". Pior: como todo o schema tem
+      `org_id uuid REFERENCES organizations(id)`, o embedding também contorna a própria
+      PLATFORM_READABLE_TABLES — platformQuery("organizations", "id, leads(name, phone)") leria
+      `leads`, que está deliberadamente FORA da lista, sem emitir nenhum `.from()` cru e portanto
+      sem acender o scanner da AC-B4. Não há exposição viva (os 3 chamadores atuais usam listas de
+      colunas planas), mas a tese de segurança da story — "a lista fechada é a única fronteira real
+      sob D14" — é mais estreita do que o texto afirma.
+    suggested_action: >-
+      Não bloqueia esta onda. Registrar explicitamente na 900-42a (endurecimento) como item de AC —
+      recusar `(` em `columns`, ou parsear os recursos embutidos e validá-los contra
+      PLATFORM_READABLE_TABLES. Acrescentar a limitação ao comentário de topo de platform-query.ts
+      para que a 900-42a não a herde em silêncio.
+    ac_refs: ["AC-B1", "AC-B2"]
+    owner_sugerido: "900-42a"
+
+  - id: "MNT-001"
+    severity: medium
+    finding: >-
+      aios/no-unscoped-admin-client subiu de 4 para 7 warnings e nenhum arquivo de /platform está em
+      docs/audits/admin-client-allowlist.json (nem em `legitimos`, nem em `legado`) — incluindo os
+      dois que o PR #498 já deixava avisando. O `_aviso` do próprio arquivo diz literalmente:
+      "arquivo novo que precise do client cru vai para `legitimos`, com motivo, e isso aparece em
+      diff". platform-query.ts é *o* caminho cross-org sancionado do painel; deixá-lo anônimo no
+      meio de 7 warnings é o oposto do que a allowlist existe para produzir. A regra é `warn` no
+      eslint.config.mjs, então nada bloqueia mecanicamente.
+    suggested_action: >-
+      JULGAMENTO: allowlistar ANTES do merge. Acrescentar a `legitimos` os DOIS arquivos que esta
+      story cria — src/lib/tenancy/platform-query.ts ("caminho único de leitura cross-org do painel
+      /platform; a fronteira é PLATFORM_READABLE_TABLES, não RLS — Story 900-22b") e
+      src/lib/tenancy/admin-invite.ts ("convida o admin de uma empresa que não é a da Trifold;
+      cross-org por natureza — Story 900-22b"). São 2 entradas JSON com motivo, não mudança de
+      código, e é exatamente o mecanismo prescrito. Os 2 arquivos herdados do PR #498
+      (app/api/platform/orgs/route.ts e a antiga orgs/page.tsx) NÃO são desta story — abrir item de
+      backlog. O @dev acertou em não editar governança por conta própria; a decisão está tomada
+      aqui.
+    ac_refs: []
+    owner_sugerido: "@dev nesta story (2 entradas) + backlog para os herdados do #498"
+
+  - id: "REL-001"
+    severity: low
+    finding: >-
+      A consulta de admin em orgs/page.tsx — platformQuery("users", "org_id, id, auth_id")
+      .eq("role","admin") — NÃO tem .order("created_at"), enquanto ensureAdminInvited e a rota de
+      reenvio têm .order("created_at", ASC).limit(1). O mapa da página fica com a primeira linha que
+      o PostgREST devolver. Numa org com mais de um admin (a AC-A3 cita justamente a org "Trifold"
+      legada como esse caso), o badge pode dizer "convite pendente" apontando para a linha B
+      enquanto o botão Reenviar age sobre a linha A, e o operador recebe 400 NO_PENDING_INVITE sem
+      entender por quê. O desempate determinístico foi aplicado na escrita e esquecido na leitura.
+    suggested_action: >-
+      Acrescentar .order("created_at", { ascending: true }) à consulta de admin da página, para que
+      a linha exibida seja a MESMA que ensureAdminInvited escolheria. Uma linha.
+    ac_refs: ["AC-A3", "AC-A5", "AC-B3"]
+
+  - id: "SEC-002"
+    severity: low
+    finding: >-
+      A senha temporária da conta Auth do admin é
+      `Tmp_${Date.now().toString(36)}${Math.random().toString(36).slice(2,10)}!` — Math.random(),
+      que não é CSPRNG. É cópia byte a byte de brokers/route.ts:67 e :275, então é REUSO fiel do
+      idioma do projeto e não invenção desta story. Mas: (a) o principal aqui é o admin de uma
+      empresa cliente inteira, blast radius maior que um corretor; (b) a janela é indefinida — um
+      convite não aceito fica de pé para sempre; (c) o repositório JÁ TEM o padrão mais forte em
+      users/[id]/reset-password/route.ts:42 (`crypto.randomUUID()`), então corrigir também seria
+      REUSO, não invenção. Exploração prática é improvável (rate limit do Supabase Auth, ~41 bits).
+    suggested_action: >-
+      Trocar por crypto.randomUUID() em admin-invite.ts (1 linha, sem novo padrão). Opcionalmente
+      abrir backlog para alinhar brokers/route.ts.
+    ac_refs: ["AC-A3"]
+
+  - id: "TEST-001"
+    severity: low
+    finding: >-
+      Pontos cegos medidos do detectRawTableReads, não declarados no docstring (que só documenta o
+      falso positivo em comentário): `db.from(\`leads\`)` (template literal) → [] e
+      `db.from(TABELA_VAR)` (nome por variável) → []. `db.schema("public").from("leads")` → ["leads"],
+      esse pega. São limites inerentes a uma regra de texto e não há evasão intencional no modelo de
+      ameaça, mas o docstring afirma cobertura da regra "qualquer .from(<literal>)" sem nomear os
+      falsos NEGATIVOS. A guarda de vivacidade também é fraca por construção: assere apenas
+      total > 0 (hoje 6 arquivos), então uma quebra parcial do walker — por exemplo o regex de
+      extensão passando a casar 1 arquivo só — passaria despercebida.
+    suggested_action: >-
+      Acrescentar os falsos negativos ao docstring de platform-query-scan.ts. Considerar
+      toBeGreaterThanOrEqual(<piso conhecido>) na guarda de vivacidade, na 900-42a.
+    ac_refs: ["AC-B4"]
+
+  - id: "DOC-001"
+    severity: low
+    finding: >-
+      A R9 do `npm run gate:tenancy` roda `git diff --diff-filter=A origin/main...HEAD` — só enxerga
+      arquivo COMMITADO. Com a árvore ainda não commitada, ela reportou "nenhuma migration nova em
+      relação a origin/main", ou seja, a migration 244 NÃO foi exercitada pela regra que existe para
+      detectar colisão de CREATE OR REPLACE (classe CON-7). Sem consequência aqui — 244 é
+      ALTER TABLE ADD COLUMN puro, sem função — mas a alegação "gate:tenancy +0" é verdadeira e
+      vazia quanto a 244.
+    suggested_action: >-
+      @devops deve rodar `npm run gate:tenancy` DEPOIS do commit/push, quando a R9 passa a enxergar
+      244, antes de aplicar o DDL.
+    ac_refs: ["AC-A2", "T1"]
+
+  - id: "ARCH-001"
+    severity: low
+    finding: >-
+      `platformQuery(table, columns: string)` degrada a inferência do client tipado para
+      GenericStringError[], forçando `as unknown as <Linha>[]` em todos os 3 chamadores. O custo é
+      real e está documentado no topo de platform-query.ts com o caminho de saída nomeado (trocar
+      string por genérico de literal na 900-42a). ACEITÁVEL NESTA ONDA: o parâmetro de runtime é
+      justamente o que torna possível recusar "*", e o débito está escrito onde quem for endurecer
+      vai lê-lo — não fica implícito para a 900-42a. O risco residual é a família `as unknown as`
+      normalizar cast cego em telas futuras de /platform.
+    suggested_action: >-
+      Nenhuma ação nesta story. A 900-42a já herda a nota. Não replicar o cast sem comentário nas
+      telas de 900-31/900-35/900-44.
+    ac_refs: ["AC-B2", "AC-B3"]
+
+  - id: "MNT-002"
+    severity: low
+    finding: >-
+      O `UPDATE admin_invite_email` foi movido da rota para lib/tenancy/admin-invite.ts porque a
+      rota está dentro do diretório varrido. A justificativa é CORRETA e a alternativa (afrouxar a
+      exclusão) seria pior — é o C-1 do @po. Verificado: nenhuma exclusão foi afrouxada, o walker
+      mantém `*.test.ts`/`__tests__/`/`__fixtures__/` com o comentário NÃO REMOVER, a restrição a
+      .ts/.tsx está lá, e a AC-A2 continua com poder discriminante (mutação de ordem medida acima).
+      Mas fica um PRECEDENTE: "se a régua acende, mova o código para lib/tenancy". Aplicado uma vez,
+      com razão escrita, é engenharia; aplicado por reflexo, esvazia a régua sem nunca tocar nela.
+    suggested_action: >-
+      A 900-42a deve declarar explicitamente o critério de quando mover código para fora da
+      população varrida é legítimo (escrita, que está fora do escopo declarado de platformQuery) e
+      quando é evasão (leitura, que deveria passar por platformQuery).
+    ac_refs: ["AC-A2", "AC-B4"]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Divergências story↔código registradas pelo @dev — julgadas uma a uma
+# ─────────────────────────────────────────────────────────────────────────────
+divergencias_julgadas:
+  - item: "POST retornava 200, não 201 (AC-A1 afirmava 201)"
+    veredicto: "RESOLVER NO CÓDIGO foi certo"
+    razao: >-
+      O vermelho da AC-A1 não dependia do número (o teste espera 400 e recebia 2xx) e a AC-A7 exige
+      201 explicitamente. Tornar o 201 explícito reconcilia as duas ACs sem inventar comportamento.
+      Não havia decisão de produto a tomar.
+  - item: 'platformQuery("users") precisou de `id` além de "org_id, auth_id"'
+    veredicto: "RESOLVER NO CÓDIGO foi certo"
+    razao: >-
+      deriveAdminInviteStatus recebe `{ id, authId }` por assinatura escrita na própria AC-A5. A
+      AC-B3 listou as colunas de forma incompleta; acrescentar `id` é a leitura que torna as duas
+      ACs simultaneamente satisfazíveis. É correção de erro de transcrição, não mudança de escopo.
+  - item: "renderPasswordActionEmail vive em lib/email-layout/ (diretório), não email-layout.ts"
+    veredicto: "RESOLVER NO CÓDIGO foi certo"
+    razao: "O import é idêntico. Fato do repositório, não decisão."
+  - item: "[AUTO-DECISION] wizard não redireciona em already_active (a AC-A7 só nomeia failed/invited)"
+    veredicto: "ACEITÁVEL, mas era a única que merecia um ping ao @sm"
+    razao: >-
+      A leitura é defensável e o @dev registrou o raciocínio: a AC-A5 manda a UI dizer que o e-mail
+      foi ignorado, e router.push apagaria a mensagem pelo mesmo mecanismo que a AC-A7 documenta —
+      logo navegar só em "invited" é a única regra que preserva as duas ACs. Isso é COMPORTAMENTO DE
+      PRODUTO visível ao operador, não um fato do repositório: preencher um buraco de AC é papel do
+      @sm/@po. Como a decisão está escrita, é reversível e nenhuma AC ficou violada, não retorna a
+      story. Fica como observação de processo, não como correção.
+  - item: "UPDATE admin_invite_email movido da rota para admin-invite.ts"
+    veredicto: "CERTO — ver MNT-002"
+    razao: >-
+      Escrever na rota acenderia a régua com código correto, e a saída natural seria afrouxar a
+      exclusão (o C-1 do @po). A alternativa escolhida preserva a régua E a AC-A2, o que eu medi
+      com a mutação de ordem. O que sobra é o precedente, endereçado em MNT-002.
+
+# ─────────────────────────────────────────────────────────────────────────────
+ac_traceability:
+  AC-A1: { status: PASS, evidencia: "3 testes em route.test.ts (400, trim, não provisiona) + campo required/type=email no wizard" }
+  AC-A2: { status: PASS, evidencia: "asserção de ORDEM no fake, provada discriminante por 2 mutações de ordem que executei" }
+  AC-A3: { status: PASS, evidencia: "9 testes em admin-invite.test.ts, incluindo id-vs-auth_id, idempotência e desempate created_at ASC" }
+  AC-A4: { status: PASS, evidencia: "403/404/NO_PENDING_INVITE cobertos em resend route.test.ts" }
+  AC-A5: { status: PASS, evidencia: "5 casos nomeados; MUT1/MUT2/MUT3 reproduzidas por mim com os carrascos exatos previstos pelo @po" }
+  AC-A6: { status: PASS, evidencia: "orgId forjado no corpo é ignorado; o insert usa o retorno de provision_org" }
+  AC-A7: { status: PASS, evidencia: "201 com adminInvite.failed na criação; 400 ADMIN_INVITE_FAILED com message no reenvio; wizard não navega em failed" }
+  AC-B1: { status: PASS, evidencia: "lista mínima + teste de regex do comentário lista PROVISÓRIA" }
+  AC-B2: { status: CONCERNS, evidencia: "tabela fora da lista e '*' plano são recusados; embedding do PostgREST escapa — SEC-001" }
+  AC-B3: { status: PASS, evidencia: "3 asserções estáticas verdes; as 3 leituras migradas; red reproduzido revertendo a page" }
+  AC-B4: { status: PASS, evidencia: "6 fixtures inline + fixture commitada byte-idêntica ao HEAD + varredura real + guarda de vivacidade (medida como único carrasco)" }
+
+nfr_validation:
+  security: { status: CONCERNS, notes: "SEC-001 (embedding contorna a lista fechada) e SEC-002 (senha temp de Math.random, herdada). Guards de platform admin presentes e testados por mutação; orgId nunca vem do cliente, verificado." }
+  reliability: { status: CONCERNS, notes: "REL-001 — desempate determinístico aplicado na escrita e ausente na leitura da lista." }
+  maintainability: { status: CONCERNS, notes: "MNT-001 (allowlist) e MNT-002 (precedente de mover código para fora da população varrida). ARCH-001 documentado no código." }
+  performance: { status: PASS, notes: "Consulta de admin filtrada por role='admin' evita o corte de 1000 linhas do PostgREST; contagem total sem filtro é pré-existente e declarada." }
+
+recommendations:
+  antes_do_merge:
+    - "MNT-001 — acrescentar platform-query.ts e admin-invite.ts a admin-client-allowlist.json → legitimos, com motivo."
+    - "REL-001 — .order('created_at', { ascending: true }) na consulta de admin de orgs/page.tsx."
+    - "SEC-002 — crypto.randomUUID() no lugar de Math.random() para a senha temporária."
+    - "SEC-001 — registrar a limitação do embedding no comentário de topo de platform-query.ts (o código não muda nesta onda)."
+  no_deploy:
+    - "@devops: rodar `npm run gate:tenancy` DEPOIS do commit, para a R9 enxergar a migration 244 (DOC-001)."
+    - "@devops: reconferir colisão de 244 contra origin/main no momento do PR — origin/main já avançou desde a medição do @dev e continua livre, mas a janela permanece aberta."
+    - "Migration 244 NÃO está aplicada em prod nem em dev. Aplicar é passo de deploy, não desta revisão."
+  backlog:
+    - "PR #498 deixou app/api/platform/orgs/route.ts fora da allowlist — dívida herdada, não desta story."
+    - "900-42a herda SEC-001, TEST-001, ARCH-001 e MNT-002 — todos nomeados aqui para não serem redescobertos."
+
+waiver: { active: false }
