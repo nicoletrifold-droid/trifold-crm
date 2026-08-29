@@ -61,7 +61,9 @@
     "src/app/api/webhooks/sienge/route.ts": "webhook: resolve a org pelo payload, não tem sessão de usuário (900-24)",
     "src/lib/supabase/admin-helpers.ts": "definição do próprio client cru",
     "src/lib/supabase/admin.ts": "definição do próprio client cru",
-    "src/lib/supabase/org-scoped-admin.ts": "É o próprio wrapper: encapsula createAdminClient para injetar o escopo de org. Sinalizá-lo seria a regra acusando a solução que ela existe para promover."
+    "src/lib/supabase/org-scoped-admin.ts": "É o próprio wrapper: encapsula createAdminClient para injetar o escopo de org. Sinalizá-lo seria a regra acusando a solução que ela existe para promover.",
+    "src/lib/tenancy/admin-invite.ts": "Convite do admin de uma empresa CLIENTE (Story 900-22b): a Trifold escreve em users/organizations de uma org que não é a dela, então não existe org do chamador para injetar. O escopo é o orgId devolvido por provision_org() (nunca vindo do corpo da requisição — AC-A6), aplicado explicitamente em cada .eq('org_id'/'id').",
+    "src/lib/tenancy/platform-query.ts": "É o caminho cross-org SANCIONADO do painel /platform (Story 900-22b): o platform admin precisa enxergar TODAS as orgs e a RLS de organizations escopa por org do usuário, então createOrgScopedAdminClient(orgId) quebraria a listagem. O escopo aqui não é .eq('org_id') manual, é a lista fechada PLATFORM_READABLE_TABLES + recusa de \"*\" em runtime. Endurecido pela 900-42a."
   },
   "legado": [
     "src/app/agendar/[token]/page.tsx",
