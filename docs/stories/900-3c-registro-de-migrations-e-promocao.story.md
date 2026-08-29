@@ -6,7 +6,7 @@
 - **Story:** 900-3c — **Fatia B** do split decidido pelo `@po` na validação de 2026-08-29
   (`docs/qa/po-validation-900-3b.md`) e autorizado pelo dono do produto. A irmã é `900-3b` (Fatia A —
   Ambiente), que precisa estar mergeada antes desta (ver Dependencies).
-- **Status:** Ready for Review (rodada 3) — **gate `CONCERNS` do `@qa` e review `CHANGES_REQUESTED` do CodeRabbit (PR #525, 4 Major + 4 minor) respondidos, nenhum achado descartado.** Os dois Major que atacavam garantias desta story estão fechados com mutação: a guarda do aviso passou de *"achei algum?"* para **cobertura** (2 migrations no PR e 1 no relatório saía `✅ limpo` omitindo a outra), e o `ON CONFLICT DO UPDATE` que **apagava a detecção de `ALTERADA-APÓS-APLICAR`** virou três construtores com **precondição escrita** — `db:apply` nunca sobrescreve (`DO NOTHING RETURNING`, conflito vira anomalia), o reset declara `sobrescrever: true` porque acabou de recriar a tabela vazia, e o backfill carrega um `RAISE EXCEPTION` que o aborta fora da janela de ledger vazio (exercido contra o banco povoado). Mais: o fallback do `db:apply` para no primeiro statement com erro e nomeia o estado parcial; a `245` ganhou `CHECK` de domínio em `sha256` e `via` (reprovando de verdade, com controle positivo); `--excluir` inválido falha antes de gerar SQL; `listComments` paginado; e o passo do runbook que "validava o projeto" — e **não validava** (`current_database()` responde igual nos dois) — foi trocado por conferências que nomeiam o ref. **A `245` foi editada duas vezes na série, e as duas vezes a ferramenta desta própria story acusou `ALTERADA-APÓS-APLICAR` e o `db:apply` recusou em bloco** — atravessei pelo Procedimento de exceção do runbook, nunca por atalho. **Duas coisas ficam abertas e nomeadas:** (a) **`MNT-001`** — ~1.400 linhas de `scripts/*.ts` desta fatia não passam por `lint`/`type-check` no CI, e esta fatia **aumentou** o ponto cego (rodo `tsc` dedicado à mão, mas à mão não é gate); (b) o `tenancy-gate` tem a **mesma** falta de paginação que corrigi aqui, mas consertá-lo produziria deleções no `ci.yml` e derrubaria a régua de não-reescrita desta AC — story própria. **AC1 segue parcial:** a `245` em produção, agora com `COMMENT` e `CHECK`s corretos, é passo de runbook do `@devops`. 274 arquivos de teste, **3520 passed**. Pronta para a reavaliação do `@qa`.
+- **Status:** Ready for Review (rodada 4) — **R3-1, o único achado bloqueante do gate do `@qa`, fechado.** A paginação do `listComments` que eu havia aplicado na rodada 3 tinha ido para o job **errado** (`tenancy-gate`, por causa de um `replace(..., 1)` sobre um bloco que existe duas vezes no arquivo): o job desta story ficou sem paginar, descumprindo o "atualiza in-place em vez de acumular" da AC4. Corrigido — `tenancy-gate` de volta a **byte a byte** o de `origin/main`, paginação no `migrations-do-pr`. **Escolhi remover as 2 linhas em vez de declará-las na AC**, por coerência com a decisão que eu já havia registrado (o conserto do `tenancy-gate` é de outra story). **O achado maior é que a régua de não-reescrita da AC4 era cega para linha movida verbatim** — o `git diff` casou as linhas retiradas com as idênticas do job novo e chamou de inserção pura (`170 0`, verde, arquivo modificado no meio), então o item de DoD estava satisfeito **por vacuidade**. A AC4 ganhou uma régua **complementar de forma do diff** (um hunk só, começando depois da última linha da base), medida nos dois estados: acende no commit com o defeito, verde no corrigido. **Segue aberto e nomeado:** `MNT-001` (as ~1.400 linhas de `scripts/*.ts` desta fatia fora do `lint`/`type-check` do CI) e a falta de paginação do `tenancy-gate`, agora explicitamente **não** consertada aqui — story própria. **AC1 segue parcial:** a `245` em produção é passo de runbook do `@devops`. 274 arquivos de teste, **3520 passed**. Pronta para o `@qa` fechar.
 - **Priority:** P0 — sem esta fatia não existe registro auditável de migration aplicada, nem forma de
   levar migration nova ao ambiente de teste sem `supabase db push` (que é estruturalmente
   inutilizável neste repositório — ver Dev Notes).
@@ -355,6 +355,22 @@ o registro que a substitui.
     # porque awk sem linhas de entrada nunca executa o corpo do padrão e sai 0
     git diff --numstat origin/main...HEAD -- .github/workflows/ci.yml | awk '$2 != 0 { exit 1 }'
     ```
+  - **A régua acima é NECESSÁRIA e INSUFICIENTE — medido pelo `@qa` (R3-1, rodada 3).** Ela é
+    **cega para linha movida verbatim**: se uma edição retira N linhas de um job pré-existente e
+    as mesmas N linhas passam a existir, idênticas, dentro do job novo, o LCS do `git diff` casa
+    as duas e representa a modificação como **inserção pura** — `numstat` devolve `170 0` e a
+    régua fica **verde tendo o arquivo sido modificado no meio**. Aconteceu de verdade nesta
+    story (a paginação do `listComments` foi parar no `tenancy-gate` em vez do job novo, e a
+    régua não acusou). **Régua complementar, obrigatória junto com a de cima:**
+    ```bash
+    # O diff tem de ser UM hunk só, começando DEPOIS da última linha da base — acréscimo puro.
+    BASE=$(git show origin/main:.github/workflows/ci.yml | wc -l | tr -d ' ')
+    test "$(git diff --unified=0 origin/main...HEAD -- .github/workflows/ci.yml | grep -c '^@@')" = 1 &&
+    git diff --unified=0 origin/main...HEAD -- .github/workflows/ci.yml | grep -q "^@@ -${BASE},0 +"
+    ```
+    Medido nos dois estados: no commit com o defeito, `numstat` `170 0` (verde) e hunk
+    `@@ -187,0 +188,170 @@` → a régua de forma **acende**; no commit corrigido, `numstat`
+    `171 0` e hunk `@@ -194,0 +195,171 @@` (194 = última linha da base) → as duas verdes.
     **Mutação que derruba a régua nova (e que a régua velha não distinguia da mutação oposta):**
     apagar uma linha existente do job `static` (ex.: remover o passo `lint`) → `git diff --numstat`
     emite uma linha com `$2` (deleções) `> 0` → `awk` sai `1` (correto). Rodando a régua **antiga**
@@ -390,6 +406,10 @@ o registro que a substitui.
   - PR de fork (ou `head.repo.full_name` diferente simulado) → job não roda.
   - `git diff --numstat origin/main...HEAD -- .github/workflows/ci.yml | awk '$2 != 0 { exit 1 }'`
     (pós-implementação) sai `0`; `grep -c "^  static:\|^  tenancy-gate:"` continua 2.
+  - **(R3-1)** A régua de **forma** do diff (um hunk só, começando na última linha da base) sai
+    `0`. Mutação que a derruba e que a régua de `numstat` **não** derruba: mover uma linha de um
+    job pré-existente para dentro do job novo, verbatim — `numstat` continua `N 0`, e a régua de
+    forma acusa o hunk no meio do arquivo.
   - PR que adiciona `supabase/migrations/246_algo.sql` e **não** aplica no teste → comentário
     `⚠️` nomeando `246_algo.sql` como `PENDENTE`.
   - **(G5) PR que edita uma migration já aplicada no teste** (byte alterado num arquivo cujo
@@ -767,6 +787,7 @@ Agent Record.
 | 2026-08-29 | 0.6 | **Implementada pelo `@dev` (Dex), modo YOLO.** Migration `245` reconfirmada por varredura de todas as refs com `git fetch --prune` (máximo `244`, `245` livre); 268 arquivos, 22 prefixos duplicados. **Controle positivo do `fetch`** construído em repositórios descartáveis, porque hoje nenhum prefixo existe só em ref remota — sem `fetch` a régua propõe um número já tomado por PR aberto. **`runSql`/`splitStatements` extraídos** para `scripts/lib/management-api.ts`; régua C5 verde nos 3 arquivos (baseline era 2), exclusão de `gate-tenancy.ts:215` confirmada e não afrouxada. **`db:status`/`db:apply`** com o contrato de exit code do C6 exercido nos dois lados (produção sem a tabela → `1`; teste com 268 `PENDENTE` reais → `0`), e os **quatro** estados produzidos contra o banco real, não só em teste unitário. **Reset** rodado de verdade (`464,4s`, 0 regressões) e populando o ledger. **Job de CI** acrescentado com `+151/-0` no `ci.yml`, `fetch-depth: 0`, guard de fork, sem `concurrency` e sem nenhum comando de escrita (medido por grep no bloco do job). **Controle positivo G3 capturado na janela real** entre os Passos 1 e 2 do runbook — comentário nomeando `245_registro_de_migrations.sql` como `PENDENTE`, colado no Dev Agent Record; os três estados do G2 e o texto severo do G5 exercidos ponta a ponta pelo CLI. 25 testes novos, com 4 mutações que os derrubam. **Três correções não previstas pela story, todas com vermelho medido:** o truncamento de 800 caracteres do `runSql` (quebrava a leitura do ledger); a violação de **R3** que a tabela nova introduzia na catraca de tenancy (isenta na allowlist com razão, `R3: 3 → 2`); e o envenenamento de `docs/audits/gate-tenancy-report.json` por rodar `gate:tenancy` fora de produção (restaurado). **Divergência registrada:** a nota do spawn afirmava que a `900-3b` já havia entregue `scripts/lib/management-api.ts` — não havia; a story estava certa, a nota não. | @dev (Dex) |
 | 2026-08-29 | 0.7 | **Rodada 2 — gate do `@qa` (CONCERNS) respondido.** **CONCERNS-1 (medium):** a AC4 excluía `ÓRFÃ-no-banco` alegando que ele *"não pode ser um arquivo que o PR traz"* — **justificativa falsificada por medição**: `git diff --name-only` lista caminho apagado, e um PR que APAGA migration já aplicada recebia `✅ limpo` com o corpo listando o estado órfão. AC4 corrigida com a refutação registrada, aviso passa a cobrir os **três** estados possíveis para arquivo tocado pelo PR, com bloco `⛔ REMOVIDA` próprio; reproduzido contra o banco real (apagar `244_…sql` rastreado → `ÓRFÃ-no-banco 1` → aviso acende) e mutação M5 (`removidas = []`) derruba 3 dos 28 testes. **NIT-8** junto: manchete deixou de dizer "não aplicada(s)", que era falso para `ALTERADA` e para `ÓRFÃ`. **CONCERNS-2 (low):** o `COMMENT ON COLUMN … via` da `245` documentava 3 valores e o código grava 4 — corrigido no `COMMENT` e no cabeçalho **antes** de o `@devops` aplicar em produção. A correção **atravessou a ferramenta desta própria story**: editar a `245` já aplicada disparou `ALTERADA-APÓS-APLICAR` e o `db:apply` recusou em bloco (exit 1) — saída real colada no Dev Agent Record. Remediação pelo **caminho legítimo**, documentada no runbook antes de ser executada (`DELETE` do registro obsoleto → `PENDENTE` → `db:apply` observa e grava `via='apply'`), com o `COMMENT` conferido de dentro do banco. A linha 3 do Rollback do runbook também foi corrigida: regerar o backfill inteiro fora da janela pós-Passo-2 apagaria as proveniências `reset`/`apply`. **CONCERNS-3 (low):** interpolação `${{ }}` saiu de dentro de `run:` — **dois** valores, não um (achei `github.base_ref` na mesma varredura); 0 linhas de `run:` com interpolação no bloco do job. **OBS-5:** falha ao gravar o ledger virou contador no `=== RESUMO ===` + bloco de erro nomeando que a invariante da AC3 não vale — **divergência registrada**: o `@qa` ofereceu exit code *ou* resumo, o coordenador instruiu que não pese no exit code, e eu implementei a forma que satisfaz os dois. **OBS-6:** o conhecimento sobre o `gate-tenancy-report.json` saiu da story e foi para `scripts/gate-tenancy.ts` (`_aviso` no JSON gerado + alerta impresso quando o alvo não é produção) e para o próprio JSON rastreado (`1  0`). **CONCERNS-4:** fechada por medição — com o commit local existindo, rodei a régua **literal** da AC: `164 0` → exit 0, e `164 5` → exit 1 sob a mutação nomeada (clone descartável, árvore principal intacta). Fica só a repetição pós-squash para o `@devops`. Gates: 274 arquivos, **3514 passed**, lint 0 errors, type-check 8/8. | @dev (Dex) |
 | 2026-08-29 | 0.8 | **Rodada 3 — CodeRabbit no PR #525 (`CHANGES_REQUESTED`, 4 Major + 4 minor), todos tratados, nenhum descartado.** **Major 1:** a guarda de indeterminação era `casados.length === 0` — com 2 migrations no PR e 1 no relatório, a segunda saía **sem veredito** debaixo de um `✅ limpo`. Virou guarda de **cobertura** (`semVeredito.length > 0`), nomeando quem ficou de fora; controle positivo é o próprio caso do achado, e virou teste. **Major 2:** o `ON CONFLICT DO UPDATE` regravava o `sha256` e apagava a detecção de `ALTERADA-APÓS-APLICAR` — a razão de o ledger existir. Um construtor virou três, cada um com a **precondição escrita**: `db:apply` usa `DO NOTHING RETURNING` e **nunca sobrescreve** (conflito vira anomalia nomeada); o reset declara `sobrescrever: true` porque o `drop schema cascade` acabou de recriar a tabela vazia; o backfill declara `sobrescrever: false` e o SQL vem com `RAISE EXCEPTION` que o aborta se o ledger não estiver vazio — guarda exercida contra o banco povoado, `P0001`, ledger intacto. `sobrescrever` não tem default: quem chama declara em qual mundo está. **Major 3:** o fallback autocommit seguia executando statements depois do erro, aplicando DDL sem registrar; agora para no primeiro `!s.ok` e imprime "K de N statement(s) aplicaram", com o aviso de que não há rollback. **Major 4:** o aviso mandava apagar linha do ledger — isso tira o sinal sem tirar o efeito do banco; agora manda restaurar o arquivo ou criar migration nova. **Minors:** `CHECK` de domínio na `245` (`sha256` hex de 64 e os quatro valores de `via`, com bloco `DO $$` idempotente porque `CREATE TABLE IF NOT EXISTS` pula as constraints), os dois reprovando de verdade contra o banco (`23514`) com controle positivo; `--excluir` inválido agora falha antes de gerar SQL (0 bytes, exit 1) e nasceu `--sobrescrever` opt-in; `listComments` paginado (`per_page: 100`) para o update in-place não virar comentário novo a cada push em PR longo; e o passo do runbook que "validava o projeto" com `current_database()` — medido: responde `postgres`/`main` nos **dois** projetos — trocado por três conferências reais (banner `[db-env] ref=`, `supabase:check`, ref na URL do SQL Editor) mais um discriminador de conteúdo (`organizations`). **A `245` foi editada duas vezes na série e as duas vezes a própria ferramenta acusou `ALTERADA-APÓS-APLICAR` e o `db:apply` recusou** — atravessei pelo Procedimento de exceção do runbook, nunca por atalho. **Registrado que esta fatia aumenta o `MNT-001`**: ~1.400 linhas de `scripts/*.ts` fora do `lint`/`type-check` do CI (o `--force` derruba cache, não amplia denominador); quem cobre é a suíte, e eu rodo `tsc` dedicado à mão em toda rodada. 3 mutações novas (M6/M7/M8) provadas em disco. Gates: **3520 passed**, lint 0 errors, type-check 8/8. | @dev (Dex) |
+| 2026-08-29 | 0.9 | **Rodada 4 — R3-1 do gate do `@qa` (o único bloqueante) fechado.** Na rodada 3 apliquei a paginação do `listComments` com um `replace(..., 1)` sobre um bloco que existe **duas vezes** no `ci.yml`; `replace` pega a primeira ocorrência e o `tenancy-gate` vem antes — paginei o job da `900-2c` e deixei o **desta story** sem paginar. Reproduzido byte a byte a partir do commit `f6c21b21`: `github.paginate` na linha 192 (tenancy-gate) e `existentes.data.find` na 359 (migrations-do-pr, que começa na 228). **Escolhi remover, não declarar** — o conserto do `tenancy-gate` é bom, mas é de outra story, e declará-lo aqui alargaria o escopo desta fatia para acomodar um engano de execução. O `tenancy-gate` voltou a ser **byte a byte** o de `origin/main` (`diff` sem diferença nas linhas 105-194) e o job desta story ganhou a paginação onde a AC4 a exige. **E o achado que vale mais que a correção: a régua de não-reescrita da AC4 era CEGA para linha movida verbatim** — as duas linhas retiradas do `tenancy-gate` continuavam existindo idênticas dentro do job novo, o LCS do `git diff` casou as duas e representou a modificação como **inserção pura** (`170 0`, verde, com o arquivo modificado no meio); o item de DoD estava satisfeito **por vacuidade**. Acrescentei à AC4 uma régua **complementar de forma do diff** — um hunk só, começando depois da última linha da base — medida nos dois estados reais: no commit com o defeito, `numstat` verde e forma **exit 1** (`@@ -187,0 +188,170 @@`); no corrigido, as duas verdes (`@@ -194,0 +195,171 @@`, e 194 é a última linha da base). Confirmei também o contrafactual do `@qa` (paginar os dois jobs → `175 2` → exit 1). Nada de `scripts/`, `supabase/` ou banco nesta rodada. Gates: **3520 passed**, lint 0 errors, type-check 8/8, `tsc` dedicado de `scripts/` limpo. | @dev (Dex) |
 
 ---
 
@@ -1369,6 +1390,74 @@ O item `MNT-001` já está em `docs/backlog.md` desde a `900-3b` ("`pnpm type-ch
 novo, e mais:** 11 arquivos novos em `scripts/`, dos quais 2 são de teste (esses a suíte cobre) e
 9 não. O item precisa de dono antes da próxima fatia que escreva em `scripts/`.
 
+#### RODADA 4 — R3-1 do gate do @qa: a paginação foi para o job errado
+
+**O que aconteceu, sem atenuar.** Na rodada 3 eu apliquei a paginação com um `replace(..., 1)`
+sobre um trecho que existe **duas vezes** no `ci.yml` — os dois jobs que comentam no PR têm o
+mesmo bloco de busca do comentário do bot. `replace` com contagem 1 pega a **primeira**
+ocorrência, e o `tenancy-gate` vem antes. Resultado: paginei o job da `900-2c` e deixei o job
+desta story sem paginar. Medido pelo `@qa` e reproduzido por mim, byte a byte, a partir do
+próprio commit:
+
+```
+$ git show f6c21b21:.github/workflows/ci.yml
+  github.paginate     → linha 192   (dentro do tenancy-gate)
+  existentes.data.find→ linha 359   (dentro do migrations-do-pr, que começa na 228)
+```
+
+E a ironia registrada: eu havia escrito, na rodada 3, que **não** consertaria o `tenancy-gate`
+"porque produziria deleções no `ci.yml` e derrubaria a régua de não-reescrita". A decisão estava
+certa. A execução fez exatamente o contrário dela, e **a régua não acusou**.
+
+**Escolhi (b): tirar as duas linhas, não declará-las.** O `@qa` ofereceu declarar na AC4 ou
+remover. Removi, e a razão é a coerência com a decisão que eu mesmo já tinha registrado e que o
+`@qa` aprovou: o conserto do `tenancy-gate` é bom em si, mas é de outra story — declará-lo aqui
+seria alargar o escopo desta fatia para acomodar um engano de execução, e a story própria continua
+aberta. O `tenancy-gate` voltou a ser **byte a byte** o de `origin/main`:
+
+```
+$ diff <(git show origin/main:.github/workflows/ci.yml | sed -n '105,194p') \
+       <(sed -n '105,194p' .github/workflows/ci.yml)
+(sem diferença)
+```
+
+E o job desta story ganhou a paginação, onde a AC4 a exige (linha 357, depois da fronteira do
+`migrations-do-pr` na 222).
+
+#### A régua da AC4 era cega, e agora tem companhia que enxerga
+
+O `@qa` não achou só o erro: achou **por que o instrumento não pegou**. As duas linhas retiradas
+do `tenancy-gate` continuavam existindo **verbatim** dentro do job novo, e o LCS do `git diff`
+casou as duas, representando a modificação como **inserção pura** — `numstat` `170 0`, régua
+verde, arquivo modificado no meio. O item de DoD "arquivo não reescrito, régua verde" estava
+satisfeito **por vacuidade**, que é a quarta vez que essa palavra aparece nesta série de stories.
+
+Acrescentei à AC4 uma régua **complementar**, de **forma do diff**: um hunk só, começando depois
+da última linha da base — ou seja, acréscimo puro no fim. Medida nos dois estados reais:
+
+| Estado | `numstat` | régua da AC4 | hunk | régua de FORMA |
+|---|---|---|---|---|
+| commit `f6c21b21` (o defeito) | `170 0` | **exit 0** 🔴 cega | `@@ -187,0 +188,170 @@` | **exit 1** ✅ acusa |
+| corrigido (esta rodada) | `171 0` | exit 0 ✅ | `@@ -194,0 +195,171 @@` | exit 0 ✅ |
+
+`194` é a última linha do `ci.yml` na base — o hunk começa **depois** dela, que é a definição
+operacional de "só acrescentei job". As duas réguas juntas cobrem os dois modos: a de `numstat`
+pega deleção, a de forma pega **edição disfarçada de inserção**.
+
+Também confirmei o contrafactual do `@qa`, para não ficar como alegação: paginando os **dois**
+jobs, `numstat` vai a `175 2` → exit 1, com as duas `-` aparecendo. É o que aconteceria se eu
+tivesse escolhido (a) sem mexer na AC — a régua ficaria impossível de satisfazer, exatamente como
+ele avisou.
+
+**As duas réguas rodadas sobre o commit final estão no fim desta seção, junto com os gates.**
+
+#### O que NÃO mudou nesta rodada
+
+Nada de `scripts/`, nada de `supabase/`, nada de banco. O `db:status` contra o teste continua
+`aplicada 268 · PENDENTE 0 · ALTERADA 0 · ÓRFÃ 0`, exit 0, e a `245` segue com o `sha256`
+registrado que o espelho já carrega — esta rodada não tocou no arquivo da migration, então não há
+`ALTERADA-APÓS-APLICAR` a atravessar desta vez.
+
 ### Completion Notes List
 
 1. **Migration `245` reconfirmada no dia, não herdada do documento.** `245` livre em todas as
@@ -1479,7 +1568,10 @@ novo, e mais:** 11 arquivos novos em `scripts/`, dos quais 2 são de teste (esse
 - `scripts/aviso-migrations-do-pr.test.ts` — 11 testes, G2 e G5 (AC4)
 
 **Modificados**
-- `.github/workflows/ci.yml` — **+151 linhas, 0 deleções**: job `migrations-do-pr` (AC4)
+- `.github/workflows/ci.yml` — **+171 linhas, 0 deleções**: job `migrations-do-pr` (AC4). O
+  `tenancy-gate` e o `static` ficaram **byte a byte** iguais aos de `origin/main` — conferido por
+  `diff` nas linhas 105-194 na rodada 4, depois de eu ter alterado o `tenancy-gate` por engano na
+  rodada 3.
 - `package.json` — scripts `db:status` e `db:apply` (AC2, Task 2.3)
 - `scripts/reset-tenancy-testdb.ts` — importa o transporte extraído; popula o ledger ao final (AC2/AC3)
 - `docs/deploy-flow.md` — reescrito (AC5)
@@ -1683,5 +1775,116 @@ Qualificá-la quando `falhasDeRegistro.length > 0` não toca no exit code.
    `AINDA NÃO MEDIDO`. Só então o item de DoD "aplicada em produção" fecha; hoje ele segue **aberto**.
 4. **Não** rodar `pnpm gate:tenancy` contra ref que não seja produção; se rodar, restaurar
    `docs/audits/gate-tenancy-report.json` (o arquivo agora avisa sozinho).
+
+— Quinn, guardião da qualidade 🛡️
+
+---
+
+### Quality Gate — Rodada 3 (pós-CodeRabbit) · 2026-08-29 · Quinn (Test Architect)
+
+**Veredito: CONCERNS** · commit `f6c21b21` · PR #525 · **um item bloqueia o push.**
+Sete dos oito achados estão fechados e reproduzi cada um. O oitavo foi aplicado no **job errado**,
+e isso arrastou duas consequências que o commit não registra.
+
+#### 🔴 R3-1 — a paginação foi para o `tenancy-gate`, não para o job desta story
+
+Três fatos medidos, e o commit message afirma o contrário dos três:
+
+| Medição | Resultado |
+|---|---|
+| Fronteiras dos jobs | `static:27` · `tenancy-gate:105` · `migrations-do-pr:228` |
+| Onde ficou o `github.paginate` | **linha 192 — dentro do `tenancy-gate`** (marca na 185: `const marca = '## Gate de tenancy'`) |
+| Onde ficou o não-paginado | **linhas 358-359 — dentro do `migrations-do-pr`**, o job desta story |
+| `git show origin/main:.github/workflows/ci.yml` | traz a versão não-paginada nas linhas 188-189, **no `tenancy-gate`** ⇒ um job pré-existente foi modificado por esta branch |
+
+**Consequência 1 — a AC4 fica descumprida num ponto.** Ela exige, com estas palavras, *"procura um
+comentário existente do bot e atualiza in-place, **em vez de acumular um novo a cada push**"*. Sem
+paginação (30 por página), num PR com mais de 30 comentários o `find` devolve `undefined` e o job
+cria comentário novo a cada push. Hoje o #525 tem 5 comentários de issue — o defeito é **latente,
+não teórico**, e a correção certa já está escrita; só foi colada no outro job.
+
+**Consequência 2 — a régua de não-reescrita ficou cega, e eu provei.** Ela lê `170 0` → awk 0,
+**verde**. O diff é um hunk único `@@ -186,4 +186,174 @@` com **zero linhas `-`**: as duas linhas
+retiradas do `tenancy-gate` continuam existindo, **verbatim**, dentro do job novo (358-359), e o
+LCS do git as casou — representando a modificação de um job existente como inserção pura.
+
+> **Contrafactual, em clone descartável:** apliquei ao job novo exatamente a mesma paginação (o
+> conserto que o CodeRabbit pediu), o que elimina a linha duplicada, commitei e rodei a **mesma
+> régua literal**: **`174 2` → awk exit 1**, e as duas linhas `-` aparecem.
+
+Ou seja: o item de DoD *"arquivo não reescrito, régua verde"* está satisfeito **por vacuidade**
+neste commit. É a quinta régua desta onda a perder poder discriminante — e a primeira por
+**colinearidade de conteúdo dentro do próprio arquivo**.
+
+**A decisão registrada estava certa; o código faz o oposto dela.** O @dev escreveu "não conserto o
+`tenancy-gate` aqui porque produziria deleções no `ci.yml` e derrubaria a régua". Esse raciocínio é
+exatamente o que eu queria ver. Ele consertou o `tenancy-gate`.
+
+**Como fechar** — paginar o `migrations-do-pr` (a correção já existe) e resolver o `tenancy-gate` de
+um dos dois jeitos honestos: **(a)** manter a melhoria e **declarar na AC4** que esta story altera 2
+linhas do `tenancy-gate`, com a régua reconhecendo `2` deleções esperadas e nomeadas; ou **(b)**
+tirá-la deste PR para a story própria que ele já registrou. Não peço reversão — a mudança lá é boa.
+O que não pode continuar é a régua dizendo `0` sobre uma modificação real.
+
+#### Os sete fechados — reproduzidos, não aceitos
+
+- **Cobertura parcial (Major 1).** Controle positivo: `2 no PR / 1 no relatório` → `⛔ 1 de 2 … não
+  casaram`, **nomeando** a `245` em "Sem veredito:", sem nenhum `✅`. Não-regressão: `2/2` → `✅`. M6
+  (guarda volta a `casados.length === 0`) 🔴 **2 failed**.
+- **`ON CONFLICT` (Major 2).** `db-apply.ts` importa **apenas** `sqlDeRegistroObservado`; o
+  construtor único antigo não existe mais no repo. **Prova dinâmica:** emiti o SQL exato do
+  `db:apply` para a `245` já registrada, com `sha256` falso — `RETURNING` devolveu **`[]`** e a
+  linha ficou byte a byte idêntica (`sha`, `via`, `aplicada_em`). E confirmei que `[]` (não `null`)
+  é o que a API devolve para resultado vazio ⇒ o ramo **ANOMALIA** é alcançável, não é código morto.
+  *Achado lateral:* minha primeira sonda usou `via='SOBRESCRITA-QA'` e **não chegou** ao
+  `ON CONFLICT` — o CHECK novo a barrou com `23514`.
+- **Precondição do reset — verdadeira, verificada na ordem de execução real:** `resetarSchema()` (que
+  roda o `drop schema … cascade`) é a linha 35 relativa de `main()`; a população do ledger é a 133; e
+  `resetarSchema` lança em falha, tornando a população inalcançável sem o drop.
+- **Guarda do backfill, exercida contra o banco povoado:** `ERROR P0001`, e a contagem por `via`
+  **idêntica** antes e depois (`apply:1 · reset:263 · reset-falha-conhecida:4`). M7 🔴 1 · M8 🔴 1.
+- **CHECKs de domínio.** Os dois vivos em `pg_constraint`; `sha256='NAO-E-HEX'` → `23514`,
+  `via='via-inventada'` → `23514`, zero linhas de sonda residuais. **Isto fecha por imposição o meu
+  CONCERNS-2 da rodada 1:** um quinto `via` agora falha no INSERT em vez de divergir em silêncio.
+- **`--excluir`** inválido → exit 1 com **0 bytes** em stdout; válido → 267 tuplas. A régua do
+  runbook confere: `grep -c "^  ('"` → 268 == `ls supabase/migrations/*.sql | wc -l` → 268.
+- **Estado parcial** e **conselho da órfã** (restaurar o arquivo, nunca apagar a linha do ledger —
+  "trocaria um sinal por um ponto cego"): os dois corretos.
+
+**Invariante do glifo — medi mais forte do que foi pedido.** Varri os **10** caminhos alcançáveis de
+`montarAviso` e assertei `corpo.includes('✅') === (estado === 'limpo')`. **Zero violações** — não é
+só "o ⛔ não tem ✅", é "o ✅ aparece se e somente se o estado é limpo". O fallback do
+`github-script` no `ci.yml` também não tem `✅`.
+
+**Runbook, Passo 0 — sim, agora dá para não errar de projeto.** Confirmei a medição dele nos dois
+lados (`current_database()` → `postgres`, `cluster_name` → `main`: não discriminam nada) e rodei o
+discriminador de conteúdo no teste — 1 linha, `Org de Teste — Epic 900`, exatamente como o runbook
+diz. As três conferências nomeiam o ref **fora** do banco (e a URL do SQL Editor é a que importa,
+porque é o caminho real de colar o DDL), e o discriminador cobre os **dois** sentidos do engano.
+
+#### Duas observações que não bloqueiam
+
+- **Catraca de tenancy 🔴 no #525** (`86 FAIL`, `R2:57` contra baseline `54`) — **não é desta
+  story**: o PR **#524**, já mergeado, traz o comentário **idêntico**. E **`R3: 0`**, que é a
+  confirmação em produção de que a entrada de allowlist desta fatia funciona como aprovei. Mas
+  catraca vermelha há dois PRs num job não-bloqueante é a patologia do "sinal que nunca muda" que
+  esta própria story documentou — vale escalar ao @pm/@architect.
+- **MNT-001**: os 8 arquivos desta fatia type-checam limpos quando os compilo à mão; o diretório
+  `scripts/` **inteiro** (34 `.ts`) não passaria hoje — medi erros em arquivos pré-existentes.
+  Dívida real e antiga, aumentada aqui. Concordo em não fechá-la nesta story.
+
+#### Gates
+
+`pnpm test` 274 arquivos · **3520 passed** | 6 expected fail · `type-check --force` 8/8 ·
+`lint --force` 0 errors. Produção não tocada nas três rodadas; as duas sondas de escrita abortaram
+por guarda e deixaram o ledger intacto (medido antes e depois).
+
+#### Para o @devops
+
+**Não empurrar até R3-1.** Depois do conserto: se o `tenancy-gate` continuar alterado, a régua vai
+acusar `2` deleções **reais** — isso é **correto**, e a AC4 precisa declará-las. E acrescente à
+repetição pós-squash uma leitura que eu não tinha: **verde na régua não prova que nenhum job
+existente mudou** — confira também `git diff origin/main...HEAD -- .github/workflows/ci.yml | grep -c '^-'`
+e leia onde o hunk começa; se ele começar antes da linha do job novo, um job pré-existente foi tocado.
 
 — Quinn, guardião da qualidade 🛡️

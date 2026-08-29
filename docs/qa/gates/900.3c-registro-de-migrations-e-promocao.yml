@@ -1,267 +1,294 @@
 schema: 1
 story: "900.3c"
 story_title: "Registro de migrations e fluxo de promoção (Fatia B de 2 — Onda 1)"
-gate: PASS
+gate: CONCERNS
 status_reason: >-
-  Rodada 2. Os dois CONCERNS e os três menores estão fechados, e reverifiquei cada um por
-  execução, não por relato. CONCERNS-1 (a quarta classe: PR que APAGA migration aplicada)
-  agora acende com bloco `⛔ REMOVIDA` próprio — e o controle negativo TEM vivacidade:
-  provei por duas mutações de sentido OPOSTO que matam conjuntos DISJUNTOS de teste (M5
-  `removidas=[]` → 3 falhas, todas do bloco novo; mutação de RUÍDO, `removidas` derivada do
-  relatório inteiro → 1 falha, só o controle negativo). CONCERNS-2 fechado e conferido de
-  DENTRO do banco: `col_description(via)` enumera os quatro valores, `reset` 263 +
-  `reset-falha-conhecida` 4 + `apply` 1 = 268, e o `sha256` do ledger é byte-idêntico ao do
-  arquivo em disco — a `245` consta como `apply`, isto é, OBSERVADA, não declarada. A
-  remediação atravessou a ferramenta desta própria story e foi pelo caminho legítimo,
-  documentado no runbook antes de executado. Régua da AC4 medida por mim com o commit
-  existindo: `164 0` → awk 0. Nenhum achado novo; nenhum bloqueador.
+  Rodada 3, pós-CodeRabbit. Sete dos oito achados estão fechados e reproduzi cada um por
+  execução — inclusive contra o banco real. Mas o oitavo (paginação do `listComments`) foi
+  aplicado no **job errado**, e isso arrastou duas consequências que o commit não registra:
+  (1) o job NOVO desta story continua **sem paginação**, então a garantia de "atualiza
+  in-place em vez de acumular" da AC4 vale só em PR curto; (2) o job `tenancy-gate` — que já
+  existia em `origin/main` — **foi modificado**, que é justamente o que a régua de
+  não-reescrita existe para impedir, e a régua não pegou. Ela lê `170 0` (verde) **só porque**
+  as duas linhas retiradas do `tenancy-gate` continuam existindo, idênticas, dentro do job
+  novo: o LCS do git casou as duas e representou tudo como inserção pura. Medi o
+  contrafactual — paginando também o job novo, a MESMA régua vai para `174 2` → exit 1.
+  O commit message afirma o inverso dos dois fatos. Um item bloqueante antes do push;
+  nenhum risco de dado, produção não tocada.
 reviewer: "Quinn (Test Architect)"
-rodadas: 2  # 1ª CONCERNS (árvore de trabalho, pré-commit) · 2ª PASS (commit 9e3a80fa)
-updated: "2026-08-29T19:05:00Z"
+rodadas: 3  # 1ª CONCERNS (pré-commit) · 2ª PASS (9e3a80fa) · 3ª CONCERNS pós-CodeRabbit (f6c21b21)
+updated: "2026-08-29T19:40:00Z"
 branch: "story/900-3c-registro-migrations"
 base: "77f225d1"
-commits_revisados: ["9e3a80fa"]
+commits_revisados: ["9e3a80fa", "4ab6e8aa", "f6c21b21"]
+pr: 525
 nota_de_escopo: >-
-  Produção NÃO foi tocada em nenhuma das duas rodadas. Todo comando de banco foi contra
-  xnxvygyfyyyzwhiuoehz (teste). Árvore de trabalho limpa ao fim desta rodada.
+  Produção não tocada em nenhuma das três rodadas. Todo comando de banco foi contra
+  xnxvygyfyyyzwhiuoehz (teste), incluindo as duas sondas de escrita, que abortaram por guarda
+  e deixaram o ledger byte a byte intacto (medido antes e depois).
 
 # ===========================================================================
-# RODADA 2 — reverificação dos achados
+# O ACHADO BLOQUEANTE — meu, não do CodeRabbit
 # ===========================================================================
-rodada_2:
-  concerns_1_a_quarta_classe:
+top_issues:
+  - id: "R3-1"
+    severity: high
+    bloqueia_push: true
+    finding: >-
+      A correção de paginação do `listComments` foi aplicada ao job **`tenancy-gate`**
+      (pré-existente em `origin/main`, Story 900-2c) em vez do job **`migrations-do-pr`**
+      (o que esta story entrega). São três fatos medidos, e o commit message afirma o
+      contrário dos três.
+    medido_por_mim:
+      fronteiras_dos_jobs: "static:27 · tenancy-gate:105 · migrations-do-pr:228"
+      onde_ficou_o_paginate: >-
+        linha 192, dentro de `tenancy-gate` — confirmado pela marca do próprio bloco na
+        linha 185: `const marca = '## Gate de tenancy';`
+      onde_ficou_o_nao_paginado: >-
+        linhas 358-359, dentro de `migrations-do-pr`:
+        `github.rest.issues.listComments({ owner, repo, issue_number })` + `existentes.data.find(...)`
+      no_origin_main: >-
+        `git show origin/main:.github/workflows/ci.yml` traz a versão NÃO paginada nas linhas
+        188-189, dentro do `tenancy-gate` ⇒ o job pré-existente foi modificado por esta branch
+    consequencia_1_ac4_nao_cumprida: >-
+      A AC4 exige, com estas palavras, "procura um comentário existente do bot e atualiza
+      in-place, **em vez de acumular um novo a cada push**". Com `listComments` sem paginação
+      (30 por página), num PR com mais de 30 comentários o `find` devolve `undefined` e o job
+      cria comentário NOVO a cada push. Hoje o PR #525 tem 5 comentários de issue, então o
+      defeito ainda não se manifesta — é latente, não teórico, e o próprio @dev escreveu a
+      correção certa (só a colou no outro job).
+    consequencia_2_a_regua_da_ac4_ficou_cega:
+      o_que_a_regua_diz: "`git diff --numstat origin/main...HEAD -- .github/workflows/ci.yml` → `170  0` · awk exit 0 · VERDE"
+      porque_ela_esta_verde: >-
+        O diff é um hunk único `@@ -186,4 +186,174 @@` com **zero linhas `-`**. As duas linhas
+        retiradas do `tenancy-gate` continuam existindo, VERBATIM, no job novo (358-359), e o
+        LCS do git as casou — representando a modificação de um job pré-existente como
+        inserção pura.
+      contrafactual_que_eu_construi: >-
+        Clone descartável; apliquei ao job novo exatamente a mesma paginação (o conserto que o
+        CodeRabbit pediu), o que elimina a linha duplicada; commitei; rodei a MESMA régua
+        literal: **`174  2`** → awk **exit 1**, e as duas linhas `-` aparecem.
+      leitura: >-
+        A régua não é falsa em geral — ela é cega para "modificar um job existente colando uma
+        cópia da linha antiga em outro lugar do mesmo arquivo". O item de DoD "arquivo não
+        reescrito, régua verde" está satisfeito por vacuidade neste commit. É a quinta régua
+        desta onda a perder poder discriminante, e a primeira por colinearidade de conteúdo
+        dentro do próprio arquivo.
+    suggested_owner: dev
+    suggested_action: >-
+      Paginar o job `migrations-do-pr` (é a correção que já está escrita, só no lugar errado).
+      Sobre o `tenancy-gate`: a mudança lá é boa e eu NÃO peço reversão — peço que ela deixe de
+      ser invisível. Duas saídas honestas: (a) manter e declarar na AC4 que esta story alterou
+      duas linhas do `tenancy-gate`, com a régua reconhecendo `2` deleções esperadas e
+      nomeadas; ou (b) tirar o `tenancy-gate` deste PR e levá-lo na story própria que o @dev já
+      registrou. O que não pode continuar é a régua dizendo `0` sobre uma modificação real.
+    nota_sobre_a_decisao_registrada: >-
+      O @dev registrou como decisão consciente "não conserto o `tenancy-gate` aqui porque
+      produziria deleções no `ci.yml` e derrubaria a régua". O julgamento é **certo** — é
+      exatamente o raciocínio que eu queria ver. Mas o código faz o oposto: ele consertou o
+      `tenancy-gate` e deixou o job novo. A decisão está correta e não foi executada.
+
+  - id: "R3-2"
+    severity: low
+    bloqueia_push: false
+    finding: >-
+      O `tenancy-gate` está 🔴 no PR #525 — `86 FAIL · 1 WARN`, `{"R2":57,"R6":22,"R7":7,"R8":1}`
+      contra baseline `total 83 · R2:54`.
+    nao_e_desta_story: >-
+      Medido: o PR **#524** (Fatia A, já mergeado) traz o comentário **idêntico**, mesmo
+      número e mesma distribuição por regra ⇒ é drift pré-existente de produção, chegado por
+      outro caminho. E **`R3` é 0**, que é a confirmação em produção de que a entrada de
+      allowlist desta story funciona como eu aprovei na rodada 1: a tabela nova não gera R3, e
+      não gerou nada mais.
+    porque_registro_mesmo_assim: >-
+      Uma catraca vermelha há pelo menos dois PRs, num job não-bloqueante, é a patologia do
+      "sinal que nunca muda" que esta própria story documentou na AC4. Vale um item para o
+      @pm/@architect, fora desta fatia.
+    suggested_owner: pm
+
+# ===========================================================================
+# OS OITO ACHADOS DO CODERABBIT — reverificados por mim
+# ===========================================================================
+achados_reverificados:
+  major_1_cobertura_parcial:
     status: FECHADO
-    o_que_mudou: >-
-      `montarAviso` ganhou `removidas = casados.filter(estado === "ÓRFÃ-no-banco")` e um bloco
-      `⛔ REMOVIDA` com texto próprio; a manchete virou neutra ("precisam de atenção"), o que
-      também fecha o NIT-8. A AC4 traz a justificativa original **riscada** e marcada como
-      falsificada por medição.
-    reproduzido_por_mim:
-      - id: "R2-1 — o estado acende"
-        entrada: "diff=[244_org_admin_invite_email.sql apagada] · relatório=[mesma, ÓRFÃ-no-banco]"
-        medido: "estado=pendente · bloco '⛔ REMOVIDA — este PR apaga migration que consta como aplicada (1)'"
-        antes_do_conserto: "estado=limpo, com o arquivo listado sob '✅ … já estão aplicadas'"
-      - id: "R2-2 — CONTROLE NEGATIVO: órfã alheia continua invisível"
-        entrada: "diff=[999_do_pr.sql] · relatório=[244 ÓRFÃ + 999 aplicada]"
-        medido: "estado=limpo · 0 menções a 244_org_admin_invite_email · 0 menções a REMOVIDA"
-        veredito: "a correção NÃO trocou falso-verde por falso-vermelho — o risco R6 segue fechado"
-      - id: "R2-3 — renumeração (apaga velho + adiciona novo)"
-        medido: "'2 migration(s) … precisam de atenção' · PENDENTE (1) E REMOVIDA (1), blocos separados"
-        nota: "classe que eu não havia sondado na rodada 1; sai correta"
-    vivacidade_do_controle_negativo:
-      porque_eu_insisti: >-
-        Um controle negativo que sobrevive a TODAS as mutações é decoração. Testei os dois
-        sentidos e os conjuntos de morte são DISJUNTOS — é isso que prova que ele mede.
-      mutacao_M5:
-        forma: "`const removidas = [] // MUTACAO-QA-M5` (prova em disco: grep -c 1 → 0)"
-        medido: "3 failed / 11 passed — os três casos do bloco novo. O controle negativo PASSA."
-      mutacao_de_ruido:
-        forma: "`removidas` derivada de `entrada.vereditos` (relatório inteiro) em vez de `casados`"
-        medido: "1 failed / 13 passed — SÓ o controle negativo. Os três casos novos PASSAM."
-      conclusao: "kill sets disjuntos ⇒ o controle negativo não é colinear com os testes do conserto"
-    testes: "aviso-migrations-do-pr 11 → 14 · total dos dois arquivos novos 25 → 28"
-
-  concerns_2_o_comment_do_via:
+    o_que_era: "`casados.length === 0`: 2 migrations no PR, 1 no relatório ⇒ `1 !== 0` passava e a segunda saía sem veredito, sob `✅`"
+    controle_positivo_medido: >-
+      diff=[244, 245] · relatório=[244 aplicada] ⇒ `estado=indeterminado`,
+      "⛔ 1 de 2 migration(s) deste PR não casaram", **nomeando** `245_registro_de_migrations.sql`
+      em "Sem veredito:", e sem nenhum `✅` no corpo.
+    controle_de_nao_regressao_medido: >-
+      diff=[244, 245] · relatório=[244, 245] ⇒ `estado=limpo`, listando as duas. A guarda não
+      travou o caso normal.
+    mutacao_M6: "guarda volta a `casados.length === 0` (prova em disco 1→0) ⇒ 🔴 **2 failed** / 15 passed"
+  major_2_on_conflict_do_update:
     status: FECHADO
-    conferido_de_dentro_do_banco:
-      col_description_via: >-
-        "Proveniência do registro, QUATRO VALORES: backfill-onda-1 (…); apply (pnpm db:apply
-        observou o sucesso); reset (…VIU o arquivo aplicar); reset-falha-conhecida (… NÃO
-        aplicou, e o registro existe só para ele não aparecer como PENDENTE…)" — lido por
-        `col_description('public.trifold_migrations_aplicadas'::regclass, attnum)`.
-      via_no_ledger: "reset 263 + reset-falha-conhecida 4 + apply 1 = 268 ✅"
-      linha_da_245: "arquivo=245_registro_de_migrations.sql · via=apply · sha=cc88e5aff20a…"
-      rls: "relrowsecurity=true · policies=0 ✅"
-      db_status: "aplicada 268 · PENDENTE 0 · ALTERADA 0 · ÓRFÃ 0"
-    a_prova_que_importa: >-
-      `shasum -a 256` do arquivo em disco = **cc88e5aff20a** = o `sha256` gravado no ledger.
-      E o `via` é **`apply`**, não `backfill`: o banco EXECUTOU o arquivo novo (é por isso que
-      o `col_description` já traz o texto novo — o `COMMENT ON` rodou de verdade). O ledger
-      não está declarando; está descrevendo o que foi observado.
-    o_caminho_da_remediacao:
-      veredito: CORRETO
-      analise: >-
-        Ele recusou `UPDATE … SET sha256 = <novo>` — que teria sido declarar que o SQL novo
-        rodou sem ninguém ver, exatamente a mentira que o campo `sha256` fecha — e usou
-        `DELETE` do registro obsoleto → o estado volta a `PENDENTE`, que É a verdade (aquele
-        conteúdo nunca rodou neste banco) → `db:apply` observa e grava `via='apply'`. O
-        procedimento foi escrito no runbook ANTES de executado, com escopo travado ("só antes
-        do merge e antes de produção") e com a condição de segurança nomeada (a migration
-        precisa ser idempotente; se não for, a resposta é a regra geral — migration nova).
-    correcao_extra_do_rollback:
-      veredito: ACHADO REAL, e mais grave que o item que o originou
-      analise: >-
-        A linha 3 do Rollback mandava regerar o backfill inteiro. Fora da janela logo após o
-        Passo 2, isso reescreveria as 268 linhas com `via='backfill-onda-1'` e **apagaria** as
-        proveniências `reset`/`apply`/`reset-falha-conhecida` — transformaria observação em
-        declaração em massa, silenciosamente. A correção delimita a janela e manda usar o
-        procedimento de um arquivo só. Confirmei o texto no runbook.
-
-  concerns_3_interpolacao_em_run:
+    tres_construtores: "`sqlDeRegistroObservado` (db:apply) · `sqlDeRegistroEmLote({sobrescrever})` (reset/backfill). O construtor único antigo `sqlDeRegistro` **não existe mais** (grep no repo: 0)."
+    db_apply_nao_consegue_sobrescrever:
+      prova_estatica: >-
+        `db-apply.ts` importa **apenas** `sqlDeRegistroObservado` do módulo de ledger — não
+        importa `sqlDeRegistroEmLote`. A única escrita no ledger no arquivo é a linha 210.
+      prova_dinamica_contra_o_banco: >-
+        Emiti o SQL EXATO que o `db:apply` emitiria para a `245` já registrada, com `sha256`
+        falso (`aaaa…`) e `via='apply'`: `RETURNING` devolveu **`[]`** (length 0) e a linha
+        ficou **byte a byte idêntica** — `sha`, `via` e `aplicada_em` inalterados.
+      ramo_alcancado: >-
+        `[]` (e não `null`) ⇒ o `db:apply` toma o ramo **ANOMALIA** ("já existia registro …
+        NÃO sobrescrevi"), que é a mensagem certa. Confirmei que `[]` é mesmo o que a
+        Management API devolve para resultado vazio (`select 1 where false` → `[]`, ok=true),
+        ou seja: o ramo novo **é alcançável**, não é código morto mascarado pelo ramo de erro.
+      achado_lateral: >-
+        Minha primeira sonda usou `via='SOBRESCRITA-QA'` e **não chegou** ao `ON CONFLICT`: o
+        CHECK novo a barrou com `23514`. Confirmação acidental de que o Minor dos CHECKs está
+        vivo em produção-de-teste.
+    reset_precondicao_verdadeira: >-
+      Verificada na ordem de execução real de `main()`, não no comentário: `resetarSchema()`
+      (que executa `drop schema if exists public cascade`) é a **linha 35** relativa de
+      `main()`; a população do ledger é a **linha 133**. E `resetarSchema` lança em falha ⇒ a
+      população é inalcançável se o drop não tiver acontecido. Precondição verdadeira.
+    backfill_guarda_exercida_contra_banco_povoado: >-
+      Gerei o SQL e o rodei contra o ledger POVOADO do teste: `ERROR P0001: ABORTADO:
+      trifold_migrations_aplicadas nao esta vazia…`. Contagem por `via` **idêntica** antes e
+      depois (`apply:1 · reset:263 · reset-falha-conhecida:4`). Ledger intacto.
+    mutacoes: "M7 (DO NOTHING → DO UPDATE) ⇒ 🔴 1 failed · M8 (guarda do backfill some) ⇒ 🔴 1 failed"
+    escape_hatch_julgado: >-
+      `--sobrescrever` existe, é **opt-in**, sem default, e o SQL gerado carrega um cabeçalho
+      `⚠️` dizendo exatamente o que ele destrói. O runbook **não** o menciona (conferido: 0
+      ocorrências), então ele não vira atalho de procedimento. Aceito.
+  major_3_fallback_seguia_apos_erro:
     status: FECHADO
-    medido_por_mim: >-
-      Varri o bloco do job separando os corpos de cada `run:`: **0 linhas de `run:` com
-      `${{ }}`** (a única ocorrência dentro de um `run:` está num `#` comentário explicando o
-      porquê). Todas as 4 interpolações do bloco estão em mapeamentos `env:`:
-      `BASE_REF`, `SUPABASE_MANAGEMENT_PAT`, `MOTIVO_DIFF`, `MOTIVO_STATUS`.
-    escopo_maior_que_o_pedido: >-
-      Eu havia nomeado só os dois `motivo`. Ele achou `BASE="origin/${{ github.base_ref }}"`
-      na mesma varredura — a interpolação com a superfície MAIOR das três, porque
-      `github.base_ref` é nome de branch e vinha antes das outras duas no fluxo.
-    regressao_verificada: >-
-      Rodei de novo, VERBATIM, o passo pós-hardening nos dois cenários sintéticos: checkout
-      raso (`git fetch --depth=1`) → `motivo=nao consegui resolver a ref base origin/main`, e
-      o arquivo de diff **nem é criado**; checkout completo → resolve e lista a migration. O
-      refactor para `env:` não quebrou nenhuma das guardas.
-
-  concerns_4_regua_pos_commit:
-    status: FECHADO POR MEDIÇÃO
-    medido_por_mim_no_repo_real: >-
-      `git diff --numstat origin/main...HEAD -- .github/workflows/ci.yml` → `164  0` ·
-      `awk '$2 != 0 { exit 1 }'` → exit **0** · `grep -c '^  static:\|^  tenancy-gate:'` → 2 ·
-      jobs = [static, tenancy-gate, migrations-do-pr].
-    confirmacao_da_rodada_1: "a vacuidade era mesmo artefato de gatear antes do commit, como eu havia medido em clone descartável"
-    residuo: "só a repetição pós-squash/pós-merge-de-main — ver `o_que_o_devops_carrega`"
-
-  obs_6_o_aviso_do_gate_tenancy:
-    status: FECHADO, e ancorado no lugar certo
-    o_que_mudou:
-      - "`_aviso` passa a ser EMITIDO pelo gerador (`scripts/gate-tenancy.ts`, no objeto que ele serializa)"
-      - "`_aviso` inserido no arquivo rastreado por edição cirúrgica (`--numstat 1 0`)"
-      - "alerta impresso ANTES de sobrescrever, quando `schema.projectRef !== PROD_REF`"
-    a_verificacao_que_eu_fiz_e_que_ninguem_pediu: >-
-      Avaliei a constante `AVISO_DO_RELATORIO` do fonte e comparei com o `_aviso` do JSON
-      rastreado: **byte-idênticos**. Importa porque, se divergissem, a próxima execução
-      legítima do gate contra produção produziria um diff fantasma naquele campo — e um campo
-      que "some sozinho" é como um aviso morre. Fixture: 10/10, e o teste não menciona
-      `_aviso` (inerte ao campo novo, como deve ser).
-    nao_rodou_o_gate_depois: "correto — rodar reescreveria `geradoEm` e, contra teste, envenenaria o arquivo"
-
-  obs_5_falha_de_ledger_no_reset:
-    status: ACEITO COMO IMPLEMENTADO — a decisão do coordenador prevalece
-    o_que_foi_implementado: >-
-      Contador próprio no `=== RESUMO ===` (`Falhas ao gravar o ledger: N`) + bloco de erro em
-      `stderr` nomeando que a invariante da AC3 não vale nesta execução, mandando rodar
-      `db:status` e refazer o Passo 2 do runbook antes de usar `db:apply`, e dizendo
-      explicitamente que o exit code não reflete isso e por quê.
-    meu_julgamento: >-
-      Concordo em não virar exit code, e por uma razão que esta própria onda documentou: um
-      reset de ~7,5 min que sai `1` porque um INSERT auxiliar falhou é um sinal que as pessoas
-      aprendem a ignorar — é a mesma patologia da régua sempre-vermelha que a AC4 corrigiu
-      ("ninguém confia num sinal que nunca muda"). E o furo não depende de alguém ler o log: o
-      próximo `pnpm db:status` mostra 268 `PENDENTE`, e o job do PR comenta `⚠️` sobre isso. A
-      detecção é redundante e vem de fora do reset, que é o que torna o resumo suficiente.
-    residuo_de_uma_linha_so: >-
-      O bloco de erro é impresso ANTES de `if (codigo === 0) console.log("Banco de teste
-      reconstruído.")`. A ÚLTIMA linha da tela continua sendo a tranquilizadora, sem
-      qualificação — exatamente o lugar onde o olho pousa depois de 7,5 min. Qualificar essa
-      linha final quando `falhasDeRegistro.length > 0` custa uma linha e não toca no exit
-      code. Recomendação, não bloqueio.
+    medido: >-
+      O laço de statements agora dá `break` no primeiro `!s.ok` e a mensagem nomeia
+      "ESTADO PARCIAL: K de N statement(s) … APLICARAM antes da falha … não há rollback …
+      Desfaça o estado parcial à mão ANTES de rodar de novo".
+  major_4_conselho_da_orfa:
+    status: FECHADO
+    medido: >-
+      O bloco `⛔ REMOVIDA` agora manda **restaurar o arquivo** (ou escrever migration nova com
+      o DROP/ALTER) e diz explicitamente que apagar a linha do ledger "tiraria o
+      `ÓRFÃ-no-banco` do relatório sem tirar o efeito do banco, trocando um sinal por um ponto
+      cego". É a correção certa: a versão anterior ensinava a apagar a evidência.
+  minor_checks_de_dominio:
+    status: FECHADO
+    medido_dentro_do_banco:
+      constraints: >-
+        `trifold_migrations_aplicadas_sha256_hex` CHECK `(sha256 ~ '^[0-9a-f]{64}$')` e
+        `trifold_migrations_aplicadas_via_valido` CHECK `via IN ('backfill-onda-1','apply',
+        'reset','reset-falha-conhecida')` — os dois presentes em `pg_constraint`.
+      reprovam_de_verdade: "`sha256='NAO-E-HEX'` → `23514` · `via='via-inventada'` → `23514` · zero linhas de sonda ficaram (total segue 268)"
+    fecha_o_meu_concerns_2_da_rodada_1: >-
+      O drift que eu achei (COMMENT com 3 valores, código com 4) deixa de ser possível em
+      silêncio: um quinto `via` agora falha no INSERT com `23514`. A enumeração passou de
+      documentada a **imposta**.
+    idempotencia: "bloco `DO $$` com `IF NOT EXISTS (… pg_constraint …)` — necessário porque `CREATE TABLE IF NOT EXISTS` pula constraints e o Postgres não tem `ADD CONSTRAINT IF NOT EXISTS`. Correto."
+  minor_excluir:
+    status: FECHADO
+    medido: "`--excluir 999_nao_existe.sql` → exit 1, **0 bytes** em stdout (não gerou SQL) · `--excluir 245_…sql` → 267 tuplas, a 245 fora (0 ocorrências)"
+    regua_do_runbook_confere: "sem exclusão: `grep -c \"^  ('\"` → **268** == `ls supabase/migrations/*.sql | wc -l` → **268**"
+  minor_paginacao:
+    status: "NÃO FECHADO — ver R3-1"
+  minor_runbook_passo_0:
+    status: FECHADO
+    a_medicao_dele_confere: >-
+      Confirmei nos dois lados o que ele mediu: `current_database()` → `postgres` e
+      `current_setting('cluster_name')` → `main`. Não discriminam nada. A versão anterior do
+      runbook ensinava uma conferência vazia no passo de aplicar em PRODUÇÃO.
+    discriminador_de_conteudo_verificado: >-
+      Rodei a query do runbook no teste: 1 linha, `name = 'Org de Teste — Epic 900'`,
+      `slug = 'org-teste-epic-900'` — exatamente o que o runbook diz para esperar.
+    julgamento: >-
+      **Sim, agora um operador consegue não errar de projeto.** As três conferências nomeiam o
+      ref FORA do banco (banner `[db-env] ref=`, `pnpm supabase:check`, o ref na URL do SQL
+      Editor — e é a URL que importa, porque o SQL Editor é o caminho real de colar o DDL), e o
+      discriminador de conteúdo cobre os DOIS sentidos do engano ("esperava produção e leu Org
+      de Teste" e "esperava teste e leu as organizações reais"). O que sobra é irredutível:
+      nenhuma query de dentro do Postgres devolve o ref, e o runbook agora diz isso em vez de
+      fingir o contrário.
 
 # ===========================================================================
-# EVIDÊNCIA DA RODADA 1 (mantida — nada dela foi invalidado)
-# ===========================================================================
-evidencia_rodada_1_ainda_valida:
-  banco_real:
-    - "ALTERADA-APÓS-APLICAR: db:status exit 0 (relatório) · db:apply exit 1 sem aplicar nada"
-    - "contrato C6 lado tabela-ausente: exit 1 nomeando tabela/projeto/ambiente/runbook (mutando TABELA_LEDGER contra TESTE, sem tocar produção)"
-    - "--yes em produção: duas guardas distintas, ambas exit 1, antes de qualquer rede"
-    - "espelho determinístico (só `gerado_em` muda) e a chave `producao` preservada"
-    - "gerador de backfill: 268 tuplas, zero rede/credencial, sha da 245 == o do ledger"
-  g2_terceiro_estado:
-    - "forçado por checkout raso REAL (git fetch --depth=1), passo do ci.yml copiado verbatim"
-    - "controle negativo: sem as guardas, o redirect cria arquivo vazio e o aviso responde ✅ limpo — o falso-verde medido"
-    - "três camadas independentes (rev-parse · merge-base · readFileSync ausente) + fallback no github-script"
-  ancoras_literais:
-    - "mutando SÓ supabase-refs.ts, 11 testes acendem (db-env 7 · supabase-check 4)"
-    - "os testes novos usam literal digitado à mão e não importam a constante — conforme AC2"
-  allowlist_do_gate_de_tenancy:
-    veredito: "razão suficiente, não atalho"
-    resumo: >-
-      mecanismo sancionado pela própria mensagem de erro do gate · grandfather list congelada
-      (com checksum) NÃO tocada · razão verificável (RLS on, 0 policies, 0 ocorrências em
-      packages/) · colateral checado nas quatro regras que compartilham o Set (R2/R3/R6/R8):
-      nenhuma reportaria esta tabela de outra forma.
+evidencia_das_rodadas_1_e_2: "mantida integralmente — nada foi invalidado por esta rodada"
 
-# ===========================================================================
 ac_status:
-  AC1: "CUMPRIDA (parcial por desenho — produção é runbook do @devops; o COMMENT corrigido vai junto)"
-  AC2: "CUMPRIDA"
-  AC3: "CUMPRIDA (OBS-5 aceita como implementada)"
-  AC4: "CUMPRIDA — quatro estados de arquivo do PR cobertos; a exclusão original está riscada e refutada na própria AC"
+  AC1: "CUMPRIDA (parcial por desenho — produção é runbook do @devops)"
+  AC2: "CUMPRIDA — e agora com CHECK de domínio impondo a enumeração de `via`"
+  AC3: "CUMPRIDA"
+  AC4: "**NÃO CUMPRIDA em um ponto** — o job desta story não atualiza in-place em PR longo (R3-1). Todo o resto da AC4 segue verificado."
   AC5: "CUMPRIDA"
 
 evidence:
-  tests_reviewed: 28
-  mutacoes_executadas_pelo_qa_rodada_2: 2   # M5 e a mutação de ruído (sentidos opostos)
-  mutacoes_executadas_pelo_qa_rodada_1: 6
-  ac_covered: [1, 2, 3, 4, 5]
-  ac_gaps: []
-  gates: "pnpm test 274 arquivos · 3514 passed | 6 expected fail · type-check 8/8 · lint 0 errors, 36 warnings pré-existentes"
+  tests_reviewed: 34
+  mutacoes_executadas_pelo_qa: "3 nesta rodada (M6/M7/M8, todas reproduzidas) · 8 nas rodadas 1-2"
+  sondas_contra_o_banco_real_nesta_rodada: 6
+  ac_covered: [1, 2, 3, 5]
+  ac_gaps: [4]
+  gates: "pnpm test 274 arquivos · 3520 passed | 6 expected fail · type-check 8/8 · lint 0 errors, 36 warnings pré-existentes"
+  tsc_dedicado: "os 8 arquivos .ts desta fatia type-checam limpos com `types: [node]` — verificado por mim, fora do CI"
+
+invariante_do_glifo:
+  porque: "num instrumento em que o emoji É o sinal, `✅` dentro de um corpo `⛔` engana quem varre o PR de relance"
+  como_medi: >-
+    Varri os **10** caminhos alcançáveis de `montarAviso` (4 indeterminados, 4 de aviso, 2
+    limpos) e assertei `corpo.includes('✅') === (estado === 'limpo')`. **Zero violações.**
+    Mais forte do que foi pedido: não é só "o ⛔ não tem ✅", é "o ✅ aparece se e somente se o
+    estado é limpo". O fallback do `github-script` no `ci.yml` também não tem `✅` (grep: 0).
+
+mnt_001:
+  status: "ACEITO COMO DÍVIDA NOMEADA, não como problema desta fatia"
+  medido: >-
+    `scripts/` tem 34 arquivos `.ts` e não entra no `turbo lint`/`type-check` (não é pacote).
+    Os 8 arquivos desta fatia type-checam limpos quando eu os compilo à mão; o diretório
+    INTEIRO não passaria hoje (medi erros em `add-kb-entry.ts`, `backfill-campaign-entries.ts`
+    e outros pré-existentes). Ou seja: a dívida é real e antiga, e esta fatia a aumentou em
+    ~1.400 linhas — mas fechá-la aqui exigiria consertar o que já estava lá.
+  encaminhamento: "story própria; o @dev registrou. Concordo com não fazer aqui."
 
 nfr_validation:
-  security:
-    status: PASS
-    notes: >-
-      RLS on / 0 policies confirmado DENTRO do banco. Zero `${{ }}` em bloco `run:` do job
-      novo. Gatilho `pull_request` (não `_target`) + guard de fork + 1 secret. Nenhum valor de
-      segredo em arquivo rastreado.
+  security: { status: PASS, notes: "CHECKs de domínio fecham o INSERT manual por service-role com hash truncado; nenhum `${{ }}` em `run:`; produção intocada" }
   reliability:
-    status: PASS
-    notes: >-
-      Subiu de CONCERNS para PASS: a quarta classe deixou de responder verde, e o controle
-      negativo tem vivacidade provada por mutação de sentido oposto.
+    status: CONCERNS
+    notes: "R3-1 — o comentário do job acumula em PR longo, e a régua que deveria proteger o `ci.yml` não viu a modificação de um job existente."
   maintainability: { status: PASS }
   performance: { status: PASS }
 
 # ===========================================================================
 o_que_o_devops_carrega:
   antes_do_push:
-    - "Commit `9e3a80fa` na `story/900-3c-registro-migrations`. Nada mais pendente na árvore."
+    - "⛔ **BLOQUEADO até R3-1**: paginar o job `migrations-do-pr` e resolver a modificação não-declarada do `tenancy-gate` (manter+declarar, ou tirar do PR)."
     - >-
-      NÃO rode `pnpm gate:tenancy` contra ref que não seja produção. Se rodar, restaure:
-      `git checkout -- docs/audits/gate-tenancy-report.json` (agora o próprio arquivo avisa).
+      Depois do conserto, a régua da AC4 vai passar a acusar `2` deleções REAIS se o
+      `tenancy-gate` continuar alterado — e isso é **correto**, não uma regressão. Se optarem
+      por manter, a AC4 precisa dizer que as 2 deleções são esperadas e por quê; caso
+      contrário a régua volta a ser descartada por quem a roda.
   pos_squash_ou_pos_merge_de_main:
     - >-
-      REPETIR a régua literal da AC4 e colar no PR — é a única coisa desta revisão que caduca
-      com reescrita de histórico:
+      Repetir a régua literal — segue sendo a única medição que caduca com reescrita de
+      histórico:
       `git diff --numstat origin/main...HEAD -- .github/workflows/ci.yml | awk '$2 != 0 { exit 1 }'`
-      (esperado exit 0) e `grep -c '^  static:\|^  tenancy-gate:' .github/workflows/ci.yml`
-      (esperado 2).
+      e `grep -c '^  static:\|^  tenancy-gate:' .github/workflows/ci.yml` (esperado 2).
     - >-
-      Motivo concreto, não cerimônia: a forma de três pontos mede a partir do merge-base. Se
-      main ganhar deleções em `ci.yml` e você trouxer main para a branch, elas entram na conta
-      e a régua fica vermelha por mudança que não é sua — melhor descobrir antes do push.
-  no_PR_aberto:
+      ⚠️ E agora com uma leitura a mais, aprendida em R3-1: **verde nessa régua não prova que
+      nenhum job existente mudou.** Confira também `git diff origin/main...HEAD --
+      .github/workflows/ci.yml | grep -c '^-'` e leia o hunk — se o hunk começar antes da
+      linha onde o job novo começa, um job pré-existente foi tocado.
+  no_PR:
     - >-
-      O job `migrations-do-pr` roda pela primeira vez de verdade aqui. Secret
-      `SUPABASE_MANAGEMENT_PAT` confirmado presente no repositório (gravado em 2026-08-23).
+      O job já rodou de verdade e produziu `## Migrations deste PR — ✅ Nenhuma migration deste
+      PR está pendente`. É o desfecho que eu previ na rodada 2, observado.
     - >-
-      DESFECHO ESPERADO: `✅ Nenhuma migration deste PR está pendente`, listando
-      `245_registro_de_migrations.sql — aplicada` (ela está aplicada no teste, `via=apply`).
-      Qualquer `⛔` é sinal real, não ruído de estreia. **Ausência de comentário significa uma
-      coisa só: o job não rodou.**
-  depois_do_merge_produção:
-    - >-
-      Aplicar a `245` em PRODUÇÃO pelo runbook `docs/runbooks/aplicar-245-registro-migrations.md`
-      — Passo 0 (pré-condições) → 1 (DDL) → 2 (backfill) → 3 (conferência). Use a versão do
-      arquivo que está NESTE commit: é a que traz o `COMMENT` com os quatro valores de `via`.
-    - >-
-      O backfill é GERADO na hora (`npx tsx scripts/gerar-backfill-ledger.ts`), nunca um `.sql`
-      congelado. Confira a contagem antes de colar (`grep -c \"^  ('\"` == `ls supabase/migrations/*.sql | wc -l`).
-    - >-
-      Depois: `TRIFOLD_ENV=producao pnpm db:status` (leitura, não exige TRIFOLD_ALLOW_PROD) e
-      commitar o espelho regenerado — é o que substitui o marcador `AINDA NÃO MEDIDO` da chave
-      `producao` de `docs/audits/migrations-aplicadas.json`.
-    - "Só então o item de DoD 'migration aplicada em produção' fecha. Ele segue ABERTO hoje."
-  nao_carregar:
-    - "Nenhuma correção pendente de código. Nenhum item bloqueante."
+      O `## Gate de tenancy` está 🔴 no #525 — **pré-existente**, idêntico ao do #524 já
+      mergeado, e com `R3: 0` (a allowlist desta story está correta). Não é bloqueio desta
+      fatia (job não-bloqueante), mas vale escalar: catraca vermelha há dois PRs é sinal que
+      ninguém mais lê.
+  depois_do_merge_producao:
+    - "Aplicar a `245` em produção pelo runbook, com a versão deste commit (CHECKs + COMMENT dos quatro valores). Passo 0 → 1 → 2 → 3."
+    - "Backfill **gerado na hora**; a guarda `RAISE EXCEPTION` só passa sobre ledger vazio, que é a janela do Passo 2."
+    - "Depois: `TRIFOLD_ENV=producao pnpm db:status` e commitar o espelho — substitui o marcador `AINDA NÃO MEDIDO`. Só então o item de DoD fecha."
 
 recommendations:
   future:
-    - "OBS-5 (1 linha, não bloqueia): qualificar a última linha 'Banco de teste reconstruído.' quando `falhasDeRegistro.length > 0`, para a tela não terminar tranquilizando."
-    - "OBS-7 (fora desta story, já em `docs/backlog.md` [EPIC-900]): `docs/architecture/saas-multi-tenant.md:1134` ainda cita o `sync-schema.sh` deletado."
-    - "Considerar teste de exit code para db-status/db-apply — o contrato C6 segue com prova só por execução manual (a do @dev e as minhas duas rodadas)."
+    - "OBS-5 (1 linha): qualificar a última linha 'Banco de teste reconstruído.' quando `falhasDeRegistro.length > 0`."
+    - "MNT-001: pôr `scripts/` sob lint/type-check do CI — story própria."
+    - "R3-2: catraca de tenancy vermelha desde o #524 — escalar ao @pm/@architect."
 
 waiver:
   active: false
