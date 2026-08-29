@@ -48,7 +48,7 @@
   },
   "alvos-onda-2": {
     "src/app/api/cron/daily-report/route.ts": {
-      "motivo": "travado: DEFAULT_ORG_ID (daily-report/route.ts:16), só sobrescrito por DAILY_REPORT_ORG_ID (:33) — processa uma org só. Correção no Passo 5 da Onda 2 (900-20). ARMADILHA: DAILY_REPORT_RECIPIENTS é global; sob forEachActiveOrg ingênuo esses telefones receberiam o relatório de TODAS as orgs — a env só vale para a org do DAILY_REPORT_ORG_ID, que sobrevive como override nomeado da Trifold.",
+      "motivo": "travado: DEFAULT_ORG_ID (daily-report/route.ts:16), só sobrescrito por DAILY_REPORT_ORG_ID (:33) — processa uma org só. Correção no Passo 5 da Onda 2 (900-23). ARMADILHA: DAILY_REPORT_RECIPIENTS é global; sob forEachActiveOrg ingênuo esses telefones receberiam o relatório de TODAS as orgs — a env só vale para a org do DAILY_REPORT_ORG_ID, que sobrevive como override nomeado da Trifold.",
       "alvosExpiramEm": "2026-09-30"
     },
     "src/app/api/cron/daily-report/route.test.ts": {
@@ -56,7 +56,7 @@
       "alvosExpiramEm": "2026-09-30"
     },
     "src/app/api/cron/nicole-agenda-reconcile/route.ts": {
-      "motivo": "travado: DEFAULT_ORG_ID (nicole-agenda-reconcile/route.ts:30), usado em :76 — processa uma org só. Correção no Passo 5 da Onda 2 (900-20).",
+      "motivo": "travado: DEFAULT_ORG_ID (nicole-agenda-reconcile/route.ts:30), usado em :76 — processa uma org só. Correção no Passo 5 da Onda 2 (900-23).",
       "alvosExpiramEm": "2026-09-30"
     },
     "src/app/api/cron/nicole-agenda-reconcile/route.test.ts": {
@@ -64,15 +64,15 @@
       "alvosExpiramEm": "2026-09-30"
     },
     "src/app/api/cron/nicole-health/route.ts": {
-      "motivo": "travado por DEFAULT_ORG_ID (nicole-health/route.ts:31, usado em :117,:126,:157,:166) — mas NÃO migra para forEachActiveOrg: avisa o admin da Trifold que a API de IA parou, é vigia de plataforma; migrar criaria N alertas para o mesmo incidente, o oposto do que o arquivo existe para evitar. Correção correta: remover os filtros por DEFAULT_ORG_ID para ver erros de todas as orgs, incluir org no corpo do alerta. Quem pegar o Passo 5 (900-20) tem que ler esta ressalva antes de envolvê-lo num loop. Achado da 900-21b: criado em 51d21d1e (2026-08-28), DEPOIS do congeladoEm 2026-08-23, nunca esteve na allowlist.",
+      "motivo": "travado por DEFAULT_ORG_ID (nicole-health/route.ts:31, usado em :117,:126,:157,:166) — mas NÃO migra para forEachActiveOrg: avisa o admin da Trifold que a API de IA parou, é vigia de plataforma; migrar criaria N alertas para o mesmo incidente, o oposto do que o arquivo existe para evitar. Correção correta: remover os filtros por DEFAULT_ORG_ID para ver erros de todas as orgs, incluir org no corpo do alerta. Quem pegar o Passo 5 (900-23) tem que ler esta ressalva antes de envolvê-lo num loop. Achado da 900-21b: criado em 51d21d1e (2026-08-28), DEPOIS do congeladoEm 2026-08-23, nunca esteve na allowlist.",
       "alvosExpiramEm": "2026-09-30"
     },
     "src/app/api/cron/meta-ads-intelligence/route.ts": {
-      "motivo": "defeituoso: accounts[0]!.org_id (meta-ads-intelligence/route.ts:231) vira \"a org\" para as chamadas seguintes — com 2+ orgs processa e registra êxito só para a primeira. Correção no Passo 5 da Onda 2 (900-20): agrupar accounts por org_id, um meta_sync_log por org.",
+      "motivo": "defeituoso: accounts[0]!.org_id (meta-ads-intelligence/route.ts:231) vira \"a org\" para as chamadas seguintes — com 2+ orgs processa e registra êxito só para a primeira. Correção no Passo 5 da Onda 2 (900-23): agrupar accounts por org_id, um meta_sync_log por org.",
       "alvosExpiramEm": "2026-09-30"
     },
     "src/app/api/cron/meta-capi-dispatch/route.ts": {
-      "motivo": "defeituoso: o select de leads (meta-capi-dispatch/route.ts:101-103) usa só .in(\"id\", leadIds), sem .eq(\"org_id\", ...) — a outbox de todas as orgs é processada como se fosse uma. Correção no Passo 5 da Onda 2 (900-20).",
+      "motivo": "defeituoso: o select de leads (meta-capi-dispatch/route.ts:101-103) usa só .in(\"id\", leadIds), sem .eq(\"org_id\", ...) — a outbox de todas as orgs é processada como se fosse uma. Correção no Passo 5 da Onda 2 (900-23).",
       "alvosExpiramEm": "2026-09-30"
     },
     "src/app/api/cron/meta-capi-dispatch/route.test.ts": {
@@ -80,7 +80,7 @@
       "alvosExpiramEm": "2026-09-30"
     },
     "src/app/api/cron/followup/route.ts": {
-      "motivo": "defeituoso: o lookup de whatsapp_config (followup/route.ts:168) roda ANTES do for (const rule of rules) (:192) e filtra só por status=\"active\", sem org_id nenhum — não é \"usa a config errada\", é \"usa qualquer linha ativa que o banco devolver primeiro\", para todas as regras. Correção no Passo 5 da Onda 2 (900-20): mover para dentro do loop com .eq(\"org_id\", rule.org_id).",
+      "motivo": "defeituoso: o lookup de whatsapp_config (followup/route.ts:168) roda ANTES do for (const rule of rules) (:192) e filtra só por status=\"active\", sem org_id nenhum — não é \"usa a config errada\", é \"usa qualquer linha ativa que o banco devolver primeiro\", para todas as regras. Correção no Passo 5 da Onda 2 (900-23): mover para dentro do loop com .eq(\"org_id\", rule.org_id).",
       "alvosExpiramEm": "2026-09-30"
     },
     "src/app/api/cron/calendly-sync/route.ts": {
