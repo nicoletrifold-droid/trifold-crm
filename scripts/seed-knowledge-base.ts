@@ -1,8 +1,12 @@
 import { createClient } from "@supabase/supabase-js"
+import { resolverAmbiente } from "./lib/db-env"
 
+// Story 900-3b (AC3): alvo por `scripts/lib/db-env.ts` — allowlist que falha FECHADA,
+// default TESTE. Escrever em produção exige TRIFOLD_ENV=producao E TRIFOLD_ALLOW_PROD=1.
+const ALVO = resolverAmbiente({ escreve: true })
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  ALVO.url,
+  ALVO.serviceRoleKey!,
   { auth: { autoRefreshToken: false, persistSession: false } }
 )
 

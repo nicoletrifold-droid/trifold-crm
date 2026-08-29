@@ -25,6 +25,7 @@
 
 import { createClient } from "@supabase/supabase-js"
 import { metaFetch } from "@trifold/shared"
+import { resolverAmbiente } from "./lib/db-env"
 
 const DESDE = process.env.DESDE ?? "2026-06-08"
 const ATE = process.env.ATE ?? new Date(Date.now() - 86_400_000).toISOString().split("T")[0]!
@@ -103,10 +104,13 @@ async function paginar(path: string, token: string, params: Record<string, strin
 }
 
 async function main(): Promise<void> {
-  const url = process.env.SUPABASE_URL
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !key) throw new Error("SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY são obrigatórios")
-  const db = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
+  // Story 900-3b (AC3): alvo por `scripts/lib/db-env.ts` — allowlist que falha FECHADA,
+  // default TESTE. `escreve: true` porque este backfill faz `upsert` em
+  // `meta_ad_insights`.
+  const alvo = resolverAmbiente({ escreve: true })
+  const key = alvo.serviceRoleKey
+  if (!key) throw new Error(`SUPABASE_SERVICE_ROLE_KEY ausente para o ambiente "${alvo.ambiente}"`)
+  const db = createClient(alvo.url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 
   // Sem a migration 211 o primeiro upsert com ranking real estoura na constraint.
   // Não faço sonda: o erro do Postgres já é explícito, e sonda que insere linha

@@ -4,7 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev --port 3000",
+    "dev:prod": "node ./scripts/next-com-env.mjs .env.producao.local dev --port 3000",
     "build": "next build",
+    "build:teste": "node ./scripts/next-com-env.mjs .env.development build",
     "start": "next start",
     "lint": "eslint",
     "type-check": "tsc --noEmit",

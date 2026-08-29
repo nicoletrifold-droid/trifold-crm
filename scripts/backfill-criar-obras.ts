@@ -9,18 +9,16 @@
 import { createClient } from "@supabase/supabase-js"
 import { readFileSync } from "fs"
 import { resolve } from "path"
+import { resolverAmbiente } from "./lib/db-env"
 
-// Load env from packages/web/.env.local
-const envPath = resolve(__dirname, "../packages/web/.env.local")
-for (const line of readFileSync(envPath, "utf-8").split("\n")) {
-  const match = line.match(/^([^#=]+)=(.*)$/)
-  if (match && !process.env[match[1].trim()]) {
-    process.env[match[1].trim()] = match[2].trim().replace(/^"(.*)"$/, "$1")
-  }
-}
+// Story 900-3b (AC3): o alvo vem de `scripts/lib/db-env.ts` — allowlist que falha
+// FECHADA. Default: TESTE. Escrever em produção exige TRIFOLD_ENV=producao E
+// TRIFOLD_ALLOW_PROD=1. Isto substitui o carregador de `packages/web/.env.local`
+// que existia aqui: aquele arquivo foi renomeado para `.env.producao.local`.
+const ALVO = resolverAmbiente({ escreve: true })
 
-const supabaseUrl = (process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL)!
-const supabase = createClient(supabaseUrl, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
+
+const supabase = createClient(ALVO.url, ALVO.serviceRoleKey!, {
   auth: { autoRefreshToken: false, persistSession: false },
 })
 

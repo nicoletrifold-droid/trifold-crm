@@ -35,6 +35,7 @@
  */
 import { createClient } from "@supabase/supabase-js"
 import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from "node:fs"
+import { resolverAmbiente } from "./lib/db-env"
 import path from "node:path"
 import {
   PROMPT_SNAPSHOT_ORG_ID,
@@ -82,26 +83,16 @@ function usage(): never {
  * `dotenv` não está instalado na raiz deste monorepo.
  */
 function loadCredentials(): { url: string; key: string } {
-  let url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  let key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  // Story 900-3b (AC3): substitui o parser ad hoc de `packages/web/.env.local` (arquivo
+  // renomeado). `escreve: false` — este script LÊ do banco e escreve apenas ARQUIVOS.
+  const alvo = resolverAmbiente({ escreve: false })
+  const url = alvo.url
+  const key = alvo.serviceRoleKey
 
-  if (!url || !key) {
-    const envPath = path.join(findRepoRoot(), "packages", "web", ".env.local")
-    if (existsSync(envPath)) {
-      for (const line of readFileSync(envPath, "utf8").split("\n")) {
-        const match = /^\s*([A-Z0-9_]+)\s*=\s*(.*)$/.exec(line)
-        if (!match) continue
-        const value = match[2].trim().replace(/^["']|["']$/g, "")
-        if (match[1] === "NEXT_PUBLIC_SUPABASE_URL" && !url) url = value
-        if (match[1] === "SUPABASE_SERVICE_ROLE_KEY" && !key) key = value
-      }
-    }
-  }
-
-  if (!url || !key) {
+  if (!key) {
     console.error(
-      "❌ Faltam credenciais. Defina NEXT_PUBLIC_SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY\n" +
-        "   no ambiente, ou garanta que packages/web/.env.local existe."
+      `❌ Falta SUPABASE_SERVICE_ROLE_KEY para o ambiente "${alvo.ambiente}".\n` +
+        "   Defina no ambiente ou em .env.teste/.env.producao."
     )
     process.exit(EXIT_ERROR)
   }

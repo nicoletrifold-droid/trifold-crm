@@ -21,14 +21,19 @@
  * com `Cannot find module '@web/lib/google-calendar'`. Descoberto rodando de verdade.
  */
 import { createClient } from "@supabase/supabase-js"
+import { resolverAmbiente } from "./lib/db-env"
 
 const DRY = process.argv.includes("--dry-run")
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
-const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
+// Story 900-3b (AC3): alvo por `scripts/lib/db-env.ts` — allowlist que falha FECHADA,
+// default TESTE. `escreve: true` porque este backfill grava `google_event_id` em
+// `appointments` (além de criar eventos no Google Calendar, que a allowlist não cobre).
+const ALVO = resolverAmbiente({ escreve: true })
+const SUPABASE_URL = ALVO.url
+const SERVICE_KEY = ALVO.serviceRoleKey
 
-if (!SUPABASE_URL || !SERVICE_KEY) {
-  console.error("Faltam NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY no ambiente.")
+if (!SERVICE_KEY) {
+  console.error(`Falta SUPABASE_SERVICE_ROLE_KEY para o ambiente "${ALVO.ambiente}".`)
   process.exit(1)
 }
 for (const k of ["GOOGLE_CLIENT_EMAIL", "GOOGLE_PRIVATE_KEY", "GOOGLE_CALENDAR_ID"]) {

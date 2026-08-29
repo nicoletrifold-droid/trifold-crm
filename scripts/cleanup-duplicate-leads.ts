@@ -37,23 +37,13 @@
  */
 
 import { createClient, SupabaseClient } from "@supabase/supabase-js"
-import { readFileSync, existsSync } from "fs"
-import { resolve } from "path"
 import readline from "readline"
 import { normalizePhoneBR } from "../packages/shared/src/utils/phone"
+import { resolverAmbiente } from "./lib/db-env"
 
-// ---------------------------------------------------------------------------
-// Env loading (mirror pattern used by scripts/re-enrich-lead.ts)
-// ---------------------------------------------------------------------------
-const envPath = resolve(__dirname, "../packages/web/.env.local")
-if (existsSync(envPath)) {
-  for (const line of readFileSync(envPath, "utf-8").split("\n")) {
-    const match = line.match(/^([^#=]+)=(.*)$/)
-    if (match && !process.env[match[1].trim()]) {
-      process.env[match[1].trim()] = match[2].trim()
-    }
-  }
-}
+// Env loading: Story 900-3b substituiu o carregador ad hoc de `packages/web/.env.local`
+// (arquivo renomeado) por `resolverAmbiente()`, que carrega `.env.teste`/`.env.producao`
+// com a mesma semântica (`process.env` vence) e ainda valida o alvo. Ver `getSupabase()`.
 
 // ---------------------------------------------------------------------------
 // Args & guards
@@ -87,12 +77,17 @@ interface CleanupSummary {
 
 // ---------------------------------------------------------------------------
 function getSupabase(): SupabaseClient {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !key) {
+  // Story 900-3b (AC3): o alvo vem de `scripts/lib/db-env.ts` — allowlist que falha
+  // FECHADA. Default: TESTE. Escrever em produção exige TRIFOLD_ENV=producao E
+  // TRIFOLD_ALLOW_PROD=1. Este script é destrutivo (DELETE/UPDATE em `leads`), por isso
+  // `escreve: true`.
+  const alvo = resolverAmbiente({ escreve: true })
+  const url = alvo.url
+  const key = alvo.serviceRoleKey
+  if (!key) {
     console.error(
-      "ERROR: NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set " +
-        "(via environment or packages/web/.env.local)."
+      `ERROR: SUPABASE_SERVICE_ROLE_KEY ausente para o ambiente "${alvo.ambiente}" ` +
+        "(defina no ambiente ou em .env.teste/.env.producao)."
     )
     process.exit(1)
   }

@@ -4,7 +4,7 @@
 - **Epic:** 900 — Trifold CRM → SaaS Multi-Tenant com Cobrança Modular
 - **Onda:** 1 — Isolamento. Como a `900-3` original, esta story entrega infraestrutura de teste/promoção (o critério de saída da Onda 1 do plano de 3 ondas aprovado), não uma story de policy (`900-4`…`900-18`).
 - **Story:** 900-3b — **Fatia A** de um split em duas, decidido pelo `@po` na validação de 2026-08-29 (`docs/qa/po-validation-900-3b.md`) e autorizado pelo dono do produto. A irmã é `900-3c` (Fatia B — Promoção).
-- **Status:** Ready — GO condicional do `@po` (8/10, Rodada 2, `docs/qa/po-validation-900-3b.md`) com a emenda D1 e as recomendações S8-S13 aplicadas nesta versão. A Task 1 pode começar imediatamente; não depende do PR #522.
+- **Status:** Ready for Review — implementada pelo `@dev` em 2026-08-29. **5 de 7 ACs cumpridas** (AC1, AC3, AC5, AC6, AC7), com mutação executada e vermelho medido em cada uma. **AC2 bloqueada** na Task 2.7 (`.claude/CLAUDE.md`) por exigir autorização do dono do produto — diff pronto no Dev Agent Record. **AC4 desmarcada por divergência substantiva**: a verificação dela é falsa por construção (medido: com o `config.toml` novo, `supabase db dump` sem flag ainda resolve para PRODUÇÃO, porque quem manda é `supabase/.temp/project-ref`). Ambas precisam de decisão do `@po`/`@architect` antes do gate.
 - **Priority:** P0 — sem esta fatia, `pnpm dev` continua apontando para produção por padrão e o banco de teste continua sem forma segura de ser reconstruído.
 - **Complexity:** L — 7 ACs, ~20 arquivos, **zero migration, zero toque em produção**. Não disputa número com o PR #522.
 - **Created:** 2026-08-29 (v0.1 original); **reescrita em 2026-08-29** como Fatia A do split.
@@ -133,7 +133,7 @@ e confirmou.
 
 ## Acceptance Criteria
 
-- [ ] **AC1 — `.gitignore` corrigido, com carrasco em CI (Passo 0 + correções C7 e S3 do parecer):**
+- [x] **AC1 — `.gitignore` corrigido, com carrasco em CI (Passo 0 + correções C7 e S3 do parecer):**
   - **Root `.gitignore`:** remover a linha `.env*` (hoje linha 53). As linhas `.env` (2), `.env.*`
     (3) e `!.env.example` (4) já bastam — a linha 53 é que anulava a negação da linha 4. Não
     adicionar negação nova na raiz para `packages/web/.env.development.example`: negação de path
@@ -265,7 +265,7 @@ e confirmou.
   - `git diff scripts/README.md .claude/CLAUDE.md` não é vazio no mesmo PR do rename.
   [Source: parecer `@po`, C1, S4, S7, S1; plano aprovado, Passo 1 e parte do Passo 9]
 
-- [ ] **AC3 — `scripts/lib/db-env.ts`: allowlist fecha-fechado, controle positivo sem efeito destrutivo (Passo 2 + correção C2):**
+- [x] **AC3 — `scripts/lib/db-env.ts`: allowlist fecha-fechado, controle positivo sem efeito destrutivo (Passo 2 + correção C2):**
   - Módulo novo (≤80 linhas, sem dependência `dotenv` nova). `resolverAmbiente({ escreve? })`:
     seletor `TRIFOLD_ENV`, default `teste`; `escreve: true` + `producao` exige
     `TRIFOLD_ALLOW_PROD=1`; loga ambiente/ref em `stderr`.
@@ -325,7 +325,7 @@ e confirmou.
   para `xnxvygyfyyyzwhiuoehz`.
   [Source: plano aprovado, Passo 3]
 
-- [ ] **AC5 — Reset endurecido: itens 1-3 e 5 do Passo 6 (sem o item de popular o ledger, que é `900-3c`):**
+- [x] **AC5 — Reset endurecido: itens 1-3 e 5 do Passo 6 (sem o item de popular o ledger, que é `900-3c`):**
   - `reset:testdb` (script `pnpm` novo): **default `--dry-run`**; destruir exige `--confirmar`.
   - Antes de pedir confirmação, imprime: ref do projeto-alvo, contagem de orgs, contagem de leads,
     `max(created_at)` de `leads`.
@@ -366,7 +366,7 @@ e confirmou.
   [Source: plano aprovado, Passo 6; parecer `@po`, §1.3 (item 4 da AC7 original fica em B), S6,
   S11, S13]
 
-- [ ] **AC6 — `FALHAS_CONHECIDAS` estruturada + predicados corrigidos para `236`/`237` (Passo 7 + correção C3):**
+- [x] **AC6 — `FALHAS_CONHECIDAS` estruturada + predicados corrigidos para `236`/`237` (Passo 7 + correção C3):**
   - `FALHAS_CONHECIDAS` (hoje `Map<string, string>`, 4 entradas) migra para `{ motivo: string;
     classe: 'duplicata-de-prefixo' | 'backfill-de-dado-real' | 'artefato-do-metodo'; desde: string;
     revisar_em: string }`. As 4 entradas atuais reclassificadas: as duas `025_*` são
@@ -421,7 +421,7 @@ e confirmou.
   [Source: parecer `@po`, C3 (SQL corrigido colado literal do parecer); constraint #1 do spawn
   original; leitura direta das três migrations nesta story — leitura de sequência, não execução]
 
-- [ ] **AC7 — `reference_ci_surface_trifold.md`: manchete corrigida, corpo preservado (parte do Passo 9, independente das duas fatias):**
+- [x] **AC7 — `reference_ci_surface_trifold.md`: manchete corrigida, corpo preservado (parte do Passo 9, independente das duas fatias):**
   - `.claude/agent-memory/aios-devops/reference_ci_surface_trifold.md` — a manchete (*"O único
     check de PR é o build do Vercel — não há GitHub Actions"*) está obsoleta desde a `900-1`, que
     criou `.github/workflows/ci.yml`. **Não apagar o arquivo** — duas lições do corpo continuam
@@ -443,70 +443,70 @@ versionável; 3 depois de 2 por convenção de leitura, sem dependência técnic
 ambiente inteiro [2, 3, 4] já funcionando para executar de verdade contra teste; 7 é independente,
 listada por último por conveniência)*
 
-- [ ] **Task 1 — `.gitignore` + teste que invoca `git check-ignore` (AC1)**
-  - [ ] 1.1 Remover a linha `.env*` do `.gitignore` da raiz.
-  - [ ] 1.2 Acrescentar `!.env.development.example` em `packages/web/.gitignore`, depois da linha
+- [x] **Task 1 — `.gitignore` + teste que invoca `git check-ignore` (AC1)**
+  - [x] 1.1 Remover a linha `.env*` do `.gitignore` da raiz.
+  - [x] 1.2 Acrescentar `!.env.development.example` em `packages/web/.gitignore`, depois da linha
     `.env*`.
-  - [ ] 1.3 Escrever `scripts/gitignore-env.test.ts` com os 4 casos da AC1 (`execFileSync`).
-  - [ ] 1.4 Rodar `pnpm test -- gitignore-env` e colar a saída no Dev Agent Record.
+  - [x] 1.3 Escrever `scripts/gitignore-env.test.ts` com os 4 casos da AC1 (`execFileSync`).
+  - [x] 1.4 Rodar `pnpm test -- gitignore-env` e colar a saída no Dev Agent Record.
 
-- [ ] **Task 2 — Split de ambiente + banner decomposto + `build:teste` + `scripts/README.md` + `CLAUDE.md` (AC2)**
-  - [ ] 2.1 Renomear os 3 arquivos de produção, preservando `.env.production.local.bak` (S7).
-  - [ ] 2.2 Criar `packages/web/.env.development` e `.env.teste` (raiz) com valores do projeto de
+- [x] **Task 2 — Split de ambiente + banner decomposto + `build:teste` + `scripts/README.md` + `CLAUDE.md` (AC2)**
+  - [x] 2.1 Renomear os 3 arquivos de produção, preservando `.env.production.local.bak` (S7).
+  - [x] 2.2 Criar `packages/web/.env.development` e `.env.teste` (raiz) com valores do projeto de
     teste (painel Supabase, nunca de secret do GitHub).
-  - [ ] 2.3 Criar `packages/web/.env.development.example` (tracked, só nomes).
-  - [ ] 2.4 Adicionar `"dev:prod"` e `"build:teste"` a `packages/web/package.json`.
-  - [ ] 2.5 Criar `packages/web/src/lib/env-banner.ts` (`avaliarRefDoAmbiente`, com os três
+  - [x] 2.3 Criar `packages/web/.env.development.example` (tracked, só nomes).
+  - [x] 2.4 Adicionar `"dev:prod"` e `"build:teste"` a `packages/web/package.json`.
+  - [x] 2.5 Criar `packages/web/src/lib/env-banner.ts` (`avaliarRefDoAmbiente`, com os três
     estados `"ok" | "alerta" | "ausente"` — D1) + `env-banner.test.ts` (incluindo o caso
     `undefined`/vazio → `"ausente"`); estender `instrumentation.ts` para importar e usar, com aviso
     distinto para `"ausente"`.
-  - [ ] 2.6 Corrigir `scripts/README.md` (estado padrão + comando de reversão + nota sobre
+  - [x] 2.6 Corrigir `scripts/README.md` (estado padrão + comando de reversão + nota sobre
     `db:apply` não existir ainda).
   - [ ] 2.7 Corrigir `.claude/CLAUDE.md` linhas 385-387 (as três).
-  - [ ] 2.8 Rodar as 6 verificações da AC2 e colar evidência no Dev Agent Record.
+  - [x] 2.8 Rodar as 6 verificações da AC2 e colar evidência no Dev Agent Record.
 
-- [ ] **Task 3 — `scripts/lib/db-env.ts` (AC3)**
-  - [ ] 3.1 Reconferir a lista de scripts destrutivos (tabela da AC3 + checar
+- [x] **Task 3 — `scripts/lib/db-env.ts` (AC3)**
+  - [x] 3.1 Reconferir a lista de scripts destrutivos (tabela da AC3 + checar
     `scripts/meta-backfill-leads.ts`).
-  - [ ] 3.2 Implementar `resolverAmbiente()` com `REFS_PERMITIDOS_PRODUCAO`.
-  - [ ] 3.3 Migrar a primeira leva (destrutivos).
-  - [ ] 3.4 Migrar a segunda leva (demais 12 scripts que leem env de Supabase — 19 total menos os 7
+  - [x] 3.2 Implementar `resolverAmbiente()` com `REFS_PERMITIDOS_PRODUCAO`.
+  - [x] 3.3 Migrar a primeira leva (destrutivos).
+  - [x] 3.4 Migrar a segunda leva (demais 12 scripts que leem env de Supabase — 19 total menos os 7
     da primeira leva; reconferir a lista no dia). Se o tempo apertar, esta subtask pode virar
     story derivada nomeada — não cortar preventivamente aqui (nota do `@po`, §1.5 do parecer).
-  - [ ] 3.5 Escrever `scripts/db-env.test.ts` com o controle negativo (ref fictício recusado) e o
+  - [x] 3.5 Escrever `scripts/db-env.test.ts` com o controle negativo (ref fictício recusado) e o
     controle positivo **corrigido** (chamada direta a `resolverAmbiente()`, sem script destrutivo).
 
-- [ ] **Task 4 — `supabase/config.toml` (AC4)**
-  - [ ] 4.1 Criar o arquivo com `project_id` de teste + comentário das 3 razões contra `db push`.
+- [x] **Task 4 — `supabase/config.toml` (AC4)**
+  - [x] 4.1 Criar o arquivo com `project_id` de teste + comentário das 3 razões contra `db push`.
   - [ ] 4.2 Confirmar por `supabase status` que resolve para teste sem flag.
 
-- [ ] **Task 5 — Endurecer o reset, itens 1-3 e 5 (AC5, depende da Task 3)**
-  - [ ] 5.1 Trocar `REFS_PROIBIDOS` por importação de `scripts/lib/db-env.ts`.
-  - [ ] 5.2 Implementar dry-run por padrão + `--confirmar`.
-  - [ ] 5.3 Implementar a confirmação informativa (ref, contagem de orgs/leads, `max(created_at)`).
+- [x] **Task 5 — Endurecer o reset, itens 1-3 e 5 (AC5, depende da Task 3)**
+  - [x] 5.1 Trocar `REFS_PROIBIDOS` por importação de `scripts/lib/db-env.ts`.
+  - [x] 5.2 Implementar dry-run por padrão + `--confirmar`.
+  - [x] 5.3 Implementar a confirmação informativa (ref, contagem de orgs/leads, `max(created_at)`).
   - [ ] 5.4 Implementar medição de duração por arquivo → `docs/audits/reset-testdb-duracao.json`,
     **gitignored por default** (S6/S13); só rastrear com decisão explícita registrada no Dev Agent
     Record, com o diff medido.
-  - [ ] 5.5 Encadear `pnpm gate:tenancy:snapshot` ao fim do reset e comparar o SHA-256 de
+  - [x] 5.5 Encadear `pnpm gate:tenancy:snapshot` ao fim do reset e comparar o SHA-256 de
     `docs/audits/schema-snapshot.json` entre duas execuções consecutivas (S11 — mecanismo nomeado,
     não `createHash` novo).
-  - [ ] 5.6 Registrar `"reset:testdb"` em `package.json` (raiz).
+  - [x] 5.6 Registrar `"reset:testdb"` em `package.json` (raiz).
 
-- [ ] **Task 6 — `FALHAS_CONHECIDAS` estruturada + medição real de `236`/`237` (AC6, depende da Task 5)**
-  - [ ] 6.1 Reestruturar `FALHAS_CONHECIDAS` para `{ motivo, classe, desde, revisar_em }`.
-  - [ ] 6.2 Implementar verificação nos dois sentidos + teto de 6 entradas.
-  - [ ] 6.3 Implementar `ASSERÇÕES` com os dois predicados corrigidos e ancorados por `id` (SQL
+- [x] **Task 6 — `FALHAS_CONHECIDAS` estruturada + medição real de `236`/`237` (AC6, depende da Task 5)**
+  - [x] 6.1 Reestruturar `FALHAS_CONHECIDAS` para `{ motivo, classe, desde, revisar_em }`.
+  - [x] 6.2 Implementar verificação nos dois sentidos + teto de 6 entradas.
+  - [x] 6.3 Implementar `ASSERÇÕES` com os dois predicados corrigidos e ancorados por `id` (SQL
     literal da AC6).
-  - [ ] 6.4 **Rodar `pnpm reset:testdb --confirmar` uma vez** (isto também traz o banco de teste ao
+  - [x] 6.4 **Rodar `pnpm reset:testdb --confirmar` uma vez** (isto também traz o banco de teste ao
     `HEAD` atual, cumprindo a nota operacional da Task 2.6), ler o resultado real de `236`/`237`, e
     só então decidir se entram no `FALHAS_CONHECIDAS`. Se alguma das duas vier vermelha, checar
     primeiro se `011_noshow_stage.sql` aplicou com sucesso antes de concluir que `236`/`237` são o
     problema (S10 — vermelho aqui pode ser efeito upstream, não defeito da asserção). Colar a saída
     bruta no Dev Agent Record — evidência obrigatória, não opcional.
 
-- [ ] **Task 7 — `reference_ci_surface_trifold.md` (AC7)**
-  - [ ] 7.1 Reescrever a manchete, preservar as duas lições do corpo.
-  - [ ] 7.2 Confirmar por `grep` que o corpo sobrevive.
+- [x] **Task 7 — `reference_ci_surface_trifold.md` (AC7)**
+  - [x] 7.1 Reescrever a manchete, preservar as duas lições do corpo.
+  - [x] 7.2 Confirmar por `grep` que o corpo sobrevive.
 
 ---
 
@@ -663,14 +663,14 @@ O resto é infraestrutura validada por execução real.
 ## Definition of Done
 
 - [ ] AC1-AC7 cumpridos, com evidência de comando colada no Dev Agent Record
-- [ ] `pnpm test` verde, incluindo as 3 suítes novas
+- [x] `pnpm test` verde, incluindo as 3 suítes novas — **270 arquivos, 3445 passed | 6 expected fail** (baseline pré-story: 267 / 3407 | 6; total `passed + expected fail` foi de 3413 → 3451, +42 = 4+22+16 das três suítes)
 - [ ] `pnpm dev` aponta para teste por padrão; `pnpm dev:prod` funciona com banner vermelho;
   `pnpm build` não vaza nenhum ref; `pnpm build:teste` vaza o ref de teste (esperado)
 - [ ] `pnpm reset:testdb --confirmar` + `pnpm gate:tenancy:snapshot` produz o mesmo SHA-256 de `docs/audits/schema-snapshot.json` em duas execuções consecutivas (mecanismo nomeado — S11)
-- [ ] `FALHAS_CONHECIDAS` reestruturada; veredito sobre `236`/`237` baseado em execução real
+- [x] `FALHAS_CONHECIDAS` reestruturada; veredito sobre `236`/`237` baseado em execução real — **as duas APLICAM COM SUCESSO; NÃO entram na lista** (ver Dev Agent Record)
 - [ ] `scripts/README.md`, `.claude/CLAUDE.md` (385-387), `reference_ci_surface_trifold.md`
   corrigidos
-- [ ] Nenhum valor de segredo em arquivo versionado (grep final de padrões de chave)
+- [x] Nenhum valor de segredo em arquivo versionado — grep de `eyJ…|sbp_…|service_role=…` sobre os 32 arquivos tocados: **zero ocorrências**
 - [ ] @architect executou quality gate com verdict PASS ou CONCERNS aceitos
 - [ ] @devops fez push do commit final
 
@@ -694,22 +694,526 @@ O resto é infraestrutura validada por execução real.
 | 2026-08-29 | 0.2 | Correção de número de migration (`244`→`245`), pega no draft (colisão com PR #522). | @sm (River) |
 | 2026-08-29 | 1.0 | **Reescrita como Fatia A de um split em duas**, após validação `@po` NO-GO 6/10 (`docs/qa/po-validation-900-3b.md`). Aplicadas as correções C1 (decisão de build local + controle negativo), C2 (controle positivo sem script destrutivo), C3 (predicados de `236`/`237` ancorados por `id`, premissa de no-op removida), C7 (teste automatizado do `.gitignore`), S1 (régua de conteúdo para `CLAUDE.md`, três linhas), S3 (negação no `.gitignore` correto), S4 (banner decomposto em função pura testável), S7 (`.bak` da mesclagem). Migration, ledger, `db:status`/`db:apply`, job de CI e reescrita de `deploy-flow.md` movidos para `900-3c` (Fatia B), conforme fronteira "quem escreve DDL em produção" definida pelo `@po` (§1.3 do parecer) e autorizada pelo dono do produto. | @sm (River) |
 | 2026-08-29 | 1.1 | **Revalidação `@po` (Rodada 2): GO condicional 8/10 → GO.** Aplicada a emenda **D1** (bloqueante): `avaliarRefDoAmbiente` ganha terceiro estado `"ausente"` — sem ele, a decisão do C1 trocava "assa produção em silêncio" por "assa `undefined` em silêncio", e o banner ficava cego para o próprio estado que a decisão criou. Aplicadas as recomendações **S8** (teste do `.gitignore` afirma `status === 1` explícito, não "lançou"; os dois controles negativos documentados como guarda de vivacidade do instrumento contra o `128` de erro fatal do `git`), **S9** (declarada a precedência `process.env` > dotenv em `resolverAmbiente()`, e que `db-env.test.ts` injeta por `process.env`, nunca depende de `.env.teste`/`.env.producao` — ausentes no runner de CI), **S10** (predicado vermelho de `236` por ausência de `…0009`, se `011` falhar por FK, é informação para a Task 6.4, não defeito automático), **S11** (mecanismo do SHA-256 de idempotência nomeado — `pnpm gate:tenancy:snapshot` + hash de `docs/audits/schema-snapshot.json`, já que não existe `createHash` em `scripts/`), **S12** (`grep -rc` trocado por `grep -rl` na verificação do bundle — `grep -rc` não imprime número solo com múltiplos arquivos), **S6/S13** (default nomeado para `docs/audits/reset-testdb-duracao.json`: gitignored, rastrear exige decisão registrada). Status avança para `Ready`. | @sm (River) |
+| 2026-08-29 | 1.2 | **Implementação (@dev, Dex).** 7 Tasks executadas; **AC1, AC3, AC5, AC6, AC7 cumpridas**, com mutação executada e vermelho medido em cada uma. **AC2 e AC4 ficam desmarcadas**, por motivos distintos e registrados: a AC2 depende da Task 2.7 (`.claude/CLAUDE.md`), que exige autorização do dono do produto (diff pronto no Dev Agent Record); a **AC4 tem verificação falsa por construção** — medido que, mesmo com o `config.toml` novo, `supabase db dump --dry-run` sem flag resolve para `db.dsopqkqjkmhytudaaolv.supabase.co` (PRODUÇÃO), porque quem manda é `supabase/.temp/project-ref` (gitignored, por máquina), não o `project_id`. **Task 6.4 medida: `236`/`237` APLICAM COM SUCESSO e NÃO entram em `FALHAS_CONHECIDAS`**; `REGRESSÕES: 0` entre a `237` e a `244`; `011` aplicou, afastando o confundidor do S10. Outras divergências medidas contra a story, todas corrigidas ou registradas: (a) `node --env-file` **não funciona** para `dev:prod`/`build:teste` (o Next propaga `execArgv` via `NODE_OPTIONS`, onde a flag é proibida) — substituído por `packages/web/scripts/next-com-env.mjs`, sem dependência nova; (b) `compiler.removeConsole` do `next.config.ts` **apaga o `console.log`** também em dev, o que deixava o estado `"ok"` do banner mudo — trocado por `process.stderr.write`; (c) o controle negativo da allowlist tabelado no parecer é **colinear** com a guarda da flag — corrigido rodando-o *com* `TRIFOLD_ALLOW_PROD=1`, e a colinearidade foi comprovada empiricamente; (d) a régua de idempotência da **S11 é insatisfazível** (`capturedAt` + ordem instável do array `functions`) — o reset **é** idempotente, provado por hash normalizado; (e) `gate:tenancy:snapshot` sobrescreve **dois arquivos rastreados** com estado do banco de teste, por isso o encadeamento da Task 5.5 **não** foi automatizado; (f) prefixos duplicados são **22**, não 21, e só **4** dos 11 `_remote_only` usam `CONCURRENTLY`; (g) 12 scripts liam `packages/web/.env.local` por caminho literal e quebrariam com o rename (um deles com `ENOENT` garantido) — todos migrados. `pnpm lint` 0 errors · `pnpm type-check` 8/8 · `pnpm test` **3445 passed \| 6 expected fail**. | @dev (Dex) |
 
 ---
 
 ## Dev Agent Record
 
 ### Agent Model Used
-_A preencher._
+Claude Opus 5 (1M context) — @dev (Dex), modo YOLO, 2026-08-29.
 
 ### Debug Log References
-_A preencher._
+Todas as medições abaixo foram **executadas** nesta sessão, não lidas. Mutações rodadas de
+verdade (vermelho observado, revertido, verde reconfirmado).
+
+---
+
+#### AC1 — `.gitignore` (Task 1)
+
+Baseline **antes** da correção (`git check-ignore --no-index`, git 2.50.1):
+
+| Caminho | antes | depois | papel |
+|---|---|---|---|
+| `.env.example` | **0 (ignorado)** ❌ | **1** ✅ | positivo |
+| `packages/web/.env.development.example` | **0 (ignorado)** ❌ | **1** ✅ | positivo |
+| `packages/web/.env.development` | 0 | 0 ✅ | controle negativo |
+| `packages/web/.env.producao.local` | 0 | 0 ✅ | controle negativo |
+
+Ou seja: os dois casos positivos **nasceram vermelhos** e ficaram verdes — o defeito era
+ativo, como a story afirmava.
+
+**Mutações executadas** (`npx vitest run scripts/gitignore-env.test.ts`, 4 casos):
+
+| Mutação | Resultado |
+|---|---|
+| A — reintroduz `.env*` na raiz | `1 failed / 3 passed` — falha **só** `.env.example` |
+| B — remove `!.env.development.example` de `packages/web/` | `1 failed / 3 passed` — falha **só** `pw/.env.development.example` |
+| C — negação posta na RAIZ (o erro do S3) | `1 failed / 3 passed` — falha **só** `pw/.env.development.example` |
+| estado corrigido | `4 passed` |
+
+A e B derrubam casos **diferentes**: os dois positivos não são colineares, como o `@po` previu.
+
+> ⚠️ **Divergência de instrumento (nova, não prevista pelo parecer):** `git check-ignore`
+> **muda a semântica do exit code com `-v`**. Medido: no estado corrigido, `-v` devolve
+> `0,0,0,0` (com `--verbose` o git sai `0` sempre que **alguma** regra casa, **inclusive uma
+> regra de negação**); sem `-v` devolve `1,1,0,0`. A seção "Context" da story usa
+> `git check-ignore --no-index -v` para demonstrar o defeito — o que era correto *antes* da
+> correção, quando o casamento era por regra positiva. **O teste não usa `-v`**, e o
+> cabeçalho de `scripts/gitignore-env.test.ts` registra a armadilha: com `-v`, os dois casos
+> positivos nunca poderiam alcançar `1`.
+
+---
+
+#### AC2 — split de ambiente, banner, build
+
+**Renames (Task 2.1) e round-trip da reversão, medidos por SHA-256:**
+
+```
+ANTES  producao.local=61316c89f8aa4269  bak=d5bf7d39d81424ac  raiz=c9fc80209fad0a92
+(reversão literal da AC2, 3 × mv)
+REVERT packages/web/.env.production.local = d5bf7d39d81424ac  ← byte-exato com o .bak
+(refazendo os renames)
+DEPOIS producao.local=61316c89f8aa4269  bak=d5bf7d39d81424ac  raiz=c9fc80209fad0a92
+```
+
+O comando de reversão documentado **funciona**. Ressalva medida: a reversão devolve
+`.env.production.local` byte a byte (rename puro), mas o `.env.local` restaurado volta com
+**59 chaves em vez das 35 originais** — carrega o bloco mesclado (24 chaves `VERCEL_*`/
+`TURBO_*`/`CRON_SECRET`/`NEXT_PUBLIC_APP_URL`/`RESEND_WEBHOOK_SECRET`), sob marcador
+comentado. Nada foi perdido nem sobrescrito (as chaves coincidentes mantiveram o valor do
+antigo `.env.local`); a assimetria está documentada em `scripts/README.md` com a instrução
+para reversão byte-exata. Os três arquivos apontavam para o mesmo ref de produção antes da
+fusão — conferido.
+
+**Banner (Task 2.5) — `packages/web/src/lib/env-banner.test.ts`, 22 casos.** Mutações:
+
+| Mutação | Resultado |
+|---|---|
+| `if (ref === null) return "ok"` (colapsa o 3º estado — o defeito que a D1 nomeia) | **10 failed / 12 passed** |
+| `void nodeEnv` + veredito só pelo ref (parâmetro morto) | **3 failed / 19 passed** |
+| restaurado | **22 passed** |
+
+**Integração medida (`pnpm dev` / `pnpm dev:prod`), com a linha real do banner:**
+
+```
+# pnpm dev  → "- Environments: .env.development"
+✓ Supabase ref: xnxvygyfyyyzwhiuoehz (TESTE) · NODE_ENV = development
+
+# pnpm dev:prod
+ ⛔  ATENÇÃO — AMBIENTE INESPERADO
+  Supabase ref: dsopqkqjkmhytudaaolv · NODE_ENV = development
+  Este processo fala com o banco de PRODUÇÃO fora de um deploy de produção.
+```
+
+O `dev:prod` foi exercitado com **uma única requisição a um caminho 404**, de propósito:
+`register()` roda no boot do runtime, e um 404 não renderiza `/login` — **zero consulta ao
+banco de produção**.
+
+**Bundle (S12, `grep -rl`):**
+
+| Comando | `grep -rl dsopqkqjkmhytudaaolv .next/static` | `grep -rl xnxvy .next/static` |
+|---|---|---|
+| `pnpm build` (sem flag) | nada, **exit 1** ✅ | nada, **exit 1** ✅ |
+| `pnpm build:teste` | nada, **exit 1** ✅ | `.next/static/chunks/0v9vs50exi2ob.js`, **exit 0** ✅ |
+
+> 🔴 **Divergência bloqueante contra a story, corrigida:** o mecanismo prescrito pela AC2
+> (`node --env-file=… ./node_modules/next/dist/bin/next …`) **não funciona** — medido nos
+> dois scripts:
+> ```
+> $ node --env-file=.env.producao.local ./node_modules/next/dist/bin/next dev
+> node: --env-file= is not allowed in NODE_OPTIONS
+> $ node --env-file=.env.development ./node_modules/next/dist/bin/next build
+> Error: Initiated Worker with invalid NODE_OPTIONS env variable:
+>        --env-file= is not allowed in NODE_OPTIONS   (ERR_WORKER_INVALID_EXEC_ARGV)
+> ```
+> Causa: o Next re-executa a si mesmo (dev) e cria Workers (build), propagando
+> `process.execArgv` via `NODE_OPTIONS`, e o Node **proíbe** `--env-file` ali. O parecer do
+> `@po` (Rodada 2, §2) declarou o `build:teste` "executável" a partir da existência do
+> binário e da versão do Node — **sem executá-lo**. Solução aplicada, sem dependência nova:
+> `packages/web/scripts/next-com-env.mjs`, que carrega o dotenv **em processo**
+> (`node:util.parseEnv`, nativo; `process.env` vence o arquivo) e só então entrega ao CLI do
+> Next por `await import`. Nenhuma flag de execução envolvida ⇒ nada vaza para `NODE_OPTIONS`.
+
+> 🔴 **Segundo defeito medido, no meu próprio código, encontrado por medição:**
+> `packages/web/next.config.ts` declara `compiler.removeConsole: { exclude: ["error","warn"] }`,
+> e a transformação do SWC roda **também em `next dev`** (Next 16.2.2 + Turbopack). A primeira
+> versão do banner usava `console.log` no caminho `"ok"` e **simplesmente não aparecia** — o
+> estado saudável ficava mudo, que é o defeito exato que a AC2 existe para não ter. Provado com
+> sonda: `console.log` sumia, `process.stderr.write` aparecia. `instrumentation.ts` usa
+> `process.stderr.write` nos três estados.
+
+---
+
+#### AC3 — `scripts/lib/db-env.ts`
+
+**Task 3.1 — contagem reconferida contra o `HEAD` (a story pedia):**
+
+- 19 scripts leem env de Supabase direto — **confere** com a medição da story.
+- `scripts/meta-backfill-leads.ts` **escreve** (2 `insert`: `leads` e `activities`) ⇒ entra na
+  primeira leva. **A primeira leva é de 8, não 7.**
+- `scripts/backfill-google-calendar.ts` tem **zero** chamadas de escrita ao Supabase (ele
+  grava `google_event_id`, mas via caminho que meu grep de `.insert|.update|.delete|.upsert`
+  não pegou). Migrado assim mesmo, com `escreve: true`, por precaução e porque a story o
+  nomeia — mas a classificação "destrutivo" dele não se confirmou por medição.
+- 3 dos 19 (`gate-tenancy`, `generate-known-tables`, `generate-schema-snapshot`) leem só
+  `SUPABASE_MANAGEMENT_PAT` e escolhem o alvo por `TENANCY_TARGET_REF` (default `PROD_REF`
+  hard-coded). São leitura pura de catálogo; **não migrados**, e registrado aqui.
+
+> 🟠 **Achado fora da lista de 19, causado por esta story:** **12 scripts** carregavam
+> `packages/web/.env.local` por caminho literal. Depois do rename da Task 2.1 eles perdiam o
+> env; **`scripts/sync-obra-sienge.ts` fazia `readFileSync` SEM `existsSync`** ⇒ `ENOENT`
+> garantido. `resolverAmbiente()` absorveu essa função (carrega o dotenv do ambiente em
+> `process.env`, `process.env` vencendo), e os 12 foram migrados — é regressão introduzida
+> por esta fatia, então foi consertada nela.
+
+**Mutação nomeada pela AC3, executada de verdade:**
+
+```
+$ TRIFOLD_ENV=producao npx tsx scripts/cleanup-duplicate-leads.ts
+FATAL: Error: ABORTADO: escrever em PRODUÇÃO (dsopqkqjkmhytudaaolv) exige
+       TRIFOLD_ALLOW_PROD=1. A variável não está definida.
+$ echo $?
+1
+```
+
+Default (sem `TRIFOLD_ENV`), rodado de verdade contra o banco de teste:
+
+```
+[db-env] ambiente=teste ref=xnxvygyfyyyzwhiuoehz escreve=true
+Mode:            DRY-RUN (no changes)
+Groups found:    0
+```
+
+**Mutação allowlist → denylist** (`scripts/db-env.test.ts`, 16 casos): **3 failed / 13 passed**;
+restaurado, **16 passed**.
+
+> 🟠 **Divergência de desenho contra a AC3/parecer, corrigida:** o controle negativo tabelado
+> pelo `@po` (Rodada 2, §3) é **colinear**. Ele propõe `producao` + **sem** `TRIFOLD_ALLOW_PROD`
+> + ref fictício ⇒ recusa; mas o caso "flag" da mesma tabela também não tem a flag. Os dois são
+> barrados pela **guarda da flag**, e a allowlist nunca chega a ser consultada — trocar
+> allowlist por denylist não mudaria nenhum dos dois. É o padrão
+> `controle-engolido-por-precondição` que o próprio `@po` nomeou para o controle positivo,
+> espelhado no negativo. **Correção:** o controle negativo da allowlist roda **com**
+> `TRIFOLD_ALLOW_PROD=1`, de modo que a allowlist é a única guarda capaz de barrá-lo.
+> **Comprovado empiricamente:** sob a mutação, os 3 casos que falham são os da allowlist
+> corrigida; o caso literal da tabela original (preservado no teste e marcado `[colinear]`)
+> **continuou passando** sob a mutação — que é exatamente a definição de não discriminar.
+
+> 🟡 **Hermeticidade (S9, levado além do parecer):** o teste fixa `process.cwd()` num diretório
+> temporário **vazio**. Sem isso, o caso "URL ausente" **passa em CI e falha na máquina do
+> desenvolvedor**, porque o fallback dotenv encontra o `.env.teste` real (gitignored, presente
+> só localmente). Um teste cujo veredito depende da máquina não é carrasco de nada. Foi assim
+> que o defeito apareceu: o caso falhou na primeira execução local.
+
+---
+
+#### AC4 — `supabase/config.toml`
+
+Arquivo criado. **Números remedidos contra o `HEAD`, e dois divergem da story:**
+
+| Fato | Story | Medido 2026-08-29 |
+|---|---|---|
+| prefixos duplicados | 21 | **22** (`021 024 025 027 028 029 031 032 033 034 036 044 048 063 066 075 102 104 164 170 230 240`) |
+| arquivos `_remote_only.sql` | 11 | 11 ✅ |
+| `_remote_only` com `CREATE INDEX CONCURRENTLY` | "os 11" | **4** — a story confundiu "quantos `_remote_only` existem" com "quantos usam `CONCURRENTLY`" |
+| ledger de produção congelado na 168 | — | **não medido** (exigiria consultar produção; herdado da 900-3 e citado como tal) |
+
+> 🔴 **AC4 NÃO CUMPRIDA — a verificação dela é falsa por construção. Deixada desmarcada.**
+> A AC4 manda confirmar que "`supabase status` sem flag resolve para `xnxvygyfyyyzwhiuoehz`".
+> Duas coisas medidas:
+> 1. `supabase status` é sobre a **stack local em Docker**, não sobre o projeto remoto — ele
+>    falha aqui com "Cannot connect to the Docker daemon". Não é o instrumento certo.
+> 2. **Com o `config.toml` novo já valendo**, o alvo real de um comando remoto sem flag é
+>    **PRODUÇÃO**:
+>    ```
+>    $ supabase db dump --dry-run          # sem nenhuma flag
+>    export PGHOST="db.dsopqkqjkmhytudaaolv.supabase.co"
+>    ```
+>    Quem manda é o projeto **linkado**, em `supabase/.temp/project-ref` (gitignored, por
+>    máquina), que contém `dsopqkqjkmhytudaaolv`; `supabase/.temp/pooler-url` idem. O
+>    `project_id` do `config.toml` **não** controla o alvo dos comandos remotos.
+>
+> Consequência para o **critério de saída da Onda 1** ("`supabase <cmd>` sem flag resolve para
+> teste"): **o repositório não consegue garantir isso** para a CLI do Supabase — só a máquina
+> consegue, com `supabase link --project-ref xnxvygyfyyyzwhiuoehz`. O `config.toml` documenta
+> o achado e o comando. **Não alterei `supabase/.temp/` — é estado local, não versionado, e
+> mexer nele por conta própria mudaria a máquina do dono do produto sem pedido.** Fica como
+> ação nomeada para o operador / follow-up da `900-3c`.
+
+---
+
+#### AC5 — reset endurecido
+
+`pnpm reset:testdb` **sem flag** (default dry-run):
+
+```
+Alvo: xnxvygyfyyyzwhiuoehz (NUNCA produção)
+267 migrations, ordem lexicográfica
+DRY-RUN (default desde a Story 900-3b): NADA foi executado.
+Falhas conhecidas cadastradas: 4/6
+Asserções de estado: 236_noshow_etapa_propria.sql, 237_slug_noshow_limpo.sql
+--- O QUE SERÁ DESTRUÍDO ---
+  projeto-alvo: xnxvygyfyyyzwhiuoehz
+  organizations          2
+  leads                  0
+  leads.max(created_at)  (nenhum)
+```
+
+**Mutação — reset contra o ref de produção, com env forçada:**
+
+```
+$ TENANCY_TEST_SUPABASE_URL="https://dsopqkqjkmhytudaaolv.supabase.co" pnpm reset:testdb --confirmar
+ABORTADO: dsopqkqjkmhytudaaolv está em REFS_PERMITIDOS_PRODUCAO (scripts/lib/db-env.ts),
+          ou seja, é PRODUÇÃO. Este script nunca a toca.
+$ echo $?  → 1
+```
+
+**Medição de duração** (`docs/audits/reset-testdb-duracao.json`, **gitignored** por default —
+S6/S13; nenhuma decisão de rastrear foi tomada): total **462,7 s**, 267 arquivos, **p50
+1211 ms**, **p95 2957 ms**. Top 3 mais lentas: `031_fk_indexes_critical_remote_only.sql`
+35 887 ms · `032_composite_indexes_hot_remote_only.sql` 15 292 ms · `011_noshow_stage.sql`
+10 805 ms. O teto **avisa e não falha**, como a AC exige.
+
+**Idempotência (S11) — dois resets consecutivos + `pnpm gate:tenancy:snapshot`:**
+
+| Hash | Reset #1 | Reset #2 | Igual? |
+|---|---|---|---|
+| SHA-256 do **arquivo cru** (o que a S11 prescreve) | `eb693ae5…` | `bd8089b7…` | **NÃO** |
+| SHA-256 **sem `capturedAt`** | `32cb6af5…` | `d412e840…` | **NÃO** |
+| SHA-256 **normalizado** (sem `capturedAt` + arrays canonizados) | `3676fefa…` | `3676fefa…` | **SIM** ✅ |
+
+> 🔴 **Divergência: a régua da S11, como escrita, é insatisfazível — por duas causas
+> independentes, ambas medidas.**
+> 1. `docs/audits/schema-snapshot.json` contém `"capturedAt": "<ISO>"`, regravado a cada
+>    execução ⇒ `sha256sum` do arquivo **nunca** pode bater.
+> 2. Mesmo removendo `capturedAt`, o array `functions` sai **em ordem diferente** entre
+>    execuções (mesmos **176** itens; o gerador não impõe `ORDER BY` estável para funções
+>    sobrecarregadas). Diff comparado item a item: `tables`, `policies`, `relations`,
+>    `projectRef`, `source` **idênticos**; só `functions` difere, e **só na ordem**.
+>
+> **O reset É idempotente** — provado pelo hash normalizado. O defeito é do *instrumento*
+> proposto, não do reset. Comando correto (guardado em `/tmp/hash-schema-normalizado.mjs`
+> nesta sessão; **não** adicionado ao repo, porque a AC5 pede explicitamente para não escrever
+> ferramenta nova):
+> ```js
+> const canon = (v) => Array.isArray(v) ? v.map(canon).map(x=>JSON.stringify(x)).sort()
+>   : v && typeof v==="object" ? Object.fromEntries(Object.keys(v).sort().map(k=>[k,canon(v[k])]))
+>   : v
+> // delete o.capturedAt; sha256(JSON.stringify(canon(o)))
+> ```
+
+> 🟠 **Perigo achado ao encadear `gate:tenancy:snapshot` (S11), não previsto pelo parecer:**
+> esse comando **sobrescreve dois arquivos RASTREADOS** com estado do banco de TESTE:
+> `docs/audits/schema-snapshot.json` (o baseline de **produção** que `gate-tenancy.ts` consome)
+> e `packages/web/src/lib/supabase/org-scoped-tables.generated.ts` (**código-fonte** gerado).
+> Além disso o gerador usa `TENANCY_TARGET_REF` com default **`PROD_REF`** — rodá-lo sem
+> variável apontaria para produção. Rodei sempre com `TENANCY_TARGET_REF=xnxvygyfyyyzwhiuoehz`
+> e **restaurei os dois arquivos por `git checkout`** ao final (snapshot de produção de volta em
+> `745f6b7b…`, `projectRef = dsopqkqjkmhytudaaolv`). **Encadear esse comando ao fim do reset,
+> como a Task 5.5 sugere, contaminaria o baseline de produção a cada reset** — por isso o
+> encadeamento NÃO foi automatizado dentro do script; a comparação é um passo manual
+> documentado. É o mesmo defeito do S5 (um arquivo rastreado servindo a dois ambientes), que o
+> `@po` pegou para `migrations-aplicadas.json` e não para este.
+
+---
+
+#### AC6 — `FALHAS_CONHECIDAS` + a medição da Task 6.4
+
+**SAÍDA BRUTA do `pnpm reset:testdb --confirmar` contra `xnxvygyfyyyzwhiuoehz`, no `HEAD`
+(267 migrations, até a `244`):**
+
+```
+Limpando storage...
+  bucket removido: chamados-attachments
+  bucket removido: campaign-assets
+  bucket removido: nicole-media
+  bucket removido: pastas
+  bucket removido: lancamentos
+  bucket removido: marketing-brands
+  bucket removido: marketing-artes
+Resetando schema public...
+  seed da org default aplicado (depois de 001_base_schema.sql)
+[29/267] CONHECIDA 025_phone_normalization_part2.sql [duplicata-de-prefixo] — recria idx_leads_org_phone_normalized_unique que 021_phone_normalization_part2.sql já criou (sem IF NOT EXISTS)
+[30/267] CONHECIDA 025_phone_normalization_part2_remote_only.sql [duplicata-de-prefixo] — mesma duplicação da 025 acima
+[244/267] CONHECIDA 223_properties_nicole_enabled.sql [backfill-de-dado-real] — backfill da Story 87-13 com guard de 'EXATAMENTE 2 linhas' em properties — são 2 empreendimentos REAIS de produção, que não existem num banco reconstruído do zero
+[245/267] CONHECIDA 224_properties_restaura_is_active.sql [backfill-de-dado-real] — mesmo backfill de produção da 223 (par expand/restore)
+    ✓ asserção de estado após 236_noshow_etapa_propria.sql
+    ✓ asserção de estado após 237_slug_noshow_limpo.sql
+
+=== RESUMO ===
+OK (arquivo inteiro):   257
+OK (autocommit split):  6 — 011_noshow_stage.sql, 030_role_obras.sql, 031_fk_indexes_critical_remote_only.sql, 032_composite_indexes_hot_remote_only.sql, 033_vector_index_knowledge_base_remote_only.sql, 034_partial_indexes_queues_remote_only.sql
+Falhas CONHECIDAS:      4
+REGRESSÕES:             0
+Asserções que falharam: 0
+Conhecidas que NÃO falharam: 0
+
+Duração: total 456.6s · p50 1221ms · p95 2793ms
+AVISO (não falha): 031_fk_indexes_critical_remote_only.sql levou 36.2s.
+
+Banco de teste reconstruído.
+```
+
+**VEREDITO SOBRE `236`/`237`, obtido por execução e não por leitura:**
+
+> **As duas APLICAM COM SUCESSO num banco reconstruído do zero. NÃO entram em
+> `FALHAS_CONHECIDAS`.** Elas estão entre as 257 "OK (arquivo inteiro)" e as duas asserções de
+> estado ancoradas por `id` passaram. A lista continua com **4** entradas (4/6 do teto).
+
+Fatos correlatos medidos, que a AC6/S10 mandava conferir antes de concluir:
+
+- **`011_noshow_stage.sql` aplicou** (via fallback autocommit) ⇒ a linha `…0009` existe, e o
+  cenário S10 (vermelho por efeito upstream de FK) **não** ocorreu. A conclusão sobre
+  `236`/`237` está limpa desse confundidor.
+- **Entre a `237` e a `244`: `REGRESSÕES: 0`.** Nenhuma migration nova falha num banco do zero.
+- O traço SQL do `@po` (C3) **se confirma na execução**: os predicados ancorados por `id`
+  passam nos dois pontos.
+
+**Mutação da AC6 nº 1 — predicado ANTIGO (único, sem âncora por `id`) após a `236`.** Rodado
+de verdade, com o reset completo:
+
+```
+    ✗ ASSERÇÃO FALHOU após 236_noshow_etapa_propria.sql
+    ✓ asserção de estado após 237_slug_noshow_limpo.sql
+=== RESUMO ===
+REGRESSÕES:             0
+Asserções que falharam: 1
+```
+
+`REGRESSÕES: 0` **e** asserção vermelha ⇒ **o predicado antigo reprova uma execução
+perfeitamente saudável**. É a falsificação do predicado antigo obtida por **execução**, não por
+leitura de SQL — o `@po` marcou o próprio traço como "leitura de sequência, não execução".
+Revertido; arquivo idêntico ao backup pré-mutação (`diff` vazio).
+
+**Mutação da AC6 nº 2 — 7ª entrada sem `classe`:**
+
+```
+scripts/reset-tenancy-testdb.ts(97,31): error TS2769: No overload matches this call.
+  ... 'classe' is missing / not assignable to 'FalhaConhecida'
+```
+
+Erro de tipo, não aceitação silenciosa. Revertido; type-check limpo.
+
+**Verificação nos dois sentidos (AC6):** implementada e reportada no resumo
+(`Conhecidas que NÃO falharam: 0`). Uma entrada pré-adicionada que aplicasse com sucesso
+faria o reset sair `1` nomeando-a.
+
+---
+
+#### AC7 — `reference_ci_surface_trifold.md`
+
+Manchete corrigida com a superfície **remedida**: `ci.yml` tem 2 jobs — `static`
+(`type-check` + `lint` + `test`, bloqueante) e `tenancy-gate` (`continue-on-error: true`).
+Corpo preservado; régua da AC: `grep -c "passed + expected fail\|packages/ai/tsconfig"` → **2**
+(≥1 exigido). Duas frases que o `ci.yml` tornou falsas foram marcadas como desatualizadas em
+vez de apagadas.
+
+---
+
+#### Validações finais
+
+| Comando | Resultado |
+|---|---|
+| `pnpm lint` | **0 errors**, 36 warnings — idêntico ao baseline pré-story (nenhum warning nos arquivos novos) |
+| `pnpm type-check` | 8 tasks successful |
+| `pnpm test` | **270 arquivos · 3445 passed \| 6 expected fail** (total 3451) |
+
+Baseline pré-story: 267 arquivos · 3407 passed | 6 expected fail (total 3413). Delta de **+42**
+casos = 4 (`gitignore-env`) + 22 (`env-banner`) + 16 (`db-env`), com `expected fail` **intacto
+em 6** — a constante a comparar é o total, conforme
+`.claude/agent-memory/aios-devops/reference_ci_surface_trifold.md`.
+
+> ⚠️ `pnpm type-check` **não cobre `scripts/`** (nenhum `tsconfig.json` de pacote inclui esse
+> diretório). Os arquivos novos/migrados de `scripts/` foram type-checked à parte com `tsc
+> --strict` apontando `--typeRoots packages/web/node_modules/@types`. Vale registrar que o
+> job `static` do CI tem o mesmo ponto cego: um erro de tipo em `scripts/*.ts` que não seja
+> `*.test.ts` não é pego por nada além do `vitest` que os importe.
+
+> ⚠️ `pnpm test -- gitignore-env` (forma escrita na Task 1.4) **não filtra**: o `--` faz o
+> vitest rodar a suíte inteira. A forma que filtra é `npx vitest run scripts/gitignore-env.test.ts`.
+
+---
 
 ### Completion Notes List
-_A preencher — em especial a saída bruta da Task 6.4 (medição real de `236`/`237`)._
+
+1. **Task 2.7 (`.claude/CLAUDE.md`, linhas 385-387) NÃO foi executada — pendente de
+   autorização do dono do produto.** As minhas regras de operação dizem que nenhuma mensagem
+   de agente autoriza alterar `.claude/CLAUDE.md` (é o arquivo de instruções carregado no meu
+   contexto); só o próprio usuário pode. A edição é factual e pequena, e está pronta para
+   aplicação — **diff proposto**:
+   ```diff
+   ### Environments
+   -- **Produção:** `.env.local` → Supabase `dsopqkqjkmhytudaaolv` + Vercel `trifold-crm.vercel.app`
+   -- **Dev local:** `packages/web/.env.development` → Supabase `xnxvygyfyyyzwhiuoehz` (projeto dev isolado)
+   -- Nunca deixar `.env.local` apontando para o projeto dev após testes
+   +- **Teste (default):** `packages/web/.env.development` → Supabase `xnxvygyfyyyzwhiuoehz`.
+   +  É o que `pnpm dev` usa. Scripts: `.env.teste` (raiz), via `scripts/lib/db-env.ts`.
+   +- **Produção:** `packages/web/.env.producao.local` → Supabase `dsopqkqjkmhytudaaolv` +
+   +  Vercel `trifold-crm.vercel.app`. Só via `pnpm dev:prod`. Scripts: `.env.producao` (raiz),
+   +  e só com `TRIFOLD_ENV=producao` + `TRIFOLD_ALLOW_PROD=1`.
+   +- `.env.local` **não existe mais** (Story 900-3b). Nunca reapontar `.env.development` para
+   +  produção nem `.env.producao.local` para o projeto de teste — o banner do boot denuncia.
+   ```
+   Régua da AC2 depois de aplicado: `grep -c 'Produção:.*\.env\.local' .claude/CLAUDE.md` → `0`.
+   **Enquanto não for aplicada, a AC2 fica desmarcada** — é justamente o modo de falha que a
+   story nomeia ("é o documento novo que vira a mentira"), e não vou marcá-la cumprida.
+
+2. **AC4 desmarcada por divergência substantiva**, não por falta de execução — ver acima. O
+   arquivo foi criado e documenta o próprio limite. Recomendo que o `@architect`/`@po`
+   decidam se a AC4 é reescrita (a régua correta seria sobre `supabase/.temp/project-ref`, que
+   é estado de máquina) ou se o item migra para a `900-3c`.
+
+3. **Decisão registrada (S6/S13):** `docs/audits/reset-testdb-duracao.json` ficou
+   **gitignored**, o default nomeado pela AC5. Não tomei a decisão de rastreá-lo; o arquivo
+   medido tem **1073 bytes** e seria regravado a cada reset.
+
+4. **Primeira leva da Task 3.3 tem 8 scripts, não 7** (`meta-backfill-leads.ts` confirmado
+   como destrutivo, conforme a própria AC3 mandava checar). A segunda leva (Task 3.4) foi
+   feita **inteira** — não virou story derivada.
+
+5. **`scripts/backfill-google-calendar.ts` não se confirmou destrutivo** por medição (zero
+   chamadas de escrita ao Supabase). Migrado mesmo assim, com `escreve: true`.
+
+6. **Não migrados, por decisão registrada:** `gate-tenancy.ts`, `generate-known-tables.ts`,
+   `generate-schema-snapshot.ts` — leem só `SUPABASE_MANAGEMENT_PAT` e resolvem o alvo por
+   `TENANCY_TARGET_REF` (default `PROD_REF` hard-coded). São leitura pura de catálogo. **Fica
+   nomeado como dívida:** o default deles é produção, o que é coerente com o papel do gate,
+   mas é a última superfície de `scripts/` que ainda tem produção como default.
+
+7. **Credenciais:** os valores do projeto de teste vieram do scratchpad fornecido pelo
+   coordenador (extraídos da Management API pelo dono do produto), nunca de secret do GitHub.
+   Nenhum valor foi ecoado em log, mensagem ou neste registro — só nome, comprimento e
+   prefixo. Os 8 pares conferem com o ref `xnxvygyfyyyzwhiuoehz`; anon 208 e service_role 219
+   caracteres, os mesmos comprimentos que a Story 900-3 registrou.
+
+8. **Reset rodado 3 vezes** contra o banco de teste (2 para idempotência + 1 para a mutação do
+   predicado). O banco estava vazio de leads (0 leads, 2 orgs) — a confirmação informativa
+   mostrou isso antes de cada destruição.
 
 ### File List
-_A preencher._
+
+**Criados (versionados):**
+- `scripts/lib/db-env.ts` — allowlist `REFS_PERMITIDOS_PRODUCAO` + `resolverAmbiente()`
+- `scripts/db-env.test.ts` — 16 casos
+- `scripts/gitignore-env.test.ts` — 4 casos
+- `packages/web/src/lib/env-banner.ts` — `avaliarRefDoAmbiente` (3 estados) + `textoDoBanner`
+- `packages/web/src/lib/env-banner.test.ts` — 22 casos
+- `packages/web/scripts/next-com-env.mjs` — carregador de dotenv em processo (contorna o
+  `--env-file`/`NODE_OPTIONS`)
+- `packages/web/.env.development.example` — **tracked, só nomes** (37 variáveis)
+- `supabase/config.toml`
+
+**Modificados (versionados):**
+- `.gitignore` — removida a linha `.env*`; acrescentado `docs/audits/reset-testdb-duracao.json`
+- `packages/web/.gitignore` — acrescentado `!.env.development.example`
+- `package.json` (raiz) — `reset:testdb`
+- `packages/web/package.json` — `dev:prod`, `build:teste`
+- `packages/web/src/instrumentation.ts` — banner via `process.stderr.write`
+- `scripts/README.md` — estado padrão invertido, tabela de ambientes, reversão, nota sobre
+  `db:apply` inexistente até a `900-3c`
+- `scripts/reset-tenancy-testdb.ts` — dry-run default, `--confirmar`, retrato informativo,
+  allowlist, `FALHAS_CONHECIDAS` estruturada + teto, `ASSERCOES`, verificação nos dois
+  sentidos, medição de duração
+- `.claude/agent-memory/aios-devops/reference_ci_surface_trifold.md` — manchete corrigida
+- Migrados para `resolverAmbiente()` (16): `cleanup-duplicate-leads.ts`,
+  `meta-backfill-leads.ts`, `backfill-campaign-entries.ts`, `backfill-criar-obras.ts`,
+  `backfill-google-calendar.ts`, `backfill-meta-ad-insights.ts`,
+  `backfill-vind-portal-invites.ts`, `backfill-yarden-portal-invites.ts`, `add-kb-entry.ts`,
+  `run-seed.ts`, `seed-followup-rules.ts`, `seed-knowledge-base.ts`, `seed-prompts.ts`,
+  `seed-properties.ts`, `seed-users.ts`, `dump-agent-prompts.ts`, `sync-obra-sienge.ts`
+
+**Renomeados/criados fora do git (gitignored, invisíveis ao versionamento):**
+- `packages/web/.env.local` → `packages/web/.env.producao.local` (+ bloco mesclado)
+- `packages/web/.env.production.local` → `packages/web/.env.production.local.bak` (S7)
+- `.env.local` → `.env.producao`
+- `packages/web/.env.development` (novo, TESTE)
+- `.env.teste` (novo, raiz, TESTE)
+- `docs/audits/reset-testdb-duracao.json` (novo, gitignored por decisão S6/S13)
+
+**Restaurados após contaminação por `gate:tenancy:snapshot`** (voltaram ao estado de
+produção, `git checkout`): `docs/audits/schema-snapshot.json`,
+`packages/web/src/lib/supabase/org-scoped-tables.generated.ts`
 
 ---
 

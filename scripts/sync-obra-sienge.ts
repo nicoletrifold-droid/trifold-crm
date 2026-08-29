@@ -3,16 +3,14 @@
  * Uso: npx tsx scripts/sync-obra-sienge.ts <obra_id>
  */
 
-import { readFileSync } from "fs"
-import { resolve } from "path"
+import { resolverAmbiente } from "./lib/db-env"
 
-const envPath = resolve(__dirname, "../packages/web/.env.local")
-for (const line of readFileSync(envPath, "utf-8").split("\n")) {
-  const match = line.match(/^([^#=]+)=(.*)$/)
-  if (match && !process.env[match[1].trim()]) {
-    process.env[match[1].trim()] = match[2].trim()
-  }
-}
+// Story 900-3b (AC3): o carregador que existia aqui lia `packages/web/.env.local` por
+// caminho literal, SEM `existsSync` — depois do rename desta story ele estouraria ENOENT
+// no primeiro `readFileSync`. `resolverAmbiente()` carrega `.env.teste`/`.env.producao`
+// com a mesma semântica (`process.env` vence) e ainda valida o alvo.
+// `escreve: true`: o sync importa clientes do Sienge para o banco.
+resolverAmbiente({ escreve: true })
 
 async function main() {
   const obraId = process.argv[2]
