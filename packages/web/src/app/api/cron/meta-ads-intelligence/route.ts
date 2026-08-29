@@ -228,8 +228,82 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ ok: true, skipped: "no_active_accounts" })
   }
 
-  const orgId = accounts[0]!.org_id
+  // ── Story 900-23 · AC4 — agrupamento por organização ─────────────────────
+  // Antes: `accounts[0]!.org_id` virava "a org" para os 9 usos seguintes (7 `.eq("org_id", …)` +
+  // 2 escritas). Com contas de duas empresas, o cron lia e alertava só sobre a PRIMEIRA e
+  // registrava `success` — resultado errado, resposta 200, ninguém sabe.
+  //
+  // A fonte de verdade é `meta_ad_accounts`, não `organizations`: uma org pode ter zero, uma ou
+  // várias contas de anúncio. Por isso este cron NÃO usa `forEachActiveOrg` — iterar organizações
+  // produziria N iterações vazias para quem não anuncia.
+  const accountsByOrg = new Map<string, typeof accounts>()
+  for (const conta of accounts) {
+    const lista = accountsByOrg.get(conta.org_id) ?? []
+    lista.push(conta)
+    accountsByOrg.set(conta.org_id, lista)
+  }
 
+  const porOrg: Array<Record<string, unknown>> = []
+  let campanhasTotal = 0
+  let alertasTotal = 0
+  const summaryTotal = {
+    cpl_spike: 0,
+    zero_leads_active: 0,
+    scale_candidate: 0,
+    frequency_saturation: 0,
+    creative_fatigue: 0,
+    budget_underdelivery: 0,
+  }
+
+  for (const [orgId, contasDaOrg] of accountsByOrg) {
+    try {
+      const r = await processarOrg(supabase, orgId, { startedAt, today })
+      porOrg.push({ orgId, contas: contasDaOrg.length, ...r })
+      campanhasTotal += r.campaigns_analyzed ?? 0
+      alertasTotal += r.alerts_fired ?? 0
+      for (const k of Object.keys(summaryTotal) as Array<keyof typeof summaryTotal>) {
+        summaryTotal[k] += r.summary?.[k] ?? 0
+      }
+    } catch (err) {
+      // Uma org com erro NÃO pode abortar a sincronização das outras — e o erro dela aparece
+      // nomeado no corpo, não só no log da Vercel.
+      const errorMessage = err instanceof Error ? err.message : String(err)
+      console.error(`[META_INTELLIGENCE] Error (org ${orgId}):`, errorMessage)
+      porOrg.push({ orgId, contas: contasDaOrg.length, ok: false, error: errorMessage })
+    }
+  }
+
+  return NextResponse.json({
+    ok: porOrg.every((o) => o.ok !== false),
+    orgs: accountsByOrg.size,
+    campaigns_analyzed: campanhasTotal,
+    alerts_fired: alertasTotal,
+    summary: summaryTotal,
+    por_org: porOrg,
+  })
+}
+
+/** O resumo que `processarOrg` devolve para UMA organização. */
+interface ResultadoOrgIntelligence {
+  ok: boolean
+  skipped?: string
+  campaigns_analyzed?: number
+  alerts_fired?: number
+  summary?: Record<string, number>
+}
+
+/**
+ * Todo o trabalho de UMA organização — incluindo o par insert/update de `meta_sync_log`.
+ *
+ * ⚠️ O `meta_sync_log` é POR ORG de propósito: com um par único fora do laço, `meta-sync-health`
+ * (que lê essa tabela para decidir se o sync rodou) continuaria achando que rodou para todas
+ * quando só a última org processada de fato atualizou a linha.
+ */
+async function processarOrg(
+  supabase: ReturnType<typeof createAdminClient>,
+  orgId: string,
+  { startedAt, today }: { startedAt: string; today: string },
+): Promise<ResultadoOrgIntelligence> {
   const { data: syncLog } = await supabase
     .from("meta_sync_log")
     .insert({
@@ -263,8 +337,8 @@ export async function GET(request: NextRequest) {
           .update({ finished_at: new Date().toISOString(), status: "success", records_synced: 0 })
           .eq("id", syncLog.id)
       }
-      console.log("[META_INTELLIGENCE] No data for yesterday — skipping")
-      return NextResponse.json({ ok: true, skipped: "no_yesterday_data" })
+      console.log(`[META_INTELLIGENCE] No data for yesterday (org ${orgId}) — skipping`)
+      return { ok: true, skipped: "no_yesterday_data" }
     }
 
     // ── Fetch campaigns (with daily_budget for underdelivery check) ──────────
@@ -279,7 +353,7 @@ export async function GET(request: NextRequest) {
           .update({ finished_at: new Date().toISOString(), status: "success", records_synced: 0 })
           .eq("id", syncLog.id)
       }
-      return NextResponse.json({ ok: true, campaigns_analyzed: 0 })
+      return { ok: true, skipped: "no_campaigns", campaigns_analyzed: 0 }
     }
 
     // ── Fetch campaign-level insights 30d (+ frequency) ──────────────────────
@@ -551,20 +625,22 @@ export async function GET(request: NextRequest) {
     }
 
     console.log(
-      `[META_INTELLIGENCE] Done — ${campaignMetrics.length} campaigns, ${alerts.length} alerts`,
+      `[META_INTELLIGENCE] Done (org ${orgId}) — ${campaignMetrics.length} campaigns, ${alerts.length} alerts`,
       summary,
     )
 
-    return NextResponse.json({
+    return {
       ok: true,
       campaigns_analyzed: campaignMetrics.length,
       alerts_fired: alerts.length,
       summary,
-    })
+    }
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err)
-    console.error("[META_INTELLIGENCE] Error:", errorMessage)
+    console.error(`[META_INTELLIGENCE] Error (org ${orgId}):`, errorMessage)
 
+    // A linha de log de ERRO é desta org — não de "a" org. Sem o par por org, uma falha aqui
+    // sobrescreveria (ou deixaria intacta) a linha de outra empresa.
     if (syncLog) {
       await supabase.from("meta_sync_log")
         .update({
@@ -575,6 +651,7 @@ export async function GET(request: NextRequest) {
         .eq("id", syncLog.id)
     }
 
-    return NextResponse.json({ error: errorMessage }, { status: 500 })
+    // Relança: quem contabiliza (e isola) é o laço por org do handler.
+    throw err
   }
 }

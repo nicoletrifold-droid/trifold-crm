@@ -51,6 +51,7 @@ export async function GET(request: NextRequest) {
   const orgIds = [...new Set((pendingOrgs as { org_id: string }[]).map((r) => r.org_id))]
 
   for (const orgId of orgIds) {
+   try {
     const sentToday = await getEmailsSentToday(orgId, supabase)
     const { daily_quota } = await getEmailSettings(orgId)
     const remaining = daily_quota - sentToday
@@ -159,6 +160,14 @@ export async function GET(request: NextRequest) {
 
       processed++
     }
+   } catch (e) {
+    // Story 900-23 · AC7 — isolamento por organização: um erro processando a fila da org A não
+    // pode deixar a fila da org B parada até a próxima execução. `failed` já existia no retorno;
+    // o que faltava era o CAMINHO que o incrementa.
+    console.error(`[email-queue] falha processando a org ${orgId}:`, e)
+    failed++
+    continue
+   }
   }
 
   return NextResponse.json({ processed, failed })

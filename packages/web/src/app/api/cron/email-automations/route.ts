@@ -57,8 +57,17 @@ export async function GET(request: NextRequest) {
 
   let fired = 0
   let skipped = 0
+  /**
+   * Story 900-23 · AC7 — contador de FALHAS, nomeado no corpo da resposta.
+   *
+   * Sem ele, o padrão `catch { console.error; continue }` troca "aborta tudo, ruidosamente" por
+   * "erra em silêncio, com 200 e corpo limpo" — pior que o defeito original. Um contador só,
+   * cobrindo os dois laços (cron.daily e aniversário).
+   */
+  let erros = 0
 
   for (const automation of automations ?? []) {
+   try {
     const templateSlug = (automation.email_templates as unknown as { slug: string } | null)?.slug
     if (!templateSlug) continue
 
@@ -97,6 +106,12 @@ export async function GET(request: NextRequest) {
       })
       fired++
     }
+   } catch (e) {
+    // Isolamento por item: a automação da org A que quebra não pode deixar a da org B sem rodar.
+    console.error(`[email-automations] falha na automação ${automation.id}:`, e)
+    erros++
+    continue
+   }
   }
 
   // ── client.birthday: birthday automations for CRM clients ────────────────
@@ -114,6 +129,7 @@ export async function GET(request: NextRequest) {
   const todayDay = now.getUTCDate()
 
   for (const automation of birthdayAutomations ?? []) {
+   try {
     const templateSlug = (automation.email_templates as unknown as { slug: string } | null)?.slug
     if (!templateSlug) continue
 
@@ -148,11 +164,17 @@ export async function GET(request: NextRequest) {
       })
       birthdayFired++
     }
+   } catch (e) {
+    console.error(`[email-automations] falha na automação de aniversário ${automation.id}:`, e)
+    erros++
+    continue
+   }
   }
 
   return NextResponse.json({
     fired,
     skipped,
+    erros,
     birthdayFired,
     automations: (automations?.length ?? 0) + (birthdayAutomations?.length ?? 0),
   })

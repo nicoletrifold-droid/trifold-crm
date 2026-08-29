@@ -159,3 +159,40 @@ describe('sendCapiEvents', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 })
+
+describe('Story 900-23 — datasetId por organização (aditivo)', () => {
+  const OLD_ENV = { ...process.env }
+
+  beforeEach(() => {
+    process.env.META_CAPI_ACCESS_TOKEN = 'test-token'
+    process.env.META_CAPI_DATASET_ID = 'DA_ENV'
+    vi.restoreAllMocks()
+  })
+
+  afterEach(() => {
+    process.env = { ...OLD_ENV }
+    vi.restoreAllMocks()
+  })
+
+  it('o datasetId das options tem prioridade sobre a env', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(jsonResponse(200, { events_received: 1 }))
+
+    await sendCapiEvents([makeEvent()], { datasetId: 'DA_ORG' })
+
+    const [url] = fetchMock.mock.calls[0]
+    expect(url).toBe('https://graph.facebook.com/v25.0/DA_ORG/events')
+  })
+
+  it('sem datasetId nas options, o comportamento é o de antes (env/fallback)', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(jsonResponse(200, { events_received: 1 }))
+
+    await sendCapiEvents([makeEvent()])
+
+    const [url] = fetchMock.mock.calls[0]
+    expect(url).toBe('https://graph.facebook.com/v25.0/DA_ENV/events')
+  })
+})

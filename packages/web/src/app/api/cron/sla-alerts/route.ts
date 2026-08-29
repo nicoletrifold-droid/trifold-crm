@@ -108,9 +108,10 @@ export async function GET(request: NextRequest) {
   const summary: Array<Record<string, unknown>> = []
 
   for (const cfg of (configs ?? []) as CfgRow[]) {
-    const orgId = cfg.org_id
+   const orgId = cfg.org_id
+   try {
     if (!cfg.sla_alertas_enabled && !dryRun) {
-      summary.push({ orgId, skipped: "sla_alertas_enabled=false" })
+      summary.push({ orgId, ok: true, skipped: "sla_alertas_enabled=false" })
       continue
     }
 
@@ -118,7 +119,7 @@ export async function GET(request: NextRequest) {
     const { week: schedule, timezone: scheduleTz } = await getOrgSchedule(orgId, admin)
     const withinHours = isOpenAtNow(now, schedule, scheduleTz)
     if (!withinHours && !dryRun) {
-      summary.push({ orgId, skipped: "fora do horario comercial" })
+      summary.push({ orgId, ok: true, skipped: "fora do horario comercial" })
       continue
     }
 
@@ -147,7 +148,7 @@ export async function GET(request: NextRequest) {
       .maybeSingle()
     const novoId = (novoStage?.id as string | undefined) ?? null
     if (!novoId) {
-      summary.push({ orgId, skipped: "sem stage 'novo'" })
+      summary.push({ orgId, ok: true, skipped: "sem stage 'novo'" })
       continue
     }
 
@@ -167,7 +168,7 @@ export async function GET(request: NextRequest) {
       .limit(500)
     const leadRows = (leads ?? []) as LeadRow[]
     if (leadRows.length === 0) {
-      summary.push({ orgId, candidatos: 0 })
+      summary.push({ orgId, ok: true, candidatos: 0 })
       continue
     }
 
@@ -281,6 +282,7 @@ export async function GET(request: NextRequest) {
 
     summary.push({
       orgId,
+      ok: true,
       candidatos: leadRows.length,
       alertasCorretor,
       escalonamentos,
@@ -288,7 +290,15 @@ export async function GET(request: NextRequest) {
       withinHours,
       ...(dryRun ? { wouldAlert } : {}),
     })
+   } catch (e) {
+    // Story 900-23 · AC7 — isolamento por organização, POR FORA do try/catch que já existe na
+    // folha (envio de WhatsApp). A org que falha CONTINUA no array, com `ok: false` e a mensagem.
+    console.error(`[sla-alerts] falha processando a org ${orgId}:`, e)
+    summary.push({ orgId, ok: false, erro: e instanceof Error ? e.message : String(e) })
+    continue
+   }
   }
 
-  return NextResponse.json({ ok: true, summary })
+  // `ok` agrega: uma org com erro derruba o `ok` do topo — o corpo não pode ficar limpo.
+  return NextResponse.json({ ok: summary.every((s) => s.ok !== false), summary })
 }

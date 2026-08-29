@@ -15,7 +15,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 vi.mock("server-only", () => ({}))
 
 /** Linhas que a query de `system_events` devolve no teste corrente. */
-let eventos: Array<{ created_at: string; message: string; source?: string }> = []
+let eventos: Array<{
+  created_at: string
+  message: string
+  source?: string
+  org_id?: string | null
+}> = []
 /** Linha de `whatsapp_config`; null = canal indisponível (AC14). */
 let waConfigRow: unknown = {
   phone_number_id: "1109406868918759",
@@ -35,16 +40,26 @@ vi.mock("@web/lib/supabase/admin", () => ({
       // O fake HONRA o .order(): sem isso, o teste da "primeira ocorrência" passaria
       // mesmo que a rota não ordenasse — bastaria o array de entrada já vir ordenado.
       return {
-        select: () => ({
+        // O fake HONRA a LISTA DE COLUNAS do `.select()` (Story 900-23): sem projetar, uma rota
+        // que esquecesse `org_id` no select receberia o campo do fake assim mesmo, e o teste de
+        // `orgs_afetadas` passaria verde medindo a fixture, não o código.
+        select: (colunas: string) => ({
           eq: () => ({
             gte: () => ({
               order: async (_col: string, opts?: { ascending?: boolean }) => {
                 const asc = opts?.ascending !== false
-                const ordenado = [...eventos].sort((a, b) =>
-                  asc
-                    ? a.created_at.localeCompare(b.created_at)
-                    : b.created_at.localeCompare(a.created_at)
-                )
+                const pedidas = colunas.split(",").map((c) => c.trim())
+                const ordenado = [...eventos]
+                  .sort((a, b) =>
+                    asc
+                      ? a.created_at.localeCompare(b.created_at)
+                      : b.created_at.localeCompare(a.created_at)
+                  )
+                  .map((linha) =>
+                    Object.fromEntries(
+                      Object.entries(linha).filter(([k]) => pedidas.includes(k))
+                    )
+                  )
                 return { data: ordenado, error: null }
               },
             }),
@@ -69,7 +84,12 @@ vi.mock("@web/lib/supabase/admin", () => ({
 let deletesCompensatorios: string[] = []
 /** Chaves de dedup já "no banco" — a 2ª tentativa da mesma chave leva 23505. */
 let chavesGravadas = new Set<string>()
-const logEventOnceMock = vi.fn(async (p: { dedupe_key?: string; event_type?: string }) => {
+const logEventOnceMock = vi.fn(async (p: {
+  dedupe_key?: string
+  event_type?: string
+  org_id?: string
+  metadata?: Record<string, unknown>
+}) => {
   const k = p.dedupe_key ?? ""
   if (chavesGravadas.has(k)) return { inserted: false }
   chavesGravadas.add(k)
@@ -78,7 +98,12 @@ const logEventOnceMock = vi.fn(async (p: { dedupe_key?: string; event_type?: str
 const logEventMock = vi.fn()
 vi.mock("@web/lib/logger", () => ({
   logEvent: (...a: unknown[]) => logEventMock(...a),
-  logEventOnce: (p: { dedupe_key?: string; event_type?: string }) => logEventOnceMock(p),
+  logEventOnce: (p: {
+    dedupe_key?: string
+    event_type?: string
+    org_id?: string
+    metadata?: Record<string, unknown>
+  }) => logEventOnceMock(p),
 }))
 
 /** Args que realmente interessam do envio — o resto do payload é do canal, não da rota. */
@@ -123,8 +148,12 @@ function req(query = ""): Request {
   })
 }
 
-function evento(message: string, created_at = "2026-08-28T09:05:41.798Z") {
-  return { created_at, message, source: "api/webhook/whatsapp" }
+function evento(
+  message: string,
+  created_at = "2026-08-28T09:05:41.798Z",
+  org_id: string | null = null,
+) {
+  return { created_at, message, source: "api/webhook/whatsapp", org_id }
 }
 
 beforeEach(() => {
@@ -323,5 +352,71 @@ describe("dry run (AC9)", () => {
     expect(body.alertasEnviados).toBe(0)
     expect(alertarMock).not.toHaveBeenCalled()
     expect(logEventOnceMock).not.toHaveBeenCalled()
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Story 900-23 · AC3 — reclassificado como vigia de plataforma
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+
+describe("900-23 · AC3 — agrega de todas as orgs e DIZ quais foram", () => {
+  const ORG_A = "00000000-0000-0000-0000-0000000000a1"
+  const ORG_B = "00000000-0000-0000-0000-0000000000b2"
+
+  it("erros de 2 orgs distintas ⇒ UM aviso agregado, com as 2 em metadata.orgs_afetadas", async () => {
+    // Antes desta AC o `select` nem trazia `org_id`: o cron lia de todas as orgs e não sabia de
+    // quais. Continua sendo UM alerta (a agregação é a razão de ser do cron), mas agora nomeado.
+    eventos = [
+      evento(ERRO_CREDITO, "2026-08-28T09:05:00.000Z", ORG_A),
+      evento(ERRO_CREDITO, "2026-08-28T09:06:00.000Z", ORG_B),
+    ]
+
+    const res = await GET(req() as never)
+    const body = (await res.json()) as {
+      orgsAfetadas: string[]
+      porTipo: Record<string, { orgsAfetadas: string[] }>
+    }
+
+    expect(alertarMock).toHaveBeenCalledTimes(1) // UM aviso, não dois
+    expect([...body.orgsAfetadas].sort()).toEqual([ORG_A, ORG_B])
+    expect([...body.porTipo.credito!.orgsAfetadas].sort()).toEqual([ORG_A, ORG_B])
+
+    const alerta = logEventOnceMock.mock.calls
+      .map((c) => c[0])
+      .find((p) => p.event_type === "NICOLE_HEALTH_ALERTA")!
+    expect([...(alerta.metadata!.orgs_afetadas as string[])].sort()).toEqual([ORG_A, ORG_B])
+  })
+
+  it("evento sem `org_id` aparece como `desconhecida`, nunca some", async () => {
+    eventos = [
+      evento(ERRO_CREDITO, "2026-08-28T09:05:00.000Z", null),
+      evento(ERRO_CREDITO, "2026-08-28T09:06:00.000Z", ORG_A),
+    ]
+    const res = await GET(req() as never)
+    const body = (await res.json()) as { orgsAfetadas: string[] }
+    expect([...body.orgsAfetadas].sort()).toEqual([ORG_A, "desconhecida"])
+  })
+
+  it("🔴 os dois logEventOnce do alerta gravam SEM org_id (evento de plataforma, não de tenant)", async () => {
+    eventos = [
+      evento(ERRO_CREDITO, "2026-08-28T09:05:00.000Z", ORG_A),
+      evento(ERRO_CREDITO, "2026-08-28T09:06:00.000Z", ORG_B),
+    ]
+    await GET(req() as never)
+
+    const alerta = logEventOnceMock.mock.calls
+      .map((c) => c[0])
+      .find((p) => p.event_type === "NICOLE_HEALTH_ALERTA")!
+    expect(alerta.org_id).toBeUndefined()
+
+    // …e o mesmo para o caminho de canal indisponível (AC14).
+    logEventOnceMock.mockClear()
+    waConfigRow = null
+    await GET(req() as never)
+    const semCanal = logEventOnceMock.mock.calls
+      .map((c) => c[0])
+      .find((p) => p.event_type === "NICOLE_HEALTH_SEM_CANAL")!
+    expect(semCanal.org_id).toBeUndefined()
+    expect([...(semCanal.metadata!.orgs_afetadas as string[])].sort()).toEqual([ORG_A, ORG_B])
   })
 })

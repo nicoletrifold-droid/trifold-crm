@@ -198,3 +198,69 @@ describe("roleta-retry cron (Story 71-1)", () => {
     expect(body.distributed).toBe(1)
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Story 900-23 · AC7 — isolamento de erro por lead
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+
+describe("roleta-retry — isolamento de erro no laço (AC7 da 900-23)", () => {
+  beforeEach(() => {
+    process.env.CRON_SECRET = "test-secret"
+    vi.mocked(distributeLeadToNextBroker).mockReset()
+    vi.mocked(loadLeadInboundForClassification).mockReset()
+    vi.mocked(classifyContactIntent).mockReset()
+    vi.mocked(classifyContactIntent).mockResolvedValue({
+      isLead: true,
+      category: "lead",
+      reason: "",
+    } as never)
+  })
+
+  it("controle positivo: 2 leads, os 2 distribuídos, `erros: 0`", async () => {
+    vi.mocked(loadLeadInboundForClassification).mockResolvedValue({
+      lastInboundAt: OLD,
+      text: "quero comprar",
+      hasDocument: false,
+    })
+    vi.mocked(distributeLeadToNextBroker).mockResolvedValue({ status: "distributed" } as never)
+    vi.mocked(createAdminClient).mockReturnValue(
+      makeAdminClient([
+        { id: "l1", org_id: "o1", name: "A" },
+        { id: "l2", org_id: "o2", name: "B" },
+      ]) as never,
+    )
+
+    const res = await GET(makeRequest())
+    const body = await res.json()
+    expect(res.status).toBe(200)
+    expect(body).toMatchObject({ processed: 2, distributed: 2, erros: 0 })
+  })
+
+  it("🔴 o 1º lead lança e o 2º ainda é distribuído — e o corpo NOMEIA a falha (`erros >= 1`)", async () => {
+    // Sem o try/catch, a exceção no 1º lead sobe e o cron devolve 500 sem tocar no 2º.
+    vi.mocked(loadLeadInboundForClassification).mockImplementation(
+      async (_admin: unknown, leadId: string) => {
+        if (leadId === "l1") throw new Error("falha sintética no lead l1")
+        return { lastInboundAt: OLD, text: "quero comprar", hasDocument: false }
+      },
+    )
+    vi.mocked(distributeLeadToNextBroker).mockResolvedValue({ status: "distributed" } as never)
+    vi.mocked(createAdminClient).mockReturnValue(
+      makeAdminClient([
+        { id: "l1", org_id: "o1", name: "A" },
+        { id: "l2", org_id: "o2", name: "B" },
+      ]) as never,
+    )
+
+    const res = await GET(makeRequest())
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    // O 2º lead foi processado apesar da exceção no 1º…
+    expect(vi.mocked(distributeLeadToNextBroker)).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(distributeLeadToNextBroker).mock.calls[0]![0]).toBe("l2")
+    expect(body.distributed).toBe(1)
+    // …e o erro NÃO ficou em silêncio: sem este campo, o corpo sairia limpo com 200.
+    expect(body.erros).toBeGreaterThanOrEqual(1)
+  })
+})

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
+import type { SupabaseClient } from "@supabase/supabase-js"
 import { createAdminClient } from "@web/lib/supabase/admin"
+import { logEvent } from "@web/lib/logger"
 import {
   buildCapiUserData,
   buildVisitouEvent,
@@ -24,8 +26,11 @@ const CRON_SECRET = process.env.CRON_SECRET
 const MAX_ATTEMPTS = 3 // mesmo valor de meta-leads-retry
 const BATCH_SIZE = 50 // volume baixo (~22 leads/mês); lote nunca cheio na prática
 
+const SOURCE = "api/cron/meta-capi-dispatch"
+
 interface OutboxRow {
   id: string
+  org_id: string
   lead_id: string
   event_id: string
   event_name: string
@@ -75,9 +80,11 @@ export async function GET(request: NextRequest) {
   const supabase = createAdminClient()
 
   // AC2 — busca em lote de pendentes, mais antigos primeiro.
+  // Story 900-23 · AC5.1 — `org_id` entra no `select`: sem ele a outbox de todas as empresas era
+  // tratada como se fosse de uma só, e a PII de uma org podia ir para o dataset/pixel de outra.
   const { data: rows, error } = await supabase
     .from("meta_capi_outbox")
-    .select("id, lead_id, event_id, event_name, attempts, created_at")
+    .select("id, org_id, lead_id, event_id, event_name, attempts, created_at")
     .eq("status", "pending")
     .order("created_at", { ascending: true })
     .limit(BATCH_SIZE)
@@ -94,17 +101,120 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ ok: true, ...summary })
   }
 
+  // Story 900-23 · AC5.2 — agrupa a fila por organização. Este cron NÃO usa `forEachActiveOrg`
+  // porque o trabalho vem de uma FILA (linhas concretas, com `org_id NOT NULL`), não de
+  // `organizations`: perguntar a cada org "você tem outbox pendente?" seria N queries vazias
+  // contra um `GROUP BY` em memória.
+  const porOrg = new Map<string, OutboxRow[]>()
+  for (const linha of outbox) {
+    const lista = porOrg.get(linha.org_id) ?? []
+    lista.push(linha)
+    porOrg.set(linha.org_id, lista)
+  }
+
+  const erros: Array<{ orgId: string; erro: string }> = []
+  for (const [orgId, linhasDaOrg] of porOrg) {
+    try {
+      await processarOrg(supabase, orgId, linhasDaOrg, summary)
+    } catch (e) {
+      // Mesma razão da AC4: uma org com erro não pode abortar o despacho das outras.
+      const erro = e instanceof Error ? e.message : String(e)
+      console.error(`[META-CAPI-DISPATCH] erro na org ${orgId}:`, erro)
+      erros.push({ orgId, erro })
+    }
+  }
+
+  // AC9 — observabilidade.
+  if (summary.sent > 0 || summary.failed > 0 || summary.skipped > 0) {
+    console.log("[META-CAPI-DISPATCH]", JSON.stringify(summary))
+  }
+
+  return NextResponse.json({ ok: erros.length === 0, orgs: porOrg.size, ...summary, erros })
+}
+
+/**
+ * Resolve o `dataset_id` desta organização.
+ *
+ * **Fail-safe por desenho, não por acidente:** erro de rede — ou, na janela entre este deploy e a
+ * aplicação da migration `246` em produção, a tabela ainda não existir — vira "dataset
+ * indisponível", nunca exceção. É defesa em profundidade, **não** substituto da ordem de deploy
+ * declarada na story (migration `246` → seed do `dataset_id` da Trifold → este código).
+ */
+async function resolverDatasetId(
+  supabase: SupabaseClient,
+  orgId: string,
+): Promise<string | null> {
+  try {
+    const { data: integ, error } = await supabase
+      .from("org_integrations")
+      .select("config")
+      .eq("org_id", orgId)
+      .eq("provider", "meta_capi")
+      .maybeSingle()
+
+    if (error) {
+      console.error(`[META-CAPI-DISPATCH] org_integrations indisponível (${orgId}):`, error.message)
+      return null
+    }
+    const dataset = (integ?.config as { dataset_id?: string } | null)?.dataset_id
+    return typeof dataset === "string" && dataset.length > 0 ? dataset : null
+  } catch (e) {
+    console.error(`[META-CAPI-DISPATCH] org_integrations lançou (${orgId}):`, e)
+    return null
+  }
+}
+
+/** Despacha o lote de UMA organização. */
+async function processarOrg(
+  supabase: SupabaseClient,
+  orgId: string,
+  outbox: OutboxRow[],
+  summary: { scanned: number; sent: number; failed: number; skipped: number },
+): Promise<void> {
+  const datasetId = await resolverDatasetId(supabase, orgId)
+
+  if (!datasetId) {
+    // Nem `sent` (mentiria que foi enviado) nem `failed` (gastaria as 3 tentativas num problema
+    // de configuração que retry não resolve). E — C9 — o estado ganha VOZ: sem o evento abaixo,
+    // "a empresa parou de receber CAPI" seria exatamente o defeito que esta onda existe para
+    // eliminar — comportamento errado, resposta 200, ninguém sabe.
+    for (const row of outbox) {
+      await supabase
+        .from("meta_capi_outbox")
+        .update({ status: "skipped", last_error: "capi_nao_configurado" })
+        .eq("id", row.id)
+        .eq("status", "pending")
+      summary.skipped++
+    }
+    // Uma vez por org por execução, não uma por linha — evita 50 eventos idênticos no lote cheio.
+    logEvent({
+      level: "error",
+      category: "cron",
+      event_type: "CAPI_ORG_SEM_DATASET",
+      org_id: orgId,
+      source: SOURCE,
+      message:
+        "meta_capi_outbox com linhas pendentes mas org_integrations sem dataset_id configurado",
+      metadata: { linhas_puladas: outbox.length },
+    })
+    return
+  }
+
   // AC3 — enriquecimento: buscar os dados dos leads correspondentes em um único
   // query (evita N round-trips). `metadata` pode estar null/sem meta_ad (86-6).
   const leadIds = [...new Set(outbox.map((r) => r.lead_id))]
+  // Story 900-23 — OS DOIS filtros, não um no lugar do outro: `.eq("org_id", …)` impede um lead
+  // de outra empresa de ser "resgatado" pela query da vizinha; `.in("id", …)` é o que mantém o
+  // mapeamento outbox→lead por id (sem ele viriam leads demais).
   const { data: leadRows, error: leadsError } = await supabase
     .from("leads")
     .select("id, name, email, phone, metadata")
+    .eq("org_id", orgId)
     .in("id", leadIds)
 
   if (leadsError) {
     console.error("[META-CAPI-DISPATCH] Failed to query leads:", leadsError.message)
-    return NextResponse.json({ error: leadsError.message }, { status: 500 })
+    throw new Error(leadsError.message)
   }
 
   const leadById = new Map<string, LeadRow>(
@@ -150,17 +260,17 @@ export async function GET(request: NextRequest) {
   }
 
   if (events.length === 0) {
-    return NextResponse.json({ ok: true, ...summary })
+    return
   }
 
   // AC4 — envio. `sendCapiEvents` retorna { success:false, error } se o token
   // (META_CAPI_ACCESS_TOKEN / DATASET_ID, provisionados na 86-1) estiver ausente
   // — tratamos como falha normal (retry limitado), sem lançar exceção.
   const testEventCode = process.env.META_CAPI_TEST_EVENT_CODE
-  const result = await sendCapiEvents(
-    events,
-    testEventCode ? { testEventCode } : undefined,
-  )
+  const result = await sendCapiEvents(events, {
+    datasetId,
+    ...(testEventCode ? { testEventCode } : {}),
+  })
 
   const receivedOk =
     result.success && (result.eventsReceived ?? events.length) === events.length
@@ -198,11 +308,4 @@ export async function GET(request: NextRequest) {
       summary.failed++
     }
   }
-
-  // AC9 — observabilidade.
-  if (summary.sent > 0 || summary.failed > 0 || summary.skipped > 0) {
-    console.log("[META-CAPI-DISPATCH]", JSON.stringify(summary))
-  }
-
-  return NextResponse.json({ ok: true, ...summary })
 }
