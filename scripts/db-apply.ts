@@ -41,7 +41,7 @@
 
 import { createInterface } from "node:readline/promises"
 import { resolverAmbiente } from "./lib/db-env"
-import { runSql, splitStatements } from "./lib/management-api"
+import { runSql, runSqlJson, splitStatements } from "./lib/management-api"
 import {
   RUNBOOK,
   TABELA_LEDGER,
@@ -49,7 +49,7 @@ import {
   lerMigration,
   montarRelatorio,
   sha256Do,
-  sqlDeRegistro,
+  sqlDeRegistroObservado,
   tabelaExiste,
 } from "./lib/migrations-ledger"
 
@@ -167,30 +167,64 @@ async function main(): Promise<number> {
     let r = await runSql(alvo.ref, pat, sql)
     if (!r.ok) {
       // fallback autocommit — ver o cabeçalho de scripts/lib/management-api.ts
+      // PARA no primeiro statement que falha (CodeRabbit, PR #525). Antes, o laço seguia
+      // executando os statements seguintes: eles aplicavam, a migration não era registrada
+      // (a função retorna antes do INSERT), e a execução seguinte a via como PENDENTE e
+      // tentava reaplicar DDL já parcialmente aplicado. Continuar depois do erro só aumenta
+      // o tamanho do estrago que alguém vai ter que desfazer à mão.
+      const stmts = splitStatements(sql)
       const erros: string[] = []
-      for (const st of splitStatements(sql)) {
+      let okAteAqui = 0
+      for (const st of stmts) {
         const s = await runSql(alvo.ref, pat, st)
-        if (!s.ok) erros.push(s.msg)
+        if (!s.ok) {
+          erros.push(s.msg)
+          break
+        }
+        okAteAqui += 1
       }
       if (erros.length === 0) r = { ok: true, msg: "" }
       else {
         console.error(`\nFALHOU: ${arquivo}`)
         console.error(`  ${erros[0].slice(0, 400)}`)
+        console.error(
+          `\n⚠️ ESTADO PARCIAL: ${okAteAqui} de ${stmts.length} statement(s) deste arquivo ` +
+            `APLICARAM antes da falha, e a migration NÃO foi registrada no ledger (o registro ` +
+            `só acontece depois do sucesso). A Management API roda cada statement em ` +
+            `autocommit, então não há rollback: os ${okAteAqui} primeiros estão no banco.\n` +
+            `  A próxima execução vai ver este arquivo como PENDENTE e tentar reaplicar do ` +
+            `começo. Desfaça o estado parcial à mão ANTES de rodar de novo.`,
+        )
         console.error(`\n${aplicadas} migration(s) aplicada(s) antes da falha, todas registradas.`)
         return 1
       }
     }
 
-    const reg = await runSql(
+    // Registro por OBSERVAÇÃO: `ON CONFLICT DO NOTHING RETURNING arquivo`. Se voltar vazio,
+    // já havia linha para este arquivo — e este comando NÃO a sobrescreve, porque regravar o
+    // sha256 apagaria justamente a detecção de `ALTERADA-APÓS-APLICAR`. Ver o cabeçalho de
+    // scripts/lib/migrations-ledger.ts (CodeRabbit, PR #525).
+    const reg = await runSqlJson<{ arquivo: string }>(
       alvo.ref,
       pat,
-      sqlDeRegistro(arquivo, sha256Do(Buffer.from(sql, "utf-8")), "apply"),
+      sqlDeRegistroObservado(arquivo, sha256Do(Buffer.from(sql, "utf-8")), "apply"),
     )
-    if (!reg.ok) {
+    if (reg.linhas === null) {
       console.error(
         `\nFALHOU AO REGISTRAR ${arquivo} no ledger — o SQL APLICOU, mas o registro não ` +
           `entrou. Registre à mão antes de rodar de novo, senão a próxima execução tenta ` +
           `reaplicar.\n  ${reg.msg.slice(0, 400)}`,
+      )
+      return 1
+    }
+    if (reg.linhas.length === 0) {
+      console.error(
+        `\nANOMALIA em ${arquivo}: o SQL APLICOU, mas já existia registro no ledger para este ` +
+          `arquivo — ele estava PENDENTE quando eu li, segundos atrás. Alguém escreveu no ` +
+          `ledger entre a leitura e a escrita.\n` +
+          `  NÃO sobrescrevi o registro existente: regravar o sha256 apagaria a detecção de ` +
+          `ALTERADA-APÓS-APLICAR, que é a razão de o ledger existir.\n` +
+          `  Rode \`pnpm db:status\` e decida com a informação na mão.`,
       )
       return 1
     }

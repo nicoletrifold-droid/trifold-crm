@@ -23,8 +23,8 @@ import {
   contarTotais,
   gravarEspelho,
   sha256Do,
-  sqlDeRegistro,
   sqlDeRegistroEmLote,
+  sqlDeRegistroObservado,
   type LinhaDoLedger,
   type Relatorio,
 } from "./lib/migrations-ledger"
@@ -131,27 +131,50 @@ describe("sha256Do", () => {
   })
 })
 
-describe("SQL de registro", () => {
+describe("SQL de registro — sobrescrever é precondição, não conveniência (CodeRabbit #525)", () => {
+  const DUAS = [
+    { arquivo: "001_a.sql", sha256: "h1" },
+    { arquivo: "002_b.sql", sha256: "h2" },
+  ]
+
   it("escapa aspas simples no nome do arquivo (nada de SQL quebrado ou injetado)", () => {
-    const sql = sqlDeRegistro("00'1.sql", "abc", "apply")
+    const sql = sqlDeRegistroObservado("00'1.sql", "abc", "apply")
     expect(sql).toContain("'00''1.sql'")
   })
 
+  it("`db:apply` NUNCA sobrescreve: DO NOTHING + RETURNING, para o conflito ser observável", () => {
+    const sql = sqlDeRegistroObservado("245_x.sql", "abc", "apply")
+    expect(sql).toContain("on conflict (arquivo) do nothing")
+    expect(sql).toContain("returning arquivo")
+    // O `DO UPDATE` é o que apagava a evidência de ALTERADA-APÓS-APLICAR.
+    expect(sql).not.toContain("do update")
+    expect(sql).not.toContain("sha256 = excluded.sha256")
+  })
+
   it("o lote traz uma tupla por entrada e o `via` declarado", () => {
-    const sql = sqlDeRegistroEmLote(
-      [
-        { arquivo: "001_a.sql", sha256: "h1" },
-        { arquivo: "002_b.sql", sha256: "h2" },
-      ],
-      "backfill-onda-1",
-    )
+    const sql = sqlDeRegistroEmLote(DUAS, "backfill-onda-1", { sobrescrever: false })
     expect(sql).toContain("('001_a.sql', 'h1', 'backfill-onda-1')")
     expect(sql).toContain("('002_b.sql', 'h2', 'backfill-onda-1')")
+  })
+
+  it("`sobrescrever: false` (backfill) embute a guarda de ledger vazio e NÃO sobrescreve", () => {
+    const sql = sqlDeRegistroEmLote(DUAS, "backfill-onda-1", { sobrescrever: false })
+    expect(sql).toContain("raise exception")
+    expect(sql).toContain("if exists (select 1 from public.trifold_migrations_aplicadas)")
+    // A guarda vem ANTES do insert — abortar depois de gravar não seria guarda nenhuma.
+    expect(sql.indexOf("raise exception")).toBeLessThan(sql.indexOf("insert into"))
+    expect(sql).not.toContain("do update")
+  })
+
+  it("`sobrescrever: true` (reset) dispensa a guarda — a tabela acabou de ser recriada vazia", () => {
+    const sql = sqlDeRegistroEmLote(DUAS, "reset", { sobrescrever: true })
+    expect(sql).not.toContain("raise exception")
     expect(sql).toContain("on conflict (arquivo) do update")
   })
 
-  it("lote vazio devolve string vazia (nunca um INSERT sem VALUES)", () => {
-    expect(sqlDeRegistroEmLote([], "reset")).toBe("")
+  it("lote vazio devolve string vazia (nunca um INSERT sem VALUES, nem uma guarda solta)", () => {
+    expect(sqlDeRegistroEmLote([], "reset", { sobrescrever: true })).toBe("")
+    expect(sqlDeRegistroEmLote([], "backfill-onda-1", { sobrescrever: false })).toBe("")
   })
 })
 

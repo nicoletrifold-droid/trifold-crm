@@ -94,8 +94,63 @@ describe("G2 — o job SEMPRE comenta, com três estados nomeados", () => {
     })
     expect(b.estado).toBe("indeterminado")
     expect(b.corpo).toContain("⛔")
-    expect(b.corpo).toContain("nenhuma das 1 migration(s) deste PR casou")
+    expect(b.corpo).toContain("1 de 1 migration(s) deste PR não casaram")
+    expect(b.corpo).toContain("Nenhuma casou")
     expect(b.corpo).not.toContain("✅")
+  })
+})
+
+describe("CodeRabbit #525 — cobertura PARCIAL do relatório não é estado limpo", () => {
+  /**
+   * A guarda era `casados.length === 0`. Com DUAS migrations no PR e só UMA no relatório,
+   * `1 !== 0` passava batido e a segunda saía sem veredito debaixo de um `✅ limpo`.
+   * O controle positivo natural é exatamente esse caso: 2 no PR, 1 no relatório.
+   */
+  it("2 migrations no PR, 1 no relatório (a que casa está `aplicada`) ⇒ ⛔, nunca ✅", () => {
+    const a = montarAviso({
+      arquivosDoPr: [
+        "supabase/migrations/244_org_admin_invite_email.sql",
+        "supabase/migrations/245_registro_de_migrations.sql",
+      ],
+      vereditos: [{ arquivo: "244_org_admin_invite_email.sql", estado: "aplicada" }],
+    })
+    expect(a.estado).toBe("indeterminado")
+    expect(a.corpo).toContain("⛔")
+    expect(a.corpo).toContain("1 de 2 migration(s) deste PR não casaram")
+    // A que ficou sem veredito é NOMEADA — o furo era justamente ela sumir.
+    expect(a.corpo).toContain("245_registro_de_migrations.sql")
+    expect(a.corpo).toContain("cobertura parcial não é estado")
+    expect(a.corpo).not.toContain("✅")
+    // E não pode ser confundido com o caso "nenhuma casou".
+    expect(a.corpo).not.toContain("Nenhuma casou")
+  })
+
+  it("cobertura parcial vence até quando a que casa está PENDENTE (não vira só `⚠️`)", () => {
+    const a = montarAviso({
+      arquivosDoPr: [
+        "supabase/migrations/244_org_admin_invite_email.sql",
+        "supabase/migrations/245_registro_de_migrations.sql",
+      ],
+      vereditos: [{ arquivo: "244_org_admin_invite_email.sql", estado: "PENDENTE" }],
+    })
+    expect(a.estado).toBe("indeterminado")
+    expect(a.corpo).toContain("245_registro_de_migrations.sql")
+    expect(a.corpo).not.toContain("PENDENTE — ainda não aplicada no teste")
+  })
+
+  it("cobertura TOTAL segue passando — a correção não pode travar o caso normal", () => {
+    const a = montarAviso({
+      arquivosDoPr: [
+        "supabase/migrations/244_org_admin_invite_email.sql",
+        "supabase/migrations/245_registro_de_migrations.sql",
+      ],
+      vereditos: [
+        { arquivo: "244_org_admin_invite_email.sql", estado: "aplicada" },
+        { arquivo: "245_registro_de_migrations.sql", estado: "aplicada" },
+      ],
+    })
+    expect(a.estado).toBe("limpo")
+    expect(a.corpo).toContain("✅")
   })
 })
 
@@ -184,8 +239,12 @@ describe("CONCERNS-1 (@qa) — a quarta classe: PR que APAGA migration já aplic
     })
     expect(a.corpo).toContain("REMOVIDA — este PR apaga migration que consta como aplicada (1)")
     expect(a.corpo).toContain("244_org_admin_invite_email.sql")
-    expect(a.corpo).toContain("fica órfão")
+    expect(a.corpo).toContain("Restaure o arquivo")
     expect(a.corpo).toContain("reset:testdb")
+    // CodeRabbit #525: o aviso NÃO pode mandar apagar a linha do ledger — isso tiraria o
+    // sinal sem tirar o efeito do banco. Ele manda restaurar o arquivo ou criar migration nova.
+    expect(a.corpo).toContain("migration nova")
+    expect(a.corpo).toContain("não** resolve")
     // Não veste a roupa de nenhum dos outros dois.
     expect(a.corpo).not.toContain("ainda não aplicada no teste")
     expect(a.corpo).not.toContain("vai recusar")

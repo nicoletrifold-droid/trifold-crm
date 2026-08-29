@@ -1,7 +1,7 @@
 {
   "_aviso": "O BANCO É A VERDADE; este arquivo é o retrato que aparece no diff de PR. Regenerado por `pnpm db:status`, uma chave por ambiente — cada execução só reescreve a chave do ambiente que ela consultou, para que um `db:status` contra teste não apague o retrato de produção. `aplicada_em` NÃO entra aqui de propósito: ele muda a cada reset e afogaria o diff.",
   "teste": {
-    "gerado_em": "2026-08-29T18:24:17.405Z",
+    "gerado_em": "2026-08-29T19:01:38.139Z",
     "projeto_ref": "xnxvygyfyyyzwhiuoehz",
     "totais": {
       "aplicada": 268,
@@ -1615,7 +1615,7 @@
       {
         "arquivo": "245_registro_de_migrations.sql",
         "estado": "aplicada",
-        "sha256": "cc88e5aff20a4edac84bbc82ae3eedd2d16fbdf9664ed110ddde49bda1ed9b6a",
+        "sha256": "b5e1a12e25fe3374bc000ed24ac55d7674e24ccb6d908ff7318c7a27d913798a",
         "via": "apply"
       }
     ]

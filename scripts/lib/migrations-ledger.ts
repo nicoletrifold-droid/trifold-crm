@@ -263,34 +263,91 @@ export function gravarEspelho(relatorio: Relatorio, caminho: string = ARQ_ESPELH
   return caminho
 }
 
-/** `INSERT … ON CONFLICT` de uma linha do ledger. Usado por `db:apply` e pelo reset. */
-export function sqlDeRegistro(arquivo: string, sha256: string, via: string): string {
+/**
+ * ## O SOBRESCREVER DO LEDGER É PRECONDIÇÃO, NÃO CONVENIÊNCIA (CodeRabbit, PR #525)
+ *
+ * O `ON CONFLICT (arquivo) DO UPDATE SET sha256 = excluded.sha256` de antes era um só, usado
+ * por três caminhos com necessidades diferentes — e num deles ele **apagava a evidência**:
+ * regravar o hash faz `classificar()` voltar a dizer `aplicada` onde diria
+ * `ALTERADA-APÓS-APLICAR`. A detecção de drift, que é a razão de o ledger existir, se apagava
+ * sozinha. Vale aqui o mesmo princípio que fez o runbook escolher `DELETE` + `db:apply` em vez
+ * de `UPDATE … SET sha256`: **a diferença entre declarar e observar é a razão de o `via`
+ * existir.** Um `UPDATE` de hash é declaração; e declaração não pode se disfarçar de
+ * observação.
+ *
+ * Os três caminhos, separados por função, cada um com a sua precondição escrita:
+ *
+ * | Caminho | Função | Precondição | Conflito significa |
+ * |---|---|---|---|
+ * | `db:apply` | `sqlDeRegistroObservado` | o arquivo estava `PENDENTE` ⇒ **não há linha** | anomalia — alguém escreveu entre a leitura e a escrita. **Nunca sobrescreve**; devolve vazio e o chamador acusa. |
+ * | `reset:testdb` | `sqlDeRegistroEmLote({ sobrescrever: true })` | `drop schema public cascade` acabou de rodar ⇒ a tabela foi **destruída e recriada vazia** | impossível na prática; se acontecer, o registro antigo descrevia um banco que não existe mais |
+ * | backfill do runbook | `sqlDeRegistroEmLote({ sobrescrever: false })` | ledger **vazio** (Passo 2, logo após o DDL) | o SQL **aborta** com `RAISE EXCEPTION` antes de tocar em qualquer linha |
+ *
+ * O caso que o CodeRabbit apontou — reregistro em lote sobre um ambiente que **não** foi
+ * zerado — deixa de existir por construção: é exatamente o que a guarda do backfill recusa.
+ */
+
+/**
+ * `INSERT` de uma linha, para `db:apply`: **observação, nunca sobrescrita.**
+ *
+ * `ON CONFLICT DO NOTHING` + `RETURNING`: se já houver linha para este arquivo, nada é
+ * gravado e a resposta volta **vazia** — é assim que o chamador distingue "registrei" de
+ * "havia registro que eu não vou apagar". Um `DO NOTHING` sem `RETURNING` seria pior que o
+ * `DO UPDATE`: silêncio no lugar de evidência sobrescrita.
+ */
+export function sqlDeRegistroObservado(arquivo: string, sha256: string, via: string): string {
   return (
     `insert into public.${TABELA_LEDGER} (arquivo, sha256, via) values ` +
     `(${citarLiteral(arquivo)}, ${citarLiteral(sha256)}, ${citarLiteral(via)}) ` +
-    `on conflict (arquivo) do update set sha256 = excluded.sha256, ` +
-    `aplicada_em = now(), via = excluded.via;`
+    `on conflict (arquivo) do nothing returning arquivo;`
   )
 }
 
 /**
  * `INSERT` em lote de todos os arquivos de `supabase/migrations/` com o `via` dado.
  *
- * Usado pelo `reset:testdb` (`via='reset'`) e pelo backfill do runbook
- * (`via='backfill-onda-1'`). Um único statement: 268 POSTs à Management API custariam
- * minutos, e o ledger não precisa de granularidade transacional por arquivo.
+ * Um único statement: 268 POSTs à Management API custariam minutos, e o ledger não precisa de
+ * granularidade transacional por arquivo.
+ *
+ * `sobrescrever` **não tem default de propósito** — quem chama tem de declarar em qual dos
+ * dois mundos está:
+ *
+ * • `false` (backfill do runbook) — o SQL vem com uma guarda `RAISE EXCEPTION` que o aborta
+ *   se o ledger não estiver vazio. Sem ela, um backfill rodado fora da janela do Passo 2
+ *   reescreveria as 268 linhas com `via='backfill-onda-1'`, trocando as proveniências
+ *   `reset`/`apply`/`reset-falha-conhecida` (observação) por declaração retroativa em massa.
+ * • `true` (reset) — a tabela acabou de ser destruída pelo `drop schema public cascade` e
+ *   recriada vazia pela própria migration `245`. Não há evidência a apagar, porque não há
+ *   linha. O `DO UPDATE` fica como rede de segurança para o caso de a precondição falhar.
  */
 export function sqlDeRegistroEmLote(
   entradas: Array<{ arquivo: string; sha256: string }>,
   via: string,
+  opcoes: { sobrescrever: boolean },
 ): string {
   if (entradas.length === 0) return ""
   const valores = entradas
     .map((e) => `(${citarLiteral(e.arquivo)}, ${citarLiteral(e.sha256)}, ${citarLiteral(via)})`)
     .join(",\n  ")
+
+  const guarda = opcoes.sobrescrever
+    ? ""
+    : `do $$\nbegin\n` +
+      `  if exists (select 1 from public.${TABELA_LEDGER}) then\n` +
+      `    raise exception 'ABORTADO: ${TABELA_LEDGER} nao esta vazia. Este lote (via=%) so e ` +
+      `seguro sobre ledger vazio -- fora dessa janela ele sobrescreveria proveniencia observada ` +
+      `(reset/apply) por declaracao retroativa. Veja o Procedimento de excecao em ` +
+      `docs/runbooks/aplicar-245-registro-migrations.md.', ${citarLiteral(via)};\n` +
+      `  end if;\nend $$;\n\n`
+
+  const conflito = opcoes.sobrescrever
+    ? `\non conflict (arquivo) do update set sha256 = excluded.sha256, ` +
+      `aplicada_em = now(), via = excluded.via;`
+    : `;`
+
   return (
-    `insert into public.${TABELA_LEDGER} (arquivo, sha256, via) values\n  ${valores}\n` +
-    `on conflict (arquivo) do update set sha256 = excluded.sha256, ` +
-    `aplicada_em = now(), via = excluded.via;`
+    guarda +
+    `insert into public.${TABELA_LEDGER} (arquivo, sha256, via) values\n  ${valores}` +
+    conflito
   )
 }

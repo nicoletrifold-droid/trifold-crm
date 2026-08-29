@@ -542,9 +542,15 @@ async function main(): Promise<number> {
     ]
     for (const [via, nomes] of lotes) {
       if (nomes.length === 0) continue
+      // `sobrescrever: true` com a precondição escrita: o `drop schema public cascade` de
+      // `resetarSchema()` destruiu a própria tabela do ledger (ela mora em `public`), e a
+      // migration 245 a recriou VAZIA nesta mesma execução. Não há evidência a apagar porque
+      // não há linha. O `DO UPDATE` fica como rede, não como conveniência — ver o cabeçalho
+      // de scripts/lib/migrations-ledger.ts (CodeRabbit, PR #525).
       const sql = sqlDeRegistroEmLote(
         nomes.map((nome) => ({ arquivo: nome, sha256: hash(nome) })),
         via,
+        { sobrescrever: true },
       )
       const r = await runSql(ref, pat, sql)
       if (r.ok) {

@@ -6,7 +6,7 @@
 - **Story:** 900-3c — **Fatia B** do split decidido pelo `@po` na validação de 2026-08-29
   (`docs/qa/po-validation-900-3b.md`) e autorizado pelo dono do produto. A irmã é `900-3b` (Fatia A —
   Ambiente), que precisa estar mergeada antes desta (ver Dependencies).
-- **Status:** Ready for Review (rodada 2) — **gate CONCERNS do `@qa` respondido em 2026-08-29**. **CONCERNS-1** (a quarta classe de PR — o que **apaga** migration já aplicada — saía `✅ limpo`) fechada: a justificativa da AC4 para excluir `ÓRFÃ-no-banco` foi **falsificada por medição** (`git diff --name-only` lista caminho apagado) e está marcada como tal na própria AC; o aviso cobre agora os três estados, com bloco `⛔ REMOVIDA` próprio, reproduzido contra o banco real e com mutação que derruba 3 testes. **CONCERNS-2** fechada, e a correção **atravessou a ferramenta desta própria story**: editar a `245` já aplicada fez o `db:status` acusar `ALTERADA-APÓS-APLICAR` e o `db:apply` recusar em bloco (exit 1) — a remediação foi feita pelo caminho legítimo, documentado no runbook antes de ser executado, e a saída real está no Dev Agent Record. **CONCERNS-3** (interpolação em `run:`), **OBS-5** (falha de ledger alta no resumo) e **OBS-6** (o aviso sobre o `gate-tenancy-report.json` agora mora no código e no próprio JSON) também fechadas. **CONCERNS-4** fechada por medição, não deferida: com o commit local existindo, a régua **literal** da AC dá `164 0` → exit 0, e `164 5` → exit 1 sob a mutação nomeada (medida em clone descartável). O `@devops` só precisa repeti-la depois do squash, porque a contagem muda se o histórico for reescrito. **AC1 segue parcial por desenho** — a `245` em produção é passo de runbook do `@devops`, e o `COMMENT` corrigido precisa ir junto. Uma divergência registrada em vez de resolvida sozinha: OBS-5 (exit code × resumo — ver a nota da rodada 2). 274 arquivos de teste, 3514 passed. Pronta para a reavaliação do `@qa`.
+- **Status:** Ready for Review (rodada 3) — **gate `CONCERNS` do `@qa` e review `CHANGES_REQUESTED` do CodeRabbit (PR #525, 4 Major + 4 minor) respondidos, nenhum achado descartado.** Os dois Major que atacavam garantias desta story estão fechados com mutação: a guarda do aviso passou de *"achei algum?"* para **cobertura** (2 migrations no PR e 1 no relatório saía `✅ limpo` omitindo a outra), e o `ON CONFLICT DO UPDATE` que **apagava a detecção de `ALTERADA-APÓS-APLICAR`** virou três construtores com **precondição escrita** — `db:apply` nunca sobrescreve (`DO NOTHING RETURNING`, conflito vira anomalia), o reset declara `sobrescrever: true` porque acabou de recriar a tabela vazia, e o backfill carrega um `RAISE EXCEPTION` que o aborta fora da janela de ledger vazio (exercido contra o banco povoado). Mais: o fallback do `db:apply` para no primeiro statement com erro e nomeia o estado parcial; a `245` ganhou `CHECK` de domínio em `sha256` e `via` (reprovando de verdade, com controle positivo); `--excluir` inválido falha antes de gerar SQL; `listComments` paginado; e o passo do runbook que "validava o projeto" — e **não validava** (`current_database()` responde igual nos dois) — foi trocado por conferências que nomeiam o ref. **A `245` foi editada duas vezes na série, e as duas vezes a ferramenta desta própria story acusou `ALTERADA-APÓS-APLICAR` e o `db:apply` recusou em bloco** — atravessei pelo Procedimento de exceção do runbook, nunca por atalho. **Duas coisas ficam abertas e nomeadas:** (a) **`MNT-001`** — ~1.400 linhas de `scripts/*.ts` desta fatia não passam por `lint`/`type-check` no CI, e esta fatia **aumentou** o ponto cego (rodo `tsc` dedicado à mão, mas à mão não é gate); (b) o `tenancy-gate` tem a **mesma** falta de paginação que corrigi aqui, mas consertá-lo produziria deleções no `ci.yml` e derrubaria a régua de não-reescrita desta AC — story própria. **AC1 segue parcial:** a `245` em produção, agora com `COMMENT` e `CHECK`s corretos, é passo de runbook do `@devops`. 274 arquivos de teste, **3520 passed**. Pronta para a reavaliação do `@qa`.
 - **Priority:** P0 — sem esta fatia não existe registro auditável de migration aplicada, nem forma de
   levar migration nova ao ambiente de teste sem `supabase db push` (que é estruturalmente
   inutilizável neste repositório — ver Dev Notes).
@@ -766,6 +766,7 @@ Agent Record.
 | 2026-08-29 | 0.5 | **GO condicional do `@po` (Rodada 3) — dois obrigatórios (G2, G5) e três recomendados (G1, G3, G4) aplicados, sem revalidação de conteúdo pendente.** O `@po` confirmou que o redesenho v0.4 é melhor que as quatro opções da tabela anterior e que a quinta que ele mesmo havia proposto (transação + `ROLLBACK`): tirar a escrita não mitigou B1 (banco de dev destruído) — **dissolveu**; idem F4 (semântica do `concurrency` sob 3+ execuções, que ele se recusou a afirmar na Rodada 2) deixou de ser pergunta. **G2 (obrigatória):** o job agora **sempre** comenta, in-place, com três estados nomeados — `pendente`, `limpo`, `não foi possível verificar` — nunca mais "nenhum comentário" como desfecho válido; sem isso, cinco situações (limpo de verdade, sem migration, `fetch-depth` errado, `db:status` saindo `1`, parsing quebrado) ficavam visualmente idênticas, três delas falhas, porque `git diff --name-only` devolve vazio com exit 0 tanto para "sem migration" quanto para "não consegui resolver as refs". **G5 (obrigatória):** o aviso cobre `PENDENTE` **e** `ALTERADA-APÓS-APLICAR` — um PR que edita migration já aplicada (a classe mais perigosa, que a AC2 trata bloqueando o `db:apply` inteiro) tinha saído por arrasto no encolhimento v0.3→v0.4, mesmo sendo detectável só com leitura. **G1:** qualificado que "leitura pura" vale para o banco, não para a árvore — `db:status` regenera `docs/audits/migrations-aplicadas.json` (rastreado), e a AC agora diz que o job não commita nem falha por árvore suja. **G3:** nomeada a janela do controle positivo real (a própria migration `245` desta story) — capturar o comentário do job **antes** da Task 1.4 aplicá-la, nova Task 4.6. **G4:** o bloco `bash` com a régua errada, que sobrevivia sob "Substituída por:" e foi exatamente como o bug entrou da primeira vez, marcado `❌ VERSÃO ERRADA — não copiar`. **Nota para a memória, do próprio `@po`:** ele havia apresentado quatro caminhos de mitigação para B1 e uma quinta opção sua — o dono do produto não escolheu nenhum, reenquadrou o problema e perguntou por que o job escrevia. A quinta opção do `@po` era estritamente pior (eliminava a destruição mas mantinha a escrita e a complexidade, comprando uma garantia que ninguém tinha pedido). Corolário registrado em `feedback_job_de_ci_que_escreve_e_extra_caro.md`: **quatro opções de mitigação são sinal de que o problema está no mecanismo, não na escolha entre elas.** Vai direto ao `@dev` — sem nova rodada do `@po`. | @sm (River) |
 | 2026-08-29 | 0.6 | **Implementada pelo `@dev` (Dex), modo YOLO.** Migration `245` reconfirmada por varredura de todas as refs com `git fetch --prune` (máximo `244`, `245` livre); 268 arquivos, 22 prefixos duplicados. **Controle positivo do `fetch`** construído em repositórios descartáveis, porque hoje nenhum prefixo existe só em ref remota — sem `fetch` a régua propõe um número já tomado por PR aberto. **`runSql`/`splitStatements` extraídos** para `scripts/lib/management-api.ts`; régua C5 verde nos 3 arquivos (baseline era 2), exclusão de `gate-tenancy.ts:215` confirmada e não afrouxada. **`db:status`/`db:apply`** com o contrato de exit code do C6 exercido nos dois lados (produção sem a tabela → `1`; teste com 268 `PENDENTE` reais → `0`), e os **quatro** estados produzidos contra o banco real, não só em teste unitário. **Reset** rodado de verdade (`464,4s`, 0 regressões) e populando o ledger. **Job de CI** acrescentado com `+151/-0` no `ci.yml`, `fetch-depth: 0`, guard de fork, sem `concurrency` e sem nenhum comando de escrita (medido por grep no bloco do job). **Controle positivo G3 capturado na janela real** entre os Passos 1 e 2 do runbook — comentário nomeando `245_registro_de_migrations.sql` como `PENDENTE`, colado no Dev Agent Record; os três estados do G2 e o texto severo do G5 exercidos ponta a ponta pelo CLI. 25 testes novos, com 4 mutações que os derrubam. **Três correções não previstas pela story, todas com vermelho medido:** o truncamento de 800 caracteres do `runSql` (quebrava a leitura do ledger); a violação de **R3** que a tabela nova introduzia na catraca de tenancy (isenta na allowlist com razão, `R3: 3 → 2`); e o envenenamento de `docs/audits/gate-tenancy-report.json` por rodar `gate:tenancy` fora de produção (restaurado). **Divergência registrada:** a nota do spawn afirmava que a `900-3b` já havia entregue `scripts/lib/management-api.ts` — não havia; a story estava certa, a nota não. | @dev (Dex) |
 | 2026-08-29 | 0.7 | **Rodada 2 — gate do `@qa` (CONCERNS) respondido.** **CONCERNS-1 (medium):** a AC4 excluía `ÓRFÃ-no-banco` alegando que ele *"não pode ser um arquivo que o PR traz"* — **justificativa falsificada por medição**: `git diff --name-only` lista caminho apagado, e um PR que APAGA migration já aplicada recebia `✅ limpo` com o corpo listando o estado órfão. AC4 corrigida com a refutação registrada, aviso passa a cobrir os **três** estados possíveis para arquivo tocado pelo PR, com bloco `⛔ REMOVIDA` próprio; reproduzido contra o banco real (apagar `244_…sql` rastreado → `ÓRFÃ-no-banco 1` → aviso acende) e mutação M5 (`removidas = []`) derruba 3 dos 28 testes. **NIT-8** junto: manchete deixou de dizer "não aplicada(s)", que era falso para `ALTERADA` e para `ÓRFÃ`. **CONCERNS-2 (low):** o `COMMENT ON COLUMN … via` da `245` documentava 3 valores e o código grava 4 — corrigido no `COMMENT` e no cabeçalho **antes** de o `@devops` aplicar em produção. A correção **atravessou a ferramenta desta própria story**: editar a `245` já aplicada disparou `ALTERADA-APÓS-APLICAR` e o `db:apply` recusou em bloco (exit 1) — saída real colada no Dev Agent Record. Remediação pelo **caminho legítimo**, documentada no runbook antes de ser executada (`DELETE` do registro obsoleto → `PENDENTE` → `db:apply` observa e grava `via='apply'`), com o `COMMENT` conferido de dentro do banco. A linha 3 do Rollback do runbook também foi corrigida: regerar o backfill inteiro fora da janela pós-Passo-2 apagaria as proveniências `reset`/`apply`. **CONCERNS-3 (low):** interpolação `${{ }}` saiu de dentro de `run:` — **dois** valores, não um (achei `github.base_ref` na mesma varredura); 0 linhas de `run:` com interpolação no bloco do job. **OBS-5:** falha ao gravar o ledger virou contador no `=== RESUMO ===` + bloco de erro nomeando que a invariante da AC3 não vale — **divergência registrada**: o `@qa` ofereceu exit code *ou* resumo, o coordenador instruiu que não pese no exit code, e eu implementei a forma que satisfaz os dois. **OBS-6:** o conhecimento sobre o `gate-tenancy-report.json` saiu da story e foi para `scripts/gate-tenancy.ts` (`_aviso` no JSON gerado + alerta impresso quando o alvo não é produção) e para o próprio JSON rastreado (`1  0`). **CONCERNS-4:** fechada por medição — com o commit local existindo, rodei a régua **literal** da AC: `164 0` → exit 0, e `164 5` → exit 1 sob a mutação nomeada (clone descartável, árvore principal intacta). Fica só a repetição pós-squash para o `@devops`. Gates: 274 arquivos, **3514 passed**, lint 0 errors, type-check 8/8. | @dev (Dex) |
+| 2026-08-29 | 0.8 | **Rodada 3 — CodeRabbit no PR #525 (`CHANGES_REQUESTED`, 4 Major + 4 minor), todos tratados, nenhum descartado.** **Major 1:** a guarda de indeterminação era `casados.length === 0` — com 2 migrations no PR e 1 no relatório, a segunda saía **sem veredito** debaixo de um `✅ limpo`. Virou guarda de **cobertura** (`semVeredito.length > 0`), nomeando quem ficou de fora; controle positivo é o próprio caso do achado, e virou teste. **Major 2:** o `ON CONFLICT DO UPDATE` regravava o `sha256` e apagava a detecção de `ALTERADA-APÓS-APLICAR` — a razão de o ledger existir. Um construtor virou três, cada um com a **precondição escrita**: `db:apply` usa `DO NOTHING RETURNING` e **nunca sobrescreve** (conflito vira anomalia nomeada); o reset declara `sobrescrever: true` porque o `drop schema cascade` acabou de recriar a tabela vazia; o backfill declara `sobrescrever: false` e o SQL vem com `RAISE EXCEPTION` que o aborta se o ledger não estiver vazio — guarda exercida contra o banco povoado, `P0001`, ledger intacto. `sobrescrever` não tem default: quem chama declara em qual mundo está. **Major 3:** o fallback autocommit seguia executando statements depois do erro, aplicando DDL sem registrar; agora para no primeiro `!s.ok` e imprime "K de N statement(s) aplicaram", com o aviso de que não há rollback. **Major 4:** o aviso mandava apagar linha do ledger — isso tira o sinal sem tirar o efeito do banco; agora manda restaurar o arquivo ou criar migration nova. **Minors:** `CHECK` de domínio na `245` (`sha256` hex de 64 e os quatro valores de `via`, com bloco `DO $$` idempotente porque `CREATE TABLE IF NOT EXISTS` pula as constraints), os dois reprovando de verdade contra o banco (`23514`) com controle positivo; `--excluir` inválido agora falha antes de gerar SQL (0 bytes, exit 1) e nasceu `--sobrescrever` opt-in; `listComments` paginado (`per_page: 100`) para o update in-place não virar comentário novo a cada push em PR longo; e o passo do runbook que "validava o projeto" com `current_database()` — medido: responde `postgres`/`main` nos **dois** projetos — trocado por três conferências reais (banner `[db-env] ref=`, `supabase:check`, ref na URL do SQL Editor) mais um discriminador de conteúdo (`organizations`). **A `245` foi editada duas vezes na série e as duas vezes a própria ferramenta acusou `ALTERADA-APÓS-APLICAR` e o `db:apply` recusou** — atravessei pelo Procedimento de exceção do runbook, nunca por atalho. **Registrado que esta fatia aumenta o `MNT-001`**: ~1.400 linhas de `scripts/*.ts` fora do `lint`/`type-check` do CI (o `--force` derruba cache, não amplia denominador); quem cobre é a suíte, e eu rodo `tsc` dedicado à mão em toda rodada. 3 mutações novas (M6/M7/M8) provadas em disco. Gates: **3520 passed**, lint 0 errors, type-check 8/8. | @dev (Dex) |
 
 ---
 
@@ -1239,6 +1240,134 @@ não chega ao PR como alegação: chega medida nos dois sentidos.
 
 **Gates da rodada 2:** `pnpm lint --force` 8/8, 0 errors · `pnpm type-check --force` 8/8 ·
 `pnpm test` 274 arquivos, **3514 passed | 6 expected fail** (28 testes novos, +3 desta rodada).
+
+#### RODADA 3 — CodeRabbit no PR #525 (CHANGES_REQUESTED, 4 Major + 4 minor)
+
+O job estreou certo no PR real (`✅`, 1 de 1 casada). Os 8 achados foram tratados; nenhum
+descartado.
+
+**Major 1 — cobertura PARCIAL do relatório passava como limpa** (`aviso-migrations-do-pr.ts`).
+A guarda era `casados.length === 0`. Com **duas** migrations no PR e só uma no relatório,
+`1 !== 0` passava batido e a segunda saía **sem veredito nenhum** debaixo de um `✅ limpo`. A
+pergunta certa não é *"achei algum?"*, é *"apurei todos?"* — a guarda passou a ser
+`semVeredito.length > 0`, nomeando os arquivos que ficaram de fora. **O controle positivo é o
+próprio caso do achado** (2 no PR, 1 no relatório), e ele virou teste.
+
+Um detalhe que só apareceu ao rodar: o corpo `⛔` continha o glifo `✅` na prosa explicativa.
+Tirei — aqui o emoji é o **sinal**, e um `✅` dentro de um comentário `⛔` engana quem varre o PR
+de relance (o teste que exige `not.toContain("✅")` foi quem pegou).
+
+**Major 2 — `ON CONFLICT DO UPDATE` apagava a evidência** (`migrations-ledger.ts`). Regravar o
+`sha256` faz `classificar()` voltar a dizer `aplicada` onde diria `ALTERADA-APÓS-APLICAR`: a
+detecção de drift se apagava sozinha. **Decidi e escrevi a razão, e a decisão foi transformar
+convenção em precondição** — vale aqui o mesmo princípio que o runbook já aplicava ao recusar
+`UPDATE … SET sha256`: *declarar não é observar*. Um construtor virou três caminhos, cada um com
+a precondição escrita numa tabela no cabeçalho do módulo:
+
+| Caminho | Função | Precondição | Conflito significa |
+|---|---|---|---|
+| `db:apply` | `sqlDeRegistroObservado` | estava `PENDENTE` ⇒ não há linha | `DO NOTHING RETURNING`: **nunca sobrescreve**; volta vazio e o comando acusa a anomalia |
+| `reset:testdb` | `sqlDeRegistroEmLote({ sobrescrever: true })` | `drop schema cascade` acabou de rodar ⇒ tabela recriada **vazia** | nada a apagar; `DO UPDATE` é rede, não conveniência |
+| backfill | `sqlDeRegistroEmLote({ sobrescrever: false })` | ledger **vazio** (Passo 2) | o SQL **aborta** com `RAISE EXCEPTION` antes de tocar em linha nenhuma |
+
+`sobrescrever` **não tem default** — quem chama declara em qual mundo está. E o caso que o
+CodeRabbit apontou (lote sobre ambiente não zerado) deixou de existir por construção. Guarda
+exercida contra o banco real, com o ledger povoado:
+```
+ERROR: P0001: ABORTADO: trifold_migrations_aplicadas nao esta vazia. Este lote (via=backfill-onda-1)
+so e seguro sobre ledger vazio -- fora dessa janela ele sobrescreveria proveniencia observada
+(reset/apply) por declaracao retroativa. Veja o Procedimento de excecao em docs/runbooks/…
+```
+Ledger conferido depois: `263 reset + 4 reset-falha-conhecida + 1 apply` — intacto, nada gravado.
+
+**Major 3 — o fallback autocommit seguia depois do erro** (`db-apply.ts`). Ele executava os
+statements seguintes ao que falhou; eles aplicavam, a migration não era registrada (o `INSERT` só
+acontece após o sucesso) e a execução seguinte a via `PENDENTE` e reaplicava DDL parcial. Agora
+**para no primeiro `!s.ok`** e imprime o estado parcial com número: *"K de N statement(s) deste
+arquivo APLICARAM antes da falha… a Management API roda cada statement em autocommit, então não
+há rollback… desfaça o estado parcial à mão ANTES de rodar de novo"*. Não dá para reverter; dá
+para **não aumentar o estrago** e para nomeá-lo.
+
+**Major 4 — o aviso mandava apagar linha do ledger.** O CodeRabbit está certo e o argumento é o
+mesmo do Major 2: apagar a linha tira o `ÓRFÃ-no-banco` do relatório **sem tirar o efeito do
+banco** — troca um sinal por um ponto cego, e o reset seguinte passa a divergir do banco real em
+silêncio. O texto agora manda **restaurar o arquivo** (migration é histórico, não código vivo) ou,
+se o objetivo é desfazer, escrever uma **migration nova** com o `DROP`/`ALTER` — que roda no reset
+e mantém o histórico reproduzível. Há teste com `toContain("não** resolve")`.
+
+**minor — `CHECK` de domínio na `245`.** `sha256 ~ '^[0-9a-f]{64}$'` e
+`via IN ('backfill-onda-1','apply','reset','reset-falha-conhecida')`, nomeados, mais um bloco
+`DO $$` idempotente que os acrescenta se a tabela já existir (o `CREATE TABLE IF NOT EXISTS` pula
+o corpo inteiro, constraints inclusive; `ADD CONSTRAINT IF NOT EXISTS` não existe no Postgres).
+A razão está escrita no `.sql`: a escrita é por **service-role**, que bypassa RLS — um `INSERT`
+manual com hash truncado tornaria o ledger não auditável sem nada reclamar. Consequência aceita e
+declarada: **um quinto valor de `via` passa a exigir migration nova**, que é o ponto (foi
+exatamente o crescimento silencioso do domínio que produziu o CONCERNS-2 da rodada anterior).
+
+Os dois `CHECK` reprovam de verdade, medido contra o banco:
+```
+sha256='NAO-E-HEX'  → ERROR 23514 … violates check constraint "trifold_migrations_aplicadas_sha256_hex"
+via='teste'         → ERROR 23514 … violates check constraint "trifold_migrations_aplicadas_via_valido"
+linha válida        → ok=true            ← controle positivo: a constraint não recusa tudo
+```
+
+**minor — `--excluir` inválido era ignorado em silêncio** (`gerar-backfill-ledger.ts`). Sem valor,
+ou com nome inexistente, não excluía nada — e o efeito é o pior possível **para este script**: a
+migration que o operador queria fora do lote entra nele declarada como aplicada. Agora falha
+**antes de gerar SQL** (`0 bytes` de saída nos dois casos, exit 1). `--sobrescrever` novo, opt-in,
+e o SQL gerado diz em comentário qual dos dois modos está.
+
+**minor — `listComments` sem paginação** (`ci.yml`). 30 por página: num PR com muita conversa o
+comentário deste job cai fora da primeira página, o `find` devolve `undefined` e o job **cria um
+comentário novo a cada push** — o oposto do update in-place que a AC exige. Trocado por
+`github.paginate(…, { per_page: 100 })`. ⚠️ **O job `tenancy-gate` tem o mesmo defeito**
+(`existentes.data.find`), mas ele é da `900-2c` e corrigi-lo aqui produziria deleções no `ci.yml`
+— o que derrubaria a régua de não-reescrita desta própria AC. Fica registrado para uma story
+própria.
+
+**minor — o passo do runbook que "validava o projeto" não validava nada.** `current_database()` e
+`current_setting('cluster_name')` respondem `postgres` / `main` nos **dois** projetos — medido, não
+suposto. Um operador podia atravessar aquele passo no projeto errado, e é o passo de aplicar em
+**produção**. O ref só é observável **de fora do banco**, então o Passo 0.1 passou a ter três
+conferências reais: o banner `[db-env] … ref=…` do `pnpm db:status` (com a ressalva de que o exit 1
+antes do Passo 1 é esperado — o que se confere é a linha do ref), `pnpm supabase:check`, e o **ref
+na URL do SQL Editor** (`/project/<ref>/sql`). Mais um discriminador **de conteúdo**, que funciona
+de dentro porque não pergunta "qual projeto é este" e sim "que dados moram aqui":
+`select id, name, slug from organizations limit 5` — em teste é uma linha só, `Org de Teste — Epic
+900`. Mesma ideia da confirmação informativa do `reset:testdb`.
+
+**Mutações desta rodada** (todas provadas em disco por `grep -c`, revertidas depois):
+
+| # | Mutação | `grep -c` | Resultado |
+|---|---|---|---|
+| baseline | — | — | **34 passed** |
+| M6 | a guarda volta a ser "achei algum" (`&& casados.length === 0`) | 1 | 🔴 **2 failed** |
+| M7 | `db:apply` volta a sobrescrever o hash (`do update set sha256`) | 1 | 🔴 **1 failed** |
+| M8 | o backfill perde a guarda de ledger vazio | 1 | 🔴 **1 failed** |
+| revertido | — | 0 | **34 passed** |
+
+**A `245` foi editada duas vezes nesta rodada** (COMMENT do `via`, na rodada 2; `CHECK`s, agora), e
+as duas vezes a ferramenta desta story acusou `ALTERADA-APÓS-APLICAR` e o `db:apply` recusou em
+bloco. As duas vezes atravessei pelo **Procedimento de exceção** do runbook, não por atalho.
+Estado final do teste: `aplicada 268 · PENDENTE 0 · ALTERADA 0 · ÓRFÃ 0`, exit 0.
+
+#### ⚠️ MNT-001 — esta fatia aumenta o ponto cego, e o número é grande
+
+Medido pelo `@devops` no PR #525: `type-check` e `lint` voltaram **FULL TURBO honestamente** —
+este PR não toca `packages/`, e as tarefas do turbo são por pacote. A consequência é que **as
+~1.400 linhas novas de `scripts/*.ts` desta fatia não passaram por `lint` nem por `type-check` no
+CI**, porque o `tsconfig.json` da raiz não tem `include` que alcance `scripts/`. O `--force`
+derruba o cache, **não amplia o denominador** — o `type-check --force 8/8` que rodei localmente
+cobre os mesmos 8 pacotes.
+
+Quem cobriu o código novo foi a **suíte**, que rodou de verdade (confirmada pelos nomes dos
+arquivos no log do CI, não pelo total). E eu rodo um `tsc --noEmit` dedicado sobre `scripts/`
+à mão, em toda rodada — limpo nas três. Mas "à mão" não é gate.
+
+O item `MNT-001` já está em `docs/backlog.md` desde a `900-3b` ("`pnpm type-check` não cobre
+`scripts/`, e a `900-3b` aumentou o ponto cego"). **Registro aqui que a `900-3c` o aumentou de
+novo, e mais:** 11 arquivos novos em `scripts/`, dos quais 2 são de teste (esses a suíte cobre) e
+9 não. O item precisa de dono antes da próxima fatia que escreva em `scripts/`.
 
 ### Completion Notes List
 

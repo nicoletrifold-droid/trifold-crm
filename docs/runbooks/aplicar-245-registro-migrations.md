@@ -28,19 +28,46 @@ neste repositório, e os arquivos `_remote_only.sql` com `CREATE INDEX CONCURREN
 
 Rode no ambiente-alvo. Os dois resultados precisam bater com o esperado, senão **PARE**.
 
-```sql
--- 1) A tabela ainda NÃO existe. Esperado: NULL.
---    Se vier 'trifold_migrations_aplicadas', a 245 já foi aplicada neste banco: pule o Passo 1.
-SELECT to_regclass('public.trifold_migrations_aplicadas') AS ja_existe;
+### 0.1 — Você está no projeto certo?
 
--- 2) Você está no projeto certo. Esperado: o ref que você pretende tocar.
-SELECT current_database(), current_setting('server_version');
-```
+⚠️ **Nenhuma query de dentro do Postgres devolve o ref do Supabase.** Medido nos dois projetos:
+`current_database()` → `postgres` e `current_setting('cluster_name')` → `main` em **ambos**.
+Uma versão anterior deste runbook usava essas duas como "confirmação do projeto" — elas
+respondem igual nos dois lados e um operador podia atravessar o passo **no projeto errado**,
+que é justamente o passo de aplicar em produção.
 
-E, fora do banco, confira o alvo do repositório antes de qualquer comando `pnpm`:
+O ref só é observável **de fora do banco**. Use as duas conferências abaixo, nesta ordem:
 
 ```bash
-pnpm supabase:check        # sai 1 se o link local estiver apontando para produção
+# CLI / scripts: o banner nomeia o ref resolvido, e as guardas de db-env.ts recusam ref
+# desconhecido ou produção sem TRIFOLD_ALLOW_PROD.
+TRIFOLD_ENV=producao pnpm db:status
+#   → [db-env] ambiente=producao ref=dsopqkqjkmhytudaaolv ⚠️ PRODUÇÃO
+#   Antes do Passo 1 ele sai 1 nomeando a tabela ausente — isso é o esperado aqui; o que
+#   você está conferindo é a LINHA DO REF, não o exit code.
+
+pnpm supabase:check    # sai 1 se o link local da CLI estiver apontando para produção
+```
+
+**SQL Editor:** confira o ref **na URL** — ela é `.../project/<ref>/sql`. O seletor de projeto
+no topo mostra o nome; a URL mostra o ref, que é o identificador de verdade.
+
+E um discriminador **de conteúdo**, que funciona dentro do banco porque não pergunta "qual
+projeto é este" e sim "que dados moram aqui" — mesma ideia da confirmação informativa do
+`reset:testdb`:
+
+```sql
+SELECT id, name, slug FROM organizations ORDER BY created_at LIMIT 5;
+-- TESTE:    1 linha, name = 'Org de Teste — Epic 900', slug = 'org-teste-epic-900'
+-- PRODUÇÃO: as organizações reais. Se você esperava produção e leu "Org de Teste", PARE.
+```
+
+### 0.2 — A tabela ainda não existe?
+
+```sql
+-- Esperado: NULL.
+-- Se vier 'trifold_migrations_aplicadas', a 245 já foi aplicada neste banco: pule o Passo 1.
+SELECT to_regclass('public.trifold_migrations_aplicadas') AS ja_existe;
 ```
 
 ---
@@ -99,6 +126,13 @@ para que a diferença fique legível em qualquer consulta futura, em vez de vira
 ## Passo 3 — Conferência (leia o resultado antes de dar o passo por concluído)
 
 ```sql
+-- 0) Os dois CHECK de domínio existem (sha256 hex de 64, via nos quatro valores).
+SELECT conname FROM pg_constraint
+ WHERE conrelid = 'public.trifold_migrations_aplicadas'::regclass AND contype = 'c'
+ ORDER BY conname;
+-- esperado: trifold_migrations_aplicadas_sha256_hex
+--           trifold_migrations_aplicadas_via_valido
+
 -- 1) Tabela existe, RLS ligada, ZERO policies.
 SELECT c.relname,
        c.relrowsecurity                                          AS rls_ligada,

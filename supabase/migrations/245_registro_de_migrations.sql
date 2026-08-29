@@ -46,6 +46,19 @@
 --     veio da migration original, ou backfill de dado real que não existe aqui). O campo `via`
 --     existe para carregar essa diferença em vez de escondê-la.
 --
+-- OS DOMÍNIOS SÃO IMPOSTOS PELO BANCO, NÃO SÓ PELO CÓDIGO
+-- ---------------------------------------------------------
+-- `sha256` só aceita hex de 64 caracteres minúsculos; `via` só aceita os quatro valores
+-- documentados acima. A razão é que a escrita nesta tabela é por **service-role**, que bypassa
+-- RLS: um `INSERT` manual num SQL Editor, com hash truncado ou `via='teste'`, tornaria o ledger
+-- não auditável sem que nada reclamasse. Os `CHECK` fecham isso no único lugar por onde toda
+-- escrita passa.
+--
+-- Consequência aceita, e ela é o ponto: **acrescentar um quinto valor de `via` exige uma
+-- migration nova.** Um campo de proveniência cujo domínio pode crescer em silêncio deixa de ser
+-- proveniência e vira texto livre — foi o que quase aconteceu quando o `reset-falha-conhecida`
+-- nasceu no código e o `COMMENT` desta tabela continuou dizendo que havia três valores.
+--
 -- SEGURANÇA — RLS LIGADA, ZERO POLICY (deny por padrão)
 -- -----------------------------------------------------
 -- Mesmo padrão da tabela de auditoria da Story 900-16: com RLS habilitada e nenhuma policy,
@@ -73,10 +86,41 @@
 
 CREATE TABLE IF NOT EXISTS public.trifold_migrations_aplicadas (
   arquivo     text        PRIMARY KEY,
-  sha256      text        NOT NULL,
+  sha256      text        NOT NULL
+                          CONSTRAINT trifold_migrations_aplicadas_sha256_hex
+                          CHECK (sha256 ~ '^[0-9a-f]{64}$'),
   aplicada_em timestamptz NOT NULL DEFAULT now(),
   via         text        NOT NULL
+                          CONSTRAINT trifold_migrations_aplicadas_via_valido
+                          CHECK (via IN ('backfill-onda-1', 'apply', 'reset', 'reset-falha-conhecida'))
 );
+
+-- Os dois CHECKs acima, para o caso de a tabela JÁ existir (o `IF NOT EXISTS` acima pula o
+-- corpo inteiro, constraints inclusive). `ADD CONSTRAINT IF NOT EXISTS` não existe no
+-- Postgres, então a idempotência vem do guard por nome. Reaplicar esta migration num banco
+-- que já a tem continua sendo no-op.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+     WHERE conrelid = 'public.trifold_migrations_aplicadas'::regclass
+       AND conname  = 'trifold_migrations_aplicadas_sha256_hex'
+  ) THEN
+    ALTER TABLE public.trifold_migrations_aplicadas
+      ADD CONSTRAINT trifold_migrations_aplicadas_sha256_hex
+      CHECK (sha256 ~ '^[0-9a-f]{64}$');
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+     WHERE conrelid = 'public.trifold_migrations_aplicadas'::regclass
+       AND conname  = 'trifold_migrations_aplicadas_via_valido'
+  ) THEN
+    ALTER TABLE public.trifold_migrations_aplicadas
+      ADD CONSTRAINT trifold_migrations_aplicadas_via_valido
+      CHECK (via IN ('backfill-onda-1', 'apply', 'reset', 'reset-falha-conhecida'));
+  END IF;
+END $$;
 
 ALTER TABLE public.trifold_migrations_aplicadas ENABLE ROW LEVEL SECURITY;
 

@@ -34,6 +34,13 @@
  *     registro fica órfão no ledger e o `reset:testdb` deixa de conseguir reconstruir aquele
  *     efeito do zero.
  *
+ * ## E A GUARDA É DE COBERTURA, NÃO DE "ACHEI ALGUM" (CodeRabbit, PR #525)
+ *
+ * Todo arquivo que o PR toca precisa de **um** veredito. A guarda antiga (`casados.length
+ * === 0`) deixava passar cobertura **parcial**: num PR com duas migrations em que só uma
+ * casava com o relatório, a outra saía sem veredito debaixo de um `✅ limpo`. Um instrumento
+ * que omite uma linha e ainda assim diz "limpo" é pior que um que não roda.
+ *
  * ⚠️ **A AC4 original excluía `ÓRFÃ-no-banco`, e a razão que ela dava foi FALSIFICADA POR
  * MEDIÇÃO (@qa, gate de 2026-08-29).** O texto era: *"é registro sem arquivo correspondente,
  * não pode ser um arquivo que o PR traz"*. Medido: `git diff --name-only` **lista caminho
@@ -145,19 +152,38 @@ export function montarAviso(entrada: EntradaDoAviso): Aviso {
     .map((caminho) => ({ caminho, nome: so(caminho), estado: porArquivo.get(so(caminho)) }))
     .filter((c): c is { caminho: string; nome: string; estado: string } => c.estado !== undefined)
 
-  // Nenhum casamento com o relatório: ou o formato mudou, ou o relatório é de outra árvore.
-  // Em nenhum dos dois casos dá para dizer "está limpo".
-  if (casados.length === 0) {
+  // COBERTURA, não "achei pelo menos um" (CodeRabbit, PR #525).
+  //
+  // A guarda anterior era `casados.length === 0`. Num PR com DUAS migrations em que só uma
+  // casa com o relatório, `1 !== 0` passava batido e a segunda saía **sem veredito nenhum**,
+  // debaixo de um `✅ limpo`. É o mesmo "silêncio como desfecho válido" que o terceiro estado
+  // existe para recusar — e o furo aparecia justamente no PR mais complicado, não no simples.
+  //
+  // A pergunta certa não é "achei algum?", é "**apurei todos?**". Um arquivo do PR sem linha
+  // correspondente no relatório é falha de apuração: ou o relatório é de outra árvore, ou o
+  // formato mudou, ou o `db:status` rodou antes do arquivo existir. Nenhuma dessas é "limpo".
+  const semVeredito = entrada.arquivosDoPr.filter(
+    (caminho) => !porArquivo.has(so(caminho)),
+  )
+  if (semVeredito.length > 0) {
+    const todas = casados.length === 0
     return {
       estado: "indeterminado",
       corpo:
         cabecalho +
-        `\n⛔ **Não foi possível verificar** — nenhuma das ${entrada.arquivosDoPr.length} ` +
-        `migration(s) deste PR casou com alguma linha do relatório do \`db:status\` ` +
-        `(${entrada.vereditos.length} linha(s)).\n` +
-        `\nOu o formato do relatório mudou, ou ele foi gerado contra outra árvore. Cruzamento ` +
-        `sem casamento nenhum é falha de apuração, não estado limpo.\n` +
-        `\nArquivos do PR: ${entrada.arquivosDoPr.map((a) => `\`${so(a)}\``).join(", ")}\n` +
+        `\n⛔ **Não foi possível verificar** — ${semVeredito.length} de ` +
+        `${entrada.arquivosDoPr.length} migration(s) deste PR não casaram com nenhuma linha do ` +
+        `relatório do \`db:status\` (${entrada.vereditos.length} linha(s)).\n` +
+        `\nSem veredito: ${semVeredito.map((a) => `\`${so(a)}\``).join(", ")}\n` +
+        (todas
+          ? `\nNenhuma casou. Ou o formato do relatório mudou, ou ele foi gerado contra outra ` +
+            `árvore.\n`
+          : // ⚠️ O glifo do estado limpo NÃO entra neste corpo: aqui ele é o sinal, e um `✅`
+            // dentro de um comentário `⛔` engana quem varre o PR de relance (e quebra a
+            // invariante "corpo indeterminado não contém o glifo de limpo").
+            `\nAs outras ${casados.length} casaram, mas **cobertura parcial não é estado ` +
+            `limpo**: publicar um veredito limpo aqui omitiria as de cima sem veredito nenhum, ` +
+            `que é o silêncio que este comentário existe para recusar.\n`) +
         RODAPE,
     }
   }
@@ -214,12 +240,16 @@ export function montarAviso(entrada: EntradaDoAviso): Aviso {
     partes.push(
       `\n**⛔ REMOVIDA — este PR apaga migration que consta como aplicada (${removidas.length}):**\n` +
         removidas.map((c) => `- \`${c.nome}\``).join("\n") +
-        `\n\nO arquivo sai do repositório, mas o registro **fica órfão** no ledger do banco de ` +
-        `teste (\`ÓRFÃ-no-banco\`): o efeito daquele SQL continua no banco e o repositório não ` +
-        `tem mais como reproduzi-lo — \`pnpm reset:testdb\` reconstrói a partir dos arquivos, e ` +
-        `esse deixou de existir. Se a remoção for intencional, apague também a linha ` +
-        `correspondente de \`trifold_migrations_aplicadas\` em **cada** ambiente onde ela ` +
-        `existe; se não for, restaure o arquivo.\n`,
+        `\n\nO arquivo sai do repositório, mas **o efeito daquele SQL continua no banco**. O ` +
+        `repositório deixa de conseguir reproduzi-lo: \`pnpm reset:testdb\` reconstrói a partir ` +
+        `dos arquivos, e esse não existe mais — o banco reconstruído passa a divergir do banco ` +
+        `real, em silêncio.\n\n` +
+        `**Restaure o arquivo.** Migration é histórico, não código vivo: um \`.sql\` que já ` +
+        `rodou vale como registro do que aconteceu, mesmo que ninguém mais o leia. Se o objetivo ` +
+        `é desfazer o que ela fez, o caminho é uma **migration nova** com o \`DROP\`/\`ALTER\` ` +
+        `correspondente — que também roda no reset e mantém o histórico reproduzível.\n\n` +
+        `Apagar a linha do ledger **não** resolve: tiraria o \`ÓRFÃ-no-banco\` do relatório sem ` +
+        `tirar o efeito do banco, trocando um sinal por um ponto cego.\n`,
     )
   }
 

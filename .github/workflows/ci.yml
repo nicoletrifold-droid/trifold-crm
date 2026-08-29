@@ -185,8 +185,14 @@ jobs:
             const marca = '## Gate de tenancy';
             const { owner, repo } = context.repo;
             const issue_number = context.issue.number;
-            const existentes = await github.rest.issues.listComments({ owner, repo, issue_number });
-            const meu = existentes.data.find(c => c.body.startsWith(marca) && c.user.type === 'Bot');
+            // `listComments` devolve 30 por página. Num PR com muita conversa, o comentário
+            // deste job cai fora da primeira página, o `find` devolve undefined e o job cria um
+            // comentário NOVO a cada push — o oposto do update in-place que a AC pede. Paginar
+            // é o que torna "atualiza in-place" verdade em PR longo, não só em PR curto.
+            const existentes = await github.paginate(github.rest.issues.listComments, {
+              owner, repo, issue_number, per_page: 100,
+            });
+            const meu = existentes.find(c => c.body.startsWith(marca) && c.user.type === 'Bot');
             if (meu) {
               await github.rest.issues.updateComment({ owner, repo, comment_id: meu.id, body: corpo });
             } else {
