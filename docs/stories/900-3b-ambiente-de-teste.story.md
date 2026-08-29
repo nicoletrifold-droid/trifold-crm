@@ -741,7 +741,7 @@ validada por execução real.
 ## Definition of Done
 
 - [x] AC1-AC7 cumpridos, com evidência de comando colada no Dev Agent Record — **nunca a saída de subcomando remoto do `supabase`** (E3; a evidência da AC4b é a saída de `pnpm supabase:check`, que só imprime o ref)
-- [x] `pnpm test` verde, incluindo as **4** suítes novas — **272 arquivos, 3474 passed | 6 expected fail (total 3480)**. Baseline pré-story **medida** (as 4 suítes movidas para fora da árvore e a suíte rodada): **267 arquivos, 3403 passed | 6 expected fail (total 3409)**. Aritmética fechada: **3409 + 71 = 3480**, com 71 = 4 (`gitignore-env`) + 22 (`env-banner`) + 23 (`db-env`) + 13 (`supabase-check`) + 9 (`supabase-refs`), e `expected fail` intacto em 6. (As três primeiras cresceram na rodada do PR #524, com os casos das guardas novas.)
+- [x] `pnpm test` verde, incluindo as **4** suítes novas — **272 arquivos, 3486 passed | 6 expected fail (total 3492)**. Baseline pré-story **medida** (as 4 suítes movidas para fora da árvore e a suíte rodada): **267 arquivos, 3403 passed | 6 expected fail (total 3409)**. Aritmética fechada: **3409 + 83 = 3492**, com 83 = 4 (`gitignore-env`) + 32 (`env-banner`) + 23 (`db-env`) + 13 (`supabase-check`) + 11 (`supabase-refs`), e `expected fail` intacto em 6.
 - [x] `pnpm dev` aponta para teste por padrão; `pnpm dev:prod` funciona com banner vermelho;
   `pnpm build` não vaza nenhum ref; `pnpm build:teste` vaza o ref de teste (esperado)
 - [~] `pnpm reset:testdb --confirmar` + `pnpm gate:tenancy:snapshot`: **o reset É idempotente**, provado por hash NORMALIZADO (`3676fefa…` nas duas execuções). A régua literal da S11 (SHA-256 do arquivo cru) é **insatisfazível** — `capturedAt` + ordem instável do array `functions`. Ver Dev Agent Record.
@@ -779,6 +779,7 @@ validada por execução real.
 | 2026-08-29 | 1.4 | **AC4 fechada (AC4a/AC4b/AC4c), Tasks 4.2-4.4.** Implementado `pnpm supabase:check` (`scripts/supabase-check.ts` + 11 casos em `scripts/supabase-check.test.ts`), que lê `supabase/.temp/project-ref` e classifica pela **mesma** `REFS_PERMITIDOS_PRODUCAO` de `scripts/lib/db-env.ts` — importada, nunca reimplementada. Três desfechos rodados de verdade pela CLI contra **raízes de mentira** em `os.tmpdir()`, sem tocar o arquivo real da máquina (SHA-256 idêntico antes e depois). O ref sugerido no conserto vem do `project_id` do `config.toml`, para não criar um terceiro lugar nomeando o ref de teste. Régua estática da AC4a verde e **não vazia** (9 `package.json` + 1 workflow; os 3 restantes que o `@po` contou estão sob `.aios-core/`, excluído de propósito pela própria AC — os números fecham) e **discriminante**: mutação `supabase db push` em `packages/db/package.json` acende. Reuso da allowlist provado por mutação — acrescentar um ref em `db-env.ts` muda o veredito do `supabase-check` (1 failed); esvaziá-la derruba 5 casos. **Regra E3 aplicada retroativamente**: removi do `config.toml` e do Dev Agent Record a linha `export PGHOST=…` que eu havia colado da saída de `db dump --dry-run` — mesmo sem senha, é saída de subcomando remoto, e mantê-la ensinaria que truncar é aceitável. Os números corrigidos pelo `@sm` (22 prefixos duplicados; 4 de 11 `_remote_only` com `CONCURRENTLY`) conferem com os meus. | @dev (Dex) |
 | 2026-08-29 | 1.5 | **Rodada de correção do gate `@qa` (CONCERNS).** O achado que muda a premissa: `supabase/.temp/` **estava RASTREADO** em `origin/main` com o ref de **produção** — verificado por mim (`git ls-files`, `git show origin/main:…`), introduzido em `0b6e1baf`. Logo o `supabase:check` não nascia vermelho por estado desta máquina, e sim **para todo clone**, por conteúdo do repositório; minha frase "o conserto é do dono da máquina" estava errada. Ninguém pegou em 3 rodadas porque a regra `supabase/.temp/` do `.gitignore` é **inerte para caminho já no índice** — o mesmo defeito que a AC1 conserta para o `.env.example` — e `git check-ignore` **sem** `--no-index` **mente** para arquivo rastreado (medido: `1` sem a flag, `0` com ela). Aplicado `git rm --cached -r supabase/.temp/` (4 arquivos fora do índice, **nenhum apagado do disco**; `project-ref` com SHA-256 idêntico antes e depois; `git check-ignore` passa a sair `0`). Pior caso auditado antes de agir: `pooler-url` **sem componente de senha** (DSN parseado, grupo de senha vazio) — nenhum segredo vazou. **DOC-001**: as 3 afirmações de "gitignored, por máquina" (`config.toml`, `supabase-check.ts`, `CLAUDE.md`) reescritas para dizer que os arquivos ESTAVAM rastreados, que esta story os removeu do índice e que o link é por máquina daí em diante; régua S1 reconferida (**0**) e cada afirmação do bloco revalidada contra o disco. **SEC-001**: a linha crua de host substituída por descrição nos **4** arquivos rastreados (backlog, parecer do `@po`, gate do `@qa` e esta story) — `git grep 'PGHOST="db\.'` → nenhuma. **DOC-002**: `scripts/README.md` não instrui mais `node --env-file`. **TEST-001**: baseline **medida** removendo as 4 suítes da árvore — **3403 passed | 6 expected fail (3409)**; **3409 + 53 = 3462**, fecha exato. O erro era de rótulo: minha "baseline" já continha os 4 casos do `gitignore-env`, criado antes daquela primeira execução. **MNT-001** registrado em `docs/backlog.md`. **MNT-002**: validação final com `--force` (`Cached: 0 cached, 8 total`). `pnpm lint --force` 0 errors · `type-check --force` 8/8 · `pnpm test` 3456 passed \| 6 expected fail. | @dev (Dex) |
 | 2026-08-29 | 1.6 | **Rodada CodeRabbit (PR #524) — 4 Major + 2 Minor.** O mais grave: a guarda de produção do `reset-tenancy-testdb.ts` falhava **ABERTA por caixa alta** — regex de extração case-insensitive contra `Set.has()` case-sensitive; com a URL em maiúsculas o script seguia para `drop schema … cascade` **contra produção**. Reproduzido antes de consertar e verificado depois ponta a ponta (`exit=1`). Conserto no **ponto único de extração**. Criada a fonte única `packages/shared/src/constants/supabase-refs.ts`, da qual `scripts/lib/db-env.ts` **e** `packages/web/src/lib/env-banner.ts` derivam — o banner tinha `REF_PRODUCAO` próprio, uma segunda definição de produção (o defeito que a AC3 matou, reintroduzido pela porta dos fundos); `web` não pode importar de `scripts/`, por isso a fonte única foi para `@trifold/shared`. **Fail-closed nos dois lados**: `REFS_PERMITIDOS_TESTE` acrescentada, ref fora das duas listas é recusado (antes, um projeto de produção novo caía como teste e liberava escrita destrutiva sem `TRIFOLD_ALLOW_PROD=1`). `supabase:check` passa a sair **1** em `desconhecido`. `resolverAmbiente({escreve:true})` exige `SUPABASE_SERVICE_ROLE_KEY` e devolve `AmbienteParaEscrita` (12 asserções `!` removidas). `FALHAS_CONHECIDAS` passa a ser consultada **também** no ramo do fallback statement-a-statement, que era cego — a condição exata que a AC6 existe para detectar. 4 mutações executadas com prova de aplicação **por conteúdo em disco** (o `git diff` mentiu para arquivo novo não rastreado — mesma armadilha que o `@qa` reportou). Descartados com razão: os 2 achados em `900-3c` (o `--numstat` lendo o 3º campo, e o isolamento do banco no job de CI) são ACs de outra story — encaminhados ao `@sm`. `pnpm lint --force` 0 errors · `type-check --force` 8/8 (`Cached: 0`) · `pnpm test` **272 arquivos, 3474 passed \| 6 expected fail**. | @dev (Dex) |
+| 2026-08-29 | 1.7 | **TEST-002 — a régua da AC2 se auto-satisfazia.** O `@qa` mediu: mutação só na fonte única fazia `shared`, `db-env` e `supabase-check` acenderem e o **`env-banner` ficar mudo (22 ✅)**, porque a suíte montava as URLs esperadas a partir de `REF_PRODUCAO`/`REF_TESTE` — derivados da própria fonte sob teste — e não tinha caso de caixa. Sob a mutação, o banner devolvia **`ok` para produção em MAIÚSCULAS**: o instrumento da AC2 mudo exatamente sobre produção. Foi a correção do PR #524 (derivar da fonte única) que criou a cegueira, ao acoplar régua e fonte. Acrescentado bloco com **URLs literais**, escritas à mão, incluindo maiúsculas e caixa mista, mais uma guarda contra o conserto preguiçoso (maiúscula em `NODE_ENV=production` tem de seguir `"ok"`, não virar `"ausente"`). **Ao remedir achei uma célula muda a mais e fechei**: a suíte da própria fonte derivava os refs dos `Set`s, então trocar o ref de produção não a reprovava — âncora literal de identidade acrescentada lá também. Matriz completa remedida, **12 células de mutação, nenhuma muda**. Prova de aplicação por conteúdo em disco em todos os passos. Registrado o `SEC-002` do `@qa` (`packages/web/scripts/fix-campaign-lead-names.mjs` com default de produção e escrita) como vizinho descoberto por esta fatia. `pnpm lint --force` 0 errors · `type-check --force` 8/8 (`Cached: 0`) · `pnpm test` **3486 passed \| 6 expected fail (3492 = 3409 + 83)**. | @dev (Dex) |
 | 2026-08-29 | 1.4 | **Arbitragem da AC4 (Rodada 3, `docs/qa/po-validation-900-3b.md`) aplicada — E1, E2, E3.** O dono do produto delegou ao `@po` a decisão sobre o destino da AC4 (bloqueada pelo `@dev`, achado real). Nenhuma das três opções levantadas serviu: apagar `.temp/project-ref` faz o comando **errar**, não redirecionar (testado); reescrever para exigir só documentação mede o documento, não o comportamento; mover para a `900-3c` move uma AC falsa para uma story bloqueada. **AC4 reescrita em três partes, no mesmo padrão que a AC2 já usou** para o mesmo tipo de problema (estado de máquina que o repo não governa → tornar audível, não afirmar nem apagar): **AC4a** (estático — `config.toml` com os números corrigidos + zero invocação remota em `package.json`/workflows, restrita a essa população); **AC4b** (`pnpm supabase:check`, reusando a allowlist de `db-env.ts`, nos três desfechos — teste/produção/ausente); **AC4c** (a afirmação falsa sai da AC, do Testing, da DoD — a parte do plano/épico é do `@po`, já encaminhada junto do item `[EPIC-900]`). **E3 — risco novo, o mais grave da rodada:** `supabase db dump --dry-run` (o comando que a AC anterior mandava rodar) imprime a senha de produção em texto claro no stdout, e o padrão de evidência desta story é colar em arquivo rastreado — contenção verificada e limpa pelo `@po` (nenhum vazamento ocorreu; o `@dev` truncou por disciplina própria), mas a regra agora é explícita: proibido colar saída de subcomando remoto do `supabase` em qualquer arquivo rastreado. Risco R6 acrescentado (severidade Alta). Números corrigidos onde citados: **22** prefixos duplicados (não 21); **4** dos 11 `_remote_only.sql` usam `CREATE INDEX CONCURRENTLY` (não os 11) — as outras duas razões contra `db push` (prefixos duplicados na chave `version`; ledger congelado) seguem de pé, a conclusão não muda. Tasks 4.2/4.3/4.4 acrescentadas; Task 4 volta a `[ ]` para o `@dev` retomar. | @sm (River) |
 
 ---
@@ -1289,6 +1290,88 @@ carona: é entregável de AC. Mantido de propósito.
 
 ---
 
+#### TEST-002 (gate 3ª rodada) — a régua da AC2 se auto-satisfazia
+
+**O achado é meu defeito, e é o terceiro instrumento cego desta story.** O `@qa` fez a prova
+de reuso — mexer só na fonte única e ver as pontas acenderem — e o `env-banner` **não
+acendia**:
+
+| Mutação só em `supabase-refs.ts` | shared | env-banner | db-env | supabase-check |
+|---|---|---|---|---|
+| troca o ref de produção | 9 ✅ | **22 ✅ (mudo)** | 7 ❌ | 3 ❌ |
+| remove a normalização | 3 ❌ | **22 ✅ (mudo)** | 3 ❌ | 1 ❌ |
+
+Causa: `env-banner.test.ts` montava as URLs esperadas **a partir de `REF_PRODUCAO`/
+`REF_TESTE`**, que passaram a ser derivados de `@trifold/shared` na rodada anterior. A régua
+tirava o alvo da mesma fonte que devia vigiar: a mutação movia o código **e a expectativa
+junto**. E não havia nenhum caso de caixa.
+
+Consequência medida pelo `@qa`: sob a mutação, o banner devolvia **`ok` para produção em
+MAIÚSCULAS** — o instrumento da AC2 ficaria mudo exatamente sobre produção, que é o único
+caso para o qual ele existe. Ironia registrada: foi a **correção** do PR #524 (derivar da
+fonte única, para matar a segunda definição) que criou a cegueira, ao acoplar a régua à
+fonte.
+
+**Regra aplicada:** *uma régua que deriva o esperado da mesma fonte que testa não pode
+reprovar a fonte.* As URLs do bloco novo são **literais**, escritas à mão, sem importar
+constante nenhuma — inclusive `https://DSOPQKQJKMHYTUDAAOLV.supabase.co`.
+
+**Uma célula muda a mais, que eu achei ao remedir e fechei:** a própria suíte da fonte única
+derivava os refs dos `Set`s, então "trocar o ref de produção" também não a fazia falhar
+(`9 ✅` na tabela do `@qa`). Correto para as propriedades de **comportamento** (normalização,
+disjunção), mas deixava a **identidade** sem carrasco. Acrescentei a âncora literal lá
+também.
+
+**Matriz completa, remedida depois das duas correções — nenhuma célula muda:**
+
+| Mutação (só na FONTE) | shared | env-banner | db-env | supabase-check |
+|---|---|---|---|---|
+| nenhuma (limpo) | 0F/11P | 0F/32P | 0F/23P | 0F/13P |
+| remove normalização | **4F** | **5F** | **3F** | **1F** |
+| troca ref de produção | **1F** | **6F** | **7F** | **3F** |
+| troca ref de teste | **1F** | **1F** | **7F** | **1F** |
+| restaurado | 0F/11P | 0F/32P | 0F/23P | 0F/13P |
+
+Prova de aplicação por **conteúdo em disco** a cada passo (`toLowerCase=3→0→3`,
+`prod=1→0→1`, `teste=1→0→1`) — não por `git diff`, que já me enganou uma vez nesta story com
+arquivo não rastreado.
+
+**Nota de desenho:** um caso extra guarda contra o conserto preguiçoso — caixa alta em
+`NODE_ENV=production` tem de continuar `"ok"` (é o deploy), não virar `"ausente"`. Sem ele,
+alguém "consertaria" a caixa fazendo maiúscula cair em `"ausente"`, ficaria verde no caso
+novo e quebraria o deploy legítimo.
+
+**Se o ref de produção mudar de verdade, estes casos falham — e é para falhar.** Trocar o
+projeto de produção é decisão deliberada, com diff revisado em cada âncora, não propagação
+silenciosa que ninguém enxerga.
+
+#### Achados do `@qa` que vão ao backlog e não são meus para consertar
+
+- **`SEC-002` (medium, pré-existente):** `packages/web/scripts/fix-campaign-lead-names.mjs:12`
+  faz `process.env.SUPABASE_URL || "https://dsopqkqjkmhytudaaolv.supabase.co"` — **default
+  produção, e escreve** (`PATCH` em leads). É a mesma classe que a AC3 mata, num diretório
+  irmão que o denominador desta fatia explicitamente não cobre (`scripts/*.ts`). **Registro
+  que esta fatia deixa esse vizinho descoberto** — o `packages/web/scripts/*.mjs` é a
+  próxima superfície a migrar para `resolverAmbiente()`.
+- **`TEST-003`** e demais: no gate file. Não sobrepus nenhum deles.
+
+#### Confirmações do `@qa` que fecham pendências minhas
+
+- **Ponto único de extração:** `git grep` de regex de URL do Supabase em todo `.ts/.tsx/.mjs`
+  rastreado → **uma ocorrência**. Os `extrairRef` de `db-env.ts` e `env-banner.ts` são
+  wrappers que delegam; nenhum extrator paralelo sobreviveu.
+- **Fuzz de 15 formas hostis** (domínio/esquema em maiúsculas, porta, caminho, `http`,
+  `.supabase.co.evil.com`, ponto final, hífen, sem esquema): **zero falha aberta**.
+- **AC6:** interseção **vazia** entre `FALHAS_CONHECIDAS` (4 entradas) e os 6 arquivos que
+  tomam o fallback (`011`, `030`, `031`-`034`) — a cegueira corrigida nunca mascarou nada na
+  execução real, e o veredito da Task 6.4 sobre `236`/`237` continua de pé.
+- **`serviceRoleKey!` → `serviceRoleKey`** não é cosmético: `AmbienteParaEscrita` estreita
+  para `string` e a função lança. A asserção virou guarda.
+- **MNT-001:** `scripts/` type-checado à mão — 17 erros, **todos pré-existentes, nenhum em
+  arquivo desta story**.
+
+---
+
 #### AC5 — reset endurecido
 
 `pnpm reset:testdb` **sem flag** (default dry-run):
@@ -1463,16 +1546,16 @@ vez de apagadas.
 |---|---|
 | `pnpm lint` | **0 errors**, 36 warnings — idêntico ao baseline pré-story (nenhum warning nos arquivos novos) |
 | `pnpm type-check` | 8 tasks successful |
-| `pnpm test` | **272 arquivos · 3474 passed \| 6 expected fail** (total 3480) |
+| `pnpm test` | **272 arquivos · 3486 passed \| 6 expected fail** (total 3492) |
 | `pnpm lint --force` / `type-check --force` | 0 errors · 8/8 · **`Cached: 0 cached, 8 total`** (MNT-002: sem `--force`, o turbo servia cache de outra árvore) |
 
 **Baseline pré-story, MEDIDA e não deduzida** (correção do achado `TEST-001` do gate): movi as
 4 suítes novas para fora da árvore e rodei `pnpm test` — **267 arquivos · 3403 passed | 6
 expected fail (total 3409)**. Com elas de volta, e com a 5ª suíte do PR #524:
-**272 · 3474 | 6 (total 3480)**.
+**272 · 3486 | 6 (total 3492)**.
 
-**3409 + 71 = 3480**, exato, com 71 = 4 (`gitignore-env`) + 22 (`env-banner`) + 23 (`db-env`)
-+ 13 (`supabase-check`) + 9 (`supabase-refs`, nova no PR #524) — contados suíte a suíte. `expected fail`
+**3409 + 83 = 3492**, exato, com 83 = 4 (`gitignore-env`) + 32 (`env-banner`) + 23 (`db-env`)
++ 13 (`supabase-check`) + 11 (`supabase-refs`) — contados suíte a suíte pelo reporter JSON. `expected fail`
 intacto em **6**, que é a constante a comparar segundo
 `.claude/agent-memory/aios-devops/reference_ci_surface_trifold.md`.
 
@@ -1576,9 +1659,9 @@ foi tocado.
 - `scripts/supabase-check.ts` — `pnpm supabase:check` (AC4b), reusa a allowlist de `db-env.ts`
 - `scripts/supabase-check.test.ts` — 13 casos (3 desfechos + reuso da allowlist + caixa alta)
 - `packages/shared/src/constants/supabase-refs.ts` — **fonte única** dos refs (PR #524)
-- `packages/shared/src/constants/supabase-refs.test.ts` — 9 casos (normalização de caixa)
+- `packages/shared/src/constants/supabase-refs.test.ts` — 11 casos (normalização de caixa + âncora literal de identidade)
 - `packages/web/src/lib/env-banner.ts` — `avaliarRefDoAmbiente` (3 estados) + `textoDoBanner`
-- `packages/web/src/lib/env-banner.test.ts` — 22 casos
+- `packages/web/src/lib/env-banner.test.ts` — 32 casos (inclui o bloco TEST-002, URLs literais)
 - `packages/web/scripts/next-com-env.mjs` — carregador de dotenv em processo (contorna o
   `--env-file`/`NODE_OPTIONS`)
 - `packages/web/.env.development.example` — **tracked, só nomes** (37 variáveis)
@@ -1821,5 +1904,83 @@ Pré-existente, não introduzido por esta story, **não bloqueia**. Vai para o b
 **PASS.** As 7 ACs cumpridas, todas as mutações reproduzidas com recibo de aplicação, suíte/lint/tipos verdes sem cache, aritmética fechada, e o achado de segurança da rodada anterior corrigido na raiz — não no sintoma. A correção do DOC-001 tornou o repositório melhor do que a story prometia: em vez de tornar audível um estado ruim, eliminou o estado ruim para todo clone futuro, e manteve a régua audível para quem já tem o arquivo.
 
 Registro que o `@dev` tomou minha nota de método como vinculante e passou a exigir recibo de aplicação em toda edição. Fiz o mesmo aqui: cada mutação desta rodada foi confirmada por `git diff --numstat` **antes** de eu ler qualquer resultado.
+
+— Quinn, guardião da qualidade 🛡️
+
+---
+
+## QA Results — 3ª rodada (pós-CodeRabbit, `8587f4fa`)
+
+### Review Date: 2026-08-29 · Reviewed By: Quinn (Test Architect)
+
+### Gate Status
+
+Gate: **PASS** → `docs/qa/gates/900.3b-ambiente-de-teste.yml`
+
+**Começo pelo que é meu.** O PASS da 2ª rodada foi dado sobre uma guarda de produção que falhava **aberta** por caixa alta. Rodei matriz de guardas, matriz de allowlist, mutação de allowlist — e **nunca variei a caixa do insumo**. Testei `dsopqkqjkmhytudaaolv` de todo jeito, menos `DSOPQKQJKMHYTUDAAOLV`. O CodeRabbit pegou o que eu não peguei, duas vezes.
+
+#### O furo — reproduzido por mim, ponta a ponta
+
+| Entrada | Resultado |
+|---|---|
+| `reset:testdb --confirmar` com `https://DSOPQ….supabase.co` | **ABORTADO**, exit 1, ref normalizado na mensagem |
+| idem, caixa **mista** (`DsOpQkQj…`) | **ABORTADO**, exit 1 |
+| `db-env` `TRIFOLD_ENV=teste` + prod MAIÚSCULO | **ABORTADO** (guarda 3) |
+| `db-env` `TRIFOLD_ENV=producao` MAIÚSCULO sem flag | **ABORTADO** (guarda 1) |
+| banner em dev, as três caixas | **`alerta`** nas três |
+
+**Ponto único de extração — varrido, não assumido.** `git grep` de regex de URL do Supabase em todo `.ts/.tsx/.mjs` rastreado: **uma única ocorrência**, em `supabase-refs.ts:46`. Os `extrairRef` de `db-env.ts` e `env-banner.ts` são wrappers que delegam. **Nenhum caminho extrai ref por conta própria.**
+
+**Fuzz do regex, já que ele virou toda a superfície:** 15 formas (domínio maiúsculo, esquema maiúsculo, porta, caminho, `http`, sufixo hostil `.supabase.co.evil.com`, ponto final, hífen, `.com`, sem esquema, espaços, newline). **Zero falha aberta** — toda forma contendo o ref de produção é classificada como PRODUÇÃO ou recusada, e recusa faz o chamador lançar.
+
+#### Fonte única — e onde a prova NÃO fecha
+
+`packages/shared/package.json` tem `main: src/index.ts` e **não há `dist`** — os testes leem a fonte, não build velho. `packages/web` importa por `@trifold/shared`; `scripts/` por caminho relativo. A segunda definição sumiu.
+
+Mas o pedido literal foi "mexa só na fonte e veja o outro lado acender". **Medi, e a ponta web não acende:**
+
+| Mutação **só** em `supabase-refs.ts` | `supabase-refs.test` | `env-banner.test` | `db-env.test` | `supabase-check.test` |
+|---|---|---|---|---|
+| troca o valor do ref de produção | 9 ✅ verde | **22 ✅ verde** | 7 ❌ | 3 ❌ |
+| remove a normalização | 3 ❌ | **22 ✅ verde** | 3 ❌ | 1 ❌ |
+
+`env-banner.test.ts` monta as URLs esperadas **a partir das próprias constantes** (`URL_PROD = https://${REF_PRODUCAO}…`) e não tem caso de caixa. Medi a consequência: sob a mutação, `avaliarRefDoAmbiente("https://DSOPQ….supabase.co","development")` devolve **`ok`** — o instrumento da AC2 ficaria **mudo sobre produção**, que é o defeito exato que a AC2 existe para não ter.
+
+Isso é **TEST-002 (low)**, não bloqueio: a classe está guardada repo-wide (3 suítes acendem na mesma mutação, a suíte fica vermelha). Falta o carrasco na ponta certa — uma linha. E **TEST-003 (low)**: nenhum teste fixa os *valores* por literal; `supabase-refs.test.ts` também deriva dos próprios Sets.
+
+#### Fail-closed nos dois lados — matriz de 12 células
+
+2 ambientes × 3 classes de ref × flag × escreve. **Só 3 das 12 combinações com `escreve=true` liberam:** `teste`+ref de teste (com e sem flag) e `producao`+ref de produção+`flag=1`. **Ref DESCONHECIDO é recusado em todas**, lendo e escrevendo. **Nenhum caminho de escape.** `supabase:check` com ref desconhecido sai **1**; `0` fica reservado ao ref de teste declarado e ao não-linkado.
+
+#### AC6 — a confirmação de que o veredito da Task 6.4 continua de pé
+
+O ramo do fallback agora consulta `FALHAS_CONHECIDAS` (linha 527), e `conhecidasQueNaoFalharam` leva o exit a ≠ 0. **Confirmei a afirmação de que a run real não muda:** `FALHAS_CONHECIDAS` tem **4** entradas (`025` ×2, `223`, `224`); os 6 arquivos que de fato tomam o fallback (`011`, `030`, `031`–`034`) têm **interseção vazia** com ela. A cegueira nunca mascarou nada na execução real, e o achado de que **`236`/`237` aplicam com sucesso** continua válido.
+
+> Nota de método: meu primeiro `grep` das chaves misturou `FALHAS_CONHECIDAS` com `ASSERCOES` (mesma indentação) e sugeriu 6 entradas — o que teria virado um achado falso de que `236`/`237` estavam na lista. A extração **por bloco** (`awk` entre `const FALHAS_CONHECIDAS` e `])`) corrige. Terceiro deslize de instrumento meu nesta story; os três foram pegos pela mesma regra de exigir prova.
+
+#### Minor e MNT-001
+
+- `ALVO.serviceRoleKey!` → `ALVO.serviceRoleKey` **não é cosmético**: `AmbienteParaEscrita` estreita para `string` e `resolverAmbiente` **lança** quando `escreve && !serviceRoleKey`. A asserção non-null virou guarda real.
+- **Type-checkei `scripts/` à mão** (o ponto cego do MNT-001): 17 erros, **todos pré-existentes** (`noImplicitAny`/`unknown`) e **nenhum em arquivo escrito por esta story**. A justificativa do backlog confere.
+
+#### Números — medidos por mim, com `--force`
+
+Suíte **272 arquivos · 3474 passed | 6 expected fail (3480)**. Baseline remedida com as 5 suítes fora: **267 · 3403 | 6 (3409)**. **3409 + 71 = 3480**, exato (71 = 4+22+23+13+9). `lint --force` **0 errors**, `type-check --force` **8/8**, ambos `0 cached`.
+
+### 🟠 SEC-002 (medium, fora do escopo, pré-existente)
+
+Varrendo os literais do ref, achei `packages/web/scripts/fix-campaign-lead-names.mjs:12`:
+
+```js
+const SUPABASE_URL = process.env.SUPABASE_URL || "https://dsopqkqjkmhytudaaolv.supabase.co"
+```
+
+**Default produção, e o script escreve** (`method: "PATCH"` em leads). É a mesma classe que a AC3 existe para matar, num diretório irmão ao qual esta story acabou de acrescentar um arquivo. **Não bloqueia:** o denominador da AC3 é explicitamente `scripts/*.ts`, e `scripts/README.md` diz "todo `scripts/*.ts`" — preciso e verdadeiro. Vai para o backlog.
+
+### Veredito
+
+**PASS.** Os 6 achados do CodeRabbit estão corrigidos, e o crítico foi corrigido no lugar certo — o ponto único de extração, não o comparador. Varri para confirmar que não sobrou extrator paralelo, fuzzei o regex que virou a superfície inteira, e provei fail-closed por matriz em vez de por amostra. O que sobra são três itens de backlog e duas lacunas de carrasco (low), nenhuma delas escondendo comportamento errado — verifiquei o comportamento diretamente.
+
+A lição que fica desta rodada não é a caixa alta: é que **eu testei a guarda só com a forma que se digita**. Matriz de guardas não é matriz de insumos, e foi no insumo que o furo morava.
 
 — Quinn, guardião da qualidade 🛡️

@@ -70,3 +70,25 @@ describe("as duas listas são disjuntas", () => {
     expect(REFS_PERMITIDOS_TESTE.size).toBeGreaterThan(0)
   })
 })
+
+/**
+ * Âncora literal da FONTE ÚNICA.
+ *
+ * Os casos acima derivam os refs dos próprios `Set`s — o que é correto para as
+ * propriedades de **comportamento** (normalização de caixa, disjunção), mas deixa a
+ * **identidade** dos refs sem carrasco: trocar o ref de produção aqui não faria nenhum
+ * deles falhar. Foi a última célula muda da matriz de mutação da 3ª rodada do gate.
+ *
+ * Este bloco fecha isso com valores literais. Se um dia o projeto de produção mudar de
+ * verdade, ele falha — e é para falhar: trocar o banco de produção é decisão deliberada,
+ * com diff revisado, não propagação silenciosa.
+ */
+describe("âncora literal — qual ref é qual (identidade, não comportamento)", () => {
+  it("a allowlist de produção contém exatamente o ref de produção conhecido", () => {
+    expect([...REFS_PERMITIDOS_PRODUCAO]).toEqual(["dsopqkqjkmhytudaaolv"])
+  })
+
+  it("a allowlist de teste contém exatamente o ref de teste conhecido", () => {
+    expect([...REFS_PERMITIDOS_TESTE]).toEqual(["xnxvygyfyyyzwhiuoehz"])
+  })
+})
