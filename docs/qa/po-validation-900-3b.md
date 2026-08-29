@@ -829,3 +829,243 @@ no Dev Agent Record com o tamanho do diff medido. Isso converte inércia em opt-
 3. `900-3c` só depois do merge da `900-3b` — ver `docs/qa/po-validation-900-3c.md`.
 
 *— Pax, equilibrando prioridades 🎯*
+
+---
+---
+
+# RODADA 3 — Arbitragem da AC4 (pós-implementação, commit `9d104e73`)
+
+- **Data:** 2026-08-29 · **Validador:** @po (Pax)
+- **Pedido:** o dono do produto delegou a mim a decisão sobre o destino da AC4.
+- **Método:** as três opções foram **testadas**, não julgadas no papel. Uma delas se comporta de
+  forma diferente do que o enunciado supunha.
+
+---
+
+## 🔴 ANTES DA DECISÃO — achado de segurança encontrado ao reproduzir a medição
+
+Rodei o comando que a própria AC4 manda rodar. **Ele imprime a senha do banco de produção em texto
+claro, no stdout:**
+
+> Saída **não reproduzida** (R6/E3): `supabase db dump --dry-run`, sem flag nenhuma, imprime
+> um bloco `export` com `PGHOST`/`PGPORT`/`PGUSER`/`PGDATABASE` do banco de **produção** e
+> `PGPASSWORD` com a senha **em texto claro**. Nem o bloco nem a linha de host truncada
+> entram em arquivo rastreado — truncar não é mitigação. Instrumento de evidência correto
+> para "para onde a CLI aponta": `pnpm supabase:check`, que imprime só o project ref.
+
+
+
+**Contenção — verificada, e está limpa:**
+
+| Verificação | Resultado |
+|---|---|
+| `git grep -l -F '<senha>'` em arquivos rastreados | **nenhum** |
+| `git log -S'<senha>' --all` | **nenhum commit** |
+| `grep -rl` no repo inteiro (fora `.git`/`node_modules`) | **nenhum arquivo** |
+| `supabase/.temp/pooler-url` contém a senha? | **não** (vem do credential store da CLI, não do repo) |
+| O `@dev` colou essa saída na story? | **truncou em `PGHOST`** — a senha não entrou |
+
+**O `@dev` acertou por disciplina. A AC pede por regra o comportamento perigoso.** A AC4 diz
+*"confirmar por `supabase status` (ou qualquer subcomando que resolva o projeto-alvo)"*, e o padrão
+de evidência desta story — repetido em 7 ACs e na DoD — é *"colar a saída no Dev Agent Record"*, que
+é **arquivo rastreado**. Um subcomando que resolve o projeto-alvo é exatamente um subcomando remoto,
+e subcomando remoto imprime a senha. A distância entre esta story e um segredo de produção commitado
+foi **uma decisão de bom senso de um agente**, não uma regra.
+
+Isso, sozinho, já desqualifica a forma atual da AC4 — independentemente de ela ser falsa por
+construção. Registrei item de segurança em `docs/backlog.md`.
+
+---
+
+## 1. As três opções, testadas
+
+### ❌ Opção 1 — apagar `supabase/.temp/project-ref`: **não faz o que o enunciado supõe**
+
+Testei (com backup e restauração garantida — a máquina voltou ao estado original):
+
+```
+$ rm supabase/.temp/project-ref && supabase db dump --dry-run
+Cannot find project ref. Have you run supabase link?
+```
+
+**O `project_id` do `config.toml` não é fallback para comandos remotos.** Sem o
+`.temp/project-ref`, a CLI **não cai no projeto de teste — ela erra**. Então a Opção 1 não torna a
+AC4 verdadeira; ela troca "resolve para produção" por "não resolve para nada".
+
+Isso é uma melhora real de segurança (**falha fechada** em vez de falha aberta em produção), e vou
+recomendá-la como **ação de operador** — mas com a expectativa correta, que é o oposto da que o
+enunciado da opção carregava. Como resposta à AC4, não serve: continua sendo estado de máquina, some
+no primeiro `supabase link`, e não protege a próxima máquina. O `@dev` fez certo em não tocar nisso
+por conta própria.
+
+### ❌ Opção 2 — reescrever a AC para exigir a instrução de `supabase link` documentada
+
+Vira uma AC que mede **o documento**, não o comportamento. É a régua que este repositório já aprendeu
+a desconfiar: *"existe um parágrafo"* fica verde para sempre, inclusive no dia em que a máquina
+estiver linkada em produção. Necessária como parte, insuficiente como resposta.
+
+### ❌ Opção 3 — mover a AC4 para a `900-3c`
+
+Mover uma AC falsa não a torna verdadeira. A CLI é igualmente ingovernável lá, e a `900-3c` está
+**bloqueada por dependência** (precisa da `900-3b` mergeada) — o que adiaria por dias um conserto que
+custa ~10 linhas. Além disso, o problema não é "tema de CLI"; é "propriedade de máquina que o repo
+não governa", que é assunto de ambiente — ou seja, **desta** fatia.
+
+---
+
+## 2. ✅ DECISÃO — nenhuma das três: a AC4 é reescrita no padrão que a AC2 já estabeleceu
+
+**O critério (a) do coordenador está certo, e eu o endureço:** uma AC que o repositório não pode
+garantir não deveria ser marcável — nem por acaso, nem por estado de máquina. **O critério (b)
+também está certo:** o `config.toml` tem valor sem a AC, e o valor não é pequeno — o aviso de
+`db push` proibido mora no lugar exato onde a pessoa erraria.
+
+Mas há uma quarta saída, e ela não é invenção minha: **esta story já resolveu este mesmo problema,
+uma vez, na AC2.** `pnpm dev` apontar para produção também é estado de máquina (`.env.local`) que o
+repositório não pode garantir. A resposta da AC2 não foi "afirmar que o repo garante" nem "apagar a
+AC" — foi **tornar o estado errado audível no momento do uso**: o banner. A AC4 sofre do mesmo mal e
+merece o mesmo remédio.
+
+### AC4 passa a ter três partes, e cada uma mede o que é medível
+
+**AC4a — o que o repositório de fato governa (estático, em `pnpm test`).**
+- `supabase/config.toml` existe, versionado, com `project_id` = ref de **teste**, e carrega o aviso
+  de `db push` proibido. Régua: `grep` do `project_id` — ela protege contra alguém "consertar" o
+  arquivo apontando para produção depois.
+- **Nenhum `package.json` nem workflow do repositório invoca subcomando remoto do `supabase`.**
+  Medido hoje: **zero ocorrências** em 12 `package.json` + 1 workflow — a régua nasce verde,
+  é barata e significa algo real (o repositório nunca **roteia** ninguém para a superfície
+  ingovernada; quem for, foi a pé).
+  *Nota de escopo, medida:* a régua tem de ficar restrita a `*package.json` + `.github/workflows/*`.
+  Varrer o repo inteiro traz `.aios-core/` (templates do framework), `.claude/hooks/`, `.coderabbit.yaml`
+  e **comentários** dentro de `scripts/*.ts` — população grande e ruidosa, pela qual esta story não
+  responde.
+
+**AC4b — tornar audível o que o repositório não governa (o padrão do banner).**
+`pnpm supabase:check`: lê `supabase/.temp/project-ref`, classifica o ref pela **mesma allowlist de
+`scripts/lib/db-env.ts`** (reuso obrigatório — não pode haver duas definições de "o que é produção"
+no repositório, que é o defeito que a AC3 existiu para matar), e:
+- ref de teste → sai `0`;
+- ref de produção → sai **`1`**, nomeando o ref e imprimindo `supabase link --project-ref xnxvygyfyyyzwhiuoehz`;
+- arquivo ausente → sai `0` com aviso "não linkado — comandos remotos vão falhar", que é o estado
+  **seguro** (medido na Opção 1).
+
+Documentado em `scripts/README.md`, ao lado da nota do `reset-tenancy-testdb.ts`. É a Opção 2 com
+dentes: o comando é o documento, e ele acende.
+
+**AC4c — a afirmação falsa sai de todo lugar onde está escrita.**
+"`supabase <cmd>` sem flag resolve para teste" precisa sumir da AC4, da seção Testing (item 4) e da
+DoD. **E de mais um lugar, que é o que me preocupa:** ela também é parte do **critério de saída da
+Onda 1** do plano aprovado. O plano afirma algo que a ferramenta não permite. Isso não é conserto de
+story — é correção de plano/épico, e vai junto do item de épico que já abri.
+
+**Regra de evidência, obrigatória nas três partes:** **é proibido colar em arquivo rastreado a saída
+de qualquer subcomando remoto do `supabase`.** A evidência da AC4b é a saída do `pnpm supabase:check`
+(que imprime só o ref — identificador público), nunca a do `db dump`/`status`.
+
+### Por que não simplesmente apagar a AC4
+
+Porque o achado é bom demais para virar silêncio. O que o `@dev` descobriu — *"o repositório não
+consegue garantir isto; só a máquina consegue"* — é exatamente o tipo de fato que some quando não
+tem uma régua para segurá-lo. O `config.toml` que ele escreveu já documenta o achado dentro do
+próprio arquivo, e isso é excelente. Falta o carrasco.
+
+---
+
+## 3. O que o @sm precisa reescrever
+
+| # | Onde | O quê |
+|---|---|---|
+| **E1** | `900-3b` AC4 | Substituir a AC inteira pelas partes **AC4a / AC4b / AC4c** acima, com a régua de evidência ("nunca colar saída de subcomando remoto do `supabase`"). Acrescentar Task 4.3 (`pnpm supabase:check` + teste) e Task 4.4 (`scripts/README.md`). |
+| **E2** | `900-3b` Testing (item 4) e DoD | Trocar "`supabase status` resolve para teste sem flag" pelas duas réguas novas. |
+| **E3** | `900-3b` Riscos | Risco novo: *"comando remoto do `supabase` imprime a senha de produção em stdout; qualquer paste de evidência pode vazar segredo"* — severidade **Alta**, mitigação = a regra de evidência da E1. |
+| **E4** | plano/épico | O critério de saída da Onda 1 afirma "`supabase <cmd>` sem flag resolve para teste", que é **inalcançável**. Encaminhado por mim junto do item `[EPIC-900]` já aberto em `docs/backlog.md`. Fora da autoridade do @sm. |
+| **E5** | `900-3c` | Nada a mover. A AC4 **fica** na `900-3b`. |
+
+**Ação de operador, separada da story (não é AC):** rodar `supabase link --project-ref xnxvygyfyyyzwhiuoehz`
+nesta máquina. Se não for rodar, apagar `supabase/.temp/project-ref` deixa a CLI **falhando fechada**
+— pior ergonomia, melhor segurança. Decisão do dono do produto; nenhuma das duas é responsabilidade
+desta story.
+
+---
+
+## 4. Três correções ao meu próprio parecer — aceitas, e uma delas eu reproduzi
+
+Registro as três, porque parecer de `@po` também é alegação e este errou.
+
+**4.1 — `node --env-file` não funciona com o Next. Eu afirmei que funcionava sem rodar.**
+Reproduzi a causa que o `@dev` apontou:
+
+```
+$ NODE_OPTIONS="--env-file=/tmp/pax.env" node -e "console.log('passou')"
+node: --env-file= is not allowed in NODE_OPTIONS
+```
+
+O Next re-spawna a si mesmo e propaga `execArgv` via `NODE_OPTIONS`, onde a flag é proibida. **Eu
+classifiquei o mecanismo como "executável" a partir da existência do binário, da versão do Node e do
+comportamento do `@next/env` — três fatos verdadeiros que não se somam na conclusão.** Era uma
+inferência apresentada como medição, e atingia `dev:prod` **e** `build:teste`, os dois mecanismos
+que a AC2 prescrevia. É exatamente o defeito que eu cobro dos outros: *rodar a AC, não raciocinar
+sobre ela*. A substituição do `@dev` (`packages/web/scripts/next-com-env.mjs` com `util.parseEnv`,
+sem dependência nova) preserva a propriedade que importava — gravar em `process.env` antes do Next
+subir — sem a flag proibida.
+
+**4.2 — o controle negativo da AC3 era colinear. Procede.**
+A tabela que eu escrevi na Rodada 2 (§3, "C2 — o controle positivo exercita a guarda") pedia o caso
+negativo **sem** `TRIFOLD_ALLOW_PROD`. Com a flag ausente, a guarda de flag barra a chamada **antes**
+de a allowlist ser consultada — o caso passava sem exercitar a allowlist, que era o que ele dizia
+exercitar. O `@dev` provou empiricamente (sob a mutação que reverte allowlist→denylist, o caso
+original continuava verde) e corrigiu rodando **com** a flag, isolando a allowlist como única
+variável. **Eu montei a tabela para separar duas variáveis e deixei as duas ligadas na mesma linha.**
+
+**4.3 — a régua de hash do S11 é insatisfazível como escrita. Procede.**
+Eu sugeri hashear `docs/audits/schema-snapshot.json`. O arquivo tem `capturedAt` e um array
+`functions` de ordenação instável — dois digests nunca baterão. A sugestão nasceu do meu achado
+correto (não existe `createHash` em `scripts/`) e morreu na implementação que eu não testei. O
+`@dev` provou a idempotência por **hash normalizado**, idêntico em duas execuções — que é a
+propriedade que a AC queria. A AC deve adotar a normalização explicitamente, não o arquivo cru.
+
+**Padrão comum aos três:** todos são eu **inferindo em vez de executar**, no mesmo parecer em que
+cobrei exatamente isso. Vale como calibragem: minha taxa de acerto é alta quando eu rodo o comando
+(as réguas do `.gitignore`, do `ci.yml`, da varredura de refs, do `grep -rc`) e cai quando eu
+raciocino sobre APIs de terceiros (Node, Next, formato de snapshot).
+
+---
+
+## 5. Duas medições do @dev que fecham questões abertas — e duas correções de número
+
+**Fecham:**
+- **`236`/`237` aplicam com sucesso** num banco do zero — não são no-op nem falha. Portanto **não**
+  entram em `FALHAS_CONHECIDAS`, que é o desfecho que a AC6 previa como possível. A `011` aplicou, o
+  que **afasta o confundidor do S10** (o predicado do `236` vermelho por ausência de `…0009`). O
+  S10 fica registrado como cenário não materializado, não como pendência.
+- **Reset em 456,6s, `REGRESSÕES: 0`** entre a `237` e a `244`. A previsão do plano ("a onda de
+  falhas novas provavelmente não vem") se confirmou.
+
+**Corrigem números que eu deixei passar:**
+- **Prefixos duplicados são 22, não 21.** Medi: `021 024 025 027 028 029 031 032 033 034 036 044
+  048 063 066 075 102 104 164 170 230 240` = **22**. A lista já estava na story v0.2 com 22 itens
+  sob o rótulo "21", e eu a reproduzi na Rodada 1 sem contar. Contagem bamba que atravessou duas
+  validações minhas.
+- **Dos 11 `_remote_only.sql`, apenas 4 usam `CREATE INDEX CONCURRENTLY`.** Medi: 11 arquivos
+  `_remote_only`; 6 mencionam `CONCURRENTLY`; **4** na forma `CREATE INDEX CONCURRENTLY` (`031`,
+  `032`, `033`, `034`). A story dizia "os 11 `_remote_only` com `CREATE INDEX CONCURRENTLY`",
+  confundindo "quantos existem" com "quantos usam". O `config.toml` do `@dev` já traz o número certo
+  e a explicação da confusão.
+
+---
+
+## 6. Situação da fatia após esta rodada
+
+| AC | Estado |
+|---|---|
+| AC1, AC3, AC5, AC6, AC7 | ✅ cumpridas pelo `@dev`, com mutação executada e vermelho medido |
+| AC2 | 🟡 bloqueada na Task 2.7 (`.claude/CLAUDE.md`) — autorização do dono do produto, já concedida; sem objeção minha |
+| **AC4** | 🔴 **reescrita determinada nesta rodada (E1-E5).** Não é "não cumprida" — o alvo é que estava errado |
+
+**Veredito da Rodada 3:** a story **não volta a NO-GO**. O `@dev` fez a coisa certa duas vezes — não
+marcou uma AC que não podia cumprir, e não mexeu na máquina do dono do produto por conta própria. O
+que falta é o `@sm` aplicar E1-E3; E4 é meu. A AC4 reescrita é ~10 linhas de script mais duas
+réguas que já sei serem verdes no baseline, porque as medi.
+
+*— Pax, equilibrando prioridades 🎯*

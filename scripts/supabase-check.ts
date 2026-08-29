@@ -5,8 +5,18 @@
  *
  * O `project_id` de `supabase/config.toml` **não** decide o alvo dos subcomandos remotos da
  * CLI do Supabase. Quem decide é o projeto **linkado**, gravado em
- * `supabase/.temp/project-ref` — arquivo **gitignored e por máquina**. Com o `config.toml`
- * apontando para teste, um subcomando remoto sem flag ainda resolvia para o ref de produção.
+ * `supabase/.temp/project-ref`. Com o `config.toml` apontando para teste, um subcomando
+ * remoto sem flag ainda resolvia para o ref de produção.
+ *
+ * ⚠️ Esse arquivo **não era** estado de máquina, como esta story supôs por três rodadas:
+ * ele estava **RASTREADO** no git, em `origin/main`, com o ref de **produção** — junto de
+ * `pooler-url`, `postgres-version` e `storage-migration`. **Todo clone recebia produção
+ * como projeto linkado.** A regra `supabase/.temp/` do `.gitignore` (linha 36) existia, mas
+ * é **inerte para caminho já no índice** — o mesmo defeito que a AC1 desta story consertou
+ * para o `.env.example` — e `git check-ignore` sem `--no-index` **mente** para arquivo
+ * rastreado (sai `1`). A Story 900-3b rodou `git rm --cached supabase/.temp/`; a partir
+ * daí o link é por máquina de verdade, e um clone novo simplesmente não tem link (falha
+ * fechada, que é o desfecho `nao-linkado` abaixo).
  *
  * ## Por que um "check" e não um conserto
  *

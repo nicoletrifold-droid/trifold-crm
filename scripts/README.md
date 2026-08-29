@@ -24,7 +24,7 @@ PRODUÇÃO e um script destrutivo rodado sem conferir o alvo atingia dados reais
 | Arquivo (todos **gitignored**) | Ambiente | Quem lê |
 |---|---|---|
 | `packages/web/.env.development` | **TESTE** | `pnpm dev` (default do Next em modo development) |
-| `packages/web/.env.producao.local` | PRODUÇÃO | só `pnpm dev:prod`, via `node --env-file` |
+| `packages/web/.env.producao.local` | PRODUÇÃO | só `pnpm dev:prod`, via `packages/web/scripts/next-com-env.mjs` |
 | `packages/web/.env.production.local.bak` | PRODUÇÃO | ninguém — é o original preservado para reversão |
 | `.env.teste` (raiz) | **TESTE** | `scripts/lib/db-env.ts`, como *fallback* |
 | `.env.producao` (raiz) | PRODUÇÃO | `scripts/lib/db-env.ts`, só sob `TRIFOLD_ENV=producao` |

@@ -6,6 +6,85 @@ Tarefas operacionais, configurações e ajustes pendentes que não requerem uma 
 
 ## Pendente
 
+### [SEGURANÇA] 🔴 `supabase db dump` imprime a senha do banco de PRODUÇÃO em texto claro — e uma AC mandava colar essa saída em arquivo rastreado
+
+**Adicionado em:** 2026-08-29
+**Prioridade:** **P1**
+**Origem:** Validação `@po` da `900-3b`, Rodada 3 (`docs/qa/po-validation-900-3b.md`). Encontrado ao
+reproduzir a medição da AC4. Procedência: **execução direta**, não leitura.
+
+Qualquer subcomando remoto da CLI do Supabase, com o projeto linkado apontando para
+produção (`supabase/.temp/project-ref`), imprime no stdout um bloco `export` de variáveis
+`PG*` do banco de **produção** — host, porta, usuário, database e **`PGPASSWORD` com a
+senha em texto claro**.
+
+> Correção de premissa (achada no gate do `@qa`): `supabase/.temp/project-ref` **não era**
+> estado de máquina — estava **rastreado** em `origin/main` com o ref de produção, então
+> *todo clone* vinha linkado em produção. A Story 900-3b o removeu do índice
+> (`git rm --cached`, sem apagar do disco).
+
+> A saída literal **não é reproduzida aqui**, por R6/E3: nem o bloco, nem a linha de host
+> truncada. Truncar não é mitigação — mantê-la ensinaria que truncar é aceitável, que é
+> justamente o quase-acidente que originou a regra. Para conferir o alvo da CLI use
+> `pnpm supabase:check`, que imprime só o project ref (identificador público).
+
+**Contenção verificada em 2026-08-29 — está limpa:** a senha **não** aparece em nenhum arquivo
+rastreado (`git grep -l -F`), **não** aparece no histórico (`git log -S --all`), **não** existe em
+nenhum arquivo do repositório fora de `.git`/`node_modules`, e **não** está em
+`supabase/.temp/pooler-url`. Ela vem do credential store da CLI, não do repo.
+
+🔴 **O risco não é o vazamento — é o procedimento.** A AC4 da `900-3b` mandava *"confirmar por
+`supabase status` (ou qualquer subcomando que resolva o projeto-alvo)"*, e o padrão de evidência
+daquela story (repetido em 7 ACs e na DoD) é **"colar a saída no Dev Agent Record"** — arquivo
+rastreado. Subcomando que resolve o projeto-alvo **é** subcomando remoto, e subcomando remoto imprime
+a senha. O `@dev` truncou a saída em `PGHOST` por disciplina própria. A distância entre esta story e
+um segredo de produção commitado foi o bom senso de um agente, não uma regra.
+
+**Ações:**
+1. **(feito)** A AC4 foi reescrita pelo `@po` com regra explícita: *é proibido colar em arquivo
+   rastreado a saída de qualquer subcomando remoto do `supabase`*. Ver E1-E3 da Rodada 3.
+2. **Avaliar rotação da senha do Postgres de produção** com o dono do produto — ela é recuperável em
+   texto claro por qualquer pessoa/agente com a CLI linkada. Mesma classe do item de `SUPREMO_TOKEN`.
+3. **Confirmar que nenhum job de CI roda subcomando remoto do `supabase` com saída capturada** em
+   log ou artefato. Medido hoje: **zero** invocações de `supabase` em `*package.json` e em
+   `.github/workflows/*` — a base está limpa, e a régua AC4a da `900-3b` passa a proteger isso.
+4. Considerar `supabase link --project-ref xnxvygyfyyyzwhiuoehz` (teste) nas máquinas de
+   desenvolvimento. Medido: sem `supabase/.temp/project-ref`, a CLI **falha fechada**
+   (*"Cannot find project ref"*) — ela **não** cai no `project_id` do `config.toml`.
+
+---
+
+### [CI] 🟡 `MNT-001` — `pnpm type-check` não cobre `scripts/`, e a `900-3b` aumentou o ponto cego
+
+**Adicionado em:** 2026-08-29 · **Origem:** gate `@qa` da Story `900-3b` (`MNT-001`)
+**Prioridade:** **P2** — não quebra nada hoje; encurta a rede que pega o próximo erro.
+
+`pnpm type-check` é `turbo type-check`, que roda **por pacote**. Nenhum `tsconfig.json` de
+pacote inclui o diretório `scripts/` da raiz, então **nada type-checa esses arquivos** — e o
+job `static` do `ci.yml`, que roda o mesmo comando, tem o mesmo ponto cego.
+
+Hoje um erro de tipo em `scripts/*.ts` só aparece se algum `*.test.ts` importar o arquivo.
+A Story `900-3b` **ampliou** a superfície descoberta: criou `scripts/lib/db-env.ts` e
+`scripts/supabase-check.ts` e migrou 17 scripts para eles. Os que têm teste estão cobertos
+por tabela; os demais, não.
+
+Medido durante a implementação: rodando `tsc` à mão sobre `scripts/*.ts` aparecem erros
+pré-existentes de resolução de módulo (`@supabase/supabase-js`, `@trifold/shared`) e
+`noImplicitAny` — ou seja, **não basta apontar o `tsconfig` da raiz para `scripts/`**: seria
+preciso um `tsconfig` próprio com `paths`/`types` do workspace, e triar os erros herdados.
+Por isso é item de backlog e não conserto de oportunidade.
+
+**Sugestão:** `scripts/tsconfig.json` estendendo o da raiz, com `paths` do workspace, mais
+um `type-check:scripts` no `package.json` da raiz encadeado no job `static`.
+
+**Comando que reproduz o ponto cego:**
+```bash
+pnpm type-check                 # verde
+npx tsc --noEmit --strict --typeRoots packages/web/node_modules/@types scripts/lib/db-env.ts
+```
+
+---
+
 ### [EPIC-900] 🟡 O §461 do epic recomenda o `sync-schema.sh` que a `900-3c` vai deletar — texto superado pelo próprio resultado da `900-3`
 
 **Adicionado em:** 2026-08-29

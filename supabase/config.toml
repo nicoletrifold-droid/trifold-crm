@@ -18,17 +18,31 @@ project_id = "xnxvygyfyyyzwhiuoehz"
 #     claro. Para conferir o alvo, use `pnpm supabase:check`, que imprime só o ref.
 #
 # O `project_id` daqui **não** controla o alvo dos comandos remotos. Quem controla é o
-# projeto LINKADO, gravado em `supabase/.temp/project-ref` — arquivo **gitignored, por
-# máquina**, que hoje contém `dsopqkqjkmhytudaaolv` (e `supabase/.temp/pooler-url`
-# aponta para lá também).
+# projeto LINKADO, gravado em `supabase/.temp/project-ref`.
 #
-# Consequência honesta: para os comandos da CLI do Supabase, o repositório **não
-# consegue** garantir "sem flag = teste". Só a máquina consegue. Cada desenvolvedor
-# precisa rodar, uma vez:
+# ⚠️ HISTÓRICO QUE IMPORTA: até a Story 900-3b, esses 4 arquivos de `supabase/.temp/`
+# (`project-ref`, `pooler-url`, `postgres-version`, `storage-migration`) estavam
+# **RASTREADOS** no git, em `origin/main`, com `project-ref = dsopqkqjkmhytudaaolv`.
+# Ou seja: **todo clone deste repositório vinha com PRODUÇÃO como projeto linkado da CLI**.
+# Não era estado de máquina — era conteúdo do repositório.
+#
+# Ninguém pegou isso em três rodadas de revisão porque `supabase/.temp/` **está** no
+# `.gitignore` (linha 36) desde sempre, mas **regra de .gitignore é inerte para caminho já
+# no índice** — o mesmo defeito que esta story consertou para o `.env.example`. E
+# `git check-ignore` (sem `--no-index`) **mente** para arquivo rastreado: sai `1`, "não
+# ignorado". Medido: com `--no-index` sai `0`, provando que a regra sempre casou.
+#
+# A Story 900-3b rodou `git rm --cached supabase/.temp/` — os arquivos saíram do índice e
+# **permanecem no disco** de quem já os tinha. Daí em diante o link é, de fato, por máquina.
+#
+# Consequência: quem clonar o repositório depois disso **não terá projeto linkado**, e os
+# subcomandos remotos vão falhar fechado ("Cannot find project ref"), que é o estado seguro.
+# Cada desenvolvedor roda, uma vez:
 #
 #     supabase link --project-ref xnxvygyfyyyzwhiuoehz
 #
-# ...e usar `--project-ref dsopqkqjkmhytudaaolv` explicitamente quando quiser produção.
+# ...e usa `--project-ref dsopqkqjkmhytudaaolv` explicitamente quando quiser produção.
+# Confira o estado a qualquer momento com `pnpm supabase:check`.
 #
 # O default seguro que ESTA story de fato entrega vale para o que vive no repositório:
 # `pnpm dev` (via `.env.development`) e todo `scripts/*.ts` (via `scripts/lib/db-env.ts`,
