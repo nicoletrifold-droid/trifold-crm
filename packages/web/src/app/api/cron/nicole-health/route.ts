@@ -28,7 +28,18 @@ import {
 // 11h–23h UTC daquele cron, que portanto jamais o teria detectado.
 export const maxDuration = 60
 
-const DEFAULT_ORG_ID = "00000000-0000-0000-0000-000000000001" // Trifold Engenharia
+/**
+ * Story 900-23 · AC3 — **canal de ENTREGA do alerta de plataforma**, não filtro do que é lido, e
+ * não o `org_id` do incidente.
+ *
+ * Este cron é vigia de PLATAFORMA: ele agrega os erros de IA de TODAS as organizações num único
+ * aviso administrativo (o comentário acima explica por quê — "7 falhas viram 1 aviso, não 7").
+ * Migrá-lo para `forEachActiveOrg` produziria N alertas para o mesmo incidente, o oposto do que
+ * ele existe para fazer. O que sobrou do antigo `DEFAULT_ORG_ID` são as duas ocorrências abaixo,
+ * renomeadas: é a org cujo `whatsapp_config` ENVIA o aviso — de quem recebe, não de quem falhou.
+ * Quais orgs foram atingidas vai em `metadata.orgs_afetadas` e no corpo da mensagem.
+ */
+const PLATFORM_ALERT_ORG_ID = "00000000-0000-0000-0000-000000000001" // Trifold Engenharia
 
 /**
  * Janela de leitura, MAIOR que o intervalo do cron (10 min) de propósito: um erro nos
@@ -40,6 +51,21 @@ const JANELA_MIN = 15
 interface Agregado {
   ocorrencias: number
   primeiraOcorrencia: string
+  /**
+   * Story 900-23 · AC3 — quais organizações produziram este tipo de erro. `null` cobre os eventos
+   * que já hoje são gravados sem `org_id`. Ler de todas as orgs já era o comportamento; o defeito
+   * era o `select` não trazer `org_id`, então o alerta agregava sem saber DE QUEM.
+   */
+  orgsAfetadas: Set<string | null>
+}
+
+/** União das orgs afetadas de vários tipos — `null` (evento sem org) vira "desconhecida". */
+function orgsAfetadasDe(entradas: Array<[TipoErroIA, Agregado]>): string[] {
+  const uniao = new Set<string>()
+  for (const [, ag] of entradas) {
+    for (const o of ag.orgsAfetadas) uniao.add(o ?? "desconhecida")
+  }
+  return [...uniao]
 }
 
 export async function GET(request: NextRequest) {
@@ -73,7 +99,7 @@ export async function GET(request: NextRequest) {
   // categoria perderia metade dos caminhos.
   const { data: eventos, error } = await admin
     .from("system_events")
-    .select("created_at, message, source")
+    .select("created_at, message, source, org_id")
     .eq("level", "error")
     .gte("created_at", desde)
     .order("created_at", { ascending: true })
@@ -86,13 +112,19 @@ export async function GET(request: NextRequest) {
   for (const ev of eventos ?? []) {
     const tipo = classificarErroIA((ev.message as string) ?? "")
     if (!tipo) continue
+    const orgDoEvento = (ev.org_id as string | null) ?? null
     const atual = porTipo.get(tipo)
     if (atual) {
       atual.ocorrencias += 1
+      atual.orgsAfetadas.add(orgDoEvento)
     } else {
       // `eventos` vem ordenado por `created_at` asc, então o primeiro que vejo de cada
       // tipo é genuinamente o mais antigo da janela.
-      porTipo.set(tipo, { ocorrencias: 1, primeiraOcorrencia: ev.created_at as string })
+      porTipo.set(tipo, {
+        ocorrencias: 1,
+        primeiraOcorrencia: ev.created_at as string,
+        orgsAfetadas: new Set([orgDoEvento]),
+      })
     }
   }
 
@@ -103,7 +135,18 @@ export async function GET(request: NextRequest) {
   const resumo = {
     janelaMin: JANELA_MIN,
     eventosLidos: (eventos ?? []).length,
-    porTipo: Object.fromEntries(porTipo),
+    porTipo: Object.fromEntries(
+      [...porTipo].map(([tipo, ag]) => [
+        tipo,
+        {
+          ocorrencias: ag.ocorrencias,
+          primeiraOcorrencia: ag.primeiraOcorrencia,
+          // `Set` vira `{}` em JSON.stringify — sem esta conversão o campo existiria e seria
+          // sempre vazio, que é pior que não existir.
+          orgsAfetadas: [...ag.orgsAfetadas].map((o) => o ?? "desconhecida"),
+        },
+      ]),
+    ),
     dryRun,
   }
 
@@ -114,16 +157,21 @@ export async function GET(request: NextRequest) {
   // AC14 — só agora buscamos o canal. Se ele não estiver utilizável, saímos ANTES de
   // gravar qualquer marcador de dedup: um alerta consumido por um envio que nunca
   // aconteceu seria um segundo silêncio.
-  const config = await carregarConfigWhatsApp(admin, DEFAULT_ORG_ID)
+  const config = await carregarConfigWhatsApp(admin, PLATFORM_ALERT_ORG_ID)
   if (!config) {
     await logEventOnce({
       level: "warn",
       category: "cron",
       event_type: "NICOLE_HEALTH_SEM_CANAL",
       message: "Falha de IA detectada, mas whatsapp_config indisponível — alerta não enviado",
-      metadata: { tipos: aAlertar.map(([t]) => t) },
+      metadata: {
+        tipos: aAlertar.map(([t]) => t),
+        orgs_afetadas: orgsAfetadasDe(aAlertar),
+      },
       source: "api/cron/nicole-health",
-      org_id: DEFAULT_ORG_ID,
+      // Story 900-23 · AC3 — SEM `org_id`: o alerta é evento de PLATAFORMA, não de tenant.
+      // Gravá-lo como se fosse da Trifold é a mesma classe de erro de atribuição que motivou
+      // esta reclassificação. Quais orgs foram atingidas vai em `metadata.orgs_afetadas`.
     })
     return NextResponse.json({ skipped: "whatsapp indisponível", ...resumo })
   }
@@ -151,10 +199,11 @@ export async function GET(request: NextRequest) {
         tipo,
         ocorrencias: ag.ocorrencias,
         primeira_ocorrencia: ag.primeiraOcorrencia,
+        orgs_afetadas: [...ag.orgsAfetadas].map((o) => o ?? "desconhecida"),
       },
       dedupe_key: `nicole-health:${tipo}:${horaAtual}`,
       source: "api/cron/nicole-health",
-      org_id: DEFAULT_ORG_ID,
+      // Sem `org_id` — ver comentário do NICOLE_HEALTH_SEM_CANAL acima (AC3 da 900-23).
     })
 
     if (!inserted) {
@@ -163,12 +212,19 @@ export async function GET(request: NextRequest) {
     }
 
     const { enviados } = await alertarAdminWhatsApp(admin, {
-      orgId: DEFAULT_ORG_ID,
+      // Canal de entrega, não org do incidente — ver PLATFORM_ALERT_ORG_ID.
+      orgId: PLATFORM_ALERT_ORG_ID,
       config,
       telefones,
       tipo,
       desdeIso: ag.primeiraOcorrencia,
       ocorrencias: ag.ocorrencias,
+      // ⚠️ Story 900-23 — `orgs_afetadas` NÃO entra aqui de propósito. `alertarAdminWhatsApp`
+      // dispara o template APROVADO `alerta_sistema_admin`, de 3 parâmetros fixos: um 4º faria a
+      // Meta devolver 400 e o alerta pararia de sair — mudança de comportamento em produção,
+      // exatamente o que a AC9 proíbe. A informação de quais orgs foram atingidas vai em
+      // `metadata.orgs_afetadas` dos dois eventos e no corpo da resposta HTTP (rastreável), até
+      // que uma story de template cuide do texto.
     })
 
     if (enviados === 0) {
@@ -198,6 +254,7 @@ export async function GET(request: NextRequest) {
     ok: true,
     ...resumo,
     tiposAlertaveis: aAlertar.map(([t]) => t),
+    orgsAfetadas: orgsAfetadasDe(aAlertar),
     alertasEnviados,
     dedupPulados,
     entregasFalhas,

@@ -59,6 +59,95 @@ export async function resolveBrokerName(
  *   - nicole_takeover_days exceeded → render template, send via Telegram, create log type='nicole_sent'
  * - Respect: max 1 followup per lead per 48h, business hours only
  */
+/**
+ * Story 900-23 · AC6 — corpo dos templates aprovados da Meta, **por organização**.
+ *
+ * Exportada para ser testável sem o cron inteiro em volta.
+ *
+ * Duas garantias que valem comentário:
+ *  - **`.eq("org_id", orgId)` além de `.eq("status","active")`.** Além de escopar, isso fecha o
+ *    `PGRST116` estruturalmente: o índice `whatsapp_config_org_ativo` (`UNIQUE (org_id) WHERE
+ *    status='active'`, migration 246) torna impossível uma org ter 2 linhas ativas, então esta
+ *    query resolve para no máximo 1 linha e `maybeSingle()` deixa de poder devolver "mais de uma".
+ *  - **o `error` é verificado, não descartado.** Era o descarte que fazia "duas linhas ativas"
+ *    virar "canal indisponível para todo mundo", sem uma linha de log. Defesa em profundidade
+ *    contra qualquer outro erro (rede, RLS), não só o `PGRST116` que a migration já impede.
+ *
+ * Fail-closed no caminho de template: se a listagem da Meta falhar, NENHUM template sai nesta run
+ * para esta org (o texto livre dentro da janela segue normal). Mandar sem validar renderia erro
+ * 132000 pago.
+ */
+export async function carregarTemplatesAprovadosDaOrg(
+  supabase: SupabaseClient,
+  orgId: string,
+): Promise<Map<string, string>> {
+  const corpoDoTemplate = new Map<string, string>()
+
+  const { data: waCfg, error: waErr } = await supabase
+    .from("whatsapp_config")
+    .select("waba_id, access_token")
+    .eq("org_id", orgId)
+    .eq("status", "active")
+    .maybeSingle()
+
+  if (waErr) {
+    logEvent({
+      level: "error",
+      category: "cron",
+      event_type: "FOLLOWUP_TEMPLATES_INDISPONIVEIS",
+      message: `Não foi possível ler whatsapp_config — nenhum envio por template nesta run: ${waErr.message}`,
+      metadata: { erro: waErr.message, etapa: "whatsapp_config" },
+      org_id: orgId,
+      source: "api/cron/followup",
+    })
+    return corpoDoTemplate
+  }
+
+  if (!waCfg?.waba_id || !waCfg?.access_token) return corpoDoTemplate
+
+  try {
+    for (const t of await listApprovedOpeningTemplates(waCfg.waba_id, waCfg.access_token)) {
+      corpoDoTemplate.set(t.name, t.body)
+    }
+  } catch (err) {
+    logEvent({
+      level: "error",
+      category: "cron",
+      event_type: "FOLLOWUP_TEMPLATES_INDISPONIVEIS",
+      message: `Não foi possível listar templates aprovados na Meta — nenhum envio por template nesta run: ${err instanceof Error ? err.message : String(err)}`,
+      metadata: { erro: err instanceof Error ? err.message : String(err) },
+      org_id: orgId,
+      source: "api/cron/followup",
+    })
+  }
+
+  return corpoDoTemplate
+}
+
+/**
+ * Story 900-23 · AC6 — cache de templates **por execução e por organização**.
+ *
+ * O comentário original do bloco ("uma chamada por run, não por lead") continua valendo: com N
+ * regras de M organizações, são M buscas, não N. Sem o cache, uma org com 5 regras faria 5
+ * chamadas à Graph API por execução do cron.
+ *
+ * Exportado para ter carrasco próprio — a contagem de chamadas é a garantia, e ela não aparece em
+ * nenhum outro lugar.
+ */
+export function criarCacheDeTemplatesPorOrg(
+  supabase: SupabaseClient,
+  carregar: typeof carregarTemplatesAprovadosDaOrg = carregarTemplatesAprovadosDaOrg,
+): (orgId: string) => Promise<Map<string, string>> {
+  const cache = new Map<string, Map<string, string>>()
+  return async (orgId: string) => {
+    const emCache = cache.get(orgId)
+    if (emCache) return emCache
+    const carregado = await carregar(supabase, orgId)
+    cache.set(orgId, carregado)
+    return carregado
+  }
+}
+
 export async function GET(request: NextRequest) {
   // Validate cron secret — fail-closed
   const authHeader = request.headers.get("authorization")
@@ -161,33 +250,19 @@ export async function GET(request: NextRequest) {
   // janela segue normal). Mandar sem validar renderia erro 132000 pago.
   const templatesConfigurados = (rules as Array<{ hsm_template?: string | null; is_active?: boolean }>)
     .some((r) => !!r.hsm_template)
-  const corpoDoTemplate = new Map<string, string>()
 
-  if (templatesConfigurados) {
-    const { data: waCfg } = await supabase
-      .from("whatsapp_config")
-      .select("waba_id, access_token")
-      .eq("status", "active")
-      .maybeSingle()
-
-    if (waCfg?.waba_id && waCfg?.access_token) {
-      try {
-        for (const t of await listApprovedOpeningTemplates(waCfg.waba_id, waCfg.access_token)) {
-          corpoDoTemplate.set(t.name, t.body)
-        }
-      } catch (err) {
-        logEvent({
-          level: "error",
-          category: "cron",
-          event_type: "FOLLOWUP_TEMPLATES_INDISPONIVEIS",
-          message: `Não foi possível listar templates aprovados na Meta — nenhum envio por template nesta run: ${err instanceof Error ? err.message : String(err)}`,
-          metadata: { erro: err instanceof Error ? err.message : String(err) },
-          source: "api/cron/followup",
-        })
-      }
-    }
-  }
-  const templatesAprovados = new Set(corpoDoTemplate.keys())
+  /**
+   * Story 900-23 · AC6 — cache POR ORGANIZAÇÃO, por execução.
+   *
+   * Antes, o lookup rodava UMA vez antes do laço, sem filtro de `org_id`. Isso preservava a razão
+   * de ser do comentário acima ("uma chamada por run, não por lead") e criava dois defeitos:
+   * a org B usaria o canal/os templates da org A; e — pior — `.eq("status","active").maybeSingle()`
+   * com DUAS linhas ativas devolve `PGRST116`, e o `error` era descartado, então `waCfg` vinha
+   * `undefined` e o follow-up por template morria para TODAS as orgs, em silêncio.
+   *
+   * O cache mantém "1 busca por org por execução" — não 1 por regra.
+   */
+  const templatesDaOrg = criarCacheDeTemplatesPorOrg(supabase)
 
   for (const rule of rules) {
     const stageArr = rule.stage as unknown as Array<{ id: string; name: string; slug: string }> | null
@@ -198,6 +273,12 @@ export async function GET(request: NextRequest) {
     // Story 75-118: lead em Perdido é terminal para a automação — a Nicole não
     // manda follow-up de lead perdido. Pula qualquer regra que aponte para Perdido.
     if (rule.stage_id === STAGE_IDS.perdido) continue
+
+    // Story 900-23 — templates da org DESTA regra (cache por execução, 1 busca por org).
+    const corpoDoTemplate = templatesConfigurados
+      ? await templatesDaOrg(rule.org_id)
+      : new Map<string, string>()
+    const templatesAprovados = new Set(corpoDoTemplate.keys())
 
     // Find leads in this stage
     const { data: leads } = await supabase

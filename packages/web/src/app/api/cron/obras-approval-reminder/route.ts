@@ -48,8 +48,11 @@ export async function GET(request: NextRequest) {
   }
 
   let notifiedOrgs = 0
+  /** Story 900-23 · AC7 — campo NOMEADO de falha; sem ele o erro vira 200 com corpo limpo. */
+  let orgsComErro = 0
 
   for (const [orgId, { count, ids }] of byOrg.entries()) {
+   try {
     // Story 75-210: respeita a preferência por usuário (opt-out em Configurações).
     const admins = await getAprovadoresParaEmail(admin, orgId)
 
@@ -78,8 +81,18 @@ export async function GET(request: NextRequest) {
       .in("id", ids)
 
     notifiedOrgs++
+   } catch (e) {
+    // Isolamento por org: a falha ao notificar a org A não pode calar a org B.
+    console.error(`[obras-reminder] falha processando a org ${orgId}:`, e)
+    orgsComErro++
+    continue
+   }
   }
 
   console.log(`[obras-reminder] ${pendentes.length} pendentes → ${notifiedOrgs} orgs notificadas`)
-  return NextResponse.json({ processed: pendentes.length, notified_orgs: notifiedOrgs })
+  return NextResponse.json({
+    processed: pendentes.length,
+    notified_orgs: notifiedOrgs,
+    orgs_com_erro: orgsComErro,
+  })
 }

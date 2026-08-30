@@ -70,6 +70,42 @@ contra uma `main` velha.
 
 ---
 
+### [TEST-002] 🟡 O `projetar()` dos fakes de cron desliga a projeção quando `org_id` divide a string com um embed
+
+**Adicionado em:** 2026-08-29 · **Origem:** `@qa` na 2ª rodada da Story `900-23` — **sexta instância** da classe "fake cego ao `select`", achada depois de fechar as cinco que a story nomeia.
+**Prioridade:** P2 · **Dona: quem tocar o próximo cron com embed** — o item traz o conserto pronto.
+
+O fake de `supabase` usado nos testes de cron tem uma escotilha:
+
+```js
+if (!colunas || colunas.includes("*") || colunas.includes("(")) return linha
+```
+
+O `(` é intenção legítima (não dá para projetar um embed do PostgREST com um `split(",")` ingênuo),
+mas ele desliga a projeção **da linha inteira**. Onde `org_id` divide a string com um embed, o fake
+devolve tudo e **deixa de discriminar** — um `select` que esquecesse o `org_id` passaria verde.
+
+Medido em 2026-08-29, três ocorrências:
+
+| arquivo | `select` |
+|---|---|
+| `cron/email-automations/route.ts:54` | `id, org_id, delay_minutes, email_templates(slug)` |
+| `cron/email-automations/route.ts:120` | `id, org_id, email_templates(slug)` |
+| `cron/obras-approval-reminder/route.ts:26` | `id, org_id, obra_id, …, obra:obras!obra_id(name)` |
+
+**Não bloqueia, e a razão importa:** nenhuma AC da `900-23` nomeia esses `select`. A classe está
+fechada exatamente onde as ACs a mediram; o que sobra é o resto da superfície.
+
+**Ação, duas partes — a segunda vale mais que a primeira:**
+1. Trocar a escotilha por um **split de vírgulas de primeiro nível** (ignorando as que estão dentro
+   de parênteses), preservando o embed inteiro como um "campo" e projetando os demais normalmente.
+2. **Extrair o `projetar()`.** Ele está hoje **duplicado byte a byte em 4 arquivos** —
+   `cron/{email-queue,roleta-retry,meta-capi-dispatch,meta-ads-intelligence}/route.test.ts`, todos
+   com a mesma linha (34/38/41/47). Consertar em um e esquecer os outros três é o desfecho provável
+   se a extração não vier junto, e aí a classe volta pela porta que ficou aberta.
+
+---
+
 ### [ARCH-001] 🟠 O `CHECK whatsapp_sem_identificador_proprio` morde **só a grafia** — `phoneNumberId` passa
 
 **Adicionado em:** 2026-08-29 · **Origem:** gate `@qa` da Story `900-21b` (`ARCH-001`, medium).

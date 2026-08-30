@@ -69,9 +69,16 @@ export async function GET(request: NextRequest) {
     nao_lead: 0,
     relacionamento: 0,
     outros: 0,
+    /**
+     * Story 900-23 · AC7 — campo de FALHA nomeado. Os 8 contadores acima descrevem desfechos
+     * esperados; nenhum deles diz "deu erro". Sem este, o `catch … continue` devolveria 200 com
+     * corpo limpo — trocar "aborta tudo" por "erra em silêncio" é piorar.
+     */
+    erros: 0,
   }
 
   for (const lead of leads ?? []) {
+   try {
     // Guard de idempotência: re-verifica antes de distribuir (execuções concorrentes).
     // Story 75-89: também pula se o lead entrou no bolsão nesse meio-tempo.
     // Story 75-118: e pula se foi marcado como Perdido nesse meio-tempo.
@@ -152,6 +159,13 @@ export async function GET(request: NextRequest) {
     else if (result.status === "fora_horario") results.fora_horario++
     else if (result.status === "sem_corretor_disponivel") results.sem_corretor++
     else results.outros++
+   } catch (e) {
+    // Isolamento por lead: um lead que quebra (classificação, rede, campo ausente) não pode
+    // deixar os demais da fila sem distribuição até a próxima execução.
+    console.error(`[roleta-retry] falha processando o lead ${lead.id}:`, e)
+    results.erros++
+    continue
+   }
   }
 
   console.log(`[roleta-retry] processed ${leads?.length ?? 0} leads:`, results)

@@ -30,6 +30,16 @@ export interface CapiSendResult {
 export interface SendCapiEventsOptions {
   /** Meta "Test Events" code — routes events to the Events Manager test tool without affecting production metrics. */
   testEventCode?: string
+  /**
+   * Story 900-23 — dataset por organização, resolvido de `org_integrations`
+   * (`provider = 'meta_capi'`, `config->>'dataset_id'`).
+   *
+   * **Aditivo e retrocompatível de propósito:** ausente, cai no fallback de env exatamente como
+   * antes. `packages/web/src/lib/meta/form-capi.ts` (o outro chamador, fluxo do formulário da
+   * landing, sem outbox nem cron) não passa nada e continua byte a byte com o comportamento de
+   * hoje. O **token** (`META_CAPI_ACCESS_TOKEN`) segue global nesta onda — só o dataset é por org.
+   */
+  datasetId?: string
 }
 
 interface CapiSuccessResponse {
@@ -70,7 +80,8 @@ export async function sendCapiEvents(
   const accessToken = process.env.META_CAPI_ACCESS_TOKEN
   // Mesmo raciocínio do Pixel do browser: o id do dataset é público e não vale
   // um deploy mudo. Já o token é segredo de verdade e segue obrigatório abaixo.
-  const datasetId = process.env.META_CAPI_DATASET_ID || '1337310707164669'
+  // Story 900-23: o override por org vence a env; sem override, o comportamento é o de antes.
+  const datasetId = options?.datasetId ?? (process.env.META_CAPI_DATASET_ID || '1337310707164669')
 
   if (!accessToken) {
     return { success: false, error: 'META_CAPI_ACCESS_TOKEN is not configured' }

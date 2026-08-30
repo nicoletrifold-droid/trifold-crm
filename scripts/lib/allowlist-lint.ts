@@ -36,14 +36,31 @@ const SECOES = [...SECOES_DE_MOTIVO, SECAO_COM_PRAZO] as const
 export type Secao = (typeof SECOES)[number]
 
 /**
- * Contagens mínimas medidas na re-triagem de 2026-08-29 (Story 900-21b, AC1).
- * São mínimos, não igualdades: a allowlist pode ganhar entrada legítima sem quebrar o teste —
- * mas não pode ESVAZIAR uma seção, que é o modo de falha que a Regra 0 existe para pegar.
+ * Contagens mínimas medidas na re-triagem de 2026-08-29 (Story 900-21b, AC1) e **re-medidas pela
+ * Story 900-23**, que executou a correção dos alvos.
+ *
+ * São mínimos, não igualdades: a allowlist pode ganhar entrada legítima sem quebrar o teste — mas
+ * não pode ESVAZIAR uma seção, que é o modo de falha que a Regra 0 existe para pegar.
+ *
+ * ⚠️ **Os mínimos sobem junto com a realidade, de propósito.** Um mínimo que fica para trás para
+ * de pegar encolhimento: `itera-orgs` caindo de 29 para 24 numa story futura passaria batido se o
+ * piso continuasse 24.
  */
 export const MINIMOS: Record<Secao, number> = {
-  plataforma: 16,
-  "itera-orgs": 24,
-  "alvos-onda-2": 12,
+  // 16 → 17 (900-23): `nicole-health` reclassificado de `alvos-onda-2` para cá — vigia de
+  // plataforma, agrega erro de IA de todas as orgs num canal único, permanente.
+  plataforma: 17,
+  // 24 → 29 (900-23): +`meta-ads-intelligence`, +`meta-capi-dispatch` (+ o `.test.ts` irmão),
+  // +`followup` (os três corrigidos, agora iteram de fato) e +`lib/tenancy/for-each-org.ts`.
+  "itera-orgs": 29,
+  /**
+   * 12 → 3 (900-23). **Este é o estado TERMINAL da seção**, não um número baixo arbitrário: os 3
+   * que sobram são os órfãos não agendados (`calendly-sync`, `supremo-history-sync`,
+   * `supremo-sync`), cuja decisão o plano aprovado adiou para a Onda 3. Quando a Onda 3 decidir o
+   * destino deles, a seção fica vazia e a Regra 0 passa a acender — que é o comportamento certo:
+   * seção vazia significa "a estrutura da allowlist mudou", e isso precisa de dono.
+   */
+  "alvos-onda-2": 3,
   legitimos: 12,
 }
 

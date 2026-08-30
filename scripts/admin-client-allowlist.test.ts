@@ -47,11 +47,16 @@ const CAMINHO_JSON = join(RAIZ, "docs", "audits", "admin-client-allowlist.json")
 const allowlist = JSON.parse(readFileSync(CAMINHO_JSON, "utf-8"))
 
 /**
- * Total re-triado em 2026-08-29. **Literal de propósito**: se este número saísse do próprio JSON,
- * o teste montaria o esperado a partir da fonte que ele vigia e nunca reprovaria a fonte. Mexer
- * na allowlist e ter que mexer aqui é o custo — e é o ponto: a mudança aparece em diff, com dono.
+ * Total re-triado em 2026-08-29 (Story 900-21b) e re-medido pela Story 900-23: **242 → 239**.
+ * −4 (`daily-report` e `nicole-agenda-reconcile`, mais os dois `.test.ts`, deixaram de chamar
+ * `createAdminClient()` — usam o `db` escopado que `forEachActiveOrg` injeta) +1
+ * (`lib/tenancy/for-each-org.ts`, o próprio mecanismo).
+ *
+ * **Literal de propósito**: se este número saísse do próprio JSON, o teste montaria o esperado a
+ * partir da fonte que ele vigia e nunca reprovaria a fonte. Mexer na allowlist e ter que mexer
+ * aqui é o custo — e é o ponto: a mudança aparece em diff, com dono.
  */
-const TOTAL_ESPERADO = 242
+const TOTAL_ESPERADO = 239
 
 const REGRA = "aios/no-unscoped-admin-client"
 
@@ -150,7 +155,9 @@ describe("validarAllowlist — Regra 0 (vivacidade das seções)", () => {
     const j = fixtureValida()
     delete sec(j, "plataforma")["src/plataforma/f0.ts"]
     const v = validarAllowlist(j)
-    expect(v.some((x) => x.regra === 0 && x.secao === "plataforma" && /15 entradas.*mínimo.*16/.test(x.mensagem))).toBe(true)
+    // Literais, não derivados de `MINIMOS`: uma asserção montada a partir da constante que ela
+    // vigia nunca reprovaria a constante. 17 é o piso re-medido pela 900-23 (era 16).
+    expect(v.some((x) => x.regra === 0 && x.secao === "plataforma" && /16 entradas.*mínimo.*17/.test(x.mensagem))).toBe(true)
   })
 })
 
@@ -232,7 +239,7 @@ describe("validarAllowlist — controle positivo: o arquivo REAL", () => {
 // ─────────────────────────────────────────────────────────────────────────────────────────────
 
 describe("ponte entre o JSON e o `PERMITIDOS` da regra ESLint", () => {
-  it("a união das 4 seções + `legado` soma 242", () => {
+  it("a união das 4 seções + `legado` soma 239", () => {
     const uniao = new Set([
       ...Object.keys(allowlist.plataforma),
       ...Object.keys(allowlist["itera-orgs"]),
@@ -243,7 +250,7 @@ describe("ponte entre o JSON e o `PERMITIDOS` da regra ESLint", () => {
     expect(uniao.size).toBe(TOTAL_ESPERADO)
   })
 
-  it("`PERMITIDOS` da regra ESLint tem exatamente as mesmas 242 entradas", () => {
+  it("`PERMITIDOS` da regra ESLint tem exatamente as mesmas 239 entradas", () => {
     // Antes desta story `PERMITIDOS` lia só `legitimos` + `legado`: seriam 190 aqui, e 51 arquivos
     // teriam perdido a isenção em silêncio (correção B1). É esta asserção que fixa isso.
     expect(PERMITIDOS.size).toBe(TOTAL_ESPERADO)

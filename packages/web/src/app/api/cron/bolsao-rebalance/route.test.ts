@@ -8,8 +8,13 @@ import { NextRequest } from "next/server"
 vi.mock("server-only", () => ({}))
 
 let elapsedReturn = 20
+/** Story 900-23 · AC7 — orgs cuja resolução de agenda deve lançar (isolamento de erro). */
+let orgsQueFalham = new Set<string>()
 vi.mock("@web/lib/roleta/business-time", () => ({
-  getOrgSchedule: async () => ({ week: [], timezone: "America/Sao_Paulo" }),
+  getOrgSchedule: async (orgId: string) => {
+    if (orgsQueFalham.has(orgId)) throw new Error(`falha sintética na agenda da ${orgId}`)
+    return { week: [], timezone: "America/Sao_Paulo" }
+  },
   isOpenAtNow: () => true,
   businessMinutesBetweenSchedule: () => elapsedReturn,
 }))
@@ -83,6 +88,7 @@ beforeEach(() => {
   process.env.CRON_SECRET = "test-secret"
   process.env.NEXT_PUBLIC_APP_URL = "https://crm.trifold.eng.br"
   elapsedReturn = 20
+  orgsQueFalham = new Set()
   cfgData = [{ ...CFG }]
   leadsData = [{ id: "L1", name: "João", assigned_broker_id: "B1" }]
   distData = [{ lead_id: "L1", created_at: new Date(Date.now() - 30 * 60000).toISOString() }]
@@ -171,5 +177,49 @@ describe("GET /api/cron/bolsao-rebalance", () => {
     await GET(req())
     expect(global.fetch).not.toHaveBeenCalled()
     expect(pushSpy).not.toHaveBeenCalled()
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Story 900-23 · AC7 — isolamento de erro por organização
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+
+describe("bolsao-rebalance — isolamento de erro por org (AC7 da 900-23)", () => {
+  const CFG_B = { ...CFG, org_id: "org-2" }
+
+  it("controle positivo: 2 orgs, as 2 no summary com `ok: true`", async () => {
+    cfgData = [{ ...CFG }, { ...CFG_B }]
+    const res = await GET(req())
+    const body = (await res.json()) as {
+      ok: boolean
+      summary: Array<{ orgId: string; ok?: boolean }>
+    }
+    expect(res.status).toBe(200)
+    expect(body.ok).toBe(true)
+    expect(body.summary.map((s) => s.orgId)).toEqual(["org-1", "org-2"])
+    expect(body.summary.every((s) => s.ok === true)).toBe(true)
+  })
+
+  it("🔴 erro na 1ª org NÃO impede a 2ª, e a org que falhou CONTINUA no array com `ok: false`", async () => {
+    // O `try/catch` que já existia era na FOLHA (envio de WhatsApp). Este é o do laço de orgs:
+    // sem ele, a exceção aqui aborta o cron inteiro e a org-2 fica sem rebalanceamento.
+    cfgData = [{ ...CFG }, { ...CFG_B }]
+    orgsQueFalham = new Set(["org-1"])
+
+    const res = await GET(req())
+    const body = (await res.json()) as {
+      ok: boolean
+      summary: Array<{ orgId: string; ok?: boolean; erro?: string }>
+    }
+
+    expect(res.status).toBe(200)
+    const a = body.summary.find((s) => s.orgId === "org-1")!
+    const b = body.summary.find((s) => s.orgId === "org-2")!
+    // A org-1 não sumiu do relatório — e diz por quê.
+    expect(a.ok).toBe(false)
+    expect(a.erro).toContain("falha sintética")
+    // A org-2 foi processada normalmente.
+    expect(b.ok).toBe(true)
+    expect(body.ok).toBe(false)
   })
 })
