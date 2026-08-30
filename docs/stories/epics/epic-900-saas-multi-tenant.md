@@ -855,6 +855,22 @@ A razão é que este epic **exige** expand → migrate → contract (NFR-1). Fat
 **Dep:** 900-23 · **Est:** M · **Executor:** @dev
 
 #### 900-25 — Org "Trifold Sandbox" + teste de aceitação de multi-tenancy
+
+> ⚠️ **[@po 2026-08-29] COLISÃO DE NUMERAÇÃO RESOLVIDA — `900-25` deixa de ser este roteiro.**
+> O número `900-25` passa a designar **a prova de duas empresas reais no ambiente de teste**
+> (Passo 6 do plano aprovado da Onda 2: Camada A + Camada B contra `trifold-crm-dev`) —
+> `docs/stories/900-25-prova-duas-empresas-reais-ambiente-teste.story.md`. Três razões, nesta
+> ordem: (1) a missão do dono do produto (2026-08-29) atribui `900-25` ao Passo 6 por escrito;
+> (2) o `[TEST-004]` do `docs/backlog.md` já registrou `900-25` como dona daquele conteúdo antes
+> de a story existir; (3) **este roteiro não é construível hoje** — `Dep: 900-22`, e `900-22`
+> não existe como story (só `900-22b`, um recorte parcial).
+>
+> **Destino deste roteiro (decisão do `@po`, não adiada):** o conteúdo abaixo — org "Trifold
+> Sandbox" criada **em produção**, ACs (a), (c), (d), (e) — **dobra para `900-32` (Onda 3)**, que
+> já absorveu a AC (b) pelo mesmo motivo (entitlement). Não recebe número novo: um roteiro de
+> aceitação partido em dois números, com a metade (b) já em `900-32`, é a receita para as duas
+> metades divergirem. `900-32` passa a carregar o roteiro **inteiro**, e a `Dep: 900-22` vira
+> dependência de `900-32`. Nada aqui é implementável na Onda 2.
 **Objetivo:** o teste que **prova** que o multi-tenant funciona. Esta org fica permanentemente como canário de regressão.
 **AC (o teste da §7.4, na parte satisfazível nesta onda):**
 - Org "Trifold Sandbox" criada em produção via `/platform/orgs/new`, **sem plano** (a Onda 2 não tem `plans` — ver 900-21/900-22).
@@ -950,6 +966,13 @@ A razão é que este epic **exige** expand → migrate → contract (NFR-1). Fat
 **Dep:** 900-28, 900-22 · **Est:** M · **Executor:** @dev
 
 #### 900-32 — Trifold no plano `completo-interno` + verificação de NFR-2
+
+> **[@po 2026-08-29] Esta story herda o roteiro de aceitação inteiro da antiga `900-25`** (org
+> "Trifold Sandbox" em produção: (a) admin recebe convite e loga · (c) lead cai no stage `novo`
+> da própria org · (d) nenhuma query retorna dado da Trifold · (e) a Trifold não vê nada dessa
+> org), além da AC (b) que já estava aqui. Motivo: o número `900-25` foi para a prova de duas
+> empresas no ambiente de teste (Passo 6 da Onda 2 — ver a nota em §857), e o roteiro de produção
+> dependia de `900-22`, que não existe como story. **`Dep` desta story passa a incluir `900-22`.**
 **Objetivo:** provar que a camada está correta pelo melhor teste de regressão que existe: se a Trifold não perceber nada, está certo.
 **AC:**
 - Trifold recebe `completo-interno`; nenhum `if (orgId === TRIFOLD)` no código (grep de verificação).

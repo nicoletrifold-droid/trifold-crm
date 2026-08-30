@@ -72,6 +72,8 @@ contra uma `main` velha.
 
 ---
 
+---
+
 ### [TEST-002] 🟡 O `projetar()` dos fakes de cron desliga a projeção quando `org_id` divide a string com um embed
 
 **Adicionado em:** 2026-08-29 · **Origem:** `@qa` na 2ª rodada da Story `900-23` — **sexta instância** da classe "fake cego ao `select`", achada depois de fechar as cinco que a story nomeia.
@@ -143,6 +145,8 @@ sozinha é a mais fraca das três e não deve ser escolhida por ser a mais barat
 
 ---
 
+---
+
 **⏳ RESOLVIDO EM CÓDIGO pela `900-24` (migration `247`), aguardando PRODUÇÃO para fechar.**
 Escolha: variante de **(a)**, não (b). O `CHECK` novo não enumera grafias — casa a ESTRUTURA do
 identificador (`phone[^[:alnum:]]{0,2}number[^[:alnum:]]{0,2}id`, `~*`) contra o texto serializado
@@ -201,6 +205,9 @@ que já implementa `resultadoSingular()` fiel (`data` **e** `error.code`, para `
 A migração é mecânica; o risco é o de sempre com teste alheio — alguma asserção existente pode
 estar apoiada na mentira do molde, e é justamente isso que a migração revela.
 ---
+
+---
+
 
 ### [REL-001] 🟡 `whatsapp_config.status` não tem `CHECK` em produção — `'Active'` evade os índices parciais
 
@@ -1313,6 +1320,51 @@ decisão novo, e por isso não entrou aqui.
 ---
 
 ## Concluído
+
+### ✅ [TEST-004] O molde de fake do Supabase mentia em `.maybeSingle()`/`.single()`
+
+**Aberto em:** 2026-08-29 (condição de GO do `@po` na `900-24`) · **Fechado em:** 2026-08-30 pela
+Story **`900-25`, AC2 / Task 2** (a dona registrada) — commit "test: os 2 fakes cegos do TEST-004
+migram para o fixture fiel [Story 900-25]".
+
+**Resolução.** As duas cópias do molde foram migradas para `criarFakeSupabase` de
+`packages/web/src/lib/tenancy/__fixtures__/fake-supabase-postgrest.ts`, que espelha `data` **e**
+`error`:
+
+- `packages/web/src/lib/tenancy/admin-invite.test.ts` — os **dois** terminais (`.single()` e
+  `.maybeSingle()`);
+- `packages/web/src/app/api/platform/orgs/[id]/resend-admin-invite/route.test.ts` — o terminal
+  único (`.maybeSingle()`; esse arquivo não tem `.single()`).
+
+Régua de fechamento, casando as **duas** formas em que a cegueira estava escrita (`linhas[0]` num
+arquivo, `selecionadas()[0]` no outro — a correção D8 do parecer da `900-25`):
+`grep -nE "\[0\] \?\? null" <os 2 arquivos>` → **0 ocorrências** (controle de vivacidade: a
+mesma régua contra os blobs de `origin/main` dá **2** e **1**). Contagem de testes idêntica antes e
+depois: **33 + 15 = 48**, verdes nos dois lados.
+
+**O que a migração revelou (o risco que o próprio item previa).** Um vermelho, e o diagnóstico foi
+do *setup*, não da asserção: o hook de erro de escrita do molde só era consultado nas cadeias
+`update(...).eq(...)` — `insert(...).select().single()` tinha uma porta própria que o ignorava.
+Com um fake que trata as duas escritas igual, o predicado `"auth_id" in payload` passou a casar
+**também** com o `insert` de `{ …, auth_id: null }`, e o teste do vínculo mediu o ramo errado. O
+fixture ganhou `erroPorEscrita(tabela, payload, operacao)` para que "só o UPDATE falha" volte a ser
+dizível; nenhuma asserção foi reescrita.
+
+**Correção colateral, com o caso na mão.** O fixture declarava fora de escopo a diferença entre
+`.single()` e `.maybeSingle()` em **0 linhas**, sob a premissa "nenhum dos 3 resolvers da `900-24`
+usa esses terminais". A migração invalidou a premissa (os dois arquivos são consumidores de
+`.maybeSingle()`, e um deles exercita 0 linhas em "org inexistente → 404"). Medido em
+`@supabase/postgrest-js@2.101.1` (`dist/index.cjs:129-141`): `.maybeSingle()` com 0 linhas devolve
+`{ data: null, error: null, status: 200 }`. Nasceu `resultadoMaybeSingle()`; `resultadoSingular()`
+não mudou.
+
+**Onde vive o carrasco (medido, para não virar promessa).** Mutando `resultadoSingular` de volta
+para a mentira do molde: os 2 arquivos migrados seguem **48/48 verdes** — nenhum deles exercita
+consulta singular com 2+ linhas —, e quem fica **vermelho é `webhook-org.test.ts` (5 testes)**.
+Ou seja: o valor deste item nunca foi "estes 2 testes passam a reprovar o bug", e sim "some a
+fonte de cópia da mentira, e o carrasco passa a morar num lugar só".
+
+---
 
 ### [INFRA] Chaves Supabase legacy no .env.local
 
