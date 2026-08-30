@@ -306,6 +306,22 @@ describe("Story 900-24 — telegram: dual-run", () => {
     expect(serializado).not.toContain("Maria")
   })
 
+  /**
+   * Gate `@qa`, 11º instrumento cego — mesma ressalva do `landing-page`: `resolveSoleOrg` não
+   * recebe dado do payload, então o que se afirma é aridade e identidade do argumento. O
+   * `chat_id`/`from` do Telegram NÃO pode virar argumento de resolução de org.
+   */
+  it("`resolveSoleOrg` é chamado com exatamente 1 argumento (o client), sem chat_id", async () => {
+    process.env.WEBHOOK_ORG_ROUTING = "identifier"
+    resolveSoleOrgMock.mockImplementation(async () => ({ status: "resolvida", orgId: "org-B" }))
+
+    await POST(post())
+
+    expect(resolveSoleOrgMock).toHaveBeenCalledTimes(1)
+    expect(resolveSoleOrgMock.mock.calls[0]!).toHaveLength(1)
+    expect(resolveSoleOrgMock.mock.calls[0]![0]).toEqual(expect.objectContaining({ from: expect.any(Function) }))
+  })
+
   /** Gate `@qa`, concern 2 — carrasco do `await` no CALL SITE (escrita completa em macrotask). */
   it("a escrita de `WEBHOOK_ORG_UNRESOLVED` COMPLETA antes de a rota responder", async () => {
     process.env.WEBHOOK_ORG_ROUTING = "identifier"

@@ -508,6 +508,39 @@ describe("Story 900-24 — dual-run em process-lead", () => {
     }
   })
 
+  /**
+   * Gate `@qa`, 11º instrumento cego — o ARGUMENTO passado ao resolver. Trocar `pageId` por
+   * `leadgenId` (identificador do LEAD, não da Página) ficava VERDE: o `vi.mock` que planta o
+   * resolver apaga os argumentos da observação, e `webhook-org.test.ts` não sabe que existe rota.
+   * `entry.id` é `"page-1"` e o `leadgenId` é `"111"` — valores distintos de propósito, para a
+   * troca ser detectável.
+   */
+  it("o resolver recebe o `page_id` de `entry` — nunca o `leadgen_id` do lead", async () => {
+    process.env.WEBHOOK_ORG_ROUTING = "identifier"
+    resolveOrgByMetaPageMock.mockImplementation(async () => ({
+      status: "resolvida",
+      orgId: "org-B",
+    }))
+
+    await processMetaLead("111", value, entry, "log-1")
+
+    expect(resolveOrgByMetaPageMock).toHaveBeenCalledTimes(1)
+    expect(resolveOrgByMetaPageMock).toHaveBeenCalledWith(expect.anything(), "page-1")
+  })
+
+  it("em `both` o resolver TAMBÉM recebe o `page_id` certo", async () => {
+    process.env.WEBHOOK_ORG_ROUTING = "both"
+    resolveOrgByMetaPageMock.mockImplementation(async () => ({
+      status: "resolvida",
+      orgId: "org-B",
+    }))
+
+    await processMetaLead("111", value, entry, "log-1")
+
+    expect(resolveOrgByMetaPageMock).toHaveBeenCalledTimes(1)
+    expect(resolveOrgByMetaPageMock).toHaveBeenCalledWith(expect.anything(), "page-1")
+  })
+
   /** Gate `@qa`, concern 2 — carrasco do `await` no CALL SITE (escrita completa em macrotask). */
   it("a escrita de `WEBHOOK_ORG_UNRESOLVED` COMPLETA antes de `processMetaLead` resolver", async () => {
     process.env.WEBHOOK_ORG_ROUTING = "both"

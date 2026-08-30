@@ -1187,6 +1187,69 @@ describe("Story 900-24 — dual-run: em `both`, quem decide é o legado", () => 
   })
 
   /**
+   * Gate `@qa`, 11º instrumento cego — **o ARGUMENTO passado ao resolver nunca era afirmado**.
+   *
+   * O mesmo `vi.mock` que viabiliza a mutação #8 **substitui** o resolver, e isso apaga os
+   * argumentos da observação; `webhook-org.test.ts` testa o resolver isolado e não sabe que existe
+   * rota. A classe mora na costura entre as duas suítes: trocar `phoneNumberId` por `fromRaw`
+   * (o telefone do LEAD) ficava **VERDE**, porque nenhuma asserção olhava o que a rota passou.
+   *
+   * Não é forward-gate. Em `identifier` — o modo do `trifold-crm-dev` desde o dia 1, e o modo onde
+   * a prova das duas empresas vai rodar — a chave errada dá `nenhuma_correspondencia` e **toda
+   * mensagem é descartada com 200**: o defeito desta story, uma camada acima, no ambiente onde a
+   * fatia seguinte tentaria provar que multi-tenant funciona.
+   */
+  it("o resolver recebe o `phone_number_id` do payload — nunca o telefone do lead", async () => {
+    process.env.WEBHOOK_ORG_ROUTING = "identifier"
+    plantarDivergencia()
+    const { POST } = await import("../route")
+
+    await POST(
+      signedRequest(
+        buildPayloadComTelefone({
+          from: "+5544999689453",
+          wamid: "wamid.ARG-1",
+          text: "oi",
+          phoneNumberId: "PNID-DO-WABA",
+        }),
+        APP_SECRET,
+      ),
+    )
+    await flushAsync()
+
+    expect(resolveOrgByWhatsAppPhoneMock).toHaveBeenCalledTimes(1)
+    expect(resolveOrgByWhatsAppPhoneMock).toHaveBeenCalledWith(
+      expect.anything(),
+      "PNID-DO-WABA",
+    )
+  })
+
+  it("em `both` o resolver TAMBÉM recebe o identificador certo (o dual-run audita o mesmo eixo)", async () => {
+    process.env.WEBHOOK_ORG_ROUTING = "both"
+    plantarDivergencia()
+    const { POST } = await import("../route")
+
+    await POST(
+      signedRequest(
+        buildPayloadComTelefone({
+          from: "+5544999689454",
+          wamid: "wamid.ARG-2",
+          text: "oi",
+          phoneNumberId: "PNID-DO-WABA",
+        }),
+        APP_SECRET,
+      ),
+    )
+    await flushAsync()
+
+    expect(resolveOrgByWhatsAppPhoneMock).toHaveBeenCalledTimes(1)
+    expect(resolveOrgByWhatsAppPhoneMock).toHaveBeenCalledWith(
+      expect.anything(),
+      "PNID-DO-WABA",
+    )
+  })
+
+  /**
    * Gate `@qa`, concern 2 — carrasco do `await` no CALL SITE (a mutação #5 media o await INTERNO).
    * A escrita do duplo completa num macrotask; se a rota não aguardar, ela responde antes e
    * `escritasCompletadas` está vazio aqui — que é exatamente a lambda congelando no `return`.

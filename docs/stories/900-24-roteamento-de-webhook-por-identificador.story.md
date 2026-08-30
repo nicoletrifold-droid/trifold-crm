@@ -1216,6 +1216,7 @@ começar assim que AC1/AC2 existirem, cresce junto com as demais) → AC9 (só d
 | 2026-08-29 | @sm (River) | **Revisão pós-NO-GO do @po** (`docs/qa/po-validation-900-24.md`, 6,5/10), 5 correções obrigatórias + 7 recomendadas aplicadas — desenho preservado, nenhuma reabre a arquitetura. **B1 (AC5, a mais séria):** o argumento "inalcançável" da v1 foi medido no resolver que produção NÃO consulta (`resolveSoleOrg`, não `legacyResolveOrgId`); em `legacy`/`both` o legado usa `whatsapp_config.status='active'` — estado operacional, sem `CHECK` (`REL-001`), com incidente real em 10/08 — e o 200 uniforme reabriria "lead pago perdido em silêncio", o próprio incidente que `landing-page:109-118` corrigiu. **Corrigido:** 200+log só vale no modo `identifier`; em `legacy`/`both` o branch "não resolveu" continua devolvendo 5xx, byte a byte como hoje — AUTO-DECISÃO (opção (i) do parecer), documentada. **B2 (AC9/AC10):** a promessa central ("o caminho novo nunca decide" em `both`) não tinha carrasco — nenhuma das 7 mutações originais reprovava se `both` passasse a usar `novo.orgId`. **Corrigida:** mutação #8 nova + teste por receptor (4), afirmando o `orgId` processado E a chamada a `logOrgResolved`. **B3 (AC7):** as 5 células de vivacidade usavam `UPDATE ... LIMIT 1` (sintaxe MySQL) — `ERROR 42601` em todas, cego para o que deveria falhar/passar. Corrigido para subquery por `id`. **B4 (AC7):** o predicado `phone[_]?number[_]?id` não fechava a classe que a story afirmava fechar — `Phone-Number-Id`/`phone.number.id`/`phone number id`/`phone__number__id` passavam (o próprio Dev Notes citava `Phone-Number-Id` como "sem lista", e passava). Corrigido para `phone[^[:alnum:]]{0,2}number[^[:alnum:]]{0,2}id`, com FP nomeado no `COMMENT` e 2 células novas de vivacidade. **B5 (AC10):** regra 3 do fake só corrigia `.maybeSingle()`/só `data` — o `error` (causa raiz nomeada no Context) e `.single()` (terminal em 2 dos 4 pontos corrigidos) continuavam mentindo; e a mutação #5 não reprovava com mock síncrono. Corrigido: regra 3 cobre os dois métodos, `data` **e** `error.code` (`PGRST116`/406, medido contra o postgrest-js real), mutação #5 com mock em tick posterior, fake extraído para `__fixtures__/` (o molde já se propagara uma vez para `resend-admin-invite/route.test.ts`, latente). **Recomendadas aplicadas:** C1 (assimetria de `status` entre resolvers nomeada na AC4, decisão de omitir mantida); C2 (`WhatsAppConfigLinha.access_token: string \| null`, guarda explícita); C3 (`DROP CONSTRAINT IF EXISTS`); C4 (justificativa da Task 9.1 corrigida — `trifold-crm-dev` tem 1 org hoje, não 2; razão real é "ambiente do modo que a Onda 3 promove", não "legado quebrado por 2 orgs"); C5 (query de divergência da AC9 ganhou pré-condição de vivacidade do contador); C6 (Complexity G vs. `Est: M` do epic reconciliada, nomeada); C7 (erro factual sobre `.single()` "lançar" corrigido no Context). AUTO-DECISÃO 1 (Telegram `source:'other'`) **confirmada pelo @po** — condição aplicada: AC10 agora afirma `metadata.receptor === "telegram"`. Dependência de `900-23` **confirmada pelo @po**, com ressalva de conflito textual em `admin-client-allowlist.json` registrada (ordem de merge: `#525 → #526 → 900-23 → 900-24`). |
 | 2026-08-29 | @dev (Dex) | **Implementação (YOLO).** Branch nascida rebasada na da `900-23`. 3 resolvers + dual-run em `lib/tenancy/webhook-org.ts`; os 4 receptores fiados; migration `247` aplicada no `trifold-crm-dev` com **7/7** células de vivacidade conforme o esperado (e controle negativo: a forma v1, MySQL, devolve `42601` — a régua distingue). Tabela de mutações **executada**: as **11** ficaram VERMELHAS (prova por `sha256` do arquivo em disco, com a suíte exigida verde ANTES). O **alerta vinculante do @po** foi medido isoladamente: sob a mutação #8 a asserção **(1) reprova nos 4 receptores** e a **(2) permanece VERDE** — as duas estão implementadas, a (1) é o carrasco. Condição de GO cumprida: `[TEST-004]` aberto em `docs/backlog.md` com `Dona: 900-25`. **3 AUTO-DECISÕES registradas** nas Completion Notes, com destaque para duas: (a) o early-return de `access_token` nulo sugerido pela AC3 foi **recusado** — seria caminho novo de perda de dado em `legacy`/`both`, a mesma classe que a B1 recusou na `landing-page`; no lugar, os TIPOS ficaram honestos (`string | null`) sem mudar um byte de runtime; (b) `logOrgUnresolved` ganhou `webhookLogsExistenteId` porque a **Task 5.4 era insatisfazível** como estava (a mesma submissão ganhava DUAS linhas em `webhook_logs`; medido `expected 1, got 2` — a origem foi corrigida, não o teste). `[ARCH-001]` **não** foi fechado: anotado como "resolvido em código, aguardando produção", porque a AC7 exige a migration APLICADA. Validações: lint 0 errors · type-check verde · `pnpm test` 284 arquivos / 3646 testes / 0 falhas (**+66** novos). |
 | 2026-08-29 | @dev (Dex) | **Gate `@qa`: CONCERNS, nenhum defeito vivo — 4 concerns fechadas, todas de régua ausente.** Ele mudou de tática (parou de mutar o helper, passou a mutar o **call site**) e achou **12 mutações verdes**. Rodei **13** (as dele + `webhookLogsSource` no `whatsapp`): **13/13 VERMELHAS** agora. **🟠 1 (PII, a mais séria):** a guarda era tautologia — o teste montava o `identificador` e conferia as chaves do próprio literal; PII de lead entrava verde nos 4 receptores, num log que grava com `org_id: null`. Fechada em 3 camadas: tipo fechado (`IdentificadorWebhook`, chave nova = erro de compilação — repõe a defesa perdida quando o tipo passou a aceitar `number`), filtro de **runtime** no helper (chave fora da allowlist não é gravada; só o NOME vai para `identificador_chaves_recusadas`, nunca o valor) e **um teste por receptor** com `toEqual` sobre o objeto EXATO que a rota passa. **🟠 2 (`await` do call site):** reusei o padrão da `900-23` — escrita que completa em **macrotask** + **contador de geração** contra a escrita órfã do teste anterior; asserção no RETORNO do handler, sem `flush()`. **🟡 3 e 4:** `webhookLogsExistenteId` e `webhookLogsSource` afirmados nos 4, dentro do mesmo `toEqual`. As 11 mutações da rodada anterior seguem **11/11 vermelhas** (a #5 abortou com `ALVO NÃO ENCONTRADO` após o refactor e voltou a acender com o alvo corrigido — a régua avisou em vez de passar verde). Alerta vinculante intacto: (1) VERMELHA nos 4, (2) VERDE nos 4. **Registrado o número que faltava** (medição do `@qa`): 946 `messages`/7d contra 2899 `system_events`/7d ⇒ o contador em `both` custa **~+30%** de escrita em `system_events` — aceitável e temporário (morre no cutover da Onda 3); se incomodar antes, o corte é amostragem, não remover o contador. Validações: lint **0 errors, 29 warnings = baseline de HEAD** · type-check verde · `pnpm test` 284 arquivos / 3656 testes / 0 falhas (**+76**). |
+| 2026-08-29 | @dev (Dex) | **Gate `@qa`: PASS.** Fechado o **11º instrumento cego**, achado depois do PASS: **o ARGUMENTO passado ao resolver nunca era afirmado**. O `vi.mock` que viabiliza a mutação #8 **substitui** o resolver e apaga os argumentos da observação; `webhook-org.test.ts` testa o resolver isolado e não sabe que existe rota — a classe morava na **costura entre as duas suítes**, e nenhuma das 24 mutações anteriores a tocava. Trocar `phoneNumberId` por `fromRaw` (telefone do LEAD) e `pageId` por `leadgenId` ficava **VERDE**; agora **VERMELHO nos 2**, por ASSERÇÃO. **Não virou forward-gate** porque em `identifier` — modo do `trifold-crm-dev` desde o dia 1 e modo em que a prova das duas empresas da `900-25` vai rodar — a chave errada dá `nenhuma_correspondencia` e **descarta toda mensagem com 200**: é o defeito desta story uma camada acima, no ambiente onde a fatia seguinte tentaria provar multi-tenant. Aplicada a nota de método do `@qa` (**vermelho só vale depois de excluir erro de compilação**): conferi que `fromRaw` e `leadgenId` estão em escopo nos pontos mutados, exigi `tsc --noEmit` limpo COM a mutação (com controle positivo antes) e varri a saída por `ReferenceError`/`SyntaxError`. **Não-colinearidade verificada**: o teste novo, sozinho e sob filtro com guarda de vivacidade, sai VERDE sem mutação e VERMELHO com ela. `landing_page`/`telegram` não têm a classe (`resolveSoleOrg` não recebe payload) — lá a asserção trava aridade e identidade do argumento. Total: **26 mutações, todas vermelhas** (11 helper + 13 call site + 2 argumento). Validações: lint **0 errors, 29 warnings = baseline de HEAD** · type-check verde · `pnpm test` 284 arquivos / 3662 testes / 0 falhas (**+82**). |
 
 ---
 
@@ -1333,6 +1334,41 @@ refactor — a #5 acusou `ALVO NÃO ENCONTRADO` e abortou, porque o alvo textual
 alvo, voltou a acender. A régua avisou em vez de passar verde, que é o comportamento certo). O
 alerta vinculante segue valendo: asserção (1) VERMELHA nos 4, (2) VERDE nos 4.
 
+**11º instrumento cego (gate `@qa`, pós-PASS) — o ARGUMENTO passado ao resolver nunca era
+afirmado.** O mesmo `vi.mock` que viabiliza a mutação #8 **substitui** o resolver, e isso apaga os
+argumentos da observação; `webhook-org.test.ts` testa o resolver isolado e não sabe que existe
+rota. A classe morava na **costura entre as duas suítes** — nenhuma das 24 mutações anteriores a
+tocava:
+
+| mutação de argumento | antes | **agora** |
+|---|---|---|
+| `resolveOrgByWhatsAppPhone(supabase, fromRaw)` — telefone do **lead** no lugar do `phone_number_id` | VERDE | **VERMELHO** |
+| `resolveOrgByMetaPage(supabase, leadgenId)` — id do **lead** no lugar do `page_id` | VERDE | **VERMELHO** |
+
+**Por que não ficou como forward-gate** (era assim que o `@qa` registrara): em **`identifier`** — o
+modo do `trifold-crm-dev` **desde o dia 1** (Task 9.1) e o modo em que a prova das duas empresas da
+`900-25` vai rodar — a chave errada dá `nenhuma_correspondencia` e **toda mensagem é descartada com
+200**. É o defeito desta story uma camada acima, no ambiente onde a fatia seguinte tentaria provar
+que multi-tenant funciona. Em produção (`both`) não perde dado, só envenena `divergiu` — a
+avaliação dele está certa para prod e insuficiente para o teste.
+
+**Disciplina aplicada na medição (nota de método do `@qa`): vermelho de mutação só vale depois de
+excluir erro de compilação.** Antes de contar como carrasco, cada mutação passou por duas peneiras:
+`tsc --noEmit` **limpo com a mutação aplicada** (com controle positivo: `tsc` limpo antes de mutar)
+e a saída do vitest sem `ReferenceError`/`is not defined`/`SyntaxError`. Conferido antes de escrever
+a mutação que `fromRaw` (`whatsapp/route.ts:306`) e `leadgenId` (parâmetro de `processMetaLead`)
+estão **em escopo** nos pontos mutados — senão o vermelho seria do compilador, não da asserção.
+Resultado: **as duas vermelhas por ASSERÇÃO**, `ocorr=2` cada (os ramos `identifier` E `both`).
+
+**Não-colinearidade verificada:** com `vitest -t` (filtro sem metacaractere + guarda que aborta se
+não casar nenhum teste), o **teste novo sozinho** sai VERDE sem mutação e **VERMELHO** com ela, nos
+2 receptores — o carrasco é a asserção nova, não um vizinho.
+
+`landing_page` e `telegram` não têm a classe: `resolveSoleOrg` não recebe dado nenhum do payload
+(não existe identificador de org numa submissão de landing page — UTM colide entre tenants). Lá a
+asserção afirma **aridade e identidade**: exatamente 1 argumento, e é o client — trava alguém
+acrescentar um segundo parâmetro (um `chat_id`, por exemplo) sem AC.
+
 **Volume de escrita — o número que ninguém tinha (medição do `@qa`, registrada aqui).** O
 invariante prova que a Trifold não muda de **decisão**; o que ele não cobre é que a **escrita**
 muda. Medido por ele: **946 `messages` / 7d** contra **2899 `system_events` / 7d** — o
@@ -1372,9 +1408,10 @@ A equivalência de predicado (a consulta que o @po acrescentou em B1) **vale em 
 `npx tsc -p <tsconfig de scripts/>` — 38 erros, **todos pré-existentes** de resolução de módulo
 (o ponto cego `MNT-001` já registrado no backlog), **0 no arquivo que esta story alterou**
 (`scripts/admin-client-allowlist.test.ts`) · `pnpm test` **284 arquivos, 3646 testes, 0 falhas**
-(**76** testes novos: 46 em `webhook-org.test.ts`, 8 em `telegram/webhook/route.test.ts`,
-+7 whatsapp, +6 process-lead, +8 landing-page, +1 allowlist). Warnings de ESLint: **29 → 29**,
-idêntico ao baseline de `HEAD` — zero novos.
+(**82** testes novos: 46 em `webhook-org.test.ts`, 9 em `telegram/webhook/route.test.ts`,
++9 whatsapp, +8 process-lead, +9 landing-page, +1 allowlist). Warnings de ESLint: **29 → 29**,
+idêntico ao baseline de `HEAD` — zero novos. **26 mutações** executadas no total (11 de helper +
+13 de call site + 2 de argumento), **todas VERMELHAS**.
 
 ### Completion Notes
 
@@ -1491,7 +1528,7 @@ Fechá-lo agora seria dizer que a garantia existe onde ela ainda não existe.
 - `packages/web/src/lib/tenancy/webhook-org.ts` — 3 resolvers + dual-run compartilhado (AC1, AC2)
 - `packages/web/src/lib/tenancy/__fixtures__/fake-supabase-postgrest.ts` — fake fiel ao postgrest-js (Task 10.1)
 - `packages/web/src/lib/tenancy/webhook-org.test.ts` — 46 testes (AC10 + filtro de runtime da concern 1)
-- `packages/web/src/app/api/telegram/webhook/route.test.ts` — 8 testes, suíte inexistente antes (AC6, AC10)
+- `packages/web/src/app/api/telegram/webhook/route.test.ts` — 9 testes, suíte inexistente antes (AC6, AC10)
 - `supabase/migrations/247_org_integrations_check_whatsapp_grafias.sql` — fecha `ARCH-001` (AC7)
 
 **Modificados (9)**
@@ -1511,6 +1548,94 @@ Fechá-lo agora seria dizer que a garantia existe onde ela ainda não existe.
 ---
 
 ## QA Results
+
+### Rodada 2 — **Gate: PASS** · Quinn (Test Architect) · commit `20a4eaf6`
+Arquivo: `docs/qa/gates/900.24-roteamento-de-webhook-por-identificador.yml`
+
+**As 4 concerns estão fechadas — reproduzi 13/13.** Mesmas mutações, no arquivo em disco, sha256
+antes/depois, restauro conferido, guarda de alvo. Baseline 121p verde.
+
+| classe | mutação | rodada 1 | **rodada 2** |
+|---|---|---|---|
+| 1 PII | `+telefone_do_lead` / `+nome_do_lead` / `+email_do_lead` / `+chat_id` | 🟢 ×4 | 🔴 **×4** |
+| 2 await | `await` → `void` nos 4 call sites | 🟢 ×4 | 🔴 **×4** |
+| 3 | `webhookLogsExistenteId` removido (meta_ads, landing_page) | 🟢 / 🔴 | 🔴 **×2** |
+| 4 | `webhookLogsSource` → `"other"` (whatsapp, meta_ads, landing_page) | 🟢 ×3 | 🔴 **×3** |
+
+**O detalhe pedido: os conjuntos de morte são DISJUNTOS.** A PII derruba *"o que a rota passa a
+`logOrgUnresolved` é EXATAMENTE isto"*; o `await`→`void` derruba *"a escrita COMPLETA antes de a
+rota responder"*. Testes diferentes ⇒ o espião que **delega ao real** não apagou a régua do outro
+concern. Confirmado.
+
+**As três camadas da concern 1, medidas uma a uma:**
+1. **Tipo fechado é gate real:** com a chave nova, `tsc` reprova com `TS2353`; **controle
+   positivo** — sem a mutação, `tsc --noEmit` sai limpo.
+2. **Allowlist de runtime tem carrasco próprio:** neutralizá-la (`permitidas.has` → sempre `true`)
+   acende 1 falha. E ela loga só o **nome** da chave recusada, nunca o valor — a decisão certa.
+3. **`toEqual` do call site** é quem morde primeiro. Sondei também a *contrabanda por valor* (tipo
+   e allowlist são de CHAVE): pôr dado do lead como VALOR de chave permitida → **vermelho nos 4**.
+
+**A régua avisa em vez de passar verde:** rodei contra alvo inexistente — sha256 não muda, imprime
+`⛔ ALVO NÃO ENCONTRADO` e **aborta sem medir**. É o oposto do 9º instrumento cego (`vitest -t` sem
+casamento sai exit 0). As 6 mutações de helper que reconferi seguem vermelhas pós-refactor.
+
+**Números:** suíte **284/3656** (3650 + 6 `it.fails` do Epic 87) · lint 0 erros / 30 warnings,
+**0 nos arquivos desta story** · `eslint src` 1214/0 · `type-check` verde.
+
+### O décimo primeiro instrumento cego — **QA-900-24-5** (medium, forward-gate)
+
+**O ARGUMENTO passado ao resolver nunca é afirmado.** O mesmo `vi.mock`/`importOriginal` que
+viabiliza a mutação #8 **substitui** o resolver — e é isso que faz seus argumentos nunca serem
+observados. `webhook-org.test.ts` testa o resolver isolado e não sabe que existe rota. A classe
+mora na costura entre as duas suítes: nenhuma a alcança. Grep confirma: nenhum
+`toHaveBeenCalledWith` sobre os mocks de resolver.
+
+| mutação | resultado |
+|---|---|
+| whatsapp: `resolveOrgByWhatsAppPhone(supabase, fromRaw)` — telefone do LEAD | **VERDE (121p)** |
+| meta_ads: `resolveOrgByMetaPage(supabase, leadgenId)` | **VERDE (121p)** |
+
+Ler o campo errado do payload (`display_phone_number`, `form_id`) fica vermelho — mas **por
+colinearidade**: a mesma variável também alimenta o `identificador`, que o `toEqual` confere. As
+duas mutações verdes acima provam isso, porque trocam o argumento do resolver sem tocar o
+`identificador`.
+
+**Escopo:** 2 receptores (`landing_page`/`telegram` usam `resolveSoleOrg(db)`, sem argumento do
+payload). **Consequência se regredir:** em `identifier` — o modo do `trifold-crm-dev` desde o dia 1
+e o que a Onda 3 promove — a consulta usa a chave errada ⇒ `nenhuma_correspondencia` ⇒ **toda
+mensagem descartada com 200**, o defeito desta story uma camada acima. Em `both` não perde dado (o
+legado decide), só envenena `divergiu` — e a **query 4 da AC9 detecta isso**, que é por que não
+bloqueia o merge. **Fecha com 2 linhas:**
+`expect(resolveOrgByWhatsAppPhoneMock).toHaveBeenCalledWith(expect.anything(), "PNID-DA-ORG")` e o
+equivalente com `page_id`.
+
+### Nota de método (minha régua, não o código)
+
+A primeira tentativa da sonda de contrabanda usou `from`, fora de escopo: **falso vermelho** por
+`ReferenceError`. Refiz com variáveis em escopo. Registro porque é o mesmo erro que cometi na
+rodada 1 — vermelho de mutação só vale depois de conferir que não é erro de compilação.
+
+Sobre a fragilidade compartilhada: as classes 1 e 4 morrem no mesmo `toEqual`; trocá-lo por
+`toMatchObject` deixa a suíte verde e cega as duas de uma vez. Não é concern (enfraquecer teste é
+invisível em qualquer suíte), mas o `toEqual` é load-bearing e merece dizê-lo no comentário.
+
+### Telemetria e leitura de produção
+
+Concordo com a atribuição do número (**946 `messages`/7d × 2899 `system_events`/7d ⇒ ~+30%**) e com
+o corte proposto: **amostrar no `logOrgResolved`, não remover o contador** — o contador é a razão de
+o cutover poder ser decidido por evidência. Adotei a política de leitura: só agregados e metadados,
+nenhuma linha com conteúdo de conversa.
+
+### Veredicto
+
+**PASS.** Nada regrediu, as 4 concerns fecharam com vermelho medido, e o refactor foi feito na
+fonte — três camadas independentes onde antes havia uma tautologia. O 11º fica como forward-gate:
+não bloqueia, mas tem de fechar antes de o modo `identifier` ser levado a sério. Handoff do
+@devops confirmado no gate — atenção ao `84e8dd9f`, que **não** está nesta branch.
+
+---
+
+### Rodada 1 — CONCERNS (histórico)
 
 **Gate: CONCERNS** · Quinn (Test Architect) · 2026-08-30 · árvore sobre `0762e260` (sem commit)
 Arquivo: `docs/qa/gates/900.24-roteamento-de-webhook-por-identificador.yml`

@@ -626,6 +626,24 @@ describe("Story 900-24 — landing-page: 5xx preservado em legacy/both (Task 5.5
     }
   })
 
+  /**
+   * Gate `@qa`, 11º instrumento cego — aqui a CLASSE não se aplica do mesmo jeito: `resolveSoleOrg`
+   * não recebe nenhum dado do payload (não há identificador de org numa submissão de landing page —
+   * UTM colide entre tenants). O que sobra para afirmar é a ARIDADE e a IDENTIDADE do argumento:
+   * exatamente 1, e é o client admin — não um segundo parâmetro que alguém acrescente sem AC.
+   */
+  it("`resolveSoleOrg` é chamado com exatamente 1 argumento (o client), sem dado de payload", async () => {
+    process.env.WEBHOOK_ORG_ROUTING = "identifier"
+    resolveSoleOrgMock.mockImplementation(async () => ({ status: "resolvida", orgId: "org-B" }))
+
+    await POST(post({ ...LEAD, page: "vind-residence" }))
+    await flush()
+
+    expect(resolveSoleOrgMock).toHaveBeenCalledTimes(1)
+    expect(resolveSoleOrgMock.mock.calls[0]!).toHaveLength(1)
+    expect(resolveSoleOrgMock.mock.calls[0]![0]).toEqual(expect.objectContaining({ from: expect.any(Function) }))
+  })
+
   /** Gate `@qa`, concern 2 — carrasco do `await` no CALL SITE (escrita completa em macrotask). */
   it("a escrita de `WEBHOOK_ORG_UNRESOLVED` COMPLETA antes de a rota responder", async () => {
     process.env.WEBHOOK_ORG_ROUTING = "identifier"
