@@ -92,9 +92,42 @@ DROP POLICY IF EXISTS "org_integrations_select" ON org_integrations;
 CREATE POLICY "org_integrations_select" ON org_integrations
   FOR SELECT USING (org_id = public.user_org_id());
 
+-- Escrita: `has_capability('configuracoes.integracoes_gerenciar')`, NÃO `is_admin()`.
+--
+-- Medido em produção em 2026-08-29, antes de esta migration ter sido aplicada em ambiente
+-- nenhum: **58 policies em 45 tabelas já usam `has_capability()` e ZERO usam `is_admin()`** —
+-- a fase F4 (migration `229_f4_god_gate_fatiado.sql`) já tirou o papel de dentro das policies
+-- do schema inteiro. Esta linha, com `is_admin()`, reintroduziria o padrão que a F4 eliminou,
+-- e justamente na tabela que vai guardar a configuração de integração de cada empresa.
+--
+-- A tabela IRMÃ — `whatsapp_config`, que guarda de fato o `access_token` — usa hoje, verbatim:
+--     whatsapp_config_manage  FOR ALL USING (org_id = user_org_id()
+--                                            AND has_capability('configuracoes.integracoes_gerenciar'))
+-- (`229_f4_god_gate_fatiado.sql:250-252`). `org_integrations` passa a ser a mesma forma, com a
+-- mesma capability — cuja descrição na fonte única (`packages/web/src/lib/capabilities.ts`) é
+-- literalmente "Conectar/desconectar Google Calendar e demais integrações", `enforced: true`.
+--
+-- O QUE `is_admin()` DEIXAVA PASSAR, medido nos dois sentidos (fixture de 3 usuários,
+-- `BEGIN … ROLLBACK` no `trifold-crm-dev`):
+--   • admin com a capability REVOGADA por `user_permission_exceptions` → `is_admin()` = true,
+--     `has_capability()` = false: sob a policy antiga ele ESCREVEU (1 linha); sob esta, 0.
+--     A revogação feita no painel era silenciosamente ignorada pelo banco.
+--   • não-admin com a capability CONCEDIDA por exceção → `is_admin()` = false,
+--     `has_capability()` = true: sob a policy antiga o grant era ignorado (0 linhas); sob esta,
+--     ele escreve (1 linha).
+--   • controle positivo — admin sem exceção nenhuma escreve nos DOIS casos (1 linha), ou seja,
+--     a troca discrimina exatamente na exceção e não é um aperto cego.
+-- Produção tem 5 linhas em `user_permission_exceptions` hoje, 2 delas no módulo
+-- `configuracoes` — o estado não é hipotético, é alcançável pelo painel.
+--
+-- A policy de SELECT continua escopada só por org, DE PROPÓSITO: é o mesmo desenho de
+-- `whatsapp_config_select`, na tabela que guarda o token. Aqui só há identificador público
+-- (`secret_ref` nasce NULO, ver comentário da coluna). Estreitar a leitura seria mudança de
+-- comportamento fora desta story — se for desejada, é decisão da story do painel (Onda 7).
 DROP POLICY IF EXISTS "org_integrations_manage" ON org_integrations;
 CREATE POLICY "org_integrations_manage" ON org_integrations
-  FOR ALL USING (org_id = public.user_org_id() AND public.is_admin());
+  FOR ALL USING (org_id = public.user_org_id()
+                 AND public.has_capability('configuracoes.integracoes_gerenciar'));
 
 DROP TRIGGER IF EXISTS set_updated_at ON org_integrations;
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON org_integrations

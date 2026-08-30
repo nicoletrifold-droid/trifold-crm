@@ -505,7 +505,8 @@ Passos 4 e 5 não têm uma garantia de banco para se apoiar, só uma convenção
     FOR SELECT USING (org_id = public.user_org_id());
 
   CREATE POLICY "org_integrations_manage" ON org_integrations
-    FOR ALL USING (org_id = public.user_org_id() AND public.is_admin());
+    FOR ALL USING (org_id = public.user_org_id()
+                   AND public.has_capability('configuracoes.integracoes_gerenciar'));
 
   CREATE TRIGGER set_updated_at BEFORE UPDATE ON org_integrations
     FOR EACH ROW EXECUTE FUNCTION update_updated_at();
@@ -518,9 +519,16 @@ Passos 4 e 5 não têm uma garantia de banco para se apoiar, só uma convenção
     com `config = '{}'`.
   - **RLS ligada, com policy de escrita** (regra R1 do gate de tenancy: RLS desabilitada em tabela
     com `org_id` é FAIL) — mesmo padrão de `whatsapp_config` (`whatsapp_config_select`/
-    `whatsapp_config_manage`), usando `is_admin()` (nome do ADR-005) em vez de `user_role() =
-    'admin'` (nome usado por `whatsapp_config`) — as duas funções existem no schema
-    (`047_roles_permissions.sql`); esta tabela é nova, então segue o nome que o ADR já documentou.
+    `whatsapp_config_manage`), **com a mesma capability que a tabela irmã usa hoje**:
+    `has_capability('configuracoes.integracoes_gerenciar')`.
+    *[@dev 2026-08-29 — correção de fato, achado do CodeRabbit no PR #526. A redação anterior dizia
+    "usando `is_admin()` (nome do ADR-005) em vez de `user_role() = 'admin'` (nome usado por
+    `whatsapp_config`)". Isso estava **errado por medição**: eu citei a migration `004`, que é
+    **superada** pela `229_f4_god_gate_fatiado.sql:250-252`. O `whatsapp_config` de hoje NÃO usa
+    `user_role() = 'admin'` — usa `has_capability('configuracoes.integracoes_gerenciar')`. Medido em
+    produção: **58 policies em 45 tabelas usam `has_capability()`, ZERO usam `is_admin()`**. A forma
+    escrita aqui reintroduzia, na tabela de integrações, o padrão que a fase F4 já tinha eliminado do
+    schema inteiro. Ver Dev Agent Record §5 para as duas direções medidas.]*
   - **R3 do gate de tenancy** (tabela nova sem `org_id NOT NULL`): satisfeito, `org_id NOT NULL`.
   - **Trade-off aceito, nomeado:** `provider`/`status` são `CHECK IN (...)`, não uma tabela de
     lookup. Acrescentar um provider novo (Onda 7) exige migration nova — mesmo trade-off que
@@ -977,6 +985,8 @@ JSON estar certa.
 | 2026-08-29 | @dev (Dex) | **Implementação.** As 6 ACs cumpridas, cada uma com mutação executada e vermelho medido (M1/M2/M3 na allowlist; 23505 nos dois índices parciais; 23505/23514 nas 4 invariantes de `org_integrations`; RLS com fixture de duas orgs). **R1 aplicada** — a catraca do ESLint virou asserção dentro de `pnpm test` (subprocesso `--format=json` filtrado por `ruleId`, `cwd: packages/web`), com célula de vivacidade dos dois lados via `--stdin-filename`; `npx eslint src` sozinho sai `exit=0`, remedido por mim. **R2 aplicada pela opção (a)** — `PERMITIDOS` exportado e o JSON resolvido por `import.meta.url`; import da raiz saía `ENOENT` e agora devolve `242`. **R3 aplicada** — célula da AC6 em `BEGIN … ROLLBACK` com `coalesce(waba_id,'')`; provado por sha1 que a célula acende e que o `ROLLBACK` desfaz inclusive o `updated_at` do trigger. **Ressalvas do @po fechadas:** Regra 3 passou a iterar entradas (exige o campo, não só valida quem o tem); Context §2 corrigido de 5 para **6** providers com `dataset_id` em `meta_capi`; citação do plano B corrigida (`scripts/lib/management-api.ts` só existe no PR #525 — o transporte em `main` é o `runSql` inline de `reset-tenancy-testdb.ts:252`, com `splitStatements` em `:268`). **Duas divergências medidas e registradas, não normalizadas:** (1) o `trifold-crm-dev` não tem org `trifold` nem linha de `whatsapp_config`, então as consultas da AC6 escritas com `slug='trifold'` casariam zero linhas e a célula não acenderia — corrigido usando a org que existe e provando o zero de produção com controle de vivacidade; (2) a AC1 se contradizia (Regra 2 exige `:linha` em todo motivo de `itera-orgs`, mas prescrevia motivo sem `:linha` para os 5 testes-irmãos) — fechado acrescentando o `arquivo:linha` da implementação ao motivo do teste, em vez de abrir exceção por sufixo `.test.ts`. **Task 2.6 (produção) não executada** — é do `@devops`; produção só foi lida. |
 | 2026-08-29 | @sm (River) | **Achado registrado (condição 2 da Decisão 1 de `docs/qa/po-validation-900-23.md`).** `docs/audits/admin-client-allowlist.json`, entregue por esta story, subiu com **6** motivos em `alvos-onda-2` citando `900-20` (`daily-report`, `nicole-agenda-reconcile`, `nicole-health`, `meta-ads-intelligence`, `meta-capi-dispatch`, `followup`) — número que já é de OUTRO conteúdo do epic (`§798`, resolver de stage/imóvel, dependente de `900-19`). Origem: um palpite hedgeado neste mesmo Dev Notes ("Passo 5 = correção dos defeituosos, provavelmente 900-20") atravessou para o artefato de governança commitado sem checagem de colisão. **Corrigido pela `900-23`** (AC8.1/Task 8.1, commit próprio), que também move as entradas de seção conforme sua própria implementação. Não corrigido aqui — a `900-21b` já está em `Ready for Review` (PR #526) e reabrir para trocar 6 strings de prosa custaria mais do que corrigir na story seguinte, que reescreve essas mesmas linhas de qualquer forma. |
 
+| 2026-08-29 | @dev (Dex) | **Correção pós-gate — achado do CodeRabbit no PR #526.** `org_integrations_manage` deixa de usar `public.is_admin()` e passa a usar `public.has_capability('configuracoes.integracoes_gerenciar')`, mantendo o `org_id = user_org_id()`. **O achado procede, e a causa foi minha:** justifiquei `is_admin()` citando a migration `004`, que é **superada** pela `229_f4_god_gate_fatiado.sql:250-252` — o `whatsapp_config` de hoje já usa a capability. Medido em produção: **58 policies em 45 tabelas usam `has_capability()`, ZERO usam `is_admin()`**; a `246` seria a única. Carrasco novo, com fixture de 3 usuários e as duas policies em `BEGIN … ROLLBACK`: admin com a capability revogada por exceção **escrevia** sob a policy antiga (1 linha) e **não escreve** sob a nova (0); não-admin com a capability concedida por exceção era **ignorado** pela antiga (0) e **escreve** sob a nova (1); admin sem exceção escreve nos dois (controle positivo invariante). Produção tem 5 exceções hoje, 2 no módulo `configuracoes` — estado alcançável pelo painel. **`SELECT` inalterado de propósito** (org-scoped, mesmo desenho de `whatsapp_config_select`, e aqui só há identificador público). **Interação com a `247` (PR #528) medida:** a `247` não toca policy, e reaplicar a `246` depois dela não desfaz a `247` (o `CREATE TABLE IF NOT EXISTS` é pulado) — provado no `trifold-crm-dev`. AC3 corrigida no texto e no bloco SQL, com a correção marcada e datada. **Nota para o `@qa`:** o item 2 do gate ("todas as funções que a 246 referencia existem em produção — `is_admin`, `user_org_id`, `update_updated_at`") continua verdadeiro, mas a `246` não referencia mais `is_admin`; a função a conferir agora é `has_capability`, que existe nos dois ambientes (medido). |
+
 ---
 
 ## Dev Agent Record
@@ -1318,6 +1328,90 @@ Item a item da AC6:
    quando o #525 mergear, o job vai avisar se a `246` não estiver aplicada no teste (ela está).
 4. **A catraca do `gate:tenancy` contra um baseline de produção** — comparação entre schemas
    diferentes; o que vale desta execução é "0 violação em `org_integrations`", não o delta.
+
+### 5. Correção pós-gate — a policy de escrita de `org_integrations` (achado do CodeRabbit, PR #526)
+
+**O achado procede.** Ele não é de estilo: eu justifiquei `is_admin()` citando a migration `004`
+(`whatsapp_config_manage … user_role() = 'admin'`) **sem conferir se aquela policy ainda existe**.
+Não existe. A fase F4 (`229_f4_god_gate_fatiado.sql:250-252`) a reescreveu. Medido em produção,
+read-only, em 2026-08-29:
+
+```
+policies que usam has_capability() : 58   (em 45 tabelas)
+policies que usam is_admin()       :  0
+whatsapp_config_manage  →  FOR ALL USING ((org_id = user_org_id())
+                                          AND has_capability('configuracoes.integracoes_gerenciar'))
+whatsapp_config_select  →  FOR SELECT USING (org_id = user_org_id())
+```
+
+Ou seja: a tabela **irmã**, a que de fato guarda o `access_token`, já usa exatamente a capability
+recomendada. A `246` era a **única** policy do schema a usar `is_admin()`.
+
+**A capability existe e é a certa** — medida na fonte única
+(`packages/web/src/lib/capabilities.ts:223`), não presumida:
+`configuracoes.integracoes_gerenciar` · *"Conectar/desconectar Google Calendar e demais
+integrações"* · `seed: [A]` · `enforced: true`.
+
+**O que `is_admin()` deixava passar.** `is_admin()` é `EXISTS(SELECT 1 FROM users WHERE
+auth_id = auth.uid() AND role = 'admin')` — só o papel. `has_capability()`
+(`243_capability_live_coach.sql:44`) resolve nesta ordem: (1) exceção EXATA do usuário vence tudo,
+**inclusive admin**; (2) admin → exceção do módulo pai, senão `true`; (3) linha explícita do perfil;
+(4) exceção do usuário no pai; (5) linha do pai; ausente = nega.
+
+**Carrasco — fixture de 3 usuários, as duas policies, `BEGIN … ROLLBACK` no `trifold-crm-dev`.**
+Cada usuário tenta um `UPDATE` real; a métrica é linhas efetivamente escritas (RLS pula linha que
+falha o `USING`, não levanta erro):
+
+| policy | quem | `is_admin()` | `has_capability()` | linhas escritas |
+|---|---|:--:|:--:|:--:|
+| `is_admin()` (a que estava na `246`) | admin com a capability **REVOGADA** por exceção | ✅ | ❌ | **1** ← escreveu |
+| `is_admin()` | supervisor com a capability **CONCEDIDA** por exceção | ❌ | ✅ | **0** ← grant ignorado |
+| `is_admin()` | admin sem exceção — **controle positivo** | ✅ | ✅ | 1 |
+| `has_capability()` (corrigida) | admin com a capability **REVOGADA** | ✅ | ❌ | **0** ← revogação respeitada |
+| `has_capability()` | supervisor com a capability **CONCEDIDA** | ❌ | ✅ | **1** ← grant respeitado |
+| `has_capability()` | admin sem exceção — **controle positivo** | ✅ | ✅ | 1 ← invariante |
+
+O controle positivo dá **1 nos dois cenários**: a troca discrimina exatamente na exceção, não é um
+aperto cego. As duas direções acendem — a régua não é cosmética.
+
+**Não é hipotético.** Produção tem **5 linhas** em `user_permission_exceptions` hoje, **2 delas no
+módulo `configuracoes`** (grants para `gerente-comercial` e `gerente-relacionamento`). Medido também
+que **hoje não há divergência real** entre as duas funções em produção (0 usuários), porque a linha
+explícita do perfil (`configuracoes.integracoes_gerenciar = false` para os 10 papéis não-admin) vence
+a exceção do módulo pai. A divergência é **latente e alcançável pelo painel**, não ausente — que é
+precisamente o caso em que uma policy errada passa despercebida.
+
+**Escopo da correção — `SELECT` NÃO muda, de propósito.** Medido: um `broker` sem a capability
+continua lendo as 6 linhas da própria org e **0** de outra org. É o mesmo desenho de
+`whatsapp_config_select`, na tabela que guarda o token; aqui só há identificador público
+(`secret_ref` nasce NULO). Estreitar a leitura seria mudança de comportamento fora de qualquer AC —
+fica registrada como decisão da story do painel (Onda 7), não tomada em silêncio aqui.
+
+**Interação com a migration `247` (PR #528) — medida, não presumida.** A `247` só faz
+`DROP CONSTRAINT` + `ADD CONSTRAINT` de `whatsapp_sem_identificador_proprio`; **não toca policy
+nenhuma**. E reaplicar a `246` corrigida **depois** da `247` não desfaz a `247`, porque o
+`CREATE TABLE IF NOT EXISTS` é pulado inteiro quando a tabela existe. Provado no `trifold-crm-dev`:
+
+```
+antes:  manage = ((org_id = user_org_id()) AND is_admin())
+        check  = CHECK (provider <> 'whatsapp' OR config::text !~* 'phone…number…id')   ← da 247
+depois: manage = ((org_id = user_org_id()) AND has_capability('configuracoes.integracoes_gerenciar'))
+        check  = CHECK (provider <> 'whatsapp' OR config::text !~* 'phone…number…id')   ← INTACTA
+        org_integrations: 6 linhas · organizations: 1  (dados intactos)
+```
+
+E, depois da correção, `org_integrations` e `whatsapp_config` têm predicados **byte a byte
+idênticos** nas duas policies.
+
+**Gate de tenancy — sem impacto, verificado por leitura das regras em vez de execução.** R1 depende
+de `rowsecurity` (inalterado), R3 de `org_id NOT NULL` (inalterado) e R2 exige que a expressão
+aplicada a cada comando **mencione `org_id`** (`scripts/gate-tenancy.ts:389-407`) — a policy
+corrigida continua `FOR ALL` e continua começando por `org_id = user_org_id()`. **Não rodei o gate**
+de propósito: ele reescreve `docs/audits/gate-tenancy-report.json`, que é rastreado, e a árvore de
+trabalho está na branch da `900-24`, que não é minha.
+
+**Janela.** A `246` não estava aplicada em ambiente nenhum quando o achado chegou (`org_integrations`
+dava `PGRST205` em produção), então isto é **uma linha editada**, não uma migration de correção.
 
 ### File List
 

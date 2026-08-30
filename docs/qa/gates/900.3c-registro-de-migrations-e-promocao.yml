@@ -1,0 +1,185 @@
+schema: 1
+story: "900.3c"
+story_title: "Registro de migrations e fluxo de promoção (Fatia B de 2 — Onda 1)"
+gate: PASS
+status_reason: >-
+  Rodada 4. R3-1 fechado, e fechado pela raiz: o `tenancy-gate` voltou intocado e a paginação
+  foi para o job desta story. Provei mais forte do que foi pedido — não é só "o tenancy-gate
+  está igual", é que **o arquivo inteiro da base é prefixo byte a byte do HEAD** (mesmo
+  `sha256` para `origin/main:ci.yml` e para `sed -n '1,194p'` do HEAD), que é a definição
+  operacional de "só acrescentei no fim". A régua de forma nova acende de verdade: exit 1 em
+  `f6c21b21` (hunk `@@ -187,0`), exit 0 no commit atual (`@@ -194,0`), enquanto o `numstat`
+  diz `0` nos dois. E mapeei as três réguas por construção: nenhuma sobra, nenhum buraco entre
+  elas. Achei **uma** fragilidade real na régua nova e a medi — ela calcula a base pelo **tip**
+  da `origin/main` e compara com um hunk que vem do **merge-base**; assim que a `main` mexer no
+  `ci.yml` ela fica **falso-vermelha** sem nada de errado na branch. Correção de uma linha,
+  entregue pronta no handoff. Não bloqueia: hoje tip == merge-base e a régua está correta.
+reviewer: "Quinn (Test Architect)"
+rodadas: 4  # 1ª CONCERNS · 2ª PASS · 3ª CONCERNS (R3-1) · 4ª PASS (3ad76545)
+updated: "2026-08-29T20:10:00Z"
+branch: "story/900-3c-registro-migrations"
+base: "77f225d1"
+commits_revisados: ["9e3a80fa", "4ab6e8aa", "f6c21b21", "3ad76545"]
+pr: 525
+nota_de_escopo: >-
+  Produção não tocada nas quatro rodadas. Ledger do banco de teste conferido intacto ao fim:
+  `reset:263 · reset-falha-conhecida:4 · apply:1` = 268.
+
+# ===========================================================================
+verificacoes_da_rodada_4:
+  1_o_tenancy_gate_voltou_intocado:
+    pedido: "confirmar por conta própria — é o cerne da escolha de remover em vez de declarar"
+    o_que_eu_medi_alem_do_pedido: >-
+      Em vez de comparar só o intervalo do `tenancy-gate`, comparei o arquivo da base contra o
+      **prefixo inteiro** do HEAD:
+      `diff <(git show origin/main:.github/workflows/ci.yml) <(sed -n '1,194p' .github/workflows/ci.yml)`
+      → **sem diferença**, e `sha256` idêntico nos dois
+      (`6963eec1e9931d91ac063af21b612207e28124c153e45b1f66d357b7f6ab77c1`).
+    porque_isso_e_mais_forte: >-
+      Comparar o intervalo do job pressupõe saber onde ele começa e termina — e foi
+      exatamente um erro de localização (um `replace(…, 1)` num bloco que existe duas vezes)
+      que produziu o R3-1. A igualdade de prefixo não depende de eu acertar fronteira nenhuma.
+    localizacao_conferida_pela_marca_interna: >-
+      `const marca` aparece em duas linhas: **185** (`'## Gate de tenancy'`) e **336**
+      (`'## Migrations deste PR'`). O `existentes.data.find` não paginado está na **189**
+      (tenancy-gate, base) e o `github.paginate` na **357** (job desta story). Confirmei pela
+      marca, não pela contagem de linhas — que é a lição do R3-1.
+  2_a_regua_de_forma_acende_de_verdade:
+    pedido: "reproduzir nos dois estados; ela é nova e nunca foi auditada por ninguém além de quem a escreveu"
+    medido_por_mim:
+      f6c21b21:  "numstat `170  0` → exit **0** (cega) · hunk `@@ -187,0 +188,170 @@` → forma exit **1** ✅ acusa"
+      "3ad76545": "numstat `171  0` → exit 0 · hunk `@@ -194,0 +195,171 @@` → forma exit **0**"
+    veredito: >-
+      Ela discrimina exatamente a classe que passou por mim duas vezes: edição no meio do
+      arquivo disfarçada de inserção pura porque a linha removida reaparece verbatim adiante.
+      `194` é a última linha da base, então `-194,0` é a assinatura de "acréscimo puro no fim".
+  3_fragilidade_da_regua_nova:
+    pedido: "o que acontece quando a main andar? ruidosa é descartada"
+    achado: "🟡 SIM, ela fica FALSO-VERMELHA — e não é hipótese, é medido"
+    causa: >-
+      A régua mistura duas revisões: `BASE` vem de `git show origin/main:…` (o **tip**),
+      enquanto o cabeçalho de hunk que ela compara vem de `git diff origin/main...HEAD` (o
+      **merge-base**). Enquanto tip == merge-base as duas coincidem; no instante em que a
+      `main` mexer no `ci.yml`, deixam de coincidir.
+    experimento:
+      montagem: "clone descartável; `origin/main` avança acrescentando um job ao fim do `ci.yml` (194 → 199 linhas); a branch NÃO muda"
+      resultado: "BASE(tip)=**199**, hunk continua `@@ -194,0` → régua de forma **exit 1**, com a branch impecável e o `numstat` verde"
+    correcao_de_uma_linha_medida:
+      forma: |
+        MB=$(git merge-base origin/main HEAD)
+        BASE=$(git show "$MB":.github/workflows/ci.yml | wc -l | tr -d ' ')
+      no_cenario_do_falso_vermelho: "exit **0** ✅ (falso-vermelho eliminado)"
+      ainda_discrimina: "contra `f6c21b21` segue **exit 1** ✅ — não perdeu poder"
+    porque_importa_ja: >-
+      Não é risco distante: a paginação do `tenancy-gate` ficou como **story própria** e vai
+      mexer neste mesmo arquivo na `main`. E o `@devops` faz **merge de `main` na branch**
+      (prática registrada dele) — é o cenário exato do falso-vermelho, na hora exata em que a
+      story manda repetir a régua.
+    severidade: "não bloqueia — hoje tip == merge-base e a régua está correta. Vai para o handoff com a forma corrigida pronta para colar."
+  4_cobertura_das_tres_reguas:
+    pedido: "nem sobreposição inútil nem buraco"
+    matriz_construida_por_mim: |
+      caso                                   numstat  forma  jobs
+      C0  estado atual (correto)                0       0      0
+      C1  deleção no meio (passo do `static`)   1       1      0
+      C2  edita job existente                   1       1      0
+      C3  2º header `static:` no bloco novo     0       0      1
+      R3-1 real (edita + gêmea verbatim)        0       1      0   ← f6c21b21, medido
+    leitura:
+      numstat_e_subsumida_pela_forma: >-
+        Forma verde ⇒ hunk único `-BASE,0` ⇒ zero linhas deletadas em qualquer lugar ⇒ numstat
+        verde. Não existe estado com forma verde e numstat vermelho. Ela fica como redundância
+        barata e robusta (não depende do cálculo de `BASE`), não como cobertura.
+      jobs_NAO_e_redundante: >-
+        C3 é a célula que só ela pega: acrescentar um segundo header `^  static:` **dentro do
+        bloco novo** é acréscimo puro no fim — forma e numstat são verdes por desenho, e o
+        YAML fica com chave duplicada. Contagem 2 → 3 acusa.
+      buracos_que_sobram_e_sao_aceitos:
+        - "as três olham só o `ci.yml`; outro workflow ficaria de fora (fora do escopo da AC)"
+        - "provam FORMA, não conteúdo: nada verifica se o job acrescentado é são — por desenho"
+        - "dependem de `origin/main` fresca. Sem `git fetch --prune origin` antes, medem contra uma main velha — o mesmo modo de falha que esta story fechou para o número da migration. Vale a mesma primeira linha."
+
+# ===========================================================================
+achados_anteriores: "todos fechados e reverificados nas rodadas 1-3; nada foi invalidado por esta"
+resumo_do_que_ja_estava_provado:
+  - "quatro estados do `db:status` contra o banco real; contrato C6 nos dois lados; `--yes` recusado em produção"
+  - "G2: terceiro estado forçado por checkout raso sintético + falso-verde medido sem as guardas"
+  - "G5 e CONCERNS-1: quatro classes de arquivo do PR cobertas, com controle negativo de kill set disjunto"
+  - "`db:apply` não sobrescreve (RETURNING `[]`, linha byte a byte intacta); guarda do backfill `P0001` com ledger intacto"
+  - "CHECKs de domínio vivos (`23514` para sha não-hex e para `via` inventada) — a enumeração passou de documentada a imposta"
+  - "invariante do glifo: `✅` aparece se e somente se `estado === 'limpo'`, nos 10 caminhos (reconferido nesta rodada)"
+
+ac_status:
+  AC1: "CUMPRIDA (parcial por desenho — `245` em produção é runbook do @devops)"
+  AC2: "CUMPRIDA"
+  AC3: "CUMPRIDA"
+  AC4: "CUMPRIDA — o job desta story pagina (`per_page: 100`), o arquivo não foi reescrito, e a AC ganhou a régua de forma que fecha a cegueira que eu achei"
+  AC5: "CUMPRIDA"
+
+evidence:
+  gates: "pnpm test 274 arquivos · 3520 passed | 6 expected fail · lint 0 errors (36 warnings pré-existentes) · type-check 8/8 · YAML válido, 3 jobs"
+  job_novo: "concurrency 0 · db:apply 0 · reset:testdb 0 · --confirmar 0 · `${{ }}` em `run:` 0 · paginate 1 · per_page 100"
+  banco_de_teste: "aplicada 268 · PENDENTE 0 · ALTERADA 0 · ÓRFÃ 0 · ledger reset:263 + reset-falha-conhecida:4 + apply:1"
+  mutacoes_do_qa_no_total: "11 ao longo das quatro rodadas"
+  ac_covered: [1, 2, 3, 4, 5]
+  ac_gaps: []
+
+nfr_validation:
+  security: { status: PASS }
+  reliability: { status: PASS, notes: "a régua que protege o ci.yml deixou de ser cega; a fragilidade que sobra é de ruído, não de cegueira, e vem com correção pronta" }
+  maintainability: { status: PASS }
+  performance: { status: PASS }
+
+# ===========================================================================
+handoff_devops:
+  liberado: true
+  antes_do_push:
+    - "Nada pendente de código. Commit `3ad76545`."
+    - "Confira que `origin/main` está fresca antes de rodar qualquer régua: `git fetch --prune origin`. Sem isso as três medem contra uma main velha — mesmo modo de falha que esta story fechou para o número da migration."
+  pos_squash_ou_pos_merge_de_main:
+    - "É a única medição que caduca com reescrita de histórico. Rode as TRÊS e cole no PR."
+    - |
+      # 1. deleções (a régua original da AC)
+      git diff --numstat origin/main...HEAD -- .github/workflows/ci.yml | awk '$2 != 0 { exit 1 }'
+
+      # 2. FORMA do diff — use ESTA versão, com a base vindo do MERGE-BASE (ver abaixo)
+      MB=$(git merge-base origin/main HEAD)
+      BASE=$(git show "$MB":.github/workflows/ci.yml | wc -l | tr -d ' ')
+      test "$(git diff --unified=0 origin/main...HEAD -- .github/workflows/ci.yml | grep -c '^@@')" = 1 &&
+      git diff --unified=0 origin/main...HEAD -- .github/workflows/ci.yml | grep -q "^@@ -${BASE},0 +"
+
+      # 3. os jobs pré-existentes continuam lá, e não ganharam gêmeo
+      grep -c '^  static:\|^  tenancy-gate:' .github/workflows/ci.yml   # 2
+    - >-
+      ⚠️ **Por que a versão 2 difere da que está na AC:** a AC calcula `BASE` com
+      `git show origin/main:…` (o **tip**), mas o hunk que ela compara vem do **merge-base**.
+      Medi: se a `main` mexer no `ci.yml` (e vai — a paginação do `tenancy-gate` é story
+      própria), a régua fica **falso-vermelha** com a branch impecável. Com `BASE` do
+      merge-base o falso-vermelho some e ela continua acusando o defeito real. Vale um ajuste
+      de uma linha na AC4 quando alguém passar por ela.
+    - >-
+      E a leitura que eu pedi para acrescentar, agora com a régua que a implementa: **verde no
+      `numstat` não prova que nenhum job existente mudou.** Quem quiser a versão de bolso:
+      `git diff origin/main...HEAD -- .github/workflows/ci.yml | grep -c '^-'` (tem de casar
+      com o `$2` do numstat) e **leia onde o hunk começa** — se antes da última linha da base,
+      algo pré-existente foi tocado, mesmo com deleções zero.
+  no_PR:
+    - "O job já rodou e produziu `## Migrations deste PR — ✅ Nenhuma migration deste PR está pendente`. Desfecho esperado; qualquer `⛔` é sinal real."
+    - "`## Gate de tenancy` 🔴 é **pré-existente** (idêntico no #524 já mergeado) e tem `R3: 0` — a allowlist desta story está correta. Não bloqueia; vale escalar ao @pm."
+  depois_do_merge_producao:
+    - "Aplicar a `245` em produção pelo runbook, com a versão deste commit (CHECKs + COMMENT dos quatro valores de `via`). Passo 0 → 1 → 2 → 3, sem pular o Passo 0."
+    - "O Passo 0 é o que impede aplicar no projeto errado: nenhuma query de dentro do Postgres devolve o ref (medido — `current_database()`/`cluster_name` respondem igual nos dois). Use o banner `[db-env] ref=`, o `pnpm supabase:check`, o ref na URL do SQL Editor, e o discriminador de conteúdo em `organizations`."
+    - "Backfill **gerado na hora** (`npx tsx scripts/gerar-backfill-ledger.ts`), nunca `.sql` congelado; a guarda `RAISE EXCEPTION` só passa sobre ledger vazio, que é a janela do Passo 2. Confira `grep -c \"^  ('\"` == `ls supabase/migrations/*.sql | wc -l`."
+    - "Depois: `TRIFOLD_ENV=producao pnpm db:status` (leitura, não exige `TRIFOLD_ALLOW_PROD`) e commitar o espelho — substitui o marcador `AINDA NÃO MEDIDO`. **Só então o item de DoD 'aplicada em produção' fecha.**"
+    - "NÃO rode `pnpm gate:tenancy` contra ref que não seja produção; se rodar, restaure `docs/audits/gate-tenancy-report.json` (o arquivo agora avisa sozinho)."
+
+fica_aberto_e_nomeado:
+  - "AC1 parcial — a `245` em produção é do @devops (item de DoD aberto)"
+  - "MNT-001 — ~1.400 linhas de `scripts/*.ts` fora do lint/type-check do CI (os 8 arquivos desta fatia type-checam limpos à mão; o diretório inteiro não passaria hoje). Story própria."
+  - "Paginação do `tenancy-gate` — explicitamente NÃO consertada aqui, story própria. Foi a escolha certa."
+  - "OBS-5 (1 linha) — qualificar a última linha 'Banco de teste reconstruído.' quando `falhasDeRegistro.length > 0`."
+  - "R3-2 — catraca de tenancy vermelha desde o #524; escalar ao @pm/@architect."
+  - "Régua de forma: `BASE` pelo merge-base (uma linha na AC4)."
+
+waiver:
+  active: false
