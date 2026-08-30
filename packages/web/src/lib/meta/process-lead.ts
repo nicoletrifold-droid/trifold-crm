@@ -5,6 +5,13 @@ import { triggerAutomations } from "@web/lib/email-automations"
 import { distributeLeadToNextBroker } from "@web/lib/roleta/distributor"
 import { detectPropertyInterestId } from "@web/lib/roleta/detect-property"
 import { getDefaultStageId } from "@web/lib/leads/default-stage"
+import {
+  decidirModoRoteamento,
+  logOrgResolved,
+  logOrgUnresolved,
+  resolveOrgByMetaPage,
+  type MotivoNaoResolvida,
+} from "@web/lib/tenancy/webhook-org"
 
 const META_API_BASE = "https://graph.facebook.com/v21.0"
 
@@ -122,8 +129,63 @@ export async function processMetaLead(
   }
 
   try {
-    const orgId = await resolveOrgId(supabase)
+    // Story 900-24 · AC4 — dual-run. O `page_id` (`entry[0].id`) já chegava aqui e era
+    // descartado; agora é o identificador que resolve a org no modo `identifier`. Em
+    // `legacy`/`both` quem DECIDE continua sendo `legacyResolveActiveOrgId`.
+    const pageId = ((entry as { id?: string })?.id ?? null) as string | null
+    const modoRoteamento = decidirModoRoteamento()
+
+    let orgId: string | null = null
+    let motivoNaoResolvida: MotivoNaoResolvida = "nenhuma_correspondencia"
+    let quantidadeEncontrada = 0
+
+    if (modoRoteamento === "identifier") {
+      const novo = await resolveOrgByMetaPage(supabase, pageId)
+      if (novo.status === "resolvida") {
+        orgId = novo.orgId
+        logOrgResolved({ receptor: "meta_ads", via: "identifier", orgId, divergiu: null })
+      } else {
+        motivoNaoResolvida = novo.motivo
+        quantidadeEncontrada = novo.quantidadeEncontrada
+      }
+    } else {
+      const legado = await legacyResolveActiveOrgId(supabase)
+      if (modoRoteamento === "both") {
+        const novo = await resolveOrgByMetaPage(supabase, pageId)
+        if (legado) {
+          orgId = legado
+          logOrgResolved({
+            receptor: "meta_ads",
+            via: "legacy",
+            orgId: legado,
+            divergiu: novo.status === "resolvida" ? novo.orgId !== legado : null,
+          })
+        } else {
+          motivoNaoResolvida = novo.status === "nao_resolvida" ? novo.motivo : "nenhuma_correspondencia"
+          quantidadeEncontrada = novo.status === "nao_resolvida" ? novo.quantidadeEncontrada : 0
+        }
+      } else if (legado) {
+        orgId = legado
+      }
+    }
+
     if (!orgId) {
+      // `logOrgUnresolved` grava `system_events` (este arquivo nunca escreveu lá) e uma linha
+      // `webhook_logs` de não-resolução; o `fail()` logo abaixo preserva o
+      // `webhook_logs.processing_error` da linha ORIGINAL, que o cron `meta-leads-retry` lê.
+      await logOrgUnresolved({
+        receptor: "meta_ads",
+        motivo: motivoNaoResolvida,
+        quantidadeEncontrada,
+        // Identificador da PRÓPRIA Página da org, nunca dado do lead.
+        identificador: { page_id: pageId },
+        webhookLogsSource: "meta_ads",
+        // Task 5.4 (mesma regra aplicada aqui): esta rota também já inseriu a linha de
+        // `webhook_logs` antes de resolver. Reaproveitar evita duas linhas para o mesmo evento.
+        // O `fail()` logo abaixo sobrescreve o `processing_error` com a mensagem legada — de
+        // propósito: é ela que o cron `meta-leads-retry` lê, e o contrato dele não muda.
+        webhookLogsExistenteId: logId ?? null,
+      })
       return await fail("no_active_org: whatsapp_config sem linha status=active")
     }
 
@@ -674,7 +736,15 @@ async function syncAdOnDemand(
 // Supabase helpers
 // ---------------------------------------------------------------------------
 
-async function resolveOrgId(supabase: SupabaseClient): Promise<string | null> {
+/**
+ * Story 900-24 · Task 4.1 — o caminho LEGADO, renomeado, com o corpo intocado.
+ *
+ * `.single()` com 0 OU 2+ linhas devolve `{ data: null, error: PGRST116 }` (não lança — só
+ * lançaria com `.throwOnError()`, ausente aqui), e o `error` morre na desestruturação: com duas
+ * empresas ativas, TODO lead pago do Meta era descartado em silêncio. Continua sendo quem decide
+ * nos modos `legacy`/`both`, de propósito — ver `lib/tenancy/webhook-org.ts`.
+ */
+async function legacyResolveActiveOrgId(supabase: SupabaseClient): Promise<string | null> {
   const { data } = await supabase
     .from("whatsapp_config")
     .select("org_id")

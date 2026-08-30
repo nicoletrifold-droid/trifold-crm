@@ -47,7 +47,14 @@ interface RouteParams {
   name: string | null
   /** Número (raw) para responder via WhatsApp. */
   fromRaw: string
-  waConfig: { phone_number_id: string; access_token: string }
+  /**
+   * Story 900-24 (C2): as duas colunas são NULLABLE em `whatsapp_config` (medido no
+   * `information_schema`). O tipo passa a dizer a verdade; o RUNTIME não muda — este caminho já
+   * enviava adiante o que estava na linha, e `Bearer null` já era o resultado possível antes,
+   * tratado pelo 401 de `alertCredencialMorta`. Fechar aqui com um early-return criaria um
+   * caminho novo de perda de dado, que é a classe que a AC5/B1 da 900-24 rejeitou.
+   */
+  waConfig: { phone_number_id: string | null; access_token: string | null }
 }
 
 export async function maybeRouteInboundToRelationship(
@@ -135,7 +142,10 @@ export async function applyRelationshipRouting(
     orgId: string
     cliente: { cliente_id: string; nome: string | null } | null
     obra: { obra_id: string; obra_name: string | null } | null
-    forward: { fromRaw: string; waConfig: { phone_number_id: string; access_token: string } } | null
+    forward: {
+      fromRaw: string
+      waConfig: { phone_number_id: string | null; access_token: string | null }
+    } | null
   }
 ): Promise<void> {
   await admin

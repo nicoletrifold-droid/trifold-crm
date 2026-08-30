@@ -33,8 +33,39 @@ import {
   alertCredencialMorta,
   isCredencialMorta,
 } from "@web/lib/meta/alert-credencial-morta"
+import {
+  decidirModoRoteamento,
+  logOrgResolved,
+  logOrgUnresolved,
+  resolveOrgByWhatsAppPhone,
+  type MotivoNaoResolvida,
+  type WhatsAppConfigLinha,
+} from "@web/lib/tenancy/webhook-org"
 
 export const maxDuration = 60
+
+/**
+ * Story 900-24 · Task 3.1 — o caminho LEGADO, extraído sem mudar uma vírgula do SQL.
+ *
+ * É literalmente a query que estava inline em `:394-398` antes desta story: `status='active'`,
+ * sem filtro de telefone, terminal `.maybeSingle()`, `error` descartado. Continua sendo quem
+ * DECIDE nos modos `legacy` e `both` (produção) — é isso que torna "a Trifold não muda de
+ * comportamento" uma invariante verificável (AC10, mutação #8) em vez de uma promessa.
+ *
+ * Não corrigir este corpo é o ponto: se ele virasse `.limit(2)`, o dual-run passaria a comparar o
+ * caminho novo com outro caminho novo, e o modo `both` deixaria de ser sombra do que roda hoje.
+ */
+async function legacyResolveActiveConfig(
+  db: SupabaseClient,
+): Promise<WhatsAppConfigLinha | null> {
+  const { data } = await db
+    .from("whatsapp_config")
+    .select("org_id, phone_number_id, access_token, coexistence_enabled")
+    .eq("status", "active")
+    .maybeSingle()
+
+  return (data as WhatsAppConfigLinha | null) ?? null
+}
 
 function getSupabaseAdmin() {
   return createAdminClient()
@@ -390,15 +421,62 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: "ok" })
   }
 
-  // ---- Resolve org/whatsapp_config (sync) -------------------------------
-  const { data: config } = await supabase
-    .from("whatsapp_config")
-    .select("org_id, phone_number_id, access_token, coexistence_enabled")
-    .eq("status", "active")
-    .maybeSingle()
+  // ---- Resolve org/whatsapp_config (sync) — Story 900-24, AC3 -----------
+  //
+  // O `phone_number_id` do payload (`value.metadata.phone_number_id`) chega em TODO webhook do
+  // WhatsApp Cloud API e, até esta story, era descartado: a org saía de "a única config ativa que
+  // existir". Com duas empresas ativas, o `.maybeSingle()` devolvia `{data:null, error:PGRST116}`
+  // e o `error` sumia na desestruturação — as mensagens das DUAS eram descartadas em silêncio.
+  //
+  // Dual-run: em `legacy`/`both` quem DECIDE continua sendo a query de sempre; o caminho novo roda
+  // em sombra e só alimenta o contador. Ver `lib/tenancy/webhook-org.ts`.
+  const phoneNumberId = (value?.metadata?.phone_number_id ?? null) as string | null
+  const modoRoteamento = decidirModoRoteamento()
+
+  let config: WhatsAppConfigLinha | null = null
+  let motivoNaoResolvida: MotivoNaoResolvida = "nenhuma_correspondencia"
+  let quantidadeEncontrada = 0
+
+  if (modoRoteamento === "identifier") {
+    const novo = await resolveOrgByWhatsAppPhone(supabase, phoneNumberId)
+    if (novo.status === "resolvida") {
+      config = novo.config
+      logOrgResolved({ receptor: "whatsapp", via: "identifier", orgId: config.org_id, divergiu: null })
+    } else {
+      motivoNaoResolvida = novo.motivo
+      quantidadeEncontrada = novo.quantidadeEncontrada
+    }
+  } else {
+    const legado = await legacyResolveActiveConfig(supabase)
+    if (modoRoteamento === "both") {
+      const novo = await resolveOrgByWhatsAppPhone(supabase, phoneNumberId)
+      if (legado) {
+        config = legado
+        logOrgResolved({
+          receptor: "whatsapp",
+          via: "legacy",
+          orgId: legado.org_id,
+          divergiu: novo.status === "resolvida" ? novo.config.org_id !== legado.org_id : null,
+        })
+      } else {
+        motivoNaoResolvida = novo.status === "nao_resolvida" ? novo.motivo : "nenhuma_correspondencia"
+        quantidadeEncontrada = novo.status === "nao_resolvida" ? novo.quantidadeEncontrada : 0
+      }
+    } else if (legado) {
+      config = legado
+    }
+  }
 
   if (!config) {
     console.error("No active WhatsApp config found")
+    await logOrgUnresolved({
+      receptor: "whatsapp",
+      motivo: motivoNaoResolvida,
+      quantidadeEncontrada,
+      // Identificador da PRÓPRIA org emissora (a WABA), nunca dado do lead que mandou a mensagem.
+      identificador: { phone_number_id: phoneNumberId },
+      webhookLogsSource: "whatsapp",
+    })
     return NextResponse.json({ status: "ok" })
   }
 
@@ -1038,7 +1116,16 @@ export async function POST(request: NextRequest) {
         // Story 75-156 — humanização: mostra "digitando…" no WhatsApp do lead
         // enquanto a Nicole pensa. Fire-and-forget (nunca bloqueia/lança); a Meta
         // exige o wamid inbound e também marca a mensagem como lida (✓✓).
-        void sendWhatsAppTypingIndicator(config, messageId)
+        // Story 900-24 (C2): `WhatsAppConfig` exige `string` nos dois campos, e a linha de
+        // `whatsapp_config` é NULLABLE nos dois. O helper JÁ trata falsy internamente
+        // (`send-typing-indicator.ts:30` — sai sem enviar), então este `? :` reproduz o
+        // comportamento de runtime de hoje exatamente: com campo nulo, nenhum envio acontecia.
+        void sendWhatsAppTypingIndicator(
+          config.phone_number_id && config.access_token
+            ? { phone_number_id: config.phone_number_id, access_token: config.access_token }
+            : null,
+          messageId,
+        )
 
         // Story 75-359 — JANELA ANTI-RAJADA.
         //

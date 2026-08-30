@@ -45,6 +45,62 @@ interface Escrita {
 }
 let escritas: Escrita[] = []
 let leadExistente: Record<string, unknown> | null = null
+/** Story 900-24: resposta do caminho LEGADO (`whatsapp_config` com `status='active'`). */
+let configAtivaLegado: Record<string, unknown> | null = { org_id: "org-1" }
+
+// Story 900-24: a rota passou a logar em `system_events`.
+const logEventMock = vi.fn()
+/**
+ * Story 900-24 (gate `@qa`, concern 2) — a escrita só COMPLETA num macrotask, como o Postgres de
+ * verdade. É isto que faz a suíte medir o `await logOrgUnresolved(...)` do CALL SITE, e não só a
+ * chamada: sem o `await`, a rota responde antes e `escritasCompletadas` está vazio na asserção.
+ * A mutação #5 original media o `await` INTERNO do helper — real, mas outra camada.
+ *
+ * O contador de `geracao` existe porque uma escrita ÓRFÃ (a que a falta de `await` deixa pendente)
+ * completaria depois do fim do teste e cairia no array do teste SEGUINTE, que passaria por
+ * acidente. Mesma forma de `for-each-org.test.ts` (900-23) e de `nicole-agenda-reconcile` (87-6).
+ */
+let escritasCompletadas: unknown[] = []
+let geracaoDoTeste = 0
+const logEventOnceMock = vi.fn<(...args: unknown[]) => Promise<{ inserted: boolean }>>(
+  async (...args: unknown[]) => {
+    const minhaGeracao = geracaoDoTeste
+    await new Promise((r) => setTimeout(r, 5))
+    if (minhaGeracao !== geracaoDoTeste) return { inserted: false } // órfã: o teste já acabou
+    escritasCompletadas.push(args[0])
+    return { inserted: true }
+  },
+)
+
+/**
+ * Espião de `logOrgUnresolved` que **delega ao real** — o `await` do call site continua exercitado.
+ * Existe para a asserção de PII/shape olhar o objeto que a ROTA realmente passa, e não um literal
+ * remontado no teste (a tautologia que o `@qa` mediu: 5 chaves de PII do lead entravam VERDE).
+ */
+const logOrgUnresolvedSpy = vi.fn()
+vi.mock("@web/lib/logger", () => ({
+  logEvent: (...args: unknown[]) => logEventMock(...args),
+  logEventOnce: (...args: unknown[]) => logEventOnceMock(...args),
+}))
+
+/** Story 900-24 · AC10, mutação #8 — resolver novo plantável (delega ao real por padrão). */
+const resolveSoleOrgMock = vi.fn<(...args: unknown[]) => Promise<unknown>>()
+vi.mock("@web/lib/tenancy/webhook-org", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@web/lib/tenancy/webhook-org")>()
+  return {
+    ...real,
+    logOrgUnresolved: async (...args: unknown[]) => {
+      logOrgUnresolvedSpy(...args)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return real.logOrgUnresolved(...(args as [any]))
+    },
+    resolveSoleOrg: (...args: unknown[]) =>
+      resolveSoleOrgMock.getMockImplementation()
+        ? resolveSoleOrgMock(...args)
+        : // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          real.resolveSoleOrg(...(args as [any])),
+  }
+})
 
 vi.mock("@web/lib/supabase/admin", () => ({
   createAdminClient: () => ({
@@ -57,7 +113,10 @@ vi.mock("@web/lib/supabase/admin", () => ({
           return { data: null, error: null }
         }
         if (estado.op === "update") return { data: null, error: null }
-        if (table === "whatsapp_config") return { data: { org_id: "org-1" }, error: null }
+        // Story 900-24: o LEGADO (`legacyResolveOrgId`) lê daqui. Mutável para que a Task 5.5
+        // possa medir o cenário "config inativa/zero orgs" — que hoje devolve 5xx e PRECISA
+        // continuar devolvendo 5xx em `legacy`/`both`.
+        if (table === "whatsapp_config") return { data: configAtivaLegado, error: null }
         if (table === "kanban_stages") return { data: { id: "stage-1" }, error: null }
         if (table === "leads") return { data: leadExistente, error: null }
         return { data: null, error: null }
@@ -147,6 +206,14 @@ function escritasEm(table: string, op: "insert" | "update") {
 beforeEach(() => {
   escritas = []
   leadExistente = null
+  configAtivaLegado = { org_id: "org-1" }
+  logEventMock.mockClear()
+  logEventOnceMock.mockClear()
+  logOrgUnresolvedSpy.mockClear()
+  geracaoDoTeste++
+  escritasCompletadas = []
+  resolveSoleOrgMock.mockReset()
+  delete process.env.WEBHOOK_ORG_ROUTING
   batches.length = 0
   pendentes.length = 0
   process.env.LANDING_PAGE_WEBHOOK_SECRET = SECRET
@@ -454,5 +521,167 @@ describe("AC10 — degradação graciosa", () => {
     expect(escritasEm("leads", "insert")).toHaveLength(0)
     expect(batches).toHaveLength(0)
     warn.mockRestore()
+  })
+})
+
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Story 900-24 · AC5 + AC10 — dual-run com a EXCEÇÃO NOMEADA de resposta HTTP
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+//
+// Este é o receptor onde "não resolveu" NÃO devolve 200 hoje: devolve 5xx, e o proxy `api/lead.js`
+// re-tenta. Trocar isso por 200 uniforme reabriria, no ponto exato, o incidente que o comentário
+// de `route.ts:109-118` diz ter corrigido — lead pago perdido em silêncio. Por isso o 200+log só
+// existe no modo `identifier`.
+describe("Story 900-24 — landing-page: 5xx preservado em legacy/both (Task 5.5)", () => {
+  it("`legacy` + legado null → 500 e corpo idênticos aos de hoje", async () => {
+    process.env.WEBHOOK_ORG_ROUTING = "legacy"
+    configAtivaLegado = null
+
+    const res = await POST(post({ ...LEAD, page: "vind-residence" }))
+    await flush()
+
+    expect(res.status).toBe(500)
+    expect(await res.json()).toEqual({ error: "Lead processing failed" })
+    // `processing_error` na MESMA linha de webhook_logs, com o MESMO texto de antes da story.
+    expect(escritasEm("webhook_logs", "update")).toContainEqual(
+      expect.objectContaining({ payload: { processing_error: "Nenhuma org ativa encontrada" } }),
+    )
+    // E nenhum log de "não resolvido pelo identificador" — o caminho nem consultou o identificador.
+    expect(logEventOnceMock).not.toHaveBeenCalled()
+    expect(escritasEm("leads", "insert")).toHaveLength(0)
+  })
+
+  it("`both` + legado null → 500 também (o modo de PRODUÇÃO não abre caminho de 200)", async () => {
+    process.env.WEBHOOK_ORG_ROUTING = "both"
+    configAtivaLegado = null
+    // Mesmo com o identifier resolvendo, `both` NÃO promove o caminho novo a operativo.
+    resolveSoleOrgMock.mockImplementation(async () => ({ status: "resolvida", orgId: "org-B" }))
+
+    const res = await POST(post({ ...LEAD, page: "vind-residence" }))
+    await flush()
+
+    expect(res.status).toBe(500)
+    expect(await res.json()).toEqual({ error: "Lead processing failed" })
+    expect(logEventOnceMock).not.toHaveBeenCalled()
+    expect(escritasEm("leads", "insert")).toHaveLength(0)
+  })
+
+  it("`identifier` + não resolveu → 200 + log (a ÚNICA mudança de resposta desta story)", async () => {
+    process.env.WEBHOOK_ORG_ROUTING = "identifier"
+    resolveSoleOrgMock.mockImplementation(async () => ({
+      status: "nao_resolvida",
+      motivo: "ambigua",
+      quantidadeEncontrada: 2,
+    }))
+
+    const res = await POST(post({ ...LEAD, page: "vind-residence" }))
+    await flush()
+
+    expect(res.status).toBe(200)
+    expect(logEventOnceMock.mock.calls[0]![0]).toMatchObject({
+      event_type: "WEBHOOK_ORG_UNRESOLVED",
+      metadata: {
+        receptor: "landing_page",
+        motivo: "ambigua",
+        identificador: { quantidade_organizacoes_ativas: 2 },
+      },
+    })
+    // Reaproveita a linha de webhook_logs já inserida — não cria uma segunda.
+    expect(escritasEm("webhook_logs", "insert")).toHaveLength(1)
+    expect(escritasEm("webhook_logs", "update")).toContainEqual(
+      expect.objectContaining({ payload: { processing_error: "org_unresolved:ambigua" } }),
+    )
+    expect(escritasEm("leads", "insert")).toHaveLength(0)
+  })
+
+  /**
+   * Gate `@qa`, concerns 1/3/4 — o objeto EXATO que o call site passa. Este receptor é o de maior
+   * risco de PII: o corpo do formulário traz nome, e-mail e telefone do lead, e este log grava com
+   * `org_id: null`.
+   */
+  it("o que a rota passa a `logOrgUnresolved` é EXATAMENTE isto — sem nada do formulário", async () => {
+    process.env.WEBHOOK_ORG_ROUTING = "identifier"
+    resolveSoleOrgMock.mockImplementation(async () => ({
+      status: "nao_resolvida",
+      motivo: "ambigua",
+      quantidadeEncontrada: 2,
+    }))
+
+    await POST(post({ ...LEAD, page: "vind-residence" }))
+    await flush()
+
+    expect(logOrgUnresolvedSpy).toHaveBeenCalledTimes(1)
+    expect(logOrgUnresolvedSpy.mock.calls[0]![0]).toEqual({
+      receptor: "landing_page",
+      motivo: "ambigua",
+      quantidadeEncontrada: 2,
+      identificador: { quantidade_organizacoes_ativas: 2 },
+      webhookLogsSource: "landing_page",
+      webhookLogsExistenteId: "log-1",
+    })
+    const serializado = JSON.stringify(logEventOnceMock.mock.calls[0]![0])
+    for (const pii of ["Maria Souza", "maria@exemplo.com", "99734-4650", "5544997344650"]) {
+      expect(serializado).not.toContain(pii)
+    }
+  })
+
+  /** Gate `@qa`, concern 2 — carrasco do `await` no CALL SITE (escrita completa em macrotask). */
+  it("a escrita de `WEBHOOK_ORG_UNRESOLVED` COMPLETA antes de a rota responder", async () => {
+    process.env.WEBHOOK_ORG_ROUTING = "identifier"
+    resolveSoleOrgMock.mockImplementation(async () => ({
+      status: "nao_resolvida",
+      motivo: "nenhuma_correspondencia",
+      quantidadeEncontrada: 0,
+    }))
+
+    const res = await POST(post({ ...LEAD, page: "vind-residence" }))
+
+    // Sem `flush()`: a asserção roda no RETORNO do handler.
+    expect(res.status).toBe(200)
+    expect(escritasCompletadas).toHaveLength(1)
+  })
+
+  it("mutação #8 (1): em `both` com divergência, o lead nasce na org do LEGADO", async () => {
+    process.env.WEBHOOK_ORG_ROUTING = "both"
+    resolveSoleOrgMock.mockImplementation(async () => ({ status: "resolvida", orgId: "org-B" }))
+
+    const res = await POST(post({ ...LEAD, page: "vind-residence" }))
+    await flush()
+
+    expect(res.status).toBe(200)
+    const inseridos = escritasEm("leads", "insert")
+    expect(inseridos).toHaveLength(1)
+    expect((inseridos[0]!.payload as Record<string, unknown>).org_id).toBe("org-1")
+    expect((inseridos[0]!.payload as Record<string, unknown>).org_id).not.toBe("org-B")
+  })
+
+  it("mutação #8 (2): `logOrgResolved` com via:'legacy' e divergiu:true", async () => {
+    process.env.WEBHOOK_ORG_ROUTING = "both"
+    resolveSoleOrgMock.mockImplementation(async () => ({ status: "resolvida", orgId: "org-B" }))
+
+    await POST(post({ ...LEAD, page: "vind-residence" }))
+    await flush()
+
+    const evento = logEventMock.mock.calls
+      .map((c) => c[0] as { event_type?: string; org_id?: string; metadata?: Record<string, unknown> })
+      .find((e) => e.event_type === "WEBHOOK_ORG_RESOLVED")
+    expect(evento!.org_id).toBe("org-1")
+    expect(evento!.metadata).toMatchObject({
+      via: "legacy",
+      divergiu: true,
+      receptor: "landing_page",
+    })
+  })
+
+  it("`identifier` resolvendo: o lead nasce na org que o identificador escolheu", async () => {
+    process.env.WEBHOOK_ORG_ROUTING = "identifier"
+    resolveSoleOrgMock.mockImplementation(async () => ({ status: "resolvida", orgId: "org-B" }))
+
+    await POST(post({ ...LEAD, page: "vind-residence" }))
+    await flush()
+
+    const inseridos = escritasEm("leads", "insert")
+    expect((inseridos[0]!.payload as Record<string, unknown>).org_id).toBe("org-B")
   })
 })
