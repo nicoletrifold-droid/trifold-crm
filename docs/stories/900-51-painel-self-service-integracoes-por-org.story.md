@@ -1150,6 +1150,109 @@ O único arquivo NOVO de suporte é `tests/tenancy/support/sql-transacional.ts`,
 
 ## QA Results
 
+### Rodada 2 — Gate: 🟢 **PASS** · commit `bc8c48ae` · @qa (Quinn) · 2026-08-30
+2 concerns bloqueantes **fechadas**, 1 forward-gate aberto, 0 defeitos vivos, 0 regressões.
+Gate: `docs/qa/gates/900.51-painel-self-service-integracoes-por-org.yml`.
+
+#### QA-900-51-1 — fechada, e eu reproduzi o vermelho
+
+`alertarAposEscritaDeIntegracao(provider, lerTrilha)` é o único ponto de disparo e as **duas** rotas
+o chamam; a janela agora filtra por `metadata->>provider` (a versão anterior lia as 2 últimas linhas
+da org sem filtrar provider — uma escrita de `sienge` podia arrastar linhas de `meta_ads` para a
+janela). A leitura no `/dashboard` é RLS-scoped; confirmei que `TOTAL_ESPERADO = 242` segue verde,
+ou seja, nenhuma rota nova entrou na allowlist de `createAdminClient()`.
+
+| mutação | rodada 1 | **rodada 2** |
+|---|---|---|
+| `ehEscritaDePageIdPorCliente → return false` | 2 rotas **verdes** (12 passed) | `/dashboard` **1 failed** \| 7 passed |
+| disparo removido do call site `/dashboard` | — | **2 failed** \| 6 passed |
+| ↳ `alertas-page-id.test.ts` sob a mesma mutação | — | **13 passed** (o helper não vê) |
+
+**A assimetria do `/platform` é achado, não buraco.** Naquela superfície o `actor_type` é congelado
+como `platform_admin` pelo próprio ponto de entrada, e a janela lida são as 2 linhas que a escrita
+acabou de inserir — o predicado do Alerta 1 não pode ser verdadeiro ali. Exigir vermelho obrigaria a
+fabricar um cenário impossível, que é **exatamente** o que a versão anterior fazia (semeava
+`actor_type: "org_admin"` num fake da `/platform`) e o que fez o Alerta 1 parecer coberto quando não
+tinha caminho nenhum. Kill set vazio onde o predicado é inalcançável é o resultado correto.
+*Cosmético:* a fixture de AC11 da `/platform` ainda semeia `org_admin`; passa pelo motivo certo
+(afirma "MUDOU DE EMPRESA", que é o Alerta 2), mas o atributo é impossível naquela janela.
+
+#### QA-900-51-2 — fechada, e ele consertou a causa
+
+Uma montagem só (`montarTilesDoPainel`), usada pelas duas telas, com o estado real de produção como
+fixture — inclusive "alguém promoveu à mão a linha morta". `whatsapp_config` entrou em
+`PLATFORM_READABLE_TABLES` com justificativa própria e o limite explícito **só
+`status`/`phone_number_id`/`updated_at`**, com régua nova reprovando `access_token` em toda a árvore
+de `/platform` — que é a régua certa, porque a "correção óbvia" seria copiar o `!!access_token` do
+`/dashboard` e isso puxaria a credencial do tenant para o painel da Trifold. O cartão parou de mandar
+o usuário para um fluxo inexistente e agora diz a verdade, nomeando `900-52`/`53`/`54`.
+
+**Falso positivo meu, registrado:** levantei o literal `status: "active"` do `/dashboard` como
+fabricação. A consulta que produz o objeto já filtra `.eq("status","active")` — é o mesmo predicado
+dito duas vezes, não uma invenção. A mutação ficou verde e a leitura do call site me desmentiu.
+
+#### O décimo nono — QA-900-51-3 (forward-gate, **não** bloqueia)
+
+**O M23 do `@dev` está certo, e a régua final herda a mesma cegueira um nível acima.** Ele saiu de
+"guarda de existência do *import*" para "guarda de existência da *chamada*". Medi a reversão completa
+do conserto no `/platform` — apagar o `platformQuery("whatsapp_config", …)` e passar `null` como 2º
+argumento, que é literalmente o código de antes:
+
+```
+pnpm test                 294 files / 3763 passed   ✅
+turbo type-check --force  8 successful              ✅
+turbo lint --force        0 erros (31 warnings)     ✅
+toContain("montarTilesDoPainel(")   casa — a chamada continua lá
+not.toContain("temSegredo:")        casa — nada foi derivado à mão
+```
+
+O 18º cego volta **intacto** e todos os gates do repositório ficam verdes. A chamada sobrevive à
+neutralização do argumento exatamente como o `import` sobrevivia à remoção do uso — é a lição da M14
+("quem escolhe o **valor** é a rota/página, não o helper"), que ele aplicou ao `technicalDetail` e ao
+disparo do alerta, e não aplicou à centralização que acabou de criar.
+
+**Não bloqueia:** o valor está correto nas duas telas hoje, a causa foi removida, `providers.test.ts`
+mata mutação dentro da função. Falta catraca sobre um conserto já provado — não é defeito vivo.
+**Conserto:** subir o mesmo movimento um degrau — uma `carregarTilesDoPainel(porta)` que receba as
+duas leituras injetadas, como `alertarAposEscritaDeIntegracao` já faz com `lerTrilha`; se a página
+não escolhe argumento, não há argumento para neutralizar. Barato, no idioma da story: exigir que
+cada página mencione `whatsapp_config` e não passe `null` para a montagem.
+
+#### A pergunta sem dono: procede, e ele a escreveu inteira
+
+`GET /{page_id}?fields=id,name` pede metadados públicos: prova "token válido" + "a Página existe",
+**não prova posse**. Com o `P0018` já declarado como zero redução de superfície e a AC10 fechando só
+a sub-classe não-promovida, **nenhuma camada prova posse** — e o único freio vivo do risco de C1
+passa a ser a detecção da AC11. **Não trocar o probe às cegas é a decisão certa:** rede não é
+exercitável aqui, e um probe errado tornaria `meta_ads` inconfigurável por um caminho sem teste.
+Registro que este item de backlog **não é um débito qualquer**: é a pré-condição real do gate de
+`identifier` da AC10. Em `both` (o modo de hoje) não custa nada; em `identifier` custa os leads de
+outra empresa.
+
+#### Adjacente, confirmado
+
+`fetchLeadData` usa `process.env.META_PAGE_ACCESS_TOKEN` (env **global**, `process-lead.ts:502,521,538`).
+Ninguém consome a credencial por org que o painel grava — e isso vale para **os 4** providers
+graváveis, provado pela própria `nao-consumo.test.ts`. É exatamente o que AC6/D14 exigem e está no
+OUT. Mas muda o que o painel entrega hoje: ele guarda e testa credenciais que ainda ninguém usa. O
+tile é honesto sobre **frescor** ("não é uma verificação contínua"); não é sobre **consumo**. Não
+bloqueia — é expectativa de produto, e o dono precisa saber antes de vender a tela como "a empresa
+nova já está integrada".
+
+#### Números reconferidos
+`pnpm test` **294 files / 3763 passed** · `pnpm test:tenancy` **28 passed / 0 skipped** ·
+`turbo type-check --force` e `turbo lint --force` verdes (0 erros; 30 warnings, nenhum na story) ·
+`admin-client-allowlist` 242 verde. Produção (leitura, metadados): `whatsapp_config` da Trifold
+`status='active'` com `phone_number_id` — as duas telas concordam com este estado; a divergência que
+reportei era latente para o `inactive` do seed, que é o estado de **toda empresa nova**.
+Cada mutação foi feita com `assert` que aborta se o alvo textual não existir, com cópia de segurança
+e restauração conferida por diff. Árvore limpa.
+
+— Quinn, guardião da qualidade 🛡️
+
+---
+
+
 ### Gate: 🟡 **CONCERNS** — 2 concerns, as duas bloqueiam o merge · @qa (Quinn) · 2026-08-30
 `docs/qa/gates/900.51-painel-self-service-integracoes-por-org.yml` · árvore não commitada, de
 `origin/main` (`aa584dfb`).
