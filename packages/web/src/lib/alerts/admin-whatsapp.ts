@@ -3,7 +3,6 @@ import "server-only"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { sendWhatsAppTemplate } from "@web/lib/whatsapp/send-template"
 import { logWhatsappSend } from "@web/lib/whatsapp/log-send"
-import { MOTIVO_POR_TIPO, type TipoErroIA } from "@web/lib/alerts/erro-ia"
 
 // Story 87-19 — o canal que faltava: levar um `level='error'` do `system_events`
 // até uma pessoa. Até aqui o projeto só tinha `sendTelegramAdminAlert`, que está
@@ -89,15 +88,30 @@ export async function alertarAdminWhatsApp(
     orgId: string
     config: ConfigWhatsApp
     telefones: string[]
-    tipo: TipoErroIA
+    /**
+     * Story 87-20 — o texto do `{{1}}`, resolvido pelo CHAMADOR.
+     *
+     * Era `tipo: TipoErroIA`, com o `MOTIVO_POR_TIPO[tipo]` resolvido aqui dentro. A
+     * 87-20 precisa alertar sobre algo que NÃO é erro de API de IA (um loop é sucesso
+     * técnico com defeito de comportamento) e que precisa carregar um link para a
+     * conversa. Forçar isso dentro de `TipoErroIA` quebraria o classificador da 87-19;
+     * copiar a função inteira num módulo novo — mesmo `Promise.allSettled`, mesmo
+     * `logWhatsappSend`, mesmo try/catch, diferindo só nesta string — é onde
+     * instrumento cego mora: o bug corrigido de um lado não se propaga para o outro.
+     *
+     * Reusa-se o TRANSPORTE; o classificador continua morando em `erro-ia.ts`.
+     */
+    motivo: string
     desdeIso: string
     ocorrencias: number
   }
 ): Promise<ResultadoAlerta> {
-  const { orgId, config, telefones, tipo, desdeIso, ocorrencias } = params
+  const { orgId, config, telefones, motivo, desdeIso, ocorrencias } = params
 
+  // Três parâmetros, sempre. `alerta_sistema_admin` é template APROVADO de 3 params
+  // fixos: um 4º faz a Meta devolver 400 e o alerta para de sair (medido na 900-23).
   const parametros = [
-    MOTIVO_POR_TIPO[tipo],
+    motivo,
     formatarMomento(desdeIso),
     String(ocorrencias),
   ].map((text) => ({ type: "text", text }))

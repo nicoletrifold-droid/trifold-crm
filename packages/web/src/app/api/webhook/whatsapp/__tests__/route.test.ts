@@ -17,8 +17,19 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
 
 // ---- Mocks ----------------------------------------------------------------
 
-// Mock next/server `after` to invoke synchronously so async-path side effects
-// happen within the test. We'll await an explicit microtask drain when needed.
+/**
+ * Mock de `after()` do next/server.
+ *
+ * ⚠️ Story 87-20 · gate `@qa` QA-87-20-1 — a promise do callback é GUARDADA, não descartada.
+ * Enquanto era `void Promise.resolve().then(() => fn())`, o único jeito de o teste saber que o
+ * callback terminou era esperar tempo de relógio. Isso mede FOLGA, não ORDEM: com o laço de 60 ms
+ * do `entregar()`, uma escrita órfã (o `await` removido do `logEventOnce`) completava por acidente
+ * dentro da folga e a suíte ficava 32/32 VERDE. Guardando a promise, `drenarAfter()` espera a
+ * CONCLUSÃO do callback — com `await`, a escrita já aconteceu; com `void`, não aconteceu, e a
+ * asserção imediata fica vermelha sem depender de nenhum relógio.
+ */
+let afterPromises: Array<Promise<unknown>> = []
+
 vi.mock("next/server", async () => {
   const actual = await vi.importActual<typeof import("next/server")>(
     "next/server"
@@ -26,17 +37,40 @@ vi.mock("next/server", async () => {
   return {
     ...actual,
     after: (fn: () => Promise<unknown> | unknown) => {
-      // Fire-and-forget: kick the callback synchronously so the test can
-      // observe its effects after awaiting a microtask queue drain.
-      void Promise.resolve().then(() => fn())
+      // Dispara no microtask seguinte (como antes) — mas a promise fica retida para
+      // que o teste possa AGUARDÁ-LA em vez de cronometrar o callback.
+      afterPromises.push(Promise.resolve().then(() => fn()))
     },
   }
 })
 
-// Mock the AI dynamic import so we don't actually load Anthropic.
+/**
+ * Mock the AI dynamic import so we don't actually load Anthropic.
+ *
+ * ⚠️ Story 87-20 — o call-site do webhook passou a ser `processMessageWithMetadata`.
+ * Enquanto o mock só expunha `processMessage`, o símbolo novo era `undefined`, a
+ * chamada estourava "is not a function" e o `catch (asyncErr)` da rota engolia tudo
+ * em `WEBHOOK_ASYNC_ERROR` — a suíte inteira continuava VERDE com o caminho da IA
+ * morto. `pipelineMock` é sobrescrevível por teste; o retorno padrão é o turno normal.
+ */
+const pipelineMock = vi.fn(async () => ({
+  response: "Mocked Nicole reply",
+  qualificationScore: 0,
+}))
 vi.mock("@trifold/ai", () => ({
   processMessage: vi.fn(async () => "Mocked Nicole reply"),
+  processMessageWithMetadata: (...a: unknown[]) =>
+    (pipelineMock as unknown as (...x: unknown[]) => unknown)(...a),
   createAnthropicClient: vi.fn(() => ({})),
+}))
+
+/**
+ * Story 87-20 — o atraso "humano" (75-156) é `setTimeout` de até 3s no caminho real.
+ * Zerá-lo é a única forma de a suíte alcançar o bloco de ENVIO sem esperar segundos —
+ * e o que se mede aqui é SE o envio acontece, não quanto tempo depois.
+ */
+vi.mock("@web/lib/whatsapp/typing-delay", () => ({
+  calculateTypingDelay: () => 0,
 }))
 
 // Mock fetch for outbound WhatsApp Cloud API + media download
@@ -163,6 +197,9 @@ interface ConversationRow {
   status: string
   created_at: string
   last_message_at?: string | null
+  /** Story 87-20 (AC14) — a âncora e o MOTIVO do handoff. */
+  handoff_at?: string | null
+  handoff_reason?: string | null
 }
 
 interface DbState {
@@ -227,6 +264,29 @@ function newId(prefix: string): string {
 
 import { normalizePhoneBR } from "@trifold/shared"
 
+/** Story 87-20 — todo `.select()` executado, com a lista LITERAL de colunas. */
+let selectsPorTabela: Array<{ table: string; cols: string | null }> = []
+
+/** Colunas de uma projeção simples, ou `null` (`*`, embed, `->>`, agregados). */
+function parseProjecao(cols: string | null): string[] | null {
+  if (!cols) return null
+  const partes = cols.split(",").map((c) => c.trim())
+  if (partes.some((p) => !/^[a-z_][a-z0-9_]*$/i.test(p))) return null
+  return partes
+}
+
+function projetar(
+  rows: Record<string, unknown>[],
+  cols: string[] | null
+): Record<string, unknown>[] {
+  if (cols === null) return rows
+  return rows.map((r) => {
+    const out: Record<string, unknown> = {}
+    for (const c of cols) if (c in r) out[c] = r[c]
+    return out
+  })
+}
+
 // Build a minimal chainable Supabase-like client. Each query is built up via
 // chained method calls; `await` triggers `then` which resolves the result.
 function buildSupabaseMock() {
@@ -236,6 +296,8 @@ function buildSupabaseMock() {
       orderBy?: { col: string; ascending: boolean }
       limit?: number
       action: "select" | "insert" | "upsert" | "update" | "delete"
+      /** Story 87-20 — colunas do `.select()`, ou `null` quando não é projeção simples. */
+      cols?: string[] | null
       payload?: unknown
       onConflict?: string
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -286,11 +348,25 @@ function buildSupabaseMock() {
     }
 
     const builder = {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      /**
+       * Story 87-20 — **a lista de colunas é aplicada de verdade.**
+       *
+       * O fake devolvia a linha inteira e ignorava o `.select()`. Isso deixa passar
+       * VERDE a classe de defeito mais cara desta família: um `select` que não projeta
+       * a coluna que o código logo abaixo consulta. Foi exatamente o caso do bloco de
+       * reativação de 24h — `select("handoff_at")`, e o AC14 lendo `handoff_reason`
+       * seria `undefined` para sempre. A chamada existe; o argumento foi neutralizado.
+       *
+       * `selectsPorTabela` guarda o argumento LITERAL para a asserção explícita de
+       * projeção; o narrowing abaixo é a metade que tem dente.
+       */
       select(...args: unknown[]) {
         if (state.action !== "insert" && state.action !== "upsert") {
           state.action = "select"
         }
+        const cols = typeof args[0] === "string" ? (args[0] as string) : null
+        selectsPorTabela.push({ table: String(table), cols })
+        state.cols = parseProjecao(cols)
         return builder
       },
       insert(payload: unknown) {
@@ -365,10 +441,25 @@ function buildSupabaseMock() {
       data: any
       error: { message: string } | null
     }> {
+      /**
+       * Story 87-20 — tabela ausente vira lista VAZIA em vez de `undefined`.
+       *
+       * Sem isto, qualquer consulta a uma tabela que o `freshDb` não declara estoura
+       * `Cannot read properties of undefined (reading 'slice')` dentro do caminho
+       * assíncrono — e o `catch (asyncErr)` da rota converte isso em um
+       * `WEBHOOK_ASYNC_ERROR` silencioso. Foi o que manteve o pipeline da Nicole
+       * INTEIRO fora de alcance desta suíte: nenhum teste chegava a `processMessage`,
+       * e a suíte ficava verde de qualquer jeito. Medido em 2026-08-30 —
+       * `identifyClientByContact` (Story 76-2) consulta tabelas de relacionamento que
+       * o fake nunca declarou.
+       */
+      if (!db[table]) {
+        ;(db as unknown as Record<string, unknown[]>)[table as string] = []
+      }
       const rows = db[table] as Record<string, unknown>[]
 
       if (state.action === "select") {
-        const result = applyFilters(rows)
+        const result = projetar(applyFilters(rows), state.cols ?? null)
         return Promise.resolve({ data: result, error: null })
       }
 
@@ -562,6 +653,22 @@ async function flushAsync() {
   // Drain microtask queue so the `after()` callback runs
   await new Promise((r) => setTimeout(r, 0))
   await new Promise((r) => setTimeout(r, 0))
+}
+
+/**
+ * Story 87-20 · QA-87-20-1 — espera os callbacks de `after()` TERMINAREM.
+ *
+ * A rota agenda vários `after()` independentes (push ao corretor, coach, e o bloco assíncrono
+ * da Nicole), e um callback pode agendar outro — daí o laço, que troca a lista por uma nova a
+ * cada volta. `allSettled` preserva a semântica fire-and-forget do original: um callback que
+ * rejeita não derruba o teste, só deixa de ser esperado.
+ */
+async function drenarAfter() {
+  for (let volta = 0; volta < 10 && afterPromises.length > 0; volta++) {
+    const pendentes = afterPromises
+    afterPromises = []
+    await Promise.allSettled(pendentes)
+  }
 }
 
 // ---- Tests ----------------------------------------------------------------
@@ -1273,5 +1380,273 @@ describe("Story 900-24 — dual-run: em `both`, quem decide é o legado", () => 
     // Sem `flushAsync()`: a asserção roda no RETORNO da rota, não depois.
     expect(res.status).toBe(200)
     expect(escritasCompletadas).toHaveLength(1)
+  })
+})
+
+/**
+ * Story 87-20 — o webhook diante de um turno contido por loop bot-a-bot, e o guard
+ * que impede a conversa contida de reativar sozinha em 24h.
+ */
+describe("Story 87-20 — trava de loop bot-a-bot no webhook", () => {
+  const APP_SECRET = "test-secret"
+  const TELEFONE = "+5544999689446"
+  const CONV = "conv-87-20"
+  const LEAD = "lead-87-20"
+
+  /** URL de envio da Graph API — o que NÃO pode ser chamado no caminho bloqueado. */
+  const URL_ENVIO = "https://graph.facebook.com/v21.0/PNID/messages"
+
+  beforeEach(() => {
+    db = freshDb()
+    nextId = 0
+    geracaoDoTeste += 1
+    escritasCompletadas = []
+    // Callbacks de `after()` retidos por testes anteriores (que drenam por tempo) não
+    // podem entrar na conta de `drenarAfter()` deste bloco.
+    afterPromises = []
+    selectsPorTabela = []
+    logEventMock.mockClear()
+    logEventOnceMock.mockClear()
+    fetchMock.mockClear()
+    coachMock.mockClear()
+    coachMock.mockResolvedValue(undefined)
+    pipelineMock.mockClear()
+    pipelineMock.mockImplementation(async () => ({
+      response: "Mocked Nicole reply",
+      qualificationScore: 0,
+    }))
+    process.env.META_APP_SECRET = APP_SECRET
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "http://localhost"
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "test-key"
+    process.env.META_WHATSAPP_VERIFY_TOKEN = "verify"
+    // A janela anti-rajada (75-359) é um `setTimeout` de ~1s ANTES do pipeline. Zerada
+    // aqui de propósito: ela é um mecanismo distinto e desligá-la é o que permite a
+    // esta suíte chegar, pela primeira vez, ao `processMessageWithMetadata`.
+    process.env.NICOLE_ANTI_RAJADA_MS = "0"
+  })
+
+  afterEach(() => {
+    delete process.env.NICOLE_ANTI_RAJADA_MS
+  })
+
+  /** Lead + conversa já existentes, com o estado de handoff que o teste pedir. */
+  function semear(conversa: Partial<ConversationRow>) {
+    db.leads.push({
+      id: LEAD,
+      org_id: "org-1",
+      phone: TELEFONE,
+      phone_normalized: normalizePhoneBR(TELEFONE),
+      channel: "whatsapp",
+      source: "whatsapp",
+      stage_id: "stage-1",
+      metadata: null,
+      created_at: new Date().toISOString(),
+    })
+    db.conversations.push({
+      id: CONV,
+      org_id: "org-1",
+      lead_id: LEAD,
+      channel: "whatsapp",
+      is_ai_active: true,
+      status: "active",
+      created_at: new Date(Date.now() - 72 * 3600_000).toISOString(),
+      ...conversa,
+    })
+  }
+
+  async function entregar(wamid: string, texto = "oi") {
+    const { POST } = await import("../route")
+    const res = await POST(
+      signedRequest(buildPayload({ from: TELEFONE, wamid, text: texto }), APP_SECRET)
+    )
+    // QA-87-20-1: espera a CONCLUSÃO do callback de `after()`, não 60 ms de folga.
+    // O laço antigo dava tempo de sobra para uma escrita órfã completar sozinha — era
+    // por isso que remover só o `await` do recibo deixava a suíte inteira verde.
+    await drenarAfter()
+    return res
+  }
+
+  /**
+   * Chamadas de `fetch` que ENVIAM texto ao lead.
+   *
+   * Filtrar só pela URL não serve: o indicador de "digitando…" (75-156) usa o MESMO
+   * endpoint `/messages`, com `type: "typing_indicator"`. Um teste que contasse URLs
+   * veria o typing como envio e o "não enviou nada" nunca poderia ficar verde.
+   */
+  function enviosDeMensagem(): Array<{ text?: { body?: string } }> {
+    // `fetchMock` é declarado sem parâmetros (`vi.fn(async () => …)`), então o tipo
+    // de `mock.calls` é `[]`. Os argumentos REAIS estão lá em runtime.
+    const chamadas = fetchMock.mock.calls as unknown as unknown[][]
+    return chamadas
+      .filter((c) => String(c[0]) === URL_ENVIO)
+      .map((c) => {
+        const init = c[1] as { body?: string } | undefined
+        try {
+          return JSON.parse(String(init?.body ?? "{}")) as { type?: string; text?: { body?: string } }
+        } catch {
+          return {}
+        }
+      })
+      .filter((corpo) => (corpo as { type?: string }).type === "text")
+  }
+
+  // -------------------------------------------------------------------------
+  // T2.6 / AC9 — o recibo é AGUARDADO e o envio é pulado
+  // -------------------------------------------------------------------------
+
+  describe("turno contido (AC9)", () => {
+    const BLOQUEIO = {
+      tipo: "encerramento" as const,
+      ocorrencias: 2,
+      conversationId: CONV,
+      leadId: LEAD,
+    }
+
+    beforeEach(() => {
+      semear({})
+      pipelineMock.mockImplementation(async () => ({
+        response: "",
+        bloqueadoPorLoop: BLOQUEIO,
+        qualificationScore: 0,
+      }))
+    })
+
+    it("grava NICOLE_LOOP_DETECTADO por `logEventOnce`, e a escrita COMPLETA antes do fim", async () => {
+      await entregar("wamid.LOOP1")
+
+      // A asserção é IMEDIATA depois de `drenarAfter()` — nenhum tempo de relógio entre
+      // o fim do callback e a leitura. `escritasCompletadas` só recebe o payload depois
+      // que a promise do `logEventOnce` resolve num MACROTASK (5 ms), e com o `await` no
+      // lugar isso acontece DENTRO do callback. Trocar `await logEventOnce` por
+      // `void logEventOnce` — ou por `logEvent` — deixa este array vazio.
+      // É o carrasco do "aguardado", não só do "chamado".
+      const recibo = escritasCompletadas.find(
+        (e) => (e as { event_type?: string }).event_type === "NICOLE_LOOP_DETECTADO"
+      ) as Record<string, unknown> | undefined
+
+      expect(recibo).toBeDefined()
+      expect(recibo!.level).toBe("error")
+      expect(recibo!.category).toBe("ai")
+      expect(recibo!.org_id).toBe("org-1")
+      expect(recibo!.metadata).toMatchObject(BLOQUEIO)
+    })
+
+    it("NÃO usa o canal fire-and-forget (`logEvent`) para este evento", async () => {
+      await entregar("wamid.LOOP2")
+      const porLogEvent = logEventMock.mock.calls
+        .map((c) => (c[0] as { event_type?: string }).event_type)
+        .filter((t) => t === "NICOLE_LOOP_DETECTADO")
+      expect(porLogEvent).toEqual([])
+    })
+
+    it("o bloco de envio NÃO roda — nada de `text.body: \"\"` para a Graph API", async () => {
+      await entregar("wamid.LOOP3")
+      expect(enviosDeMensagem()).toHaveLength(0)
+    })
+
+    it("o turno NORMAL continua enviando — o guard é do caminho bloqueado, não de todos", async () => {
+      pipelineMock.mockImplementation(async () => ({
+        response: "Olá! Como posso ajudar?",
+        qualificationScore: 0,
+      }))
+      await entregar("wamid.NORMAL1")
+
+      expect(enviosDeMensagem().length).toBeGreaterThan(0)
+      expect(enviosDeMensagem()[0]!.text!.body).toBe("Olá! Como posso ajudar?")
+      expect(
+        escritasCompletadas.filter(
+          (e) => (e as { event_type?: string }).event_type === "NICOLE_LOOP_DETECTADO"
+        )
+      ).toHaveLength(0)
+    })
+
+    /**
+     * O call-site TEM de ser `processMessageWithMetadata`. O wrapper `processMessage`
+     * devolve só a string e nunca poderia carregar `bloqueadoPorLoop` — com ele, este
+     * webhook seria contido em silêncio, sem recibo e sem alerta (que é o que segue
+     * acontecendo no Telegram, aceito e documentado no OUT da story).
+     */
+    it("o pipeline é chamado pela variante COM metadata", async () => {
+      await entregar("wamid.LOOP4")
+      expect(pipelineMock).toHaveBeenCalled()
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // T5.1/T5.2 / AC14 — a conversa contida por loop não reativa sozinha
+  // -------------------------------------------------------------------------
+
+  describe("reativação de 24h (AC14)", () => {
+    /** Handoff antigo o bastante para `shouldReactivateAi` dizer sim. */
+    const HANDOFF_ANTIGO = new Date(Date.now() - 30 * 3600_000).toISOString()
+
+    it("controle: `broker_reply` com 30h REATIVA a Nicole normalmente (sem regressão)", async () => {
+      semear({
+        is_ai_active: false,
+        handoff_at: HANDOFF_ANTIGO,
+        handoff_reason: "broker_reply",
+      })
+      await entregar("wamid.REATIVA1")
+
+      const conversa = db.conversations.find((c) => c.id === CONV)!
+      expect(conversa.is_ai_active).toBe(true)
+      expect(conversa.handoff_reason).toBeNull()
+    })
+
+    it("`loop_bot_detectado` com 30h NÃO reativa — só ação humana traz a Nicole de volta", async () => {
+      semear({
+        is_ai_active: false,
+        handoff_at: HANDOFF_ANTIGO,
+        handoff_reason: "loop_bot_detectado",
+      })
+      await entregar("wamid.NAOREATIVA1")
+
+      const conversa = db.conversations.find((c) => c.id === CONV)!
+      expect(conversa.is_ai_active).toBe(false)
+      expect(conversa.handoff_reason).toBe("loop_bot_detectado")
+      // E a Nicole não respondeu: nenhum envio saiu.
+      expect(enviosDeMensagem()).toHaveLength(0)
+    })
+
+    /**
+     * A SEGUNDA metade — e a que faltava. O guard acima só funciona se a consulta que o
+     * alimenta projetar `handoff_reason`. Ela era `select("handoff_at")`: o campo viria
+     * `undefined` para sempre, a reativação nunca seria pulada, e a oscilação
+     * permanente que o AC14 existe para matar voltaria inteira — com o teste VERDE, se
+     * o fake devolvesse o campo independentemente da lista de colunas.
+     *
+     * O fake deste arquivo agora aplica a projeção de verdade, então o teste acima já
+     * reprova sozinho. Esta asserção literal é a outra metade: ela diz QUAL consulta
+     * perdeu a coluna, em vez de deixar a falha aparecer como "reativou e não devia".
+     */
+    it("a consulta de reativação NOMEIA `handoff_reason` no `.select()`", async () => {
+      semear({
+        is_ai_active: false,
+        handoff_at: HANDOFF_ANTIGO,
+        handoff_reason: "loop_bot_detectado",
+      })
+      await entregar("wamid.PROJECAO1")
+
+      const projecoes = selectsPorTabela
+        .filter((s) => s.table === "conversations" && typeof s.cols === "string")
+        .map((s) => s.cols!)
+      const daReativacao = projecoes.filter((c) => c.includes("handoff_at"))
+
+      expect(daReativacao.length).toBeGreaterThan(0)
+      for (const cols of daReativacao) {
+        expect(cols.split(",").map((c) => c.trim())).toContain("handoff_reason")
+      }
+    })
+
+    it("handoff RECENTE não reativa, com qualquer motivo — a regra temporal segue intocada", async () => {
+      semear({
+        is_ai_active: false,
+        handoff_at: new Date(Date.now() - 60_000).toISOString(),
+        handoff_reason: "broker_reply",
+      })
+      await entregar("wamid.RECENTE1")
+
+      expect(db.conversations.find((c) => c.id === CONV)!.is_ai_active).toBe(false)
+    })
   })
 })

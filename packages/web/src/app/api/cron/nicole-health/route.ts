@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { logEventOnce } from "@web/lib/logger"
-import { classificarErroIA, deveAlertar, type TipoErroIA } from "@web/lib/alerts/erro-ia"
+import {
+  classificarErroIA,
+  deveAlertar,
+  MOTIVO_POR_TIPO,
+  type TipoErroIA,
+} from "@web/lib/alerts/erro-ia"
 import {
   alertarAdminWhatsApp,
   carregarConfigWhatsApp,
@@ -57,6 +62,63 @@ interface Agregado {
    * era o `select` não trazer `org_id`, então o alerta agregava sem saber DE QUEM.
    */
   orgsAfetadas: Set<string | null>
+}
+
+/**
+ * Story 87-20 — o `event_type` que a trava de loop bot-a-bot grava, do webhook, com
+ * `await logEventOnce`. Este cron é só o MENSAGEIRO: a contenção (`is_ai_active=false`
+ * + `handoff_reason`) já aconteceu lá, síncrona. Se este branch inteiro falhar, a
+ * Nicole continua contida — é o AC11.
+ */
+const EVENTO_LOOP = "NICOLE_LOOP_DETECTADO"
+
+/** Base do link que vai dentro do `{{1}}`. `APP_URL` nu não existe — produziria `undefined/…`. */
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://crm.trifold.eng.br"
+
+interface LoopAgregado {
+  conversationId: string
+  ocorrencias: number
+  primeiraOcorrencia: string
+}
+
+/**
+ * Loops contidos na janela, agregados POR CONVERSA.
+ *
+ * Por conversa e não por tipo de sinal: o admin precisa saber ONDE olhar. Dois loops
+ * simultâneos em conversas diferentes viram dois alertas DISTINGUÍVEIS (cada um com
+ * seu link), não duas mensagens idênticas.
+ */
+async function coletarLoops(
+  admin: ReturnType<typeof createAdminClient>,
+  desde: string
+): Promise<LoopAgregado[]> {
+  const { data, error } = await admin
+    .from("system_events")
+    .select("created_at, metadata")
+    .eq("event_type", EVENTO_LOOP)
+    .gte("created_at", desde)
+    .order("created_at", { ascending: true })
+
+  if (error || !data) return []
+
+  const porConversa = new Map<string, LoopAgregado>()
+  for (const ev of data) {
+    const meta = (ev.metadata ?? {}) as Record<string, unknown>
+    const conversationId = typeof meta.conversationId === "string" ? meta.conversationId : null
+    if (!conversationId) continue
+    const atual = porConversa.get(conversationId)
+    if (atual) {
+      atual.ocorrencias += 1
+    } else {
+      porConversa.set(conversationId, {
+        conversationId,
+        ocorrencias: 1,
+        // Ordenado asc: o primeiro que vejo de cada conversa é o mais antigo.
+        primeiraOcorrencia: ev.created_at as string,
+      })
+    }
+  }
+  return [...porConversa.values()]
 }
 
 /** União das orgs afetadas de vários tipos — `null` (evento sem org) vira "desconhecida". */
@@ -132,9 +194,14 @@ export async function GET(request: NextRequest) {
     deveAlertar(tipo, ag.ocorrencias)
   )
 
+  // Story 87-20 — branch INDEPENDENTE: roda mesmo quando não há erro de API de IA na
+  // janela (o caso comum), e um loop contido não é um erro de API.
+  const loops = await coletarLoops(admin, desde)
+
   const resumo = {
     janelaMin: JANELA_MIN,
     eventosLidos: (eventos ?? []).length,
+    conversasEmLoop: loops.map((l) => l.conversationId),
     porTipo: Object.fromEntries(
       [...porTipo].map(([tipo, ag]) => [
         tipo,
@@ -150,7 +217,7 @@ export async function GET(request: NextRequest) {
     dryRun,
   }
 
-  if (aAlertar.length === 0) {
+  if (aAlertar.length === 0 && loops.length === 0) {
     return NextResponse.json({ ok: true, ...resumo, alertasEnviados: 0, dedupPulados: 0 })
   }
 
@@ -167,6 +234,10 @@ export async function GET(request: NextRequest) {
       metadata: {
         tipos: aAlertar.map(([t]) => t),
         orgs_afetadas: orgsAfetadasDe(aAlertar),
+        // Story 87-20 — sem isto, um loop contido que não conseguiu alertar sairia
+        // do registro por completo: o evento de "não consegui avisar" não diria que
+        // havia um loop a avisar.
+        conversas_em_loop: loops.map((l) => l.conversationId),
       },
       source: "api/cron/nicole-health",
       // Story 900-23 · AC3 — SEM `org_id`: o alerta é evento de PLATAFORMA, não de tenant.
@@ -216,7 +287,10 @@ export async function GET(request: NextRequest) {
       orgId: PLATFORM_ALERT_ORG_ID,
       config,
       telefones,
-      tipo,
+      // Story 87-20 — a resolução do texto subiu um nível (`tipo` → `motivo`) para o
+      // transporte poder servir o alerta de loop, que não é um `TipoErroIA`. O texto
+      // que sai daqui é byte-a-byte o de antes.
+      motivo: MOTIVO_POR_TIPO[tipo],
       desdeIso: ag.primeiraOcorrencia,
       ocorrencias: ag.ocorrencias,
       // ⚠️ Story 900-23 — `orgs_afetadas` NÃO entra aqui de propósito. `alertarAdminWhatsApp`
@@ -250,12 +324,78 @@ export async function GET(request: NextRequest) {
     alertasEnviados += enviados
   }
 
+  // ─── Story 87-20 · alerta de loop bot-a-bot ───────────────────────────────
+  //
+  // Branch NOVO e independente do de erro de API de IA acima: mesma infraestrutura de
+  // transporte (`alertarAdminWhatsApp`), classificador diferente (nenhum — o webhook
+  // já classificou), agregação por CONVERSA em vez de por tipo.
+  //
+  // AC11 — se tudo aqui falhar, a contenção continua de pé: ela aconteceu dentro do
+  // `processMessageWithMetadata`, aguardada, antes e independentemente deste cron.
+  let alertasDeLoop = 0
+  for (const loop of loops) {
+    if (dryRun) continue
+
+    // O link cabe no `{{1}}` (texto livre) e é a diferença entre "loop detectado" e
+    // "loop detectado NESTA conversa". Sem ele, trocamos um loop infinito por uma
+    // conversa contida que ninguém acha: `handoff_reason` é escrito em 6 rotas de API
+    // e lido em ZERO telas.
+    const motivo = `loop bot-a-bot detectado — ${APP_URL}/dashboard/conversas/${loop.conversationId}`
+
+    const { inserted } = await logEventOnce({
+      level: "warn",
+      category: "system",
+      event_type: "NICOLE_LOOP_ALERTA",
+      message: `Loop bot-a-bot contido — ${loop.ocorrencias} bloqueio(s) na janela`,
+      metadata: {
+        conversation_id: loop.conversationId,
+        ocorrencias: loop.ocorrencias,
+        primeira_ocorrencia: loop.primeiraOcorrencia,
+      },
+      // Dedup POR CONVERSA e por hora: dois loops simultâneos em conversas diferentes
+      // produzem dois alertas distintos, não um só nem dois idênticos.
+      dedupe_key: `nicole-loop-alerta:${loop.conversationId}:${horaAtual}`,
+      source: "api/cron/nicole-health",
+    })
+
+    if (!inserted) {
+      dedupPulados += 1
+      continue
+    }
+
+    const { enviados } = await alertarAdminWhatsApp(admin, {
+      orgId: PLATFORM_ALERT_ORG_ID,
+      config,
+      telefones,
+      motivo,
+      desdeIso: loop.primeiraOcorrencia,
+      ocorrencias: loop.ocorrencias,
+    })
+
+    if (enviados === 0) {
+      // Mesma compensação do branch acima: marcador gravado ANTES do envio dá o dedup
+      // atômico, mas mantê-lo depois de uma falha total de entrega transformaria a
+      // falha em silêncio pela hora inteira.
+      await admin
+        .from("system_events")
+        .delete()
+        .eq("event_type", "NICOLE_LOOP_ALERTA")
+        .eq("metadata->>dedupe_key", `nicole-loop-alerta:${loop.conversationId}:${horaAtual}`)
+      entregasFalhas += 1
+      continue
+    }
+
+    alertasEnviados += enviados
+    alertasDeLoop += 1
+  }
+
   return NextResponse.json({
     ok: true,
     ...resumo,
     tiposAlertaveis: aAlertar.map(([t]) => t),
     orgsAfetadas: orgsAfetadasDe(aAlertar),
     alertasEnviados,
+    alertasDeLoop,
     dedupPulados,
     entregasFalhas,
   })

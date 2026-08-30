@@ -19,6 +19,7 @@ vi.mock("@web/lib/whatsapp/log-send", () => ({
   logWhatsappSend: (...a: unknown[]) => logSendMock(...a),
 }))
 
+import { MOTIVO_POR_TIPO } from "./erro-ia"
 import {
   alertarAdminWhatsApp,
   carregarConfigWhatsApp,
@@ -100,7 +101,10 @@ describe("alertarAdminWhatsApp", () => {
   const params = {
     orgId: "org",
     config: CONFIG,
-    tipo: "credito" as const,
+    // Story 87-20 — a assinatura passou de `tipo: TipoErroIA` para `motivo: string`.
+    // O caller da 87-19 (`nicole-health`) resolve o texto com `MOTIVO_POR_TIPO[tipo]`
+    // e o resultado no fio é byte-a-byte o de antes — é o que este `motivo` reproduz.
+    motivo: MOTIVO_POR_TIPO.credito,
     desdeIso: "2026-08-28T09:05:41.798Z",
     ocorrencias: 7,
   }
@@ -147,5 +151,37 @@ describe("alertarAdminWhatsApp", () => {
     const r = await alertarAdminWhatsApp(admin, { ...params, telefones: [] })
     expect(r).toEqual({ enviados: 0, falhas: 0 })
     expect(enviarMock).not.toHaveBeenCalled()
+  })
+
+  /**
+   * Story 87-20 — o `{{1}}` é texto LIVRE e o alerta de loop o usa para carregar o
+   * link da conversa. Sem esta garantia, o admin recebe "loop detectado, N
+   * ocorrências" e não tem como achar qual conversa — metade do defeito que a story
+   * existe para matar.
+   */
+  it("o `motivo` vai LITERAL no {{1}} — é por ele que o link da conversa passa", async () => {
+    // UUID SINTÉTICO — nenhum identificador de conversa real entra no repositório.
+    const motivo =
+      "loop bot-a-bot detectado — https://crm.trifold.eng.br/dashboard/conversas/00000000-0000-4000-8000-000000000001"
+    await alertarAdminWhatsApp(admin, { ...params, motivo, telefones: ["5544999761478"] })
+
+    const chamada = enviarMock.mock.calls[0]
+    if (!chamada) throw new Error("sendWhatsAppTemplate não foi chamado")
+    const componentes = chamada[4] as Array<{ parameters: Array<{ text: string }> }>
+    expect(componentes[0]!.parameters[0]!.text).toBe(motivo)
+    // Três parâmetros, SEMPRE: um 4º faz a Meta devolver 400 e o alerta para de sair.
+    expect(componentes[0]!.parameters).toHaveLength(3)
+  })
+
+  it("nenhum destinatário perde o alerta quando o motivo muda — os 3 params seguem fixos", async () => {
+    await alertarAdminWhatsApp(admin, {
+      ...params,
+      motivo: "qualquer texto",
+      telefones: ["5544999761478", "5544984070700"],
+    })
+    for (const chamada of enviarMock.mock.calls) {
+      const componentes = chamada[4] as Array<{ parameters: unknown[] }>
+      expect(componentes[0]!.parameters).toHaveLength(3)
+    }
   })
 })

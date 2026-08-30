@@ -3,7 +3,7 @@ import { SupabaseClient } from "@supabase/supabase-js"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import crypto from "crypto"
 import type { MediaBlock } from "@trifold/ai"
-import { logEvent } from "@web/lib/logger"
+import { logEvent, logEventOnce } from "@web/lib/logger"
 import { triggerAutomations } from "@web/lib/email-automations"
 import { notifyBrokerOfAppointment } from "@web/lib/broker/notify-appointment"
 import { notifyBrokerOnReply } from "@web/lib/broker/notify-on-reply"
@@ -14,6 +14,13 @@ import {
   resolveTakeoverAnchor,
 } from "@web/lib/broker/broker-takeover-status"
 import { normalizePhoneBR } from "@trifold/shared"
+// Story 87-20 — caminho PROFUNDO de propósito. `@trifold/ai` (o barrel) arrasta o SDK
+// da Anthropic e todos os flows; é exatamente por isso que o pipeline é carregado por
+// `await import()` lá embaixo, dentro do caminho assíncrono. Este módulo é puro e sem
+// dependências — importá-lo estaticamente não recria o custo que o dynamic import
+// existe para evitar. Reescrever a string aqui criaria uma segunda definição do mesmo
+// motivo, que diverge no primeiro typo.
+import { LOOP_BOT_HANDOFF_REASON } from "@trifold/ai/src/flows/loop-breaker"
 import type { WhatsAppReferral } from "@trifold/shared"
 import { buildCtwaMetadata } from "@web/app/api/webhook/whatsapp/ctwa-metadata"
 import { ehPedidoDeOptOut } from "@web/lib/followup/template-fallback"
@@ -1063,7 +1070,14 @@ export async function POST(request: NextRequest) {
         const [{ data: convRow }, { data: lastBrokerMsg }] = await Promise.all([
           supabase
             .from("conversations")
-            .select("handoff_at")
+            // Story 87-20 (AC14) — `handoff_reason` PRECISA estar na projeção.
+            // Sem ela, o guard logo abaixo lê `undefined` para sempre, a reativação
+            // nunca é pulada e a oscilação permanente que o AC14 existe para matar
+            // volta inteira — com o teste VERDE, se o fake devolver o campo
+            // independentemente da lista de colunas. É a mesma classe de defeito da
+            // consulta que alimenta os três sinais, na consulta que este próprio
+            // conserto introduziu. O carrasco está em `__tests__/route.test.ts`.
+            .select("handoff_at, handoff_reason")
             .eq("id", conversation!.id)
             .maybeSingle(),
           supabase
@@ -1081,7 +1095,18 @@ export async function POST(request: NextRequest) {
           lastBrokerMsg?.created_at ?? null
         )
 
-        if (shouldReactivateAi(anchor)) {
+        // Story 87-20 (AC14) — conversa contida pela trava de loop bot-a-bot NÃO
+        // reativa sozinha. Sem esta condição, reativar em 24h zera o contador da
+        // janela de 30 min do Sinal A: o outro bot volta a falar, a Nicole responde,
+        // repete 2×, bloqueia, e o ciclo recomeça — um alerta a cada 24h, para
+        // sempre. A conversa só volta por ação humana explícita (`resume-ai`).
+        //
+        // A condição entra AQUI, no chamador. `shouldReactivateAi` e
+        // `resolveTakeoverAnchor` (63-13/63-15) continuam puramente temporais e
+        // agnósticas ao motivo — nenhuma linha delas é tocada.
+        const contidaPorLoop = convRow?.handoff_reason === LOOP_BOT_HANDOFF_REASON
+
+        if (shouldReactivateAi(anchor) && !contidaPorLoop) {
           // Reassume: limpa o handoff para não influenciar cálculos futuros.
           await supabase
             .from("conversations")
@@ -1177,7 +1202,11 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        const { processMessage, createAnthropicClient } = await import(
+        // Story 87-20 — `processMessageWithMetadata`, não o wrapper `processMessage`.
+        // O wrapper devolve só `.response` (uma string) e por isso não consegue
+        // carregar o sinal de bloqueio. Ele continua existindo e não muda: o Telegram
+        // (canal de staging) e dois arquivos de teste seguem usando.
+        const { processMessageWithMetadata, createAnthropicClient } = await import(
           "@trifold/ai"
         )
         // Story 73-1: injeta o push pro Google Calendar (mantém packages/ai desacoplado).
@@ -1195,7 +1224,7 @@ export async function POST(request: NextRequest) {
           text: asyncText,
         })
 
-        const response = await processMessage({
+        const { response, bloqueadoPorLoop } = await processMessageWithMetadata({
           supabase,
           anthropic,
           conversationId: conversation!.id,
@@ -1297,6 +1326,39 @@ export async function POST(request: NextRequest) {
             }
           },
         })
+
+        // ─── Story 87-20 · o turno foi contido por loop bot-a-bot ──────────────
+        //
+        // A contenção (`is_ai_active=false` + `handoff_reason`) já aconteceu dentro
+        // do `processMessageWithMetadata`, síncrona e aguardada. O que falta aqui é
+        // o RECIBO — e ele é a última escrita antes do response, no caminho em que
+        // o envio é pulado.
+        //
+        // Por isso `await logEventOnce` e não o `logEvent` do `onEvent` acima: o
+        // canal `emit()` → `onEvent` → `logEvent` é fire-and-forget, e numa lambda
+        // serverless a promise pendente morre com o processo. Isso já custou um
+        // evento em produção (o recibo `NICOLE_LASTRO_DIARIO` de 10/08). Um evento
+        // perdido aqui produz o pior estado possível: contido, silencioso e
+        // indistinguível de "funcionou e o admin não olhou o WhatsApp".
+        //
+        // O `return` pula o typing-delay, o envio e a mídia — o bloco abaixo não tem
+        // guarda de resposta vazia, e mandar `text.body: ""` faz a Graph API recusar.
+        // Mesmo padrão do `rajada_resposta_suprimida` logo acima.
+        if (bloqueadoPorLoop) {
+          await logEventOnce({
+            level: "error",
+            category: "ai",
+            event_type: "NICOLE_LOOP_DETECTADO",
+            message: `Loop bot-a-bot contido (${bloqueadoPorLoop.tipo}) — Nicole pausada nesta conversa`,
+            metadata: {
+              ...bloqueadoPorLoop,
+              wamid: messageId,
+            },
+            source: "api/webhook/whatsapp",
+            org_id: orgId,
+          })
+          return
+        }
 
         // Story 75-156 — atraso "humano" curto antes de enviar (teto 3s no
         // componente por caractere). Completa o efeito do "digitando…" iniciado
