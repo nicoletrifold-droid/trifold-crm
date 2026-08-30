@@ -89,3 +89,23 @@ export {
   parseCoachDraft,
 } from "./live-coach"
 export type { ObjecaoTipo, Confianca, ObjectionDetection, CoachDraft } from "./live-coach"
+// Story 87-20 — a trava de loop bot-a-bot. Pública em `@trifold/ai` porque o webhook
+// do WhatsApp (packages/web) precisa de `LOOP_BOT_HANDOFF_REASON` para NÃO reativar
+// a Nicole sozinha em 24h numa conversa contida por loop (AC14). Reimplementar a
+// string lá criaria duas definições do mesmo motivo, que divergem no primeiro typo.
+export {
+  LOOP_BOT_HANDOFF_REASON,
+  LOOP_CLOSING_MAX_SENDS,
+  LOOP_CLOSING_WINDOW_MIN,
+  LOOP_COUNT_MAX,
+  LOOP_COUNT_WINDOW_MIN,
+  LOOP_REPEAT_MAX_SENDS,
+  LOOP_REPEAT_WINDOW_MIN,
+  PADROES_DE_ENCERRAMENTO,
+  contarEnviosNaJanela,
+  detectarLoopDeConteudo,
+  detectarLoopDeEncerramento,
+  detectarLoopPorContagem,
+  ehMensagemDeEncerramento,
+} from "./loop-breaker"
+export type { MensagemRecente } from "./loop-breaker"
