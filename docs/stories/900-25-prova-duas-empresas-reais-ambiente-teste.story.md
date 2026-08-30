@@ -1473,6 +1473,24 @@ nenhum filtro por org as alcança e `forEachActiveOrg` não devolve o id delas �
 Resíduo documentado em `tests/tenancy/support/fixtures.ts`, mesma classe do `webhook_logs`
 SET NULL (Task 11.5).
 
+**Task 12.1 / AC15 — não-regressão, medida das DUAS formas.** `origin/main...HEAD` (merge-base) e
+`origin/main..HEAD` (tip a tip) devolvem o **mesmo** conjunto — a branch está direto sobre a `main`,
+sem divergência, então o controle não é redundante: ele é o que prova que o `...` não está medindo
+uma base antiga (`feedback_regua_que_mistura_duas_revisoes`).
+```
+ docs/stories/900-25-…story.md      | 407 ++++++++--
+ package.json                       |   1 +
+ tests/tenancy/alias-vivo.test.ts   |  50 ++
+ tests/tenancy/capi-dispatch.test.ts| 275 +++++++
+ tests/tenancy/cross-tenant.test.ts | 860 +++++++++++++++++++++
+ tests/tenancy/support/ambiente.ts  | 191 +++++
+ tests/tenancy/support/fixtures.ts  | 223 ++++++
+ vitest.tenancy.config.ts           |  84 ++
+ 8 files changed, 2027 insertions(+), 64 deletions(-)
+```
+Filtrando pelos padrões que a AC15 declara, **zero** arquivos fora deles. `git status --short --
+packages/ scripts/ supabase/` → **vazio**: nenhuma mutação de produção sobrou na árvore.
+
 **Validações.**
 - `pnpm test` (Camada A, gate de PR): **287 files / 3693 passed + 6 expected fail**. Baseline
   medido **movendo `tests/tenancy/` e `vitest.tenancy.config.ts` para fora e rodando de novo**:
