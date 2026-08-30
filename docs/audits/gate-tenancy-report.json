@@ -1,4 +1,5 @@
 {
+  "_aviso": "ARQUIVO GERADO — regravado a cada `pnpm gate:tenancy`. Ele é RASTREADO e é a fixture de scripts/gate-tenancy-auditoria.test.ts: se você rodar o gate contra um ref que NÃO seja produção (TENANCY_TARGET_REF=...), este arquivo passa a descrever o outro banco e a suíte quebra. Restaure com `git checkout -- docs/audits/gate-tenancy-report.json` depois de medir.",
   "geradoEm": "2026-08-24T16:09:37.870Z",
   "fonte": "management-api",
   "projectRef": "dsopqkqjkmhytudaaolv",
