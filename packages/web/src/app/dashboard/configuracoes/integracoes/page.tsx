@@ -6,6 +6,12 @@ import { createClient } from "@web/lib/supabase/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { fetchTokenValidity } from "@web/lib/meta/token-validity"
 import { GoogleIntegrationCard } from "./google-integration-card"
+import { IntegrationsPanel } from "@web/components/integrations/integrations-panel"
+import type { LinhaDaTrilha } from "@web/components/integrations/integrations-panel"
+import {
+  montarTilesDoPainel,
+  type LinhaDeIntegracaoDoPainel,
+} from "@web/lib/integrations/painel/providers"
 
 function StatusBadge({ active }: { active: boolean }) {
   return (
@@ -96,6 +102,45 @@ export default async function IntegracoesPage() {
   // inválido (o helper distingue os dois estados).
   const tokenValidity = await fetchTokenValidity(waConfig?.access_token as string | null)
 
+  // ─────────────────────────────────────────────────────────────────────────────────────────
+  // Story 900-51 (AC4/AC9) — o painel self-service, na MESMA tela, sem recriá-la.
+  //
+  // As leituras usam o client RLS-scoped (`createClient()`), nunca `createAdminClient()`: esta
+  // superfície é do cliente, e a policy `org_integrations_select`/`platform_audit_log_select_org`
+  // já escopa por `user_org_id()`. Isso não é promessa — `scripts/admin-client-allowlist.test.ts`
+  // roda ESLint por AST dentro do `pnpm test` e este caminho não está na allowlist (AC8).
+  //
+  // E este arquivo não importa nada de `lib/tenancy/platform-*` (AC9): a fronteira entre as duas
+  // superfícies é o que a varredura de `app/dashboard/**` existe para manter.
+  // ─────────────────────────────────────────────────────────────────────────────────────────
+  const { data: integracoes } = await supabase
+    .from("org_integrations")
+    .select("provider, status, config, secret_ref, updated_at")
+    .eq("org_id", user.orgId)
+
+  const { data: trilha } = await supabase
+    .from("platform_audit_log")
+    .select("id, action, actor_type, created_at, metadata")
+    .eq("org_id", user.orgId)
+    .eq("target_table", "org_integrations")
+    .order("created_at", { ascending: false })
+    .limit(10)
+
+  // A montagem dos 5 tiles é COMPARTILHADA com o `/platform` (`montarTilesDoPainel`). Antes eram
+  // duas montagens, uma por tela, e elas discordavam sobre o WhatsApp: aqui `!!access_token`, lá
+  // a linha inescrevível de `org_integrations`. Medido em produção: canal `active` com
+  // credencial, e o painel do dono do produto dizendo "Não conectado" (QA-900-51-2).
+  const tilesDoPainel = montarTilesDoPainel(
+    (integracoes ?? []) as unknown as LinhaDeIntegracaoDoPainel[],
+    waConfig
+      ? {
+          status: "active",
+          phone_number_id: whatsappPhoneNumberId,
+          updated_at: (waConfig.updated_at as string | null) ?? null,
+        }
+      : null,
+  )
+
   // Check environment variable status
   const metaAppSecretConfigured = !!process.env.META_APP_SECRET
   const telegramBotUsername = process.env.TELEGRAM_BOT_USERNAME || null
@@ -109,6 +154,26 @@ export default async function IntegracoesPage() {
           Gerencie as integracoes externas do sistema
         </p>
       </div>
+
+      {/* Story 900-51 — painel self-service (5 tiles). Os cards abaixo continuam existindo:
+          esta seção é acréscimo, não substituição. */}
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-stone-100">
+            Chaves da sua empresa
+          </h2>
+          <p className="text-sm text-gray-500 dark:text-stone-400">
+            Troque uma credencial vencida sem depender do suporte. A chave é testada antes de ser
+            salva, vai para um cofre e nunca volta para esta tela.
+          </p>
+        </div>
+        <IntegrationsPanel
+          viewerRole="org_admin"
+          tiles={tilesDoPainel}
+          endpoint="/api/configuracoes/integracoes"
+          trilha={(trilha ?? []) as unknown as LinhaDaTrilha[]}
+        />
+      </section>
 
       {/* Meta Ads */}
       <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">

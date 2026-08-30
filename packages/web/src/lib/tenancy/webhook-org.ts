@@ -116,15 +116,50 @@ export async function resolveOrgByWhatsAppPhone(
  * NÃO `whatsapp_config`: são identificadores de fontes diferentes, e confundi-los é exatamente o
  * atalho que produziu o defeito original.
  *
- * ## Assimetria nomeada (correção C1 do parecer @po) — por que NÃO filtra `status`
+ * ## A assimetria ACABOU — `status='connected'` passou a ser exigido (Story 900-51, AC10)
  *
- * `resolveOrgByWhatsAppPhone` (acima) filtra `status='active'` e a justificativa ("org
- * desconectada não pode sequestrar o roteamento") se aplicaria literalmente aqui. Omitir o filtro
- * é INTENCIONAL, não esquecimento: o seed da 900-21b cria toda linha `meta_ads` como
- * `disconnected` e não existe UI para promovê-la a `connected` até a 900-47 (Onda 7). Exigir
- * `status='connected'` faria o modo `identifier` **nunca** resolver nenhuma org via Meta Ads,
- * mesmo depois de alguém configurar o `page_id` no único jeito possível hoje (SQL direto).
- * Quando a 900-47 entregar o painel, esta decisão volta à mesa com o contexto certo.
+ * A 900-24 omitiu o filtro de `status` de propósito e deixou a razão por escrito: o seed da
+ * 900-21b nasce `disconnected`, não existia UI para promover a `connected`, e exigir o filtro
+ * faria o modo `identifier` nunca resolver ninguém. A mesma nota dizia *"quando o painel
+ * entregar isso, esta decisão volta à mesa"*. A 900-51 é esse painel — `mark_connected` existe,
+ * com guard estrutural que recusa promover sem um segredo não vazio gravado (`P0015`/`P0017`), e
+ * o argumento que sustentava a omissão deixou de valer no mesmo commit em que ela é revertida.
+ *
+ * ### O que este filtro faz, medido — e o que ele NÃO faz
+ *
+ * **Faz:** fecha a sub-classe "config escrito e nunca promovido". Antes, uma única chamada direta
+ * a `org_integration_write_secret_as_org` com um `page_id` arbitrário bastava para uma empresa
+ * passar a receber os leads de outra, com `status` ainda `disconnected` e o tile mostrando "Não
+ * conectado" — ninguém olhando o painel perceberia.
+ *
+ * **Não faz:** fechar o risco cross-tenant. Medido pelo `@po` na Rodada 3 da 900-51: as duas RPCs
+ * (`write_secret_as_org` e `mark_connected_as_org`) estão `GRANT EXECUTE ... TO authenticated`,
+ * então o ataque continua possível ao custo de **um POST a mais** — o que este filtro garante é
+ * que ele deixe duas linhas de auditoria em vez de uma, não que ele não aconteça. A prevenção foi
+ * **conscientemente recusada** pelo dono do produto em 2026-08-30 (*"o cliente também grava o
+ * page_id, com auditoria"*); a compensação é a DETECÇÃO da AC11
+ * (`lib/integrations/painel/alertas-page-id.ts`).
+ *
+ * ### O preço, declarado (C3 do parecer)
+ *
+ * 1. **Credencial que expira passa a PERDER lead, não só a quebrar sync.** Antes, um `page_id`
+ *    correto com token vencido ainda resolvia a org certa — o lead chegava e só o enriquecimento
+ *    falhava. Agora, se aquela linha deixar de ser `'connected'` (hoje só por ação explícita:
+ *    `mark_error` no re-teste do painel, nunca por cron), o mesmo lead **não resolve organização
+ *    nenhuma** e cai em `WEBHOOK_ORG_UNRESOLVED`. É perda, não degradação. Trade aceito, escrito.
+ * 2. **`org_integrations_meta_page_ativo` não filtra `status`.** Uma linha `disconnected` que já
+ *    ocupa um `page_id` continua bloqueando outra org de gravar o mesmo valor. As rotas do painel
+ *    traduzem esse `23505` para o código `page_id_ja_configurado` em vez de deixar o erro de banco
+ *    cru chegar à tela — mitigação, não cura.
+ *
+ * ### Por que aplicar AGORA foi seguro (gate da Task 12.2, medido em 2026-08-30)
+ *
+ * `WEBHOOK_ORG_ROUTING` está **ausente** em produção, e `decidirModoRoteamento()` nunca lança:
+ * ausente ⇒ `"both"`, onde o legado decide o roteamento e o caminho novo só alimenta o contador
+ * de divergência. E a linha `meta_ads` da Trifold em produção está `disconnected` **com
+ * `config->>'page_id'` NULO** — ou seja, ela já não casava este resolver nem antes do filtro.
+ * Em `identifier`, o gate da AC10 é bloqueante: não aplicar enquanto essa linha não estiver
+ * `connected`, sob pena de o resolver parar de resolver qualquer org.
  */
 export async function resolveOrgByMetaPage(
   db: SupabaseClient,
@@ -138,6 +173,9 @@ export async function resolveOrgByMetaPage(
     .select("org_id")
     .eq("provider", "meta_ads")
     .eq("config->>page_id", pageId)
+    // Story 900-51/AC10 — a linha precisa ter sido PROMOVIDA por alguém que passou pela
+    // validação síncrona da rota. Ver o cabeçalho desta função para o alcance e o preço.
+    .eq("status", "connected")
     .limit(2)
 
   if (error) {

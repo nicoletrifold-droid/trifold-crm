@@ -519,6 +519,102 @@ superfície agora — mas a tabela que a `900-21b` cria já é o destino final d
 esta dependência **bloqueante de fato**, não só declarada, para qualquer story que preencha
 `secret_ref`. Draftar `900-16` antes disso, não depois.
 
+**Atualização (2026-08-30, Story `900-51`) — a fatia mínima FOI entregue; o resto do `900-16` NÃO.**
+A `900-51` (migration `248`) criou `platform_audit_log` e `platform_audit()`, e é a primeira story
+que preenche `secret_ref` — ou seja, ela fechou exatamente a metade que o parágrafo acima nomeava
+como bloqueante: nenhuma leitura de segredo de tenant acontece sem trilha (`reveal_last4` audita
+ANTES de devolver). E `append-only` nasceu como atributo estrutural, em dois eixos independentes:
+`REVOKE UPDATE, DELETE, TRUNCATE` (vale contra `BYPASSRLS`, medido) e três triggers que recusam até
+para o dono da tabela, incluindo `BEFORE TRUNCATE … FOR EACH STATEMENT` — sem esse terceiro, um
+`TRUNCATE` apagava a trilha inteira sem exceção nenhuma (medido pelo `@po`).
+
+**O que continua em aberto, e por isso este item NÃO fecha:**
+
+1. **`platform_admins` com níveis (`owner`/`operator`/`support`) não existe.** A autoridade continua
+   sendo o booleano `users.is_platform_admin`, e `requirePlatformAdmin()` continua consultando ele.
+2. **As rotas de `/platform` anteriores à `900-51` continuam sem trilha** —
+   `POST /api/platform/orgs` (provisiona empresa) e
+   `POST /api/platform/orgs/[id]/resend-admin-invite` (cria conta Auth para um admin de cliente)
+   não chamam `platform_audit()`. A função existe agora; ninguém as migrou. É uma mudança pequena e
+   NÃO foi feita aqui de propósito: está fora das ACs da `900-51`, e alargar o escopo em silêncio
+   esconderia de quem for fechar o `900-16` que a lacuna existia.
+3. **`platform_audit_log` não tem política de retenção.** Ela só cresce, por construção, e agora
+   ninguém consegue apagar linha nenhuma — nem o dono. Qualquer expurgo futuro exigirá uma migration
+   que derrube os triggers, o que é o custo pretendido, mas precisa de dono.
+
+---
+
+### [Epic 900] 🟡 A exceção referencial do trigger de `platform_audit_log` deixa o DONO nulificar atribuição
+
+**Adicionado em:** 2026-08-30
+**Prioridade:** P3 — residual conhecido, com mitigação já no lugar
+**Origem:** Camada B da Story `900-51` (achado do `@dev` durante a implementação)
+
+Os dois consertos que o `@po` pediu — `ON DELETE SET NULL` nas FKs (R7, para a trilha sobreviver à
+org e ao usuário) e trigger de imutabilidade (R1) — **colidiam**, e nenhuma leitura do código
+revelava isso. Medido só ao rodar a Camada B contra o Postgres de verdade:
+
+    DELETE FROM users WHERE id = <ator que já agiu>;
+    → ERROR: P0020: platform_audit_log é append-only — UPDATE não é permitido
+      CONTEXT: SQL statement "UPDATE ONLY public.platform_audit_log SET actor_user_id = NULL …"
+
+`ON DELETE SET NULL` é implementado como um UPDATE interno; um trigger `BEFORE UPDATE`
+incondicional o intercepta. Resultado: a FK que existia para a trilha sobreviver ficava inerte, e
+apagar uma org voltava a ser bloqueado — agora com erro opaco. Pior para a `900-25`: o teardown dela
+deriva as FKs bloqueantes de `pg_constraint` **excluindo** as `SET NULL`, então nunca saberia que
+precisava tratar esta.
+
+**Conserto aplicado na `248`:** a exceção do trigger é cirúrgica — passa apenas o UPDATE que
+NULIFICA `actor_user_id`/`org_id` deixando todo o resto idêntico (carrasco nos dois sentidos:
+alterar `action`, `metadata` ou reapontar o ator para outro usuário continua levantando `P0020`).
+
+**O residual, dito sem suavizar:** o DONO da tabela (`postgres`) passa a poder apagar a atribuição
+de uma linha. Para os demais roles isso continua impossível pelo `REVOKE UPDATE`, que vale contra
+`BYPASSRLS`. E a identidade sobrevive de qualquer jeito em `metadata->>'actor_label'`, congelada no
+momento do ato. Fechar por completo exigiria trocar as FKs por colunas soltas (sem integridade
+referencial) ou por uma tabela de atribuição separada — decisão do `900-16`, não desta story.
+
+---
+
+### [Epic 900] 🟠 `validarMetaAds` não prova posse da Página — e a AC10 da `900-51` foi escrita supondo que provava
+
+**Adicionado em:** 2026-08-30
+**Prioridade:** P2 — não é um bug em produção hoje (nada rota por `page_id`), mas muda o tamanho do
+risco que o dono do produto aceitou conscientemente em C1
+**Origem:** pergunta levantada no gate `@qa` da `900-51`; investigada pelo `@dev` no mesmo dia
+
+A validação síncrona de `meta_ads` (`lib/integrations/painel/validacao.ts`) chama
+`GET /{page_id}?fields=id,name`. **`id` e `name` são metadados PÚBLICOS de Página**: legíveis com
+qualquer token válido da Meta — de usuário, de app ou de outra Página — sem que o chamador tenha
+papel nenhum na Página consultada. Então a validação prova (a) o token é válido e (b) a Página
+existe; **não prova (c) quem grava administra a Página**.
+
+**Por que isso importa mais do que parece.** O parecer do `@po` (Rodada 2, N2b) escreveu que *"a
+rota valida a posse da Página contra a Graph API"*, e a decisão C1 do dono do produto — aceitar que
+o cliente grave `page_id`, com auditoria — foi tomada com essa frase no contexto. Se a validação
+não prova posse, então **nenhuma** camada prova: nem o `P0018` (higiene de formato, já declarado
+como zero redução de superfície), nem a AC10 (que só exige `status='connected'`, alcançável pelas
+duas RPCs abertas a `authenticated`). O único freio real vira a **detecção** da AC11 — que avisa
+depois do fato. O risco aceito é maior do que o registro da decisão sugere.
+
+**⚠️ Isto está RACIOCINADO a partir do contrato da Graph API, NÃO MEDIDO.** Não havia credencial
+real disponível na implementação da `900-51`. **Medir é o primeiro passo deste item**, com dois
+tokens: um de quem administra a Página e um de quem não administra, contra o mesmo `page_id`.
+
+**Ação, se procede:** trocar o probe por um que exija papel na Página *e* a permissão que a
+integração realmente usa — `GET /{page_id}/leadgen_forms` (exige `leads_retrieval` + papel na
+Página; `200` com lista vazia já prova a permissão) ou `GET /{page_id}?fields=access_token`
+(devolve o token da Página só para administrador). Não foi trocado na `900-51` de propósito: é
+chamada de rede não exercitável naquele contexto, e um probe errado tornaria `meta_ads`
+inconfigurável em produção por um caminho sem teste.
+
+**Achado adjacente, medido:** o pipeline que busca o lead
+(`lib/meta/process-lead.ts:504`, `fetchLeadData`) usa `process.env.META_PAGE_ACCESS_TOKEN` — uma
+env var **global**, não o token por org que o painel da `900-51` grava. Ou seja, a credencial
+`meta_ads` gravada por empresa **ainda não é consumida por ninguém**. Isso é coerente com a AC6 da
+`900-51` (nenhum consumo de credencial de tenant foi criado) e é o que a Onda 7 terá de ligar — mas
+significa que hoje uma credencial `meta_ads` válida no painel não muda comportamento nenhum.
+
 ---
 
 ### [Agendamento público] 🔴 Erro de consulta zera a lista de OCUPADOS e abre o portão antes do `INSERT` — story `87-19`

@@ -291,8 +291,21 @@ describe("resolveOrgByWhatsAppPhone", () => {
 })
 
 describe("resolveOrgByMetaPage", () => {
-  const INTEG_A = { org_id: "org-A", provider: "meta_ads", config: { page_id: "PG-A" } }
-  const INTEG_B = { org_id: "org-B", provider: "meta_ads", config: { page_id: "PG-B" } }
+  // Story 900-51/AC10 — `status` deixou de ser decorativo nesta fixture: o resolver passou a
+  // exigir `connected`. Uma fixture sem a coluna esconderia a mudança (todas as linhas casariam
+  // `undefined`), então ela é explícita nas duas linhas.
+  const INTEG_A = {
+    org_id: "org-A",
+    provider: "meta_ads",
+    status: "connected",
+    config: { page_id: "PG-A" },
+  }
+  const INTEG_B = {
+    org_id: "org-B",
+    provider: "meta_ads",
+    status: "connected",
+    config: { page_id: "PG-B" },
+  }
 
   it("cada page_id resolve à sua org", async () => {
     const t = { org_integrations: [INTEG_A, INTEG_B] }
@@ -325,15 +338,46 @@ describe("resolveOrgByMetaPage", () => {
     )
   })
 
-  it("NÃO filtra `org_integrations.status` — assimetria intencional (C1)", async () => {
-    // O seed da 900-21b nasce `disconnected` e não há UI até a 900-47: exigir `connected` faria
-    // o modo `identifier` nunca resolver Meta Ads. Este teste trava a decisão contra "correção"
-    // acidental por simetria com o resolver do WhatsApp.
+  // ───────────────────────────────────────────────────────────────────────────────────────────
+  // Story 900-51 · AC10/Task 12.4 — a decisão da 900-24 foi REVERTIDA, e estes três testes são
+  // o carrasco dela. O teste que existia aqui antes afirmava o oposto ("NÃO filtra status") e foi
+  // SUBSTITUÍDO, não deixado ao lado do novo: régua superada por decisão precisa ser reescrita.
+  //
+  // Os dois primeiros são os dois sentidos que a Task 12.4 exige. O terceiro é o que impede o
+  // filtro de morrer num refactor sem ninguém notar — sem ele, apagar a linha `.eq("status", …)`
+  // do resolver deixaria os dois primeiros... ainda vermelhos? Não: o primeiro ficaria VERDE
+  // (linha connected resolve com ou sem filtro) e só o segundo reprovaria. É por isso que o
+  // terceiro afirma a CHAMADA, e não só o resultado.
+  // ───────────────────────────────────────────────────────────────────────────────────────────
+  it("linha com o page_id certo e `status != 'connected'` NÃO resolve (AC10)", async () => {
+    for (const status of ["disconnected", "error"]) {
+      const r = await resolveOrgByMetaPage(
+        db({ org_integrations: [{ ...INTEG_A, status }] }),
+        "PG-A",
+      )
+      expect(r).toEqual({
+        status: "nao_resolvida",
+        motivo: "nenhuma_correspondencia",
+        quantidadeEncontrada: 0,
+      })
+    }
+  })
+
+  it("linha com o page_id certo e `status = 'connected'` resolve (AC10, sentido oposto)", async () => {
     const r = await resolveOrgByMetaPage(
-      db({ org_integrations: [{ ...INTEG_A, status: "disconnected" }] }),
+      db({ org_integrations: [{ ...INTEG_A, status: "connected" }] }),
       "PG-A",
     )
     expect(r).toEqual({ status: "resolvida", orgId: "org-A" })
+  })
+
+  it("o filtro de status é EMITIDO na consulta, não obtido por acaso da fixture", async () => {
+    const fake = criarFakeSupabase({ tabelas: { org_integrations: [INTEG_A] } })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await resolveOrgByMetaPage(fake as any, "PG-A")
+    expect(fake.chamadas).toContainEqual(
+      expect.objectContaining({ metodo: "eq", args: ["status", "connected"] }),
+    )
   })
 
   it("erro de consulta vira `erro_consulta`", async () => {
