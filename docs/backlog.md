@@ -6,6 +6,41 @@ Tarefas operacionais, configurações e ajustes pendentes que não requerem uma 
 
 ## Pendente
 
+### [OPS] 🔴 Uma conversa foi **pausada à mão** por loop bot-a-bot — a pausa tem pavio de ~24h e precisa de decisão
+
+**Adicionado em:** 2026-08-30 · **Origem:** `@devops` — contenção manual em produção.
+**Prioridade:** **P1** — é **contenção, não conserto**, e ela se desfaz sozinha.
+
+Em 2026-08-30 uma conversa entrou em **loop bot-a-bot** (dezenas de mensagens em poucos minutos) e
+foi contida à mão com `is_ai_active = false` + `handoff_at` + `handoff_reason` nomeando a causa.
+Contenção verificada no banco: nenhuma mensagem nova depois do carimbo da pausa.
+
+> Sem identificar a conversa aqui de propósito: **dado de produção de cliente — identificador,
+> horário e contagem por conversa — não vai para arquivo versionado nem para corpo de PR**, mesmo
+> sem conteúdo de mensagem e mesmo sem PII direta. Este repositório é **público**. O caso se acha
+> no banco por `conversations.handoff_reason` — com a ressalva do parágrafo seguinte.
+
+**⚠️ A pausa NÃO é permanente, e o ponteiro para achá-la se apaga junto.** Medido no código:
+`packages/web/src/app/api/webhook/whatsapp/route.ts` reativa a Nicole quando a âncora de handoff
+(`resolveTakeoverAnchor` — o mais recente entre `handoff_at` e a última mensagem `role='broker'`)
+tem **≥ 24 h** (`BROKER_WINDOW_MS`, `packages/web/src/lib/broker/broker-takeover-status.ts:30`).
+A reativação não é por cron: dispara **na próxima mensagem que chegar** naquela conversa. E ela faz
+`is_ai_active = true, handoff_at = NULL, handoff_reason = NULL` — ou seja, **o mesmo evento que
+encerra a contenção apaga o rastro de que ela existiu**.
+
+**Por que isso é pior do que parece:** o interlocutor do loop era outro bot. Passadas ~24 h, a
+próxima mensagem dele reativa a Nicole e **o loop pode recomeçar sozinho, sem ninguém olhando** —
+e sem `handoff_reason` para explicar o que houve. O defeito que gerou o loop segue em produção para
+todas as outras conversas (story de correção em desenho; ver `87-20`).
+
+**Ação — decisão explícita de quem for dono da story de correção:**
+1. **Corrigir antes do pavio vencer** e deixar a reativação natural acontecer; **ou**
+2. **Manter pausada de propósito** — o que exige repausar depois de cada reativação, porque a
+   janela de 24 h não se desliga; **ou**
+3. **Assumir o risco** e dizer por escrito que uma eventual retomada do loop é aceitável.
+
+Não despausar à mão antes do fix: sem ele, despausar é reabrir o loop.
+
 ### [CI] 🔴 A catraca de tenancy está **vermelha desde o #524** e ninguém lê — escalado ao `@pm`
 
 **Adicionado em:** 2026-08-29 · **Origem:** `@devops` na revisão da Story `900-3c` (PR #525), confirmado pelo `@qa`.
