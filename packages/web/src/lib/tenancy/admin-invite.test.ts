@@ -11,29 +11,60 @@
  * passaria a não medir a única invariante que o Epic 900 inteiro existe para garantir. O mesmo
  * vale para o desempate `created_at ASC`: sem ordenação real, o "pega o admin mais antigo" é
  * uma alegação sobre uma lista que o teste já entregou na ordem certa.
+ *
+ * ## Story 900-25 · AC2 (`TEST-004`) — de onde vem o fake agora
+ *
+ * O molde local que este arquivo carregava honrava filtro, ordem e limite, mas MENTIA nos dois
+ * terminais singulares: `single`/`maybeSingle` colapsavam o resultado em `linhas[0]`, com
+ * coalescência para nulo — ou seja "achei a primeira" com 2+ linhas, e `error` sempre nulo.
+ * (A forma literal não é citada aqui de propósito: é ela que o grep de fechamento da AC2 procura,
+ * e um comentário que a repete deixa a régua vermelha para sempre.) Medido contra o corpo de
+ * `legacyResolveActiveConfig` (`webhook/whatsapp/route.ts`) com 2 configs `status='active'`: sob
+ * este molde o legado PROCESSA `org-A`; sob o `postgrest-js` de verdade ele DESCARTA
+ * (`PGRST116`/406). Ou seja, o defeito central da Onda 2 era **insatisfazível** como asserção
+ * enquanto este molde existisse — e ele já tinha sido copiado duas vezes.
+ *
+ * A troca é para `criarFakeSupabase` de `__fixtures__/fake-supabase-postgrest.ts`, que espelha
+ * `data` **e** `error`. Nenhuma asserção deste arquivo foi reescrita para acomodar o fixture.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest"
 
-interface Chamada {
-  tabela?: string
-  metodo: string
-  args: unknown[]
-}
+import {
+  criarFakeSupabase,
+  type ChamadaRegistrada,
+  type ErroPostgrest,
+  type Linha,
+} from "./__fixtures__/fake-supabase-postgrest"
 
-type Linha = Record<string, unknown>
-
-let chamadas: Chamada[] = []
+let chamadas: ChamadaRegistrada[] = []
 
 /** "Banco" do fake: linhas reais, filtradas de verdade pelo builder. */
 let usersRows: Linha[] = []
 let orgRows: Linha[] = []
 
 /** Erro injetável na LEITURA de `users`. */
-let selectErro: { message: string } | null = null
-/** Erro injetável por ESCRITA, decidido por tabela + payload. */
-let updateErro: ((tabela: string, payload: Linha) => { message: string } | null) | null = null
-/** Resultado de `insert(...).select(...).single()`. */
-let usersInsert: { data: unknown; error: { message: string } | null } = { data: null, error: null }
+let selectErro: ErroPostgrest | null = null
+/**
+ * Erro injetável por ESCRITA, decidido por tabela + payload + OPERAÇÃO.
+ *
+ * A operação entrou na assinatura na migração da AC2 (900-25) e não é decoração: o molde antigo
+ * só consultava este hook nas cadeias `update(...).eq(...)` — `insert(...).select().single()`
+ * tinha uma porta própria (`usersInsert`) que o ignorava. Com um fake que trata as duas escritas
+ * igual, `"auth_id" in payload` passou a casar TAMBÉM com o insert de `{ …, auth_id: null }`, e o
+ * teste do vínculo mediu o ramo errado. É o único vermelho que a migração produziu.
+ */
+let updateErro:
+  | ((tabela: string, payload: Linha, operacao: "insert" | "update") => ErroPostgrest | null)
+  | null = null
+
+/**
+ * Atalho para o formato de erro do PostgREST — o fixture exige `code`/`details` porque o código
+ * de produção do Epic 900 desempata por `code` (`PGRST116`) em mais de um lugar. As asserções
+ * herdadas só olham para `message`, e nenhuma delas mudou por causa disto.
+ */
+function erroDb(message: string, code = "P0001"): ErroPostgrest {
+  return { code, message, details: message, hint: null }
+}
 
 let createUserResult: { data: unknown; error: { message: string } | null } = {
   data: { user: { id: "auth-novo" } },
@@ -46,99 +77,32 @@ let generateLinkResult: { data: unknown; error: { message: string } | null } = {
 let sendEmailResult: { id: string | null; error?: string } = { id: "email-1" }
 let emailsEnviados: Array<Record<string, unknown>> = []
 
-function criarBuilder(tabela: string) {
-  let operacao: "select" | "insert" | "update" = "select"
-  let payload: Linha = {}
-  const filtros: Array<[string, unknown]> = []
-  let ordem: { coluna: string; ascendente: boolean } | null = null
-  let teto: number | null = null
-
-  function selecionadas(): Linha[] {
-    let linhas = [...(tabela === "users" ? usersRows : orgRows)]
-    for (const [coluna, valor] of filtros) linhas = linhas.filter((l) => l[coluna] === valor)
-    if (ordem) {
-      const { coluna, ascendente } = ordem
-      linhas.sort((a, b) => {
-        const x = String(a[coluna] ?? "")
-        const y = String(b[coluna] ?? "")
-        return ascendente ? x.localeCompare(y) : y.localeCompare(x)
-      })
-    }
-    if (teto !== null) linhas = linhas.slice(0, teto)
-    return linhas
-  }
-
-  function resultadoEscrita() {
-    return { data: null, error: updateErro ? updateErro(tabela, payload) : null }
-  }
-
-  const builder: Record<string, unknown> = {
-    select: (...args: unknown[]) => {
-      chamadas.push({ tabela, metodo: "select", args })
-      return builder
-    },
-    insert: (...args: unknown[]) => {
-      operacao = "insert"
-      payload = args[0] as Linha
-      chamadas.push({ tabela, metodo: "insert", args })
-      return builder
-    },
-    update: (...args: unknown[]) => {
-      operacao = "update"
-      payload = args[0] as Linha
-      chamadas.push({ tabela, metodo: "update", args })
-      return builder
-    },
-    eq: (...args: unknown[]) => {
-      filtros.push([args[0] as string, args[1]])
-      chamadas.push({ tabela, metodo: "eq", args })
-      return builder
-    },
-    order: (...args: unknown[]) => {
-      const opcoes = args[1] as { ascending?: boolean } | undefined
-      ordem = { coluna: args[0] as string, ascendente: opcoes?.ascending !== false }
-      chamadas.push({ tabela, metodo: "order", args })
-      return builder
-    },
-    limit: async (...args: unknown[]) => {
-      teto = args[0] as number
-      chamadas.push({ tabela, metodo: "limit", args })
-      return selectErro ? { data: null, error: selectErro } : { data: selecionadas(), error: null }
-    },
-    single: async () => {
-      if (operacao === "insert") return usersInsert
-      const linhas = selecionadas()
-      return { data: linhas[0] ?? null, error: null }
-    },
-    maybeSingle: async () => {
-      const linhas = selecionadas()
-      return { data: linhas[0] ?? null, error: null }
-    },
-    // Cadeias de escrita (`update(...).eq(...)`) são aguardadas direto, sem terminal.
-    then: (resolve: (v: unknown) => unknown) => resolve(resultadoEscrita()),
-  }
-  return builder
-}
-
 vi.mock("@web/lib/supabase/admin", () => ({
-  createAdminClient: () => ({
-    from: (tabela: string) => {
-      chamadas.push({ tabela, metodo: "from", args: [tabela] })
-      return criarBuilder(tabela)
-    },
-    auth: {
-      admin: {
-        createUser: async (...args: unknown[]) => {
-          chamadas.push({ metodo: "createUser", args })
-          return createUserResult
-        },
-        generateLink: async (...args: unknown[]) => {
-          chamadas.push({ metodo: "generateLink", args })
-          return generateLinkResult
+  createAdminClient: () => {
+    const fake = criarFakeSupabase({
+      tabelas: { users: usersRows, organizations: orgRows },
+      erroPorTabela: selectErro ? { users: selectErro } : undefined,
+      erroPorEscrita: updateErro ?? undefined,
+      chamadas,
+    })
+    return {
+      from: fake.from,
+      auth: {
+        admin: {
+          // `tabela: "auth"` é sentinela: o log de chamadas é UM só porque várias asserções aqui
+          // são sobre ORDEM entre banco e Auth ("reconcilia ANTES de criar a conta").
+          createUser: async (...args: unknown[]) => {
+            chamadas.push({ tabela: "auth", metodo: "createUser", args })
+            return createUserResult
+          },
+          generateLink: async (...args: unknown[]) => {
+            chamadas.push({ tabela: "auth", metodo: "generateLink", args })
+            return generateLinkResult
+          },
         },
       },
-    },
-  }),
+    }
+  },
 }))
 
 vi.mock("@web/lib/email", () => ({
@@ -179,7 +143,6 @@ beforeEach(() => {
   orgRows = [{ id: "org-1", admin_invite_email: null }]
   selectErro = null
   updateErro = null
-  usersInsert = { data: adminRow({ id: "u-novo" }), error: null }
   createUserResult = { data: { user: { id: "auth-novo" } }, error: null }
   generateLinkResult = { data: { properties: { hashed_token: "HASHED_TOKEN" } }, error: null }
   sendEmailResult = { id: "email-1" }
@@ -334,8 +297,10 @@ describe("ensureAdminInvited — createUser falha (AC-A3.4 e AC-A7)", () => {
 
 describe("ensureAdminInvited — falhas DEPOIS do createUser não podem virar “invited”", () => {
   it("vínculo do auth_id falha → failed, com a mensagem, e sem limpar o convite pendente", async () => {
-    updateErro = (tabela, payload) =>
-      tabela === "users" && "auth_id" in payload ? { message: "deadlock" } : null
+    updateErro = (tabela, payload, operacao) =>
+      tabela === "users" && operacao === "update" && "auth_id" in payload
+        ? erroDb("deadlock")
+        : null
 
     const r = await ensureAdminInvited("org-1", "admin@acme.com")
 
@@ -413,8 +378,10 @@ describe("ensureAdminInvited — reconciliação de e-mail da linha pendente", (
   })
 
   it("falha na reconciliação → failed, sem criar conta Auth órfã", async () => {
-    updateErro = (tabela, payload) =>
-      tabela === "users" && "email" in payload ? { message: "constraint" } : null
+    updateErro = (tabela, payload, operacao) =>
+      tabela === "users" && operacao === "update" && "email" in payload
+        ? erroDb("constraint")
+        : null
     const r = await ensureAdminInvited("org-1", "novo@acme.com")
     expect(r.status).toBe("failed")
     expect(chamadas.some((c) => c.metodo === "createUser")).toBe(false)
@@ -487,7 +454,7 @@ describe("ensureAdminInvited — o fake filtra e ordena de verdade (CodeRabbit #
   })
 
   it("erro na busca do admin devolve failed sem tocar no Supabase Auth", async () => {
-    selectErro = { message: "conexão caiu" }
+    selectErro = erroDb("conexão caiu")
     expect(await ensureAdminInvited("org-1", "admin@acme.com")).toEqual({
       status: "failed",
       message: "conexão caiu",
@@ -512,7 +479,7 @@ describe("persistAdminInviteEmail (AC-A2)", () => {
   })
 
   it("loga quando o UPDATE falha — a perda do endereço não pode ser silenciosa", async () => {
-    updateErro = (tabela) => (tabela === "organizations" ? { message: "coluna ausente" } : null)
+    updateErro = (tabela) => (tabela === "organizations" ? erroDb("coluna ausente") : null)
     await persistAdminInviteEmail("org-1", "admin@acme.com")
     expect(console.error).toHaveBeenCalledWith(
       expect.stringContaining("falha ao persistir admin_invite_email"),

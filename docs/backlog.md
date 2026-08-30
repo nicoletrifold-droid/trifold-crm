@@ -90,49 +90,6 @@ Medido em `trifold-crm-dev` em 2026-08-29: pré-condição 0 linhas; 7 células 
 
 ---
 
-### [TEST-004] 🟡 O molde de fake do Supabase mente em `.maybeSingle()`/`.single()` — duas cópias já mergeadas
-
-**Adicionado em:** 2026-08-29 · **Origem:** condição de GO do `@po` na validação da Story `900-24`
-(`docs/qa/po-validation-900-24.md`, rodada 2, item 6). **Prioridade:** P2 ·
-**Dona: `900-25`** — *"Org Trifold Sandbox + teste de aceitação de multi-tenancy"*, epic §857,
-`Dep: 900-22, 900-24`, executor `@qa`. Escolhida por critério, não por proximidade: é a story que
-constrói a camada de teste de DUAS orgs (Passo 6 do plano) e, portanto, a primeira que vai exercitar
-esses fakes com mais de uma linha por tabela — o cenário exato em que a mentira do molde deixa de
-ser latente. Registrado com dona porque a própria `900-24` estabeleceu o critério: dívida sem
-`Dona:` é dívida órfã (foi assim que ela justificou incluir o `ARCH-001` e excluir o `REL-001`).
-Atribuição feita pelo `@dev` ao cumprir a condição de GO; o `@po` pode re-rotear.
-
-**As duas localizações, medidas:**
-
-- `packages/web/src/lib/tenancy/admin-invite.test.ts:108,113` — o molde ORIGINAL;
-- `packages/web/src/app/api/platform/orgs/[id]/resend-admin-invite/route.test.ts:80` — a cópia nº 2,
-  a linha **verbatim**.
-
-**A medição.** O comportamento real está no pacote instalado (`@supabase/postgrest-js@2.101.1`,
-`dist/index.cjs:129-140`) e foi confirmado contra o PostgREST do `trifold-crm-dev` por HTTP
-(**406**, `PGRST116`): com `linhas.length !== 1`, os dois terminais devolvem
-`{ data: null, error: { code: "PGRST116", … }, status: 406 }`. O molde devolve
-`{ data: linhas[0] ?? null, error: null }` — erra `data` **e** erra `error`. A cegueira do `error`
-é a pior das duas: é exatamente a causa raiz que a `900-24` nomeia (o `error` descartado pela
-desestruturação `const { data } = await …`), e sob o molde ela é **impossível de reprovar**.
-
-**Por que não bloqueia hoje (latentes, não vivas).** A segunda cópia cobre uma query filtrada por
-PK (`route.ts:35`, `.eq("id", orgId)`) — 2 linhas é impossível. A primeira sustenta suas asserções
-em `order`+`limit`, não no terminal singular. Nenhuma das duas está mentindo sobre um defeito real
-**hoje**.
-
-**Por que registrar assim mesmo.** É o molde que já foi copiado **três vezes** (a `900-24` seria a
-nº 3, e a primeira em que a cegueira pousaria exatamente sobre o defeito que a story existe para
-fechar). Não registrar é o mecanismo que produz a cópia nº 4.
-
-**Encaminhamento:** migrar as duas para
-`packages/web/src/lib/tenancy/__fixtures__/fake-supabase-postgrest.ts`, criado pela `900-24` —
-que já implementa `resultadoSingular()` fiel (`data` **e** `error.code`, para `.single()` e
-`.maybeSingle()`), projeta as colunas do `.select()` e honra `.eq()`/`.order()`/`.limit()`.
-A migração é mecânica; o risco é o de sempre com teste alheio — alguma asserção existente pode
-estar apoiada na mentira do molde, e é justamente isso que a migração revela.
-
----
 
 ### [REL-001] 🟡 `whatsapp_config.status` não tem `CHECK` em produção — `'Active'` evade os índices parciais
 
@@ -1245,6 +1202,51 @@ decisão novo, e por isso não entrou aqui.
 ---
 
 ## Concluído
+
+### ✅ [TEST-004] O molde de fake do Supabase mentia em `.maybeSingle()`/`.single()`
+
+**Aberto em:** 2026-08-29 (condição de GO do `@po` na `900-24`) · **Fechado em:** 2026-08-30 pela
+Story **`900-25`, AC2 / Task 2** (a dona registrada) — commit "test: os 2 fakes cegos do TEST-004
+migram para o fixture fiel [Story 900-25]".
+
+**Resolução.** As duas cópias do molde foram migradas para `criarFakeSupabase` de
+`packages/web/src/lib/tenancy/__fixtures__/fake-supabase-postgrest.ts`, que espelha `data` **e**
+`error`:
+
+- `packages/web/src/lib/tenancy/admin-invite.test.ts` — os **dois** terminais (`.single()` e
+  `.maybeSingle()`);
+- `packages/web/src/app/api/platform/orgs/[id]/resend-admin-invite/route.test.ts` — o terminal
+  único (`.maybeSingle()`; esse arquivo não tem `.single()`).
+
+Régua de fechamento, casando as **duas** formas em que a cegueira estava escrita (`linhas[0]` num
+arquivo, `selecionadas()[0]` no outro — a correção D8 do parecer da `900-25`):
+`grep -nE "\[0\] \?\? null" <os 2 arquivos>` → **0 ocorrências** (controle de vivacidade: a
+mesma régua contra os blobs de `origin/main` dá **2** e **1**). Contagem de testes idêntica antes e
+depois: **33 + 15 = 48**, verdes nos dois lados.
+
+**O que a migração revelou (o risco que o próprio item previa).** Um vermelho, e o diagnóstico foi
+do *setup*, não da asserção: o hook de erro de escrita do molde só era consultado nas cadeias
+`update(...).eq(...)` — `insert(...).select().single()` tinha uma porta própria que o ignorava.
+Com um fake que trata as duas escritas igual, o predicado `"auth_id" in payload` passou a casar
+**também** com o `insert` de `{ …, auth_id: null }`, e o teste do vínculo mediu o ramo errado. O
+fixture ganhou `erroPorEscrita(tabela, payload, operacao)` para que "só o UPDATE falha" volte a ser
+dizível; nenhuma asserção foi reescrita.
+
+**Correção colateral, com o caso na mão.** O fixture declarava fora de escopo a diferença entre
+`.single()` e `.maybeSingle()` em **0 linhas**, sob a premissa "nenhum dos 3 resolvers da `900-24`
+usa esses terminais". A migração invalidou a premissa (os dois arquivos são consumidores de
+`.maybeSingle()`, e um deles exercita 0 linhas em "org inexistente → 404"). Medido em
+`@supabase/postgrest-js@2.101.1` (`dist/index.cjs:129-141`): `.maybeSingle()` com 0 linhas devolve
+`{ data: null, error: null, status: 200 }`. Nasceu `resultadoMaybeSingle()`; `resultadoSingular()`
+não mudou.
+
+**Onde vive o carrasco (medido, para não virar promessa).** Mutando `resultadoSingular` de volta
+para a mentira do molde: os 2 arquivos migrados seguem **48/48 verdes** — nenhum deles exercita
+consulta singular com 2+ linhas —, e quem fica **vermelho é `webhook-org.test.ts` (5 testes)**.
+Ou seja: o valor deste item nunca foi "estes 2 testes passam a reprovar o bug", e sim "some a
+fonte de cópia da mentira, e o carrasco passa a morar num lugar só".
+
+---
 
 ### [INFRA] Chaves Supabase legacy no .env.local
 

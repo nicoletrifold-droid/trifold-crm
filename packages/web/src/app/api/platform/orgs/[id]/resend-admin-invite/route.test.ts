@@ -17,7 +17,7 @@ let platformAdmin: { userId: string; email: string; name: string | null } | null
   name: "Trifold",
 }
 
-type Linha = Record<string, unknown>
+import { criarFakeSupabase, type Linha } from "@web/lib/tenancy/__fixtures__/fake-supabase-postgrest"
 
 /** "Banco" do fake — linhas reais, filtradas e ordenadas de verdade pelo builder. */
 let orgRows: Linha[] = [{ id: "org-1", admin_invite_email: "admin@acme.com" }]
@@ -38,48 +38,30 @@ vi.mock("@web/lib/tenancy/platform-guard", () => ({
  * isolamento de tenant que o Epic 900 inteiro existe para garantir. O mesmo vale para o
  * `.order("created_at")`: sem ordenação real, "pega o admin mais antigo" seria uma alegação
  * sobre uma lista que o próprio teste já entregou na ordem conveniente.
+ *
+ * ## Story 900-25 · AC2 (`TEST-004`) — o molde local saiu daqui
+ *
+ * O duplo que vivia neste arquivo honrava filtro, ordem e limite, mas mentia no terminal:
+ * `maybeSingle` colapsava o resultado no primeiro elemento de `selecionadas()`, com coalescência
+ * para nulo, e `error` nunca chegava. É a mesma mentira de `admin-invite.test.ts` escrita com
+ * outro NOME de variável — foi por isso que o grep de fechamento da AC2 precisou ancorar no índice
+ * `[0]` em vez do identificador `linhas`, que só existe no outro arquivo. (A forma literal não é
+ * citada aqui: é o que a régua procura.) Medido contra o corpo de `legacyResolveActiveConfig`
+ * (`webhook/whatsapp/route.ts`) com 2 linhas `status='active'`: sob este molde o legado PROCESSA
+ * `org-A`; sob `criarFakeSupabase` ele DESCARTA, como o `postgrest-js` de verdade (`PGRST116`/406).
+ *
+ * O fake é criado A CADA chamada de propósito: `orgRows`/`usersRows` são reatribuídos dentro dos
+ * testes, e um fake construído uma vez no factory do `vi.mock` congelaria os arrays do primeiro
+ * `beforeEach`. Diferente de `admin-invite.test.ts`, aqui só existe **um** terminal singular
+ * (`.maybeSingle()`) — não há `.single()` nesta rota.
  */
 vi.mock("@web/lib/tenancy/platform-query", () => ({
-  platformQuery: (tabela: string) => {
+  platformQuery: (tabela: string, colunas?: string) => {
     if (tabela !== "organizations" && tabela !== "users") {
       throw new Error(`platformQuery: "${tabela}" fora de PLATFORM_READABLE_TABLES`)
     }
-
-    const filtros: Array<[string, unknown]> = []
-    let ordem: { coluna: string; ascendente: boolean } | null = null
-    let teto: number | null = null
-
-    function selecionadas(): Linha[] {
-      let linhas = [...(tabela === "organizations" ? orgRows : usersRows)]
-      for (const [coluna, valor] of filtros) linhas = linhas.filter((l) => l[coluna] === valor)
-      if (ordem) {
-        const { coluna, ascendente } = ordem
-        linhas.sort((a, b) => {
-          const x = String(a[coluna] ?? "")
-          const y = String(b[coluna] ?? "")
-          return ascendente ? x.localeCompare(y) : y.localeCompare(x)
-        })
-      }
-      if (teto !== null) linhas = linhas.slice(0, teto)
-      return linhas
-    }
-
-    const builder: Record<string, unknown> = {
-      eq: (coluna: string, valor: unknown) => {
-        filtros.push([coluna, valor])
-        return builder
-      },
-      order: (coluna: string, opcoes?: { ascending?: boolean }) => {
-        ordem = { coluna, ascendente: opcoes?.ascending !== false }
-        return builder
-      },
-      limit: async (n: number) => {
-        teto = n
-        return { data: selecionadas(), error: null }
-      },
-      maybeSingle: async () => ({ data: selecionadas()[0] ?? null, error: null }),
-    }
-    return builder
+    const fake = criarFakeSupabase({ tabelas: { organizations: orgRows, users: usersRows } })
+    return (fake.from(tabela) as { select: (c?: string) => unknown }).select(colunas)
   },
 }))
 

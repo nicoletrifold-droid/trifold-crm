@@ -31,14 +31,31 @@
  * DESCARTADO pela desestruturação `const { data } = await …`, e sem `error` no fake essa causa
  * raiz continuaria impossível de reprovar.
  *
- * ## Escopo declarado, não descoberto depois
+ * ## Escopo declarado, não descoberto depois — e a parte dele que a 900-25 fechou
  *
- * `.maybeSingle()` e `.single()` compartilham {@link resultadoSingular}. A diferença real entre os
- * dois no client de verdade — com **0** linhas, `.maybeSingle()` intercepta o `PGRST116` e devolve
- * `{ data: null, error: null }`, enquanto `.single()` propaga o erro — fica **fora** deste fake de
- * propósito: nenhum dos 3 resolvers da 900-24 usa esses terminais (todos usam `.limit(2)`), e o
- * fake existe para reproduzir o **legado**, não para ser um mock genérico do postgrest-js inteiro.
- * Se um teste futuro precisar da distinção de 0 linhas, resolve-se então — com o caso na mão.
+ * A v1 deste arquivo (900-24) deixou `.maybeSingle()` e `.single()` compartilhando
+ * {@link resultadoSingular}, adiando de propósito a diferença real entre os dois com **0** linhas,
+ * sob a premissa explícita "nenhum dos 3 resolvers da 900-24 usa esses terminais (todos usam
+ * `.limit(2)`) … se um teste futuro precisar da distinção de 0 linhas, resolve-se então — com o
+ * caso na mão".
+ *
+ * **A 900-25 (AC2/`TEST-004`) trouxe o caso na mão** e a premissa deixou de valer: `admin-invite.ts`
+ * e `platform/orgs/[id]/resend-admin-invite/route.ts` são consumidores de `.maybeSingle()`, e
+ * `route.test.ts` exercita o ramo de **0 linhas** ("devolve 404 quando a org não existe"). Manter a
+ * simplificação passaria a congelar o padrão errado num mecanismo agora compartilhado por 3 suítes.
+ * Medido no pacote instalado (`@supabase/postgrest-js@2.101.1`, `dist/index.cjs:129-141`):
+ *
+ * ```js
+ * if (this.isMaybeSingle && Array.isArray(data))
+ *   if (data.length > 1) { error = PGRST116; data = null; status = 406 }
+ *   else if (data.length === 1) data = data[0]
+ *   else data = null            // ← 0 linhas: data null, error CONTINUA null, status 200
+ * ```
+ *
+ * Ou seja: `.maybeSingle()` só erra com **2+**; `.single()` erra com **0 ou 2+**. É o que
+ * {@link resultadoMaybeSingle} e {@link resultadoSingular} passam a expressar, cada um no seu
+ * terminal. `resultadoSingular` **não mudou** — continua sendo o de `.single()`, e é ele que torna
+ * o defeito central da 900-24 reprovável.
  *
  * ## O que o fake honra de verdade (a lição das fatias anteriores desta onda)
  *
@@ -71,10 +88,12 @@ export interface ChamadaRegistrada {
 }
 
 /**
- * Resultado dos terminais singulares (`.single()` / `.maybeSingle()`), fiel ao postgrest-js.
+ * Resultado de `.single()`, fiel ao postgrest-js.
  *
  * Com exatamente 1 linha devolve a linha. Com 0 ou 2+ devolve `PGRST116`/406 e `data: null` — é
  * esta linha que torna o defeito central da 900-24 REPROVÁVEL por teste.
+ *
+ * Para `.maybeSingle()` use {@link resultadoMaybeSingle}: os dois só divergem em 0 linhas.
  */
 export function resultadoSingular(linhas: Linha[]): RespostaPostgrest {
   if (linhas.length === 1) return { data: linhas[0]!, error: null, status: 200 }
@@ -91,11 +110,48 @@ export function resultadoSingular(linhas: Linha[]): RespostaPostgrest {
   }
 }
 
+/**
+ * Resultado de `.maybeSingle()`, fiel ao postgrest-js (`dist/index.cjs:129-141`).
+ *
+ * Difere de {@link resultadoSingular} em **um** ponto, e só nele: com **0** linhas devolve
+ * `{ data: null, error: null, status: 200 }` em vez de `PGRST116`. Com 2+ os dois são idênticos —
+ * é por isso que migrar um teste de `.single()` para `.maybeSingle()` (ou o contrário) não afrouxa
+ * o carrasco do defeito da 900-24.
+ */
+export function resultadoMaybeSingle(linhas: Linha[]): RespostaPostgrest {
+  if (linhas.length === 0) return { data: null, error: null, status: 200 }
+  return resultadoSingular(linhas)
+}
+
 export interface OpcoesFakeSupabase {
   /** Linhas por tabela. Tabela ausente = tabela vazia (nunca `undefined` estourando). */
   tabelas: Record<string, Linha[]>
   /** Força um erro de consulta na tabela indicada — carrasco do ramo `erro_consulta`. */
   erroPorTabela?: Record<string, ErroPostgrest>
+  /**
+   * Erro de ESCRITA decidido por tabela **e payload** — o que {@link erroPorTabela} não consegue
+   * dizer, porque ele derruba a tabela inteira, leitura junto.
+   *
+   * Trazido pela 900-25 (AC2/`TEST-004`): `admin-invite.ts` faz, na MESMA tabela `users`, uma
+   * leitura, um `insert` e dois `update` distintos (`{email,name}` e `{auth_id}`), e dois testes
+   * herdados existem exatamente para o caso "só o segundo `update` falha" — o pior parcial, em que
+   * a conta no Supabase Auth já existe e `users.auth_id` continua nulo. Com `erroPorTabela` esses
+   * testes não seriam expressáveis: a leitura do passo 1 falharia primeiro e o teste passaria a
+   * medir outro ramo.
+   *
+   * A `operacao` viaja junto, e não é conveniência: `admin-invite.ts` insere
+   * `{ …, auth_id: null }` e depois atualiza `{ auth_id: <id> }`, então um predicado escrito só
+   * sobre o payload (`"auth_id" in payload`) casa com as DUAS escritas e o teste passa a medir a
+   * falha do `insert` acreditando medir a do `update`. Medido: foi o único vermelho da migração da
+   * AC2, e o diagnóstico é do predicado do setup, não da asserção.
+   *
+   * Aplica-se só a `insert`/`update`; devolver `null` deixa a escrita passar.
+   */
+  erroPorEscrita?: (
+    tabela: string,
+    payload: Linha,
+    operacao: "insert" | "update",
+  ) => ErroPostgrest | null
   /**
    * Quando `true`, toda resolução acontece num **tick posterior** (`setTimeout(…, 0)`).
    *
@@ -171,8 +227,17 @@ export function criarFakeSupabase(opcoes: OpcoesFakeSupabase) {
       return linhas.map((l) => projetar(l, colunas))
     }
 
+    /**
+     * Erro de escrita — só consultado quando a operação corrente é `insert`/`update`, para que
+     * `erroPorEscrita` NUNCA derrube uma leitura da mesma tabela (a razão de ele existir).
+     */
+    function erroDeEscrita(): ErroPostgrest | undefined {
+      if (operacao === "select") return undefined
+      return opcoes.erroPorEscrita?.(tabela, (payload ?? {}) as Linha, operacao) ?? undefined
+    }
+
     function erro(): ErroPostgrest | undefined {
-      return opcoes.erroPorTabela?.[tabela]
+      return opcoes.erroPorTabela?.[tabela] ?? erroDeEscrita()
     }
 
     /**
@@ -242,7 +307,7 @@ export function criarFakeSupabase(opcoes: OpcoesFakeSupabase) {
         const e = erro()
         if (e) return resolver({ data: null, error: e, status: 500 })
         if (operacao === "insert") return resolver({ data: payload, error: null, status: 201 })
-        return resolver(resultadoSingular(selecionadas()))
+        return resolver(resultadoMaybeSingle(selecionadas()))
       },
       /** Cadeias sem terminal (`insert(...)`, `update(...).eq(...)`) são aguardadas direto. */
       then: (
