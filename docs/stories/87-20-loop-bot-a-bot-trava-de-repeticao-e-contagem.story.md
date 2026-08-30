@@ -582,6 +582,7 @@ verificado no código.
 | Data | Versão | Descrição | Autor |
 |------|--------|-----------|-------|
 | 2026-08-30 | 1.0 | Story criada a partir do incidente real (Nicole em loop com outro bot, contido manualmente). Números remedidos contra o banco (22/11, não 21/10). Desenho de dois sinais (repetição + contagem) calibrado com 203 conversas/14 dias e um controle negativo real. | @sm (River) |
+| 2026-08-30 | 1.7 | **Correção dos 2 achados do CodeRabbit no PR #535 (@dev), escopo mínimo — nenhuma AC, nenhum limiar e nenhum veredito mudaram; gate segue `CONCERNS` não bloqueante.** **Achado 1 (não cosmético):** `conterLoop` (`pipeline.ts`) **ignorava o `error`** do `UPDATE` de contenção — o PostgREST não rejeita, devolve `{ data: null, error }` — e devolvia `bloqueadoPorLoop` de qualquer jeito. Era o pior estado possível escondido dentro da própria correção: recibo gravado e admin avisado de que a Nicole tinha sido pausada, com `is_ai_active` ainda `true`, `handoff_reason` vazio, o guard do AC14 sem o que casar e a próxima mensagem do bot reiniciando o loop — **o mecanismo relatando um estado que não verificou ter alcançado**, que é literalmente o defeito que esta story existe para eliminar. Correção: `contencao` virou campo **obrigatório e discriminante** (`"aplicada" | "falhou"`, com `erro` = a mensagem do banco) **dentro** de `bloqueadoPorLoop` — obrigatório porque booleano opcional teria default, e o default seria "deu certo"; dentro porque é `bloqueadoPorLoop` que faz o webhook pular o envio, e o envio tem de ser pulado nos dois casos. O webhook passou a **gritar**: `NICOLE_LOOP_CONTENCAO_FALHOU`, nível `error`, com o motivo do banco e `await logEventOnce`, porque nesse caminho um humano precisa ir pausar à mão; o recibo canônico continua saindo (é ele que o cron varre para o AC10) mas deixou de afirmar "Nicole pausada" quando ela não foi. **Sem `try/catch` que só loga e segue — isso reproduz o defeito com mais linhas.** Carrasco escrito ANTES (`failOn` injetando `error` só no `update:conversations`): vermelho medido `2 failed | 21 passed (23)` antes da correção. **4 mutantes, 4 vermelhos**, um deles controle negativo (o grito sem guarda, `if (true)`) — todos 🔴 1/3.805 com `tsc` rc=0. **Achado 2:** o filtro do kill-switch comparava `s.cols` com o **literal** do `.select()`; reordenar colunas fazia `toHaveLength(0)` passar **vazio** — cego para o defeito que ele mira. Adotada a forma resistente da linha 409 do próprio arquivo (`split(",")`+`trim`), extraída em `colunasDe()` e compartilhada pelos dois pontos, comparando por **conjunto** (o histórico da 87-8 também projeta `metadata` e um filtro por pertinência daria falso-vermelho), mais um **controle de vivacidade** que exige o mesmo filtro achar a consulta com a trava ligada. **Prova em 2 × 2 medido:** filtro antigo + mutação que reintroduz a consulta **e reordena o `.select()`** = 🟢 3.798 rc=0 (**cego**); filtro novo, mesma mutação = 🔴 1/3.805; ambos 🔴 contra a mutação ingênua — o filtro antigo é cego **só** ao refator de projeção, e declarar mais que isso seria mais forte que a medição. **Varredura da classe, declarada e não consertada:** o `UPDATE` de reativação de 24h (pré-existente na `main`, 63-13/63-15) e o `.delete()` de compensação do cron (irmão idêntico do da 87-19, já na `main`) ignoram o `error` pela mesma razão — consertar um e não o gêmeo na mesma função seria pior que declarar os dois. **Suíte 289 arq · 3.799 · 6 xfail rc=0** (+9 testes sobre o baseline de 3.790; xfail inalterado), `lint --force` rc=0 (0 erros, 30 warnings pré-existentes), `type-check --force` rc=0, `packages/web build` rc=0. **Higiene reexecutada:** R1 = 4 valores distintos (os mesmos já triados), R2 = 0, R3 = 29 (idêntico), e **0 linhas adicionadas** com data-hora, token de 8 hex, telefone ou e-mail. Sem push, sem PR, sem merge, produção não tocada, a conversa contida **não despausada**. | @dev (Dex) |
 | 2026-08-30 | 1.5 | **Expurgo de identificadores de cliente (@dev), redação MECÂNICA — nenhuma AC, nenhum comportamento e nenhum veredito mudou; gate segue `CONCERNS` não bloqueante, liberado.** O repositório é público e a árvore carregava 7 conversas reais em 10 arquivos (~79 ocorrências de prefixo de 8 hex + 1 UUID completo em 5 arquivos, inclusive numa URL de `/dashboard/conversas/` e em nomes de `it()`/`describe()`, que viram saída de CI). Substitutos canônicos: `CONV_INCIDENTE`/`CONV_CONTROLE` com **UUID sintético** no código, "o incidente"/"o controle negativo"/"o lead de maior volume" na prosa, **deslocamentos relativos** (`T+0s` … `T+307s`) no lugar dos 34 `created_at` da fixture e das tabelas mensagem-a-mensagem, e "24h após a contenção" no lugar da janela de reativação datada. **Todos os agregados sobreviveram inteiros** — 1 em 90 dias, 472 de 473, picos 3/19/8, limiar 25 com 32% de margem, 8 de 11 despedidas, 6ª contra 11ª, 2m22s (que segue medindo o intervalo real, `T+165s`→`T+307s` = 142 s). **Varredura final da File List inteira com resultado ZERO** (comando registrado na seção 9 do Dev Agent Record), e `git grep` na `origin/main` confirma 0 arquivos para 6 dos 7 prefixos — o sétimo já existia na `main` (story 87-10), **dívida pré-existente fora de escopo, não piorada e não repetida**. **Remedido depois do expurgo:** suíte **289 arq · 3.790 · 6 xfail** rc=0 (idêntica ao baseline), `lint --force` rc=0, `type-check --force` rc=0, e **4 mutantes reexecutados com `tsc --noEmit` rc=0 antes de cada vermelho** — M8 🔴 2, M14 🔴 2/30, M22 🔴 8/24, `await`→`void logEventOnce` 🔴 1/31; os 3 arquivos de produção mutados restaurados e conferidos por hash. **Correção factual ao gate:** a forma ingênua do M14 **não compila** (TS2339 — o `.select()` narrowa o tipo da linha); o vermelho só vale com asserção de tipo, como o gate já fizera no M18. Gate e parecer do @po editados **apenas** para redação de identificador. Nada commitado, nenhum push, produção não tocada, a conversa do incidente **não despausada**. | @dev (Dex) |
 | 2026-08-30 | 1.6 | **Expurgo — 3ª rodada (@dev), redação MECÂNICA; nenhuma AC, nenhum comportamento e nenhum veredito mudou; gate segue `CONCERNS` não bloqueante, liberado.** A varredura independente do @devops achou o que a minha não pegou, porque usou **método diferente**: em vez de casar contra a lista dos 7 prefixos conhecidos, **enumerou todo token de 8 hex** dos 20 caminhos da File List e triou os 32 distintos um a um. Adotei a régua dele no lugar da minha — a antiga dependia de `~/.87-20-prefixos`, arquivo **fora do repo que não existe na máquina de quem revisa**, e por isso saía verde por vacuidade. **Dois achados. (1) A base `T0` do deslocamento relativo estava publicada em 2 linhas da story** — `handoff_at + 24h` ao minuto, e a **própria tabela do expurgo** instanciando o `created_at` removido — o que reverteria todo `T+n` para hora de parede; viraram "≈24h após a contenção" (a frase precisa de **um ciclo**, não da hora) e a **classe** do dado, sem instanciar. **(2) Os 28 `left(md5(content),8)`** (53 ocorrências: 34 na fixture, 16 na story, 3 no parecer) viraram **rótulos de classe `H1`…`H28`, preservando as classes de igualdade**. O argumento da 2ª rodada para mantê-los caiu na medição: o **único** consumidor em toda a árvore é `loop-breaker.test.ts:386` (`expect(a.content === b.content).toBe(a.hash === b.hash)`), auto-consistência pura que rótulos sustentam **idêntica** — os valores eram atestado de proveniência, não carga de AC. Pior: recomputando o `md5` dos 8 textos reconstituídos, **7 divergem** (fingerprint de 32 bits de conteúdo **ausente do repositório**, oráculo de confirmação) e **1 bate**, provando que o cabeçalho da fixture era **impreciso** ao dizer que tudo era reconstituído — corrigido também. **Régua nova R3** (nenhuma data-hora absoluta com precisão de minuto nos 20 arquivos): 29 linhas, todas triadas — 13 sintéticas declaradas, 15 pré-existentes em `origin/main` arrastadas em hunk (provado por `git diff`, que só mostra as 3 sintéticas adicionadas) e 1 `updated:` de gate, metadado presente em 137 dos 250 gates. **Remedido:** suíte **289 arq · 3.790 · 6 xfail** rc=0 (idêntica ao baseline), `lint --force` rc=0, `type-check --force` rc=0, controle negativo 🟢 55/55, e **dois mutantes de classe de igualdade nos DOIS sentidos** — dividir (`H15`→`H15X`) 🔴 1/54 e fundir (`H14`→`H16`) 🔴 1/54, ambos com `tsc --noEmit` rc=0 antes do vermelho; fixture restaurada e conferida byte a byte. **Declarado: a 1ª tentativa de mutação foi um vermelho FALSO** — ponteiro de linha envelhecido pelo cabeçalho reescrito, a `sed` não casou e a suíte saiu 🟢 55/55; só contei depois de imprimir a linha mutada. **Fora de escopo, não consertado e não repetido:** os 5 telefones e o oitavo prefixo, **pré-existentes na `origin/main`**. Nada commitado, nada `git add`-ado, nenhum push, produção não tocada, a conversa do incidente **não despausada**. | @dev (Dex) |
 | 2026-08-30 | 1.4 | **Correção pós-gate da concern QA-87-20-1 (@dev), única mudança pedida pelo gate `CONCERNS` — não bloqueante, já liberado.** Escopo mínimo: **só `route.test.ts`**; o `await logEventOnce` de produção está certo e **não foi tocado**. O carrasco media **relógio**, não ordem — o `entregar()` drenava ~60 ms e o duplo resolve em 5 ms, então a promise órfã de um `void logEventOnce` completava por acidente e a suíte ficava **32/32 verde**. Agora o mock de `next/server.after` **guarda** a promise do callback (`afterPromises.push(Promise.resolve().then(() => fn()))`), `drenarAfter()` espera os callbacks **terminarem** (`allSettled` em laço — a rota agenda 4 `after()` e um pode agendar outro) e o teste do recibo assere **imediatamente**. **Critério do gate atendido, remedido: as DUAS mutações vermelhas** — `→ logEvent` 🔴 2/30 e `→ void logEventOnce` 🔴 **1/31** (era 🟢 32/32), ambas com `tsc --noEmit` rc=0. `flushAsync()` deixado como está: nenhuma mutação prova que aquele ponto é cego. **Correção factual do @qa incorporada:** dos 9 testes novos do webhook, **6** executam o pipeline (os 3 do AC14 não, de propósito), e **2 pré-existentes** passaram a executar de carona — 7 de 32 com o conserto, **0 de 32** sem ele. Suíte inteira **289 arquivos · 3.790 passando · 6 expected-fail** rc=0 (idêntica ao baseline do gate); `lint --force` rc=0 (0 erros, 30 warnings pré-existentes); `type-check --force` rc=0. Nada commitado, nenhum push, produção não tocada, a conversa do incidente **não despausada**. | @dev (Dex) |
@@ -1148,6 +1149,147 @@ A conversa **não foi despausada**, nada foi escrito em produção, nada foi com
 
 ---
 
+### 10. Correção pós-PR — os 2 achados do CodeRabbit (PR #535)
+
+Escopo: **só os dois achados.** Nenhuma AC mudou, nenhum limiar mudou, nenhum sinal mudou de
+comportamento no caminho feliz. Commits novos por cima de `5ee0bf2b`, sem push. A conversa do
+incidente **não foi despausada** e nada foi escrito em produção.
+
+#### Achado 1 (`pipeline.ts`) — a contenção podia falhar e reportar sucesso
+
+`conterLoop` **ignorava o `error`** do `UPDATE` em `conversations`. O PostgREST não rejeita nesse
+caso: devolve `{ data: null, error }`. Se aquela escrita falhasse, a função devolvia
+`bloqueadoPorLoop` do mesmo jeito — e o resultado era **o pior estado possível, escondido dentro da
+própria correção**: o webhook gravava `NICOLE_LOOP_DETECTADO` dizendo que a Nicole tinha sido
+pausada, o admin era avisado disso, mas `is_ai_active` continuava `true` e `handoff_reason` vazio;
+o guard do AC14 não teria o que casar e a próxima mensagem do bot reiniciaria o loop. É a mesma
+família dos instrumentos cegos desta onda — **o mecanismo relata um estado que ele não verificou
+ter alcançado** — e é literalmente o modo de falha que esta story existe para eliminar.
+
+**O que decidi, e por quê.** Se a escrita falha, o turno **não** está contido; dizer
+`bloqueadoPorLoop` sem qualificação é mentir para o chamador. Três escolhas, cada uma com o motivo:
+
+1. **`contencao` é campo OBRIGATÓRIO e discriminante** (`"aplicada" | "falhou"`), dentro de
+   `bloqueadoPorLoop`. Obrigatório porque booleano opcional tem *default*, e o default seria "deu
+   certo" — a mesma mentira com uma linha de tipo a mais. Efeito colateral desejado: as duas
+   asserções `toEqual` que já existiam (AC9 e AC15) **quebraram** e tiveram de afirmar a verdade
+   nova. A mudança não é silenciosamente retrocompatível de propósito.
+2. **Dentro de `bloqueadoPorLoop`, e não num campo irmão.** É `bloqueadoPorLoop` que faz o webhook
+   PULAR o envio, e o envio tem de ser pulado nos dois casos — um turno em loop cuja contenção
+   falhou é o último que deveria ganhar voz. Campo separado abriria a porta para um chamador tratar
+   só um dos dois e mandar a fala (e `response` é `""`: a Graph API recusa `text.body` vazio).
+3. **O grito é um `event_type` PRÓPRIO** — `NICOLE_LOOP_CONTENCAO_FALHOU`, nível `error`, com a
+   mensagem do banco em `metadata.erro`, `await logEventOnce` pelo mesmo motivo do recibo (última
+   escrita antes do response). O recibo canônico `NICOLE_LOOP_DETECTADO` **continua saindo nos dois
+   casos** — é ele que o cron `nicole-health` varre para alertar o admin com o link da conversa
+   (AC10), e uma contenção que falhou é *mais* urgente, não menos — mas o texto dele deixou de
+   afirmar "Nicole pausada" quando ela não foi.
+
+**O que NÃO fiz, e por quê:** nada de `try/catch` que só loga e segue. Engolir o erro reproduz o
+defeito com mais linhas — é o padrão de [[catch-generico-esconde-caminho-morto]].
+
+**O carrasco veio antes.** `pipeline-loop-breaker.test.ts`, `describe("CR-87-20-2 …")`: o `failOn`
+do fake injeta `error` **só** no `update:conversations` (as leituras do turno seguem normais) e o
+teste falha se o chamador for informado de contenção bem-sucedida. Vermelho medido **antes** da
+correção — `2 failed | 21 passed (23)` no arquivo, as duas sendo justamente as asserções sobre o
+que o chamador ouve. Junto vão o **controle positivo** (o mesmo turno com o `UPDATE` normal diz
+`"aplicada"`, senão `"falhou"` poderia ser constante) e a asserção que dói: **`conversations`
+continua sem pausa** — é isso que torna a mentira cara.
+
+**Mutação — 4 formas, 4 vermelhos, suíte INTEIRA, `tsc --noEmit` rc=0 antes de cada contagem:**
+
+| # | forma da mutação | `tsc` | vermelhos | teste que caiu |
+|---|---|---|---|---|
+| M-CR1a | `conterLoop` volta a **ignorar** o `error` (reporta `"aplicada"` sempre) | rc=0 | 🔴 **1 / 3.805** | `o retorno diz \`contencao: "falhou"\` e carrega o motivo do banco` |
+| M-CR1c | o webhook **perde o grito** (bloco `if (!contida)` removido) | rc=0 | 🔴 **1 / 3.805** | `grava NICOLE_LOOP_CONTENCAO_FALHOU, aguardado, em nível de erro …` |
+| M-CR1d | o recibo canônico volta a dizer **sempre** "Nicole pausada" | rc=0 | 🔴 **1 / 3.805** | `o recibo canônico continua saindo, mas NÃO diz mais que a Nicole foi pausada` |
+| M-CR1e | **controle negativo** — o grito perde a guarda e sai sempre (`if (true)`) | rc=0 | 🔴 **1 / 3.805** | `controle — contenção APLICADA não emite o grito, e o recibo diz \`pausada\`` |
+
+M-CR1e existe porque um grito incondicional passaria em M-CR1c: sem ele, o par contido × não-contido
+seria decorativo.
+
+#### Achado 2 (`pipeline-loop-breaker.test.ts`) — filtro por string exata cegava o carrasco
+
+O filtro do kill-switch comparava `s.cols` com o **literal** do `.select()`. Mudar a ordem das
+colunas ou um espaço — refator inócuo — fazia o filtro não casar nada, `toHaveLength(0)` passava
+**vazio**, e o carrasco ficava cego justamente para o defeito que ele mira (a consulta rodando com
+o kill-switch ligado). Mesma classe do `grep -f` com arquivo ausente: **verde por vacuidade**.
+
+**A forma resistente veio da linha 409 do próprio arquivo** (`cols.split(",").map(trim)` +
+pertinência), agora extraída em `colunasDe()` e usada nos **dois** pontos — não inventei uma
+terceira forma. Duas ressalvas que a cópia literal não cobria e que precisaram de decisão:
+
+- **Comparar por CONJUNTO, não por `includes("metadata")`.** O turno faz outra leitura de
+  `messages` que também projeta `metadata`: o histórico da 87-8 (`role, content, created_at,
+  metadata`). Um filtro que só procurasse a coluna casaria o histórico e daria **falso-vermelho**
+  com o kill-switch ligado. `consultasDaTrava()` casa o conjunto exato `{content, created_at,
+  metadata}`.
+- **Controle de vivacidade, novo teste.** `toHaveLength(0)` sozinho continua podendo passar por
+  vacuidade se o predicado estiver errado. O teste irmão roda o **mesmo** filtro com a trava
+  LIGADA e exige `toHaveLength(1)`. Se o predicado deixar de casar por qualquer motivo, ele cai —
+  e o `toHaveLength(0)` não pode mais mentir sozinho. É o mesmo idioma que o AC14 já usava em
+  `route.test.ts` (`expect(daReativacao.length).toBeGreaterThan(0)` antes de iterar).
+
+**A prova é o par de mundos, medido — 2 × 2 sobre a suíte inteira, `tsc` rc=0 em todas as células:**
+
+| | **M-KS-plain**<br>reintroduz a consulta sob kill-switch ligado | **M-KS-reorder**<br>reintroduz **e** reordena o `.select()` para `created_at, metadata, content` |
+|---|---|---|
+| **filtro ANTIGO** (`s.cols === "content, created_at, metadata"`) | 🔴 1 / 3.804 | 🟢 **3.798 · rc=0 — CEGO** |
+| **filtro NOVO** (conjunto de colunas) | 🔴 1 / 3.805 | 🔴 **1 / 3.805** |
+
+Controle do mundo antigo (filtro antigo, **sem** mutação de código): 🟢 3.798 · rc=0 — o mundo
+antigo é autoconsistente, o verde da célula cega não vem de suíte quebrada.
+
+⚠️ **Os denominadores diferem de propósito e a diferença é exatamente 1:** o mundo antigo não tem o
+teste de vivacidade (3.804 = 3.798 + 6 xfail; o novo, 3.805 = 3.799 + 6). Não é ruído de medição.
+
+⚠️ **A célula que importa é a de baixo à direita ser 🔴 e a de cima à direita ser 🟢.** Note que o
+filtro antigo **não** era uniformemente cego: contra a mutação ingênua (mesma string) ele reprova.
+Ele é cego **só** ao refator de projeção — que é precisamente o cenário em que um humano mexe no
+`.select()` e acha que a suíte o está protegendo. Reportar "o filtro antigo é cego" sem essa
+qualificação seria mais forte do que a medição sustenta.
+
+#### Varredura da classe — os irmãos, medidos e DECLARADOS (não consertados)
+
+"Achei a classe e parei no primeiro" é um defeito próprio. Varri as escritas cujo `error` não é
+lido no raio desta story:
+
+| ponto | quem introduziu | decisão |
+|---|---|---|
+| `route.ts` — `UPDATE` de **reativação** de 24h (`is_ai_active: true, handoff_at: null, …`) | **pré-existente na `origin/main`** (63-13/63-15); a 87-20 só acrescentou `&& !contidaPorLoop` à condição | **não consertado.** Mesma classe (falha ⇒ `isAiActive = true` em memória contra um banco que segue pausado), fora do achado e fora do escopo. |
+| `nicole-health/route.ts` — `.delete()` de compensação do dedup | a 87-20 acrescentou o **segundo**; o primeiro (87-19) já estava na `main` com a mesma forma | **não consertado.** Consertar um e não o irmão idêntico, na mesma função, seria pior que declarar os dois. |
+
+Medido, não presumido: `git show origin/main:…` confirma o `UPDATE` de reativação na `main` e
+**1** `.delete()` no cron da `main` contra **2** no `HEAD`. Ambos ficam **declarados** para o @qa
+decidir, não pendentes em silêncio.
+
+Varredura do outro achado, mesma disciplina: `grep` por `\.cols` em todos os `*.test.ts` do repo
+devolve **3** pontos — o corrigido aqui, a linha 409 (já resistente, agora compartilhando o
+helper) e `route.test.ts:1631` do webhook, que **já** usa a forma resistente **e** já tem guarda de
+vivacidade. Nenhum quarto ponto.
+
+#### Réguas
+
+| prova | resultado |
+|---|---|
+| Suíte inteira, antes (tip `5ee0bf2b`) | **289 arquivos · 3.790 passando · 6 expected-fail** · rc=0 |
+| Suíte inteira, depois | **289 arquivos · 3.799 passando · 6 expected-fail** · rc=0 |
+| Δ | **+9 testes**, 5 em `pipeline-loop-breaker.test.ts` e 4 em `webhook/__tests__/route.test.ts`. **`xfail` inalterado em 6** — nenhum teste virou `it.fails` e nenhum saiu. |
+| `lint --force` | **rc=0** (0 erros, 30 warnings pré-existentes — mesma contagem do registro anterior) |
+| `type-check --force` | **rc=0** |
+| `packages/web` `pnpm build` | **rc=0** (o aviso `Ecmascript file had an error` é de `packages/shared/src/meta/capi-hashing.ts`, pré-existente e fora desta story) |
+| Higiene R1 (8 hex) | **30 ocorrências / 5 valores distintos** — os 4 já triados **mais `5ee0bf2b`**, o commit-tip da branch, citado 2× por este próprio registro. Provável por `git cat-file -t 5ee0bf2b` → `commit`: mesma classe benigna de `aa584dfb`/`51d21d1e` (commit público do repo), não conteúdo de cliente. **Medido depois de escrever a seção, não antes** — a régua varre a própria story, e foi assim que o dado sobreviveu às duas primeiras rodadas de expurgo. Antes desta seção existir a medida era 28 / 4. |
+| Higiene R2 (UUID fora da família sintética) | **0 linhas** |
+| Higiene R3 (data-hora com precisão de minuto) | **29 linhas** — idêntico ao registro anterior, nenhuma linha nova |
+| Higiene — linhas **adicionadas** por esta passada | `git diff` filtrado por data-hora, token de 8 hex, telefone e e-mail: **0 linhas** |
+
+**Disciplina de mutação:** backup gravado **uma vez** por arquivo (lição da 87-5), a linha mutada
+**impressa** antes de contar (lição do ponteiro de linha envelhecido da 3ª rodada de expurgo),
+`tsc --noEmit` rc=0 exigido **antes** de cada vermelho, e os 3 arquivos restaurados e conferidos
+com `cmp` byte a byte contra o backup ao final — os três deram idênticos, e a suíte voltou a
+3.799 · rc=0.
+
+
 ### Debug Log References
 
 - Régua reexecutável: `docs/qa/87-20-regua-sinais-loop.sql` (só contagens, read-only)
@@ -1164,17 +1306,17 @@ A conversa **não foi despausada**, nada foi escrito em produção, nada foi com
 
 **Modificados**
 - `packages/ai/src/flows/index.ts` — barrel exporta a trava
-- `packages/ai/src/chat/pipeline.ts` — `TipoDeLoop`, `ProcessMessageResult.bloqueadoPorLoop`, `carregarMensagensRecentesDaNicole`, kill-switch, `conterLoop`, Sinal B pré-modelo, Sinais A/C no `return` antecipado
+- `packages/ai/src/chat/pipeline.ts` — `TipoDeLoop`, `ProcessMessageResult.bloqueadoPorLoop`, `carregarMensagensRecentesDaNicole`, kill-switch, `conterLoop`, Sinal B pré-modelo, Sinais A/C no `return` antecipado; **CR-87-20-2:** `ResultadoDaContencao` (`contencao` obrigatório e discriminante) e o `error` do `UPDATE` da contenção LIDO
 - `packages/ai/src/chat/__fixtures__/fake-supabase.ts` — projeção real do `.select()` + registro dos selects
-- `packages/web/src/app/api/webhook/whatsapp/route.ts` — call-site → `processMessageWithMetadata`, `await logEventOnce(NICOLE_LOOP_DETECTADO)` + `return`, projeção `handoff_at, handoff_reason`, guard do AC14
-- `packages/web/src/app/api/webhook/whatsapp/__tests__/route.test.ts` — mock com metadata, projeção no fake, tabela ausente ⇒ vazia, 9 testes novos; **QA-87-20-1:** mock de `after()` retém a promise + `drenarAfter()` substitui a drenagem por tempo no `entregar()`
+- `packages/web/src/app/api/webhook/whatsapp/route.ts` — call-site → `processMessageWithMetadata`, `await logEventOnce(NICOLE_LOOP_DETECTADO)` + `return`, projeção `handoff_at, handoff_reason`, guard do AC14; **CR-87-20-2:** texto do recibo condicionado a `contencao` + `await logEventOnce(NICOLE_LOOP_CONTENCAO_FALHOU)` no caminho em que a contenção falha
+- `packages/web/src/app/api/webhook/whatsapp/__tests__/route.test.ts` — mock com metadata, projeção no fake, tabela ausente ⇒ vazia, 9 testes novos; **QA-87-20-1:** mock de `after()` retém a promise + `drenarAfter()` substitui a drenagem por tempo no `entregar()`; **CR-87-20-2:** `describe("contenção FALHOU")` com 4 testes (grito aguardado, recibo que não mente, controle negativo, envio suprimido)
 - `packages/web/src/lib/alerts/admin-whatsapp.ts` — `tipo: TipoErroIA` → `motivo: string`
 - `packages/web/src/lib/alerts/admin-whatsapp.test.ts` — assinatura nova + 2 testes do `{{1}}`
 - `packages/web/src/app/api/cron/nicole-health/route.ts` — `MOTIVO_POR_TIPO[tipo]` no caller, `coletarLoops`, branch de alerta com link, dedup por conversa, compensação
 - `packages/web/src/app/api/cron/nicole-health/route.test.ts` — fake honra `.eq()`, 12 testes novos
 - `docs/stories/87-20-loop-bot-a-bot-trava-de-repeticao-e-contagem.story.md` — este registro
 - `packages/ai/src/flows/loop-breaker.ts` — expurgo: comentários de produção sem identificador nem data-hora de conversa
-- `packages/ai/src/chat/pipeline-loop-breaker.test.ts` — expurgo: datas rebaseadas, deltas preservados
+- `packages/ai/src/chat/pipeline-loop-breaker.test.ts` — expurgo: datas rebaseadas, deltas preservados; **CR-87-20-1/2:** filtro do kill-switch por CONJUNTO de colunas (`colunasDe`/`consultasDaTrava`) + controle de vivacidade, e o `describe` da contenção que falha (4 testes)
 - `docs/qa/gates/87.20-loop-bot-a-bot-trava-de-repeticao-e-contagem.yml` — **só redação de identificador** (veredito, números e ACs intactos); **não tocado na 3ª rodada** (não carrega `md5` de conteúdo)
 - `docs/qa/po-validation-87-20.md` — **só redação de identificador** (parecer intacto); **3ª rodada:** 3 valores de `md5` → rótulos `H{n}` + cabeçalho da tabela
 - `packages/ai/src/flows/__fixtures__/loop-87-20.ts` — **3ª rodada:** os 34 `left(md5(content),8)` → rótulos de classe `H1`…`H28` (classes de igualdade preservadas); cabeçalho corrigido (a exceção do texto *verbatim*) e docstring do campo `hash` reescrita
