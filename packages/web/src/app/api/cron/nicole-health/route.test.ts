@@ -463,19 +463,47 @@ describe("Story 87-20 — alerta de loop bot-a-bot (AC10/AC11)", () => {
   const CONV_INCIDENTE = "00000000-0000-4000-8000-000000000001"
   const CONV_CONTROLE = "00000000-0000-4000-8000-000000000002"
 
-  /** Uma linha de `system_events` como o webhook a grava no bloqueio. */
+  /**
+   * Uma linha de `system_events` como o webhook a grava no bloqueio.
+   *
+   * QA-87-20-6 — a fixture carrega `contencao` porque o webhook a grava em TODO
+   * `NICOLE_LOOP_DETECTADO` desde `574441ea` (`ResultadoDaContencao`, campo obrigatório
+   * e discriminante). Uma fixture sem o campo seria um fake que NÃO reproduz o
+   * escritor — e um consumidor que passasse a distinguir os dois estados ficaria
+   * medindo o buraco da fixture em vez do código.
+   *
+   * `"ausente"` existe para o evento PRÉ-deploy, que hoje não existe em produção
+   * (medido: zero `NICOLE_LOOP_DETECTADO` no banco) mas cujo tratamento tem de ser
+   * fail-closed — ver o teste dedicado abaixo. É um RÓTULO e não `undefined` de
+   * propósito: parâmetro com default recebe o default quando o argumento é
+   * `undefined`, então `eventoDeLoop(..., undefined)` devolveria uma linha
+   * `"aplicada"` e o teste mediria a fixture, não a rota. (Medido: com `undefined`
+   * este teste saía verde pelo motivo errado.)
+   */
   function eventoDeLoop(
     conversationId: string,
     created_at = T_BLOQUEIO,
-    tipo = "encerramento"
+    tipo = "encerramento",
+    contencao: "aplicada" | "falhou" | "ausente" = "aplicada"
   ) {
     return {
       event_type: "NICOLE_LOOP_DETECTADO",
       created_at,
-      message: `Loop bot-a-bot contido (${tipo}) — Nicole pausada nesta conversa`,
+      // O mesmo par de textos do webhook (`route.ts`), para a fixture não afirmar
+      // "Nicole pausada" num evento que diz que a contenção falhou.
+      message:
+        contencao === "aplicada"
+          ? `Loop bot-a-bot contido (${tipo}) — Nicole pausada nesta conversa`
+          : `Loop bot-a-bot detectado (${tipo}) — a CONTENCAO FALHOU: a Nicole segue ATIVA nesta conversa`,
       source: "api/webhook/whatsapp",
       org_id: null,
-      metadata: { tipo, ocorrencias: 2, conversationId, leadId: "lead-1" },
+      metadata: {
+        tipo,
+        ocorrencias: 2,
+        conversationId,
+        leadId: "lead-1",
+        ...(contencao === "ausente" ? {} : { contencao }),
+      },
     }
   }
 
@@ -631,5 +659,68 @@ describe("Story 87-20 — alerta de loop bot-a-bot (AC10/AC11)", () => {
     const motivos = alertarMock.mock.calls.map((c) => c[1].motivo)
     expect(motivos).toContain(MOTIVO_POR_TIPO.credito)
     expect(motivos.some((m) => m.includes(CONV_INCIDENTE))).toBe(true)
+  })
+
+  /**
+   * QA-87-20-6 — o grito não tinha destinatário.
+   *
+   * `NICOLE_LOOP_CONTENCAO_FALHOU` sai em `level='error'`, mas o branch de erro deste
+   * mesmo cron passa toda mensagem por `classificarErroIA`, que casa 8 assinaturas de
+   * erro de API de IA e devolve `null` para a frase do grito — `if (!tipo) continue`,
+   * descartado. E o `{{1}}` que chega ao admin era CONSTANTE: a mesma frase quer a
+   * Nicole tivesse sido contida, quer a contenção tivesse falhado. A verdade existia só
+   * no `metadata` do recibo, e `system_events` não tem tela (QA-87-20-2).
+   *
+   * Ou seja: o estado em que a máquina NÃO resolveu o problema — o único em que um
+   * humano precisa ir pausar à mão — era indistinguível do estado em que ela resolveu.
+   * É a mesma família do defeito que a story inteira ataca.
+   */
+  describe("QA-87-20-6 — o texto do admin distingue contida de NÃO contida", () => {
+    it("contenção que FALHOU: o texto DIFERE do da contida e pede ação humana", async () => {
+      eventos = [eventoDeLoop(CONV_INCIDENTE, T_BLOQUEIO, "encerramento", "falhou")]
+      await GET(req() as never)
+      const falhou = argsDaChamada().motivo
+
+      // O MESMO mundo, mudando só a contenção: mesma conversa, mesmo instante, mesmo
+      // tipo. Sem esse par, "o texto contém a palavra X" passaria com um texto
+      // constante que sempre pede ação humana — o defeito espelhado.
+      alertarMock.mockClear()
+      chavesGravadas = new Set()
+      eventos = [eventoDeLoop(CONV_INCIDENTE, T_BLOQUEIO, "encerramento", "aplicada")]
+      await GET(req() as never)
+      const aplicada = argsDaChamada().motivo
+
+      expect(falhou).not.toBe(aplicada)
+      // Literal, não derivado da fonte: uma régua montada a partir da constante que
+      // ela testa não reprova a constante.
+      expect(falhou).toContain("CONTENÇÃO FALHOU")
+      expect(falhou).toContain("pause a conversa à mão")
+      expect(aplicada).not.toContain("à mão")
+      // O endereço não pode sumir no caminho ruim — é o caso em que ele mais importa.
+      expect(falhou).toContain(CONV_INCIDENTE)
+    })
+
+    it("janela MISTA na mesma conversa: UM bloqueio não confirmado já pede ação humana", async () => {
+      // Fail-closed na agregação. A pausa é por conversa, não por turno: se qualquer
+      // bloqueio da janela não confirmou o `UPDATE`, o admin tem de ir conferir.
+      eventos = [
+        eventoDeLoop(CONV_INCIDENTE, T_BLOQUEIO, "encerramento", "aplicada"),
+        eventoDeLoop(CONV_INCIDENTE, T_MAIS_1MIN, "encerramento", "falhou"),
+      ]
+      await GET(req() as never)
+
+      expect(alertarMock).toHaveBeenCalledTimes(1)
+      expect(argsDaChamada()).toMatchObject({ ocorrencias: 2, desdeIso: T_BLOQUEIO })
+      expect(argsDaChamada().motivo).toContain("pause a conversa à mão")
+    })
+
+    it("evento SEM `contencao` no metadata não é lido como sucesso", async () => {
+      // Ausência não é confirmação. `contencao` é obrigatório desde `574441ea`, então
+      // um evento sem ele só pode ser pré-deploy (zero em produção) ou corrompido — e
+      // em nenhum dos dois a rota tem base para afirmar que a Nicole foi pausada.
+      eventos = [eventoDeLoop(CONV_INCIDENTE, T_BLOQUEIO, "encerramento", "ausente")]
+      await GET(req() as never)
+      expect(argsDaChamada().motivo).toContain("pause a conversa à mão")
+    })
   })
 })

@@ -79,6 +79,16 @@ interface LoopAgregado {
   conversationId: string
   ocorrencias: number
   primeiraOcorrencia: string
+  /**
+   * QA-87-20-6 — TODOS os bloqueios da janela confirmaram que a Nicole foi de fato
+   * pausada (`metadata.contencao === "aplicada"`, gravado pelo webhook)?
+   *
+   * `false` é o estado em que a máquina NÃO resolveu o problema: a trava suprimiu a
+   * fala, mas o `UPDATE` de `is_ai_active` falhou e a Nicole segue ATIVA na conversa.
+   * É o único estado desta story que exige um humano — e era exatamente o que o admin
+   * não conseguia distinguir, porque o `{{1}}` saía com a mesma frase nos dois casos.
+   */
+  contencaoConfirmada: boolean
 }
 
 /**
@@ -106,15 +116,26 @@ async function coletarLoops(
     const meta = (ev.metadata ?? {}) as Record<string, unknown>
     const conversationId = typeof meta.conversationId === "string" ? meta.conversationId : null
     if (!conversationId) continue
+    // MESMO predicado do escritor (`webhook/whatsapp/route.ts`: `contencao === "aplicada"`),
+    // e na mesma polaridade: só "aplicada" confirma. Ausência não confirma nada — o campo
+    // é obrigatório desde a correção do Achado 1, então um evento sem ele é pré-deploy ou
+    // corrompido, e em nenhum dos dois há base para afirmar que a Nicole foi pausada.
+    // Tratar ausência como sucesso reintroduziria, no LEITOR, o defeito que o campo
+    // obrigatório eliminou no ESCRITOR.
+    const confirmada = meta.contencao === "aplicada"
     const atual = porConversa.get(conversationId)
     if (atual) {
       atual.ocorrencias += 1
+      // Fail-closed: a pausa é da CONVERSA, não do turno. Um único bloqueio que não
+      // confirmou já significa que ninguém verificou que ela está contida agora.
+      atual.contencaoConfirmada = atual.contencaoConfirmada && confirmada
     } else {
       porConversa.set(conversationId, {
         conversationId,
         ocorrencias: 1,
         // Ordenado asc: o primeiro que vejo de cada conversa é o mais antigo.
         primeiraOcorrencia: ev.created_at as string,
+        contencaoConfirmada: confirmada,
       })
     }
   }
@@ -340,7 +361,21 @@ export async function GET(request: NextRequest) {
     // "loop detectado NESTA conversa". Sem ele, trocamos um loop infinito por uma
     // conversa contida que ninguém acha: `handoff_reason` é escrito em 6 rotas de API
     // e lido em ZERO telas.
-    const motivo = `loop bot-a-bot detectado — ${APP_URL}/dashboard/conversas/${loop.conversationId}`
+    const link = `${APP_URL}/dashboard/conversas/${loop.conversationId}`
+
+    // QA-87-20-6 — o `{{1}}` era CONSTANTE nos dois casos, então o admin recebia a
+    // mesma frase quer a Nicole tivesse sido contida, quer a contenção tivesse falhado.
+    // O grito que o webhook passou a emitir (`NICOLE_LOOP_CONTENCAO_FALHOU`) não chega
+    // aqui: ele sai em `level='error'`, mas o branch de erro acima passa toda mensagem
+    // por `classificarErroIA`, que só casa assinatura de API de IA e devolve `null`
+    // para a frase dele — descartado no `if (!tipo) continue`. Este texto é o ÚNICO
+    // caminho que existe até uma pessoa, e é aqui que a distinção tem de aparecer.
+    //
+    // Uma linha só, sem quebra: parâmetro de template da Meta não aceita `\n`.
+    // O texto do caso contido é byte-a-byte o de antes — o caminho que funciona não muda.
+    const motivo = loop.contencaoConfirmada
+      ? `loop bot-a-bot detectado — ${link}`
+      : `loop bot-a-bot detectado e a CONTENÇÃO FALHOU: a Nicole segue ATIVA — pause a conversa à mão em ${link}`
 
     const { inserted } = await logEventOnce({
       level: "warn",
