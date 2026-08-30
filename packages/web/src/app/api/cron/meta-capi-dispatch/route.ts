@@ -178,6 +178,25 @@ async function processarOrg(
     // de configuração que retry não resolve). E — C9 — o estado ganha VOZ: sem o evento abaixo,
     // "a empresa parou de receber CAPI" seria exatamente o defeito que esta onda existe para
     // eliminar — comportamento errado, resposta 200, ninguém sabe.
+    //
+    // ⚠️ `skipped` é TERMINAL: medido (achado do @qa, gate CONCERNS da 900-23) — **nada neste
+    // repositório devolve `meta_capi_outbox.status` de `skipped` para `pending`**. O
+    // `CHECK (status IN ('pending','sent','failed','skipped'))` da migration 215 permite a volta,
+    // mas nenhum código a faz. Consequência: se este ramo rodar antes do seed do `dataset_id`, os
+    // eventos daquela org são **PERDIDOS, não adiados**.
+    //
+    // O caminho de volta é manual e existe — é este, e ele é seguro porque `event_id` é
+    // determinístico (a Meta deduplica na janela de 48 h, Story 86-2/86-4):
+    //
+    //   UPDATE meta_capi_outbox
+    //      SET status = 'pending', last_error = NULL
+    //    WHERE status = 'skipped'
+    //      AND last_error = 'capi_nao_configurado'
+    //      AND org_id = '<org>'
+    //   RETURNING id, event_id;
+    //
+    // O filtro por `last_error` é o que impede ressuscitar as linhas de `'lead not found'`, que
+    // são `skipped` por outra razão e devem continuar assim.
     for (const row of outbox) {
       await supabase
         .from("meta_capi_outbox")

@@ -22,9 +22,24 @@ let orgsQueFalham = new Set<string>()
 let pendentes: Array<{ org_id: string }> = []
 let enviados: string[] = []
 
+/**
+ * Projeta a linha nas colunas pedidas no `.select()` — como o PostgREST faz.
+ *
+ * Story 900-23 (achado do @qa, gate CONCERNS): sem isto, a mutação que a AC nomeia como a
+ * correção ("o `select` passou a trazer `org_id`") fica **VERDE** — o campo chega pela
+ * fixture, não pelo código, e a guarda não guarda. `*` e joins (`tabela(col)`) passam
+ * inteiros: quem os pede quer o objeto todo.
+ */
+function projetar<T extends Record<string, unknown>>(linha: T, colunas?: string): T {
+  if (!colunas || colunas.includes("*") || colunas.includes("(")) return linha
+  const pedidas = colunas.split(",").map((c) => c.trim())
+  return Object.fromEntries(Object.entries(linha).filter(([k]) => pedidas.includes(k))) as T
+}
+
 function builder(tabela: string) {
   const filtros: Array<[string, unknown]> = []
   let pendingUpdate: unknown = null
+  let colunas: string | undefined
 
   const resolver = () => {
     const org = filtros.find(([c]) => c === "org_id")?.[1] as string | undefined
@@ -32,7 +47,7 @@ function builder(tabela: string) {
       throw new Error(`falha sintética lendo a fila da org ${org}`)
     }
     if (tabela !== "email_sends_queue") return { data: [], error: null }
-    if (org === undefined) return { data: pendentes, error: null }
+    if (org === undefined) return { data: pendentes.map((l) => projetar(l, colunas)), error: null }
     // Segunda query: os itens daquela org, já com o join achatado pela rota.
     const itens = pendentes
       .filter((p) => p.org_id === org)
@@ -56,7 +71,10 @@ function builder(tabela: string) {
   }
 
   const api: Record<string, unknown> = {
-    select: () => api,
+    select: (c?: string) => {
+      colunas = c
+      return api
+    },
     eq: (c: string, v: unknown) => {
       filtros.push([c, v])
       return api

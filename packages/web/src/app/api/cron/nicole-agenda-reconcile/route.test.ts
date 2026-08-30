@@ -225,13 +225,17 @@ describe("cron nicole-agenda-reconcile", () => {
     expect(itemDa(body, ORG).dry).toBe(true)
     expect(itemDa(body, ORG).lastro_pct).toBe(12.5)
     // O modo em que o baseline é produzido não pode ter efeito colateral DE DOMÍNIO.
-    expect(logEventOnceMock).not.toHaveBeenCalled()
     expect(telegramMock).not.toHaveBeenCalled()
-    // O `logEvent` que sobra é a contabilidade do helper (CRON_*), nunca um evento da Nicole.
-    expect(logEventMock.mock.calls.map((c) => (c[0] as EventoEscrito).event_type)).toEqual([
+    // `logEvent` (fire-and-forget) não é usado por ninguém nesta cadeia — nem pela rota, nem pelo
+    // helper (que migrou para `logEventOnce` aguardado, achado do @qa no gate da 900-23).
+    expect(logEventMock).not.toHaveBeenCalled()
+    // O que sobra é só a contabilidade do helper (CRON_*), nunca um evento da Nicole.
+    expect(completados.map((e) => e.event_type)).toEqual([
       "CRON_ORG_PROCESSADA",
       "CRON_RESUMO",
     ])
+    expect(doTipo("NICOLE_LASTRO_DIARIO")).toEqual([])
+    expect(doTipo("NICOLE_AFIRMACAO_SEM_LASTRO")).toEqual([])
   })
 
   it("emite o evento por caso, o recibo com o número, e o alerta nomeado", async () => {
@@ -395,14 +399,16 @@ describe("cron nicole-agenda-reconcile", () => {
     expect(dias).toBe(180) // MAX_DIAS
   })
 
-  it("🔴 87-6 — nenhum evento da Nicole sai por `logEvent` fire-and-forget", async () => {
-    // ⚠️ FORMA mudou (900-23): `forEachActiveOrg` emite a própria contabilidade (`CRON_*`) por
-    // `logEvent`. A garantia da 87-6 — os eventos da NICOLE são aguardados, via `logEventOnce` —
-    // é a mesma, e é isto que a asserção mede agora.
+  it("🔴 87-6 — NADA nesta cadeia sai por `logEvent` fire-and-forget", async () => {
+    // A asserção original (`logEventMock` nunca chamado) voltou a valer INTEIRA depois que o
+    // helper migrou de `logEvent` para `logEventOnce` aguardado (achado do @qa, gate da 900-23) —
+    // e agora cobre mais que antes: além dos eventos da Nicole, os `CRON_*` do helper também são
+    // aguardados, e o `CRON_RESUMO` é a última escrita antes do response.
     await GET(req())
-    const tipos = logEventMock.mock.calls.map((c) => (c[0] as EventoEscrito).event_type)
-    expect(tipos.filter((t) => t.startsWith("NICOLE_"))).toEqual([])
-    expect(tipos).toEqual(["CRON_ORG_PROCESSADA", "CRON_RESUMO"])
+    expect(logEventMock).not.toHaveBeenCalled()
+    const tipos = completados.map((e) => e.event_type)
+    expect(tipos).toContain("NICOLE_LASTRO_DIARIO")
+    expect(tipos).toContain("CRON_RESUMO")
   })
 })
 
@@ -520,6 +526,10 @@ describe("900-23 · C6 — Propriedade 5 amarrada na rota", () => {
     expect(res.status).toBe(200)
     expect(body.total).toBe(0)
     expect(reconciliarMock).not.toHaveBeenCalled()
-    expect(completados).toEqual([])
+    // Zero evento de DOMÍNIO. O helper ainda registra o próprio `CRON_RESUMO` (total 0) — é o
+    // recibo de que o cron rodou e não tinha o que fazer, que é o oposto de silêncio.
+    expect(doTipo("NICOLE_LASTRO_DIARIO")).toEqual([])
+    expect(doTipo("NICOLE_AFIRMACAO_SEM_LASTRO")).toEqual([])
+    expect(completados.map((e) => e.event_type)).toEqual(["CRON_RESUMO"])
   })
 })

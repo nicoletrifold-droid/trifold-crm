@@ -35,6 +35,20 @@ let updates: Array<{ table: string; payload: unknown; eqs: Record<string, unknow
  */
 let integracoes: Record<string, { config: unknown } | { erro: string } | undefined> = {}
 
+/**
+ * Projeta a linha nas colunas pedidas no `.select()` — como o PostgREST faz.
+ *
+ * Story 900-23 (achado do @qa, gate CONCERNS): sem isto, a mutação que a AC nomeia como a
+ * correção ("o `select` passou a trazer `org_id`") fica **VERDE** — o campo chega pela
+ * fixture, não pelo código, e a guarda não guarda. `*` e joins (`tabela(col)`) passam
+ * inteiros: quem os pede quer o objeto todo.
+ */
+function projetar<T extends Record<string, unknown>>(linha: T, colunas?: string): T {
+  if (!colunas || colunas.includes("*") || colunas.includes("(")) return linha
+  const pedidas = colunas.split(",").map((c) => c.trim())
+  return Object.fromEntries(Object.entries(linha).filter(([k]) => pedidas.includes(k))) as T
+}
+
 vi.mock("@web/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     from: (table: string) => {
@@ -42,7 +56,12 @@ vi.mock("@web/lib/supabase/admin", () => ({
       let pendingUpdate: unknown = null
       const eqs: Record<string, unknown> = {}
       const ins: Record<string, unknown[]> = {}
-      for (const m of ["select", "order", "limit"]) b[m] = vi.fn(() => b)
+      let colunas: string | undefined
+      b.select = vi.fn((c?: string) => {
+        colunas = c
+        return b
+      })
+      for (const m of ["order", "limit"]) b[m] = vi.fn(() => b)
       b.in = vi.fn((col: string, vals: unknown[]) => {
         ins[col] = vals
         return b
@@ -72,14 +91,20 @@ vi.mock("@web/lib/supabase/admin", () => ({
           // O fake HONRA `.eq("org_id", …)` E `.in("id", …)`: sem os DOIS, o teste de
           // não-vazamento entre organizações passaria por acidente.
           const base = (leadsSelect.data ?? []) as Array<Record<string, unknown>>
-          const filtrados = base.filter(
-            (l) =>
-              (eqs.org_id === undefined || l.org_id === eqs.org_id) &&
-              (ins.id === undefined || ins.id.includes(l.id)),
-          )
+          const filtrados = base
+            .filter(
+              (l) =>
+                (eqs.org_id === undefined || l.org_id === eqs.org_id) &&
+                (ins.id === undefined || ins.id.includes(l.id)),
+            )
+            .map((l) => projetar(l, colunas))
           return Promise.resolve({ data: filtrados, error: leadsSelect.error }).then(res, rej)
         }
-        return Promise.resolve(outboxSelect).then(res, rej)
+        const linhas = (outboxSelect.data ?? []) as Array<Record<string, unknown>>
+        return Promise.resolve({
+          data: linhas.map((l) => projetar(l, colunas)),
+          error: outboxSelect.error,
+        }).then(res, rej)
       }
       return b
     },

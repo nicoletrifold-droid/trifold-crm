@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { createOrgScopedAdminClient } from "@web/lib/supabase/org-scoped-admin"
-import { logEvent } from "@web/lib/logger"
+import { logEventOnce } from "@web/lib/logger"
 
 /**
  * Story 900-23 · AC1 (Passo 2 da Onda 2) — o mecanismo compartilhado que faz um cron rodar para
@@ -26,9 +26,25 @@ import { logEvent } from "@web/lib/logger"
  *    Cloud, que têm rate limit por token: paralelizar troca "processa devagar" por "429 em
  *    cascata", que é um modo de falha novo, não uma otimização.
  * 4. **Log por org + um resumo**, em `system_events` (`CRON_ORG_PROCESSADA` / `CRON_ORG_FALHOU` /
- *    `CRON_RESUMO`).
+ *    `CRON_RESUMO`) — via `logEventOnce`, que é **aguardado**. Ver a nota abaixo: aqui isso não é
+ *    preferência de estilo.
  * 5. **Status HTTP** via {@link statusHttpParaResumo}: `total === 0` é "nada para fazer" (200),
  *    não falha.
+ *
+ * ## Por que `logEventOnce` e não `logEvent` (achado do @qa, gate CONCERNS da 900-23)
+ *
+ * `logEvent` é fire-and-forget, e `lib/logger.ts:49-55` — escrito pela própria Story 87-6 — diz o
+ * porquê: numa lambda serverless o processo congela no `return` do handler e a promise pendente
+ * morre com ele. **O `CRON_RESUMO` é exatamente a última escrita antes do response**, que é o caso
+ * que aquela story diagnosticou depois de perder o recibo `NICOLE_LASTRO_DIARIO` da run de 10/08
+ * 11:38 UTC em produção.
+ *
+ * `dedupe_key` é **opcional** em `logEventOnce` (`logger.ts:100-101`): sem a chave, o índice
+ * parcial `ux_system_events_dedupe_key` não toca a linha e o comportamento é um insert normal —
+ * só que aguardado. Não há custo de dedupe indevido, e o `await` tem carrasco próprio na suíte.
+ *
+ * O que estava em jogo não era o evento perdido: era **congelar o padrão errado num mecanismo
+ * compartilhado que vai ser copiado** por todo cron que migrar para cá.
  *
  * ## ⚠️ Regra herdada por todo callback que use `dedupe_key` (R5)
  *
@@ -136,7 +152,7 @@ export async function forEachActiveOrg<T>(
       const db = createOrgScopedAdminClient(org.id) as unknown as SupabaseClient
       const resultado = await fn(org, db)
       resultados.push({ org, ok: true, resultado })
-      logEvent({
+      await logEventOnce({
         level: "info",
         category: "cron",
         event_type: "CRON_ORG_PROCESSADA",
@@ -147,7 +163,7 @@ export async function forEachActiveOrg<T>(
     } catch (e) {
       const erro = e instanceof Error ? e.message : String(e)
       resultados.push({ org, ok: false, erro })
-      logEvent({
+      await logEventOnce({
         level: "error",
         category: "cron",
         event_type: "CRON_ORG_FALHOU",
@@ -170,7 +186,7 @@ export async function forEachActiveOrg<T>(
   // Resumo é evento de PLATAFORMA, não de tenant: `org_id` omitido de propósito (`buildRow` do
   // logger grava `null`). Atribuí-lo a uma org qualquer seria a mesma classe de erro de atribuição
   // que motivou a reclassificação do `nicole-health` (AC3).
-  logEvent({
+  await logEventOnce({
     level: "info",
     category: "cron",
     event_type: "CRON_RESUMO",

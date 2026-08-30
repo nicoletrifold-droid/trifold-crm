@@ -28,6 +28,18 @@ const neqCalls: [string, unknown][] = []
 const gteCalls: [string, unknown][] = []
 const updateCalls: unknown[] = []
 
+/**
+ * Projeta a linha nas colunas pedidas no `.select()` — como o PostgREST faz.
+ *
+ * Story 900-23 (achado do @qa, gate CONCERNS): sem isto, tirar `org_id` do `select` de `leads`
+ * (`roleta-retry/route.ts:48`) fica VERDE — o campo chega pela fixture, não pelo código.
+ */
+function projetar<T extends Record<string, unknown>>(linha: T, colunas?: string): T {
+  if (!colunas || colunas.includes("*") || colunas.includes("(")) return linha
+  const pedidas = colunas.split(",").map((c) => c.trim())
+  return Object.fromEntries(Object.entries(linha).filter(([k]) => pedidas.includes(k))) as T
+}
+
 function makeAdminClient(
   leads: { id: string; org_id: string; name: string }[],
   current: Record<string, unknown> = { assigned_broker_id: null, bolsao_em: null, segmento: "principal", stage_id: STAGE_IDS.novo },
@@ -37,6 +49,7 @@ function makeAdminClient(
   neqCalls.length = 0
   gteCalls.length = 0
   updateCalls.length = 0
+  let colunas: string | undefined
 
   const chain = {
     eq: vi.fn((c: string, v: unknown) => { eqCalls.push([c, v]); return chain }),
@@ -44,8 +57,11 @@ function makeAdminClient(
     neq: vi.fn((c: string, v: unknown) => { neqCalls.push([c, v]); return chain }),
     gte: vi.fn((c: string, v: unknown) => { gteCalls.push([c, v]); return chain }),
     order: vi.fn(() => chain),
-    limit: vi.fn(() => Promise.resolve({ data: leads, error: null })),
-    select: vi.fn(() => chain),
+    limit: vi.fn(() => Promise.resolve({ data: leads.map((l) => projetar(l, colunas)), error: null })),
+    select: vi.fn((c?: string) => {
+      colunas = c
+      return chain
+    }),
     update: vi.fn((p: unknown) => { updateCalls.push(p); return chain }),
     maybeSingle: vi.fn(() => Promise.resolve({ data: current, error: null })),
     then: (resolve: (v: unknown) => unknown) => Promise.resolve({ data: null, error: null }).then(resolve),
@@ -262,5 +278,31 @@ describe("roleta-retry — isolamento de erro no laço (AC7 da 900-23)", () => {
     expect(body.distributed).toBe(1)
     // …e o erro NÃO ficou em silêncio: sem este campo, o corpo sairia limpo com 200.
     expect(body.erros).toBeGreaterThanOrEqual(1)
+  })
+})
+
+describe("roleta-retry — o `select` de leads precisa trazer `org_id` (achado do @qa, 900-23)", () => {
+  it("🔴 a distribuição recebe o `org_id` REAL da linha — tirar a coluna do select fica vermelho", async () => {
+    // Sem o fake projetando as colunas, esta asserção passaria com `org_id` vindo da fixture:
+    // mediria o duplo, não o código. `distributeLeadToNextBroker(leadId, orgId)` é o consumidor.
+    process.env.CRON_SECRET = "test-secret"
+    vi.mocked(loadLeadInboundForClassification).mockResolvedValue({
+      lastInboundAt: OLD,
+      text: "quero comprar",
+      hasDocument: false,
+    })
+    vi.mocked(classifyContactIntent).mockResolvedValue({
+      isLead: true,
+      category: "lead",
+      reason: "",
+    } as never)
+    vi.mocked(distributeLeadToNextBroker).mockResolvedValue({ status: "distributed" } as never)
+    vi.mocked(createAdminClient).mockReturnValue(
+      makeAdminClient([{ id: "l1", org_id: "org-real", name: "A" }]) as never,
+    )
+
+    await GET(makeRequest())
+
+    expect(vi.mocked(distributeLeadToNextBroker)).toHaveBeenCalledWith("l1", "org-real")
   })
 })

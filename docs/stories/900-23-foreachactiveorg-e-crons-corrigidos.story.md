@@ -1503,12 +1503,35 @@ callback** afirmando `db === sentinela(org.id)` em cada invocação, mais
 C8 é o **par que discrimina**: erro de listagem `rejects.toThrow(/connection refused/)` com **zero**
 callbacks, contra zero orgs ativas que **resolve** com `total: 0` e status 200.
 
-**Divergência registrada (não normalizada):** a AC1 prescreve `logEvent` (fire-and-forget) para os
-logs do helper, e o próprio `lib/logger.ts:49-55` avisa que fire-and-forget numa lambda **pode não
-gravar** — foi o que custou o recibo perdido da Story 87-6. Segui a AC à risca (o carrasco da
-Propriedade 4 conta chamadas de `logEvent`, e trocá-lo por `logEventOnce` invalidaria a AC), mas
-**o `CRON_RESUMO` é a última escrita antes do response**, exatamente o padrão que a 87-6
-diagnosticou. Fica registrado como dívida nomeada para quem revisitar o helper.
+**Divergência com a AC1 — resolvida na rodada do gate, não deixada como dívida.** A AC1 prescrevia
+`logEvent` (fire-and-forget), e `lib/logger.ts:49-55` — escrito pela própria Story 87-6 — avisa que
+numa lambda a promise pendente morre no `return` do handler. **O `CRON_RESUMO` é exatamente a
+última escrita antes do response**, o caso que custou o recibo `NICOLE_LASTRO_DIARIO` perdido em
+produção. Meu bloqueio alegado na primeira rodada ("o carrasco da Propriedade 4 conta chamadas de
+`logEvent`") **não se sustentava**: `dedupe_key` é **opcional** em `logEventOnce`
+(`logger.ts:100-101`), então sem chave o índice parcial nem toca a linha — é um insert normal,
+só que aguardado. O helper usa `await logEventOnce(...)` nas 3 escritas.
+
+O que estava em jogo não era o evento perdido: era **congelar o padrão errado num mecanismo
+compartilhado que todo cron que migrar vai copiar**.
+
+**Carrasco do `await`, não da chamada** (era o furo real): o duplo de `logEventOnce` só completa a
+escrita num macrotask, com contador de geração para escrita órfã não vazar para o teste seguinte —
+mesma forma de `nicole-agenda-reconcile/route.test.ts` (87-6). Mutações:
+
+| Mutação | Resultado |
+|---|---|
+| tira **só** o `await` das 3 escritas (eventos preservados) | 🔴 1 falha / 15 passam, **em `for-each-org.test.ts`** |
+| a mesma, medida **na rota** (`nicole-agenda-reconcile`) | 🔴 **3 falham** / 19 passam |
+| volta para `logEvent` fire-and-forget | 🔴 **10 falham** / 6 passam |
+| — restaurado | ✅ 16/16 e 22/22 |
+
+**Efeito colateral bom:** a asserção `expect(logEventMock).not.toHaveBeenCalled()` de
+`nicole-agenda-reconcile/route.test.ts:339` — que na primeira rodada eu tinha **enfraquecido** para
+"nenhum `NICOLE_*` por `logEvent`" — voltou a valer **inteira**, e agora cobre mais que o original:
+`logEvent` não é usado por ninguém nesta cadeia, nem pela rota nem pelo helper. Isso fecha junto o
+R3 do gate: o "achado 3" e o "achado 4" da primeira rodada eram **o mesmo fato** — a concessão do
+conjunto permitido (de ∅ para dois eventos) *era* a dívida do `logEvent`.
 
 ### Task 2 — `daily-report` e `nicole-agenda-reconcile` migrados (AC2)
 
@@ -1571,8 +1594,10 @@ chamado.
 ⚠️ **Achado durante a implementação — o primeiro carrasco nasceu cego.** Com o fake original, a
 mutação "`select` sem `org_id`" ficava **verde**: o duplo de `system_events` ignorava a lista de
 colunas e devolvia a linha inteira da fixture, `org_id` incluso. Corrigido no fake — ele agora
-**projeta** as colunas pedidas (`colunas.split(",")`), e só então a mutação acende. É a mesma
-classe de "fixture que responde pelo código" que já custou rodada nesta onda.
+**projeta** as colunas pedidas (`colunas.split(",")`), e só então a mutação acende.
+
+**E eu parei no primeiro (achado do @qa, gate CONCERNS) — eram cinco.** Ver a seção
+"Carrascos cegos" abaixo.
 
 ⚠️ **Divergência com a AC3.2, deliberada e comentada no código.** A AC pede a linha
 `Orgs afetadas: …` no **corpo do alerta**. Medido: `alertarAdminWhatsApp` não monta texto livre —
@@ -1740,7 +1765,7 @@ PostgREST; nenhum valor de segredo impresso):
 |---|---|---|
 | 1 | `organizations WHERE is_active = true` | **1** — `00000000-0000-0000-0000-000000000001` · slug `trifold` · "Trifold Engenharia" |
 | 2 | id da org da Trifold | **bate byte a byte com o literal de `trifoldOrgId()`** — confirmado por leitura, não presumido pelo UUID histórico |
-| 3 | `dataset_id` em uso hoje | ⚠️ **NÃO MEDIDO** — ver abaixo |
+| 3 | `dataset_id` em uso hoje | ⚠️ **NÃO MEDIDO** — ver abaixo (e o mesmo vale para `DAILY_REPORT_ORG_ID`) |
 | 4 | `count(DISTINCT org_id) FROM meta_ad_accounts WHERE status='active'` | **1** (1 conta, 1 org) |
 | 5 | `count(*) FROM whatsapp_config WHERE status='active'` | **1** — o `PGRST116` do achado R1 **não** está ativo hoje; o follow-up por template funciona em produção |
 
@@ -1787,21 +1812,101 @@ violação da restrição central do dono do produto.
 
 **9.5 — NÃO EXECUTADA** (é pós-deploy, e o deploy da AC5 está retido pelo plano B).
 
+### Rodada do gate (CONCERNS) — carrascos cegos, os cinco
+
+O @qa reproduziu o meu próprio achado do `nicole-health` e mediu que ele tinha **quatro irmãos
+vivos**, dois deles exatamente sobre as linhas que as ACs 4 e 5 nomeiam como *a correção*. Um fake
+que não projeta as colunas do `.select()` faz o campo chegar **pela fixture, não pelo código**: a
+guarda existe e não guarda.
+
+Todos os cinco fakes passaram a projetar (`projetar(linha, colunas)`, com `*` e joins passando
+inteiros). Antes/depois da mesma mutação — tirar `org_id` da lista de colunas:
+
+| Linha mutada | O que a AC promete dali | Antes (gate) | Depois |
+|---|---|---|---|
+| `meta-capi-dispatch/route.ts:87` | AC5 passo 1 — `select` do outbox com `org_id` | 🟢 17/17 (cego) | 🔴 **12 falham** / 5 passam |
+| `meta-ads-intelligence/route.ts:224` | AC4 — agrupar `accounts` por `org_id` | 🟢 7/7 (cego) | 🔴 **5 falham** / 2 passam |
+| `meta-ads-intelligence/route.ts:347` | R7 — `meta_alerts` com o `org_id` de cada org | 🟢 7/7 (cego) | 🔴 1 falha / 6 passam |
+| `email-queue/route.ts:43` | agrupamento da fila por org | 🟢 2/2 (cego) | 🔴 **2 falham** / 0 |
+| `roleta-retry/route.ts:48` | `distributeLeadToNextBroker(id, org_id)` | 🟢 (sem carrasco) | 🔴 1 falha / 13 passam |
+| `nicole-health/route.test.ts:46` | AC3 — `org_id` no select de `system_events` | já corrigido por mim | 🔴 3 falham / 17 passam |
+
+Para `roleta-retry` não bastava projetar: **não havia asserção nenhuma** sobre o `org_id` chegar ao
+consumidor. Acrescentei o carrasco (`expect(distributeLeadToNextBroker).toHaveBeenCalledWith("l1",
+"org-real")`) — 13 → **14 testes**.
+
+### Rodada do gate — `skipped` do CAPI é TERMINAL: perda, não atraso
+
+Medido, confirmando o @qa: **nada neste repositório devolve `meta_capi_outbox.status` de
+`skipped` para `pending`**. O `CHECK` da migration 215 permite a volta; nenhum código a faz. Se a
+AC5 subisse antes do seed do `dataset_id`, os eventos daquela org seriam **perdidos**, não adiados
+— o que torna o plano B da Task 9.4 mais grave do que "esperar mais um ciclo".
+
+O caminho de volta está agora **no código, ao lado da causa**
+(`meta-capi-dispatch/route.ts`, no ramo `if (!datasetId)`), não só no gate:
+
+```sql
+UPDATE meta_capi_outbox
+   SET status = 'pending', last_error = NULL
+ WHERE status = 'skipped'
+   AND last_error = 'capi_nao_configurado'
+   AND org_id = '<org>'
+RETURNING id, event_id;
+```
+
+É seguro reenfileirar porque `event_id` é determinístico e a Meta deduplica na janela de 48 h
+(86-2/86-4). O filtro por `last_error` é o que impede ressuscitar as linhas de `'lead not found'`,
+que são `skipped` por outra razão.
+
+### Rodada do gate — correções factuais minhas
+
+**"31 warnings, todos pré-existentes" era 30 + 1.** O warning
+`followup/templates-por-org.test.ts:37:49 '_token' is defined but never used` está em arquivo
+**criado por esta story** — não podia ser pré-existente. E a régua que usei (`git stash` + re-lint)
+é **inerte** com as mudanças já commitadas: `git stash` não guarda nada e o "baseline" re-lintado é
+a própria árvore da story. Régua que não move não mede. A régua que morde é a interseção
+arquivo-a-arquivo (`git diff --name-only e8ea5433 HEAD` × arquivos com warning), que não depende do
+estado do índice.
+**Corrigido na fonte, não no texto:** o segundo parâmetro deixou de ser ignorado — o teste agora
+**afirma o par `[wabaId, accessToken]`** de cada chamada
+(`[["waba-a","tok-a"],["waba-b","tok-b"]]`), provando que a org A jamais lista templates com o
+token da B. O warning some porque o parâmetro passou a ter uso, não porque foi renomeado.
+
+**Fresta nova, registrada:** `DAILY_REPORT_ORG_ID` (`daily-report/route.ts:65`) tem **a mesma
+cegueira de Vercel** do `META_CAPI_DATASET_ID` — não está em `.env.producao` e a Vercel de produção
+não é legível desta máquina. Não sabemos se ela está setada em Production. Consequência prática:
+se estiver setada apontando para outra org, os telefones de `DAILY_REPORT_RECIPIENTS` deixariam de
+receber o relatório da Trifold no primeiro deploy. **Não é bloqueante** (com 1 org ativa o pior caso
+é `envDaOrg = []` e a lista da tela continua valendo), mas o @devops deve **ler as duas envs na
+conta certa** antes do deploy — não só a do CAPI.
+
+**Ordem de merge — o texto do Change Log estava errado, e a consequência real é pior.** Medido:
+`merge-base(origin/main, HEAD)` = `77f225d1`; `e8ea5433` é ancestral de `HEAD` e **não** de
+`origin/main`; `origin/main..HEAD` = **3 commits**, o primeiro sendo `e8ea5433` = `headRefOid` do
+PR #526. Mergear este PR antes do #526 **não deixa a `main` vermelha** — deixa a `main` **verde
+tendo engolido o #526 inteiro, com `supabase/migrations/246_org_integrations_e_unicidade_whatsapp.sql`,
+sem o gate nem o registro daquele PR**. Isso é pior que quebrar, porque passa despercebido. A
+formulação correta é a do início deste Dev Agent Record; o Change Log foi alinhado a ela.
+
 ### Débitos nomeados (não corrigidos aqui, conforme a story)
 
 - **R8** — `meta_ad_accounts` não filtra `organizations.is_active`: org suspensa com contas ativas
   continua consumindo Graph API. Candidato a story de entitlement (Onda 3).
 - **R9** — lote do CAPI global e FIFO (`BATCH_SIZE = 50`, `*/3 * * * *`): uma org com backlog
   monopoliza a fila. Teórico no volume atual.
-- **Novo (desta implementação)** — `forEachActiveOrg` loga por `logEvent` (fire-and-forget), e o
-  `CRON_RESUMO` é a última escrita antes do response: é o padrão que a Story 87-6 diagnosticou como
-  perda de evento em lambda. Seguido conforme a AC1 prescreve; registrado para revisão.
+- ~~`forEachActiveOrg` loga por `logEvent` (fire-and-forget)~~ — **RESOLVIDO na rodada do gate**:
+  migrado para `await logEventOnce(...)`, com carrasco que mede o `await`. Ver Task 1.
+- **Novo (gate)** — `meta_capi_outbox.status = 'skipped'` é terminal: não há reenfileiramento
+  automático. O SQL de recuperação está no código, ao lado da causa; automatizá-lo (ou permitir
+  retry de `capi_nao_configurado` depois que o dataset aparecer) é candidato a story futura.
+- **Novo (gate)** — `DAILY_REPORT_ORG_ID` compartilha a cegueira de Vercel do
+  `META_CAPI_DATASET_ID`: o valor em Production não é legível desta máquina.
 - **Novo** — `nicole-health` não pode publicar `orgs_afetadas` no texto do alerta enquanto o
   template aprovado `alerta_sistema_admin` tiver 3 parâmetros fixos (ver Task 3).
 
 ### File List
 
-**Criados (11)**
+**Criados (11)** · **Modificados na rodada do gate:** os 5 fakes que não projetavam colunas + `for-each-org.ts`/`.test.ts` (logEventOnce) + `meta-capi-dispatch/route.ts` (SQL de recuperação)
 - `packages/web/src/lib/tenancy/for-each-org.ts`
 - `packages/web/src/lib/tenancy/for-each-org.test.ts`
 - `packages/web/src/lib/tenancy/trifold-org.ts`
@@ -1838,8 +1943,8 @@ violação da restrição central do dono do produto.
 
 | Comando | Resultado |
 |---|---|
-| `npx vitest run` (suíte completa) | ✅ 282 arquivos, 3572 passando, 6 expected-fail |
-| `pnpm lint --force` | ✅ 0 erros, 31 warnings — **todos pré-existentes**, confirmado por `git stash` + re-lint no baseline |
+| `npx vitest run` (suíte completa) | ✅ **282 arquivos, 3574 passando**, 6 expected-fail (pós-gate; +2 testes novos: o do `await` no helper e o do `org_id` no `select` do `roleta-retry`) |
+| `pnpm lint --force` | ✅ 0 erros, **30 warnings, todos pré-existentes** — o 31º era meu (`templates-por-org.test.ts:37 '_token'`) e foi **eliminado na fonte**, dando uso ao parâmetro. Régua: interseção `git diff --name-only e8ea5433 HEAD` × arquivos com warning (não `git stash`, que é inerte sobre mudança commitada) |
 | `pnpm type-check --force` | ✅ 8/8 tarefas |
 | `tsc` à mão em `scripts/` | ✅ `tsc --noEmit --strict … scripts/lib/allowlist-lint.ts scripts/admin-client-allowlist.test.ts` → **exit 0** |
 | `npx eslint src --format=json` (packages/web) | ✅ 1210 arquivos, 0 ocorrências da regra |
@@ -1854,8 +1959,121 @@ violação da restrição central do dono do produto.
 
 | Data | Autor | Mudança |
 |---|---|---|
-| 2026-08-29 | @dev (Dex) | **Implementacao — `Ready for Dev` -> `Ready for Review`.** As 10 ACs cumpridas, cada propriedade com a mutacao rodada e o vermelho medido (nao relido): 6 mutacoes no `forEachActiveOrg`, 5 nas duas rotas migradas, 2 no `nicole-health`, 2 no `meta-ads-intelligence`, 4 no `meta-capi-dispatch`/`capi-client`, 3 no `followup`, **12** na AC7 (as DUAS de C10 por arquivo — sem `try/catch` **e** so sem o campo de falha), 2 na catraca do literal, e o par vermelho->verde da Task 8.8. Suite completa: **282 arquivos, 3572 passando**. **[AUTO-DECISAO] Base da branch:** `origin/main` **nao contem** a allowlist re-triada nem `allowlist-lint.ts`/`admin-client-allowlist.test.ts` (medido: vivem so no PR #526, reconfirmado aberto/`MERGEABLE`/`CLEAN` no dia) — com a branch em `main` puro a AC8 seria insatisfazivel e, pior, mergear esta story depois do #526 deixaria `MINIMOS["alvos-onda-2"]=12` reprovando uma secao de 3 e a `main` **vermelha**. Base = `e8ea5433`, que e `origin/main` + o commit da `900-21b`. **Consequencia para o @devops: este PR entra DEPOIS do #526.** **Quatro achados registrados, nao normalizados:** (1) o carrasco do `select` do `nicole-health` **nasceu cego** — o fake ignorava a lista de colunas e devolvia `org_id` da fixture; corrigido para projetar as colunas, so entao a mutacao acende; (2) a AC3.2 pede `Orgs afetadas` no corpo do alerta, mas o canal e o template **aprovado** `alerta_sistema_admin` de 3 parametros fixos — um 4o devolve 400 e o alerta para de sair, violando a AC9; `orgs_afetadas` foi para `metadata` + corpo HTTP, que e onde a propria verificacao da AC3 afirma; (3) alem das 3 assercoes de forma nomeadas em R3, **duas** outras mudaram e a story nao previu — `nicole-agenda-reconcile/route.test.ts:339` e `:179-181` afirmavam `logEvent` **nunca** chamado, e o helper passa a chama-lo (`CRON_*`); reescritas para "nenhum `NICOLE_*` por `logEvent`", que e mais forte que o original; (4) a AC1 prescreve `logEvent` (fire-and-forget) e o `CRON_RESUMO` e a ultima escrita antes do response — exatamente o padrao que a 87-6 diagnosticou como perda de evento em lambda; segui a AC e registrei como divida. **Task 8.1 em commit proprio** (`e3a6f1fc`), 6->0 no `grep -c '900-20'`. **AC9 — 5 leituras read-only de producao coladas; 4 confirmaram o esperado** (1 org ativa, e o id dela **bate byte a byte** com o literal de `trifoldOrgId()`; 1 org distinta em `meta_ad_accounts`; **1** `whatsapp_config` ativa — o `PGRST116` do R1 nao esta ativo hoje). **A 5a NAO pode ser medida:** `META_CAPI_DATASET_ID` nao esta em `.env.producao` e a Vercel de producao **nao e legivel desta maquina** (`forbidden` — gotcha das duas contas). **Leitura extra decisiva: `org_integrations` NAO EXISTE em producao** (`PGRST205`) — a migration `246` nao foi aplicada la. Com 9.1-item-3 e 9.3 abertas, **o plano B da Peca 3 esta ATIVO: o codigo da AC5 (`meta-capi-dispatch` + `sendCapiEvents`) NAO sobe neste deploy**; as demais ACs nao tem essa dependencia. Tasks 9.3 e 9.5 deixadas explicitamente **desmarcadas**. |
+| 2026-08-29 | @dev (Dex) | **Rodada do gate CONCERNS — 6 correções, todas com prova em disco.** (1) **Os carrascos cegos eram CINCO, não um.** O @qa mediu que o meu achado do `nicole-health` tinha 4 irmãos vivos, dois deles sobre as linhas que as ACs 4 e 5 chamam de *a correção*. Todos os fakes passaram a projetar as colunas do `.select()`. A mesma mutação (tirar `org_id` do select) que saía VERDE agora: `meta-capi-dispatch:87` 17/17 → **12 vermelhos**; `meta-ads-intelligence:224` 7/7 → **5 vermelhos**; `:347` 7/7 → 1 vermelho; `email-queue:43` 2/2 → **2 vermelhos**; `roleta-retry:48` (que nem tinha asserção) → 1 vermelho, com carrasco novo afirmando `distributeLeadToNextBroker("l1","org-real")`. (2) **A dívida do `logEvent` não era aceitável e nem cara:** `dedupe_key` é opcional (`logger.ts:100-101`), então o helper migrou para `await logEventOnce(...)`. Carrasco que mede o **`await`**, não a chamada (duplo que só completa em macrotask + contador de geração): tirar só o `await` → 1 vermelho no módulo e **3 na rota**; voltar para `logEvent` → **10 vermelhos**. Efeito colateral: a asserção `expect(logEventMock).not.toHaveBeenCalled()` da 87-6, que eu tinha **enfraquecido**, voltou a valer INTEIRA e agora cobre mais que o original — o que fecha o R3 do gate (os meus "achados 3 e 4" eram o mesmo fato). (3) **`skipped` do CAPI é TERMINAL** — medido: nada no repo devolve a linha para `pending`; seriam eventos **perdidos, não adiados**. O SQL de recuperação (com `RETURNING` e o filtro por `last_error` que preserva as linhas de `'lead not found'`) foi para **dentro do código, ao lado da causa**, não só para o gate. (4) **"31 warnings todos pré-existentes" era 30+1** — o `'_token'` estava em arquivo criado por esta story, e a régua `git stash` que usei é inerte sobre mudança commitada. Corrigido **na fonte**: o teste passou a afirmar o par `[wabaId, accessToken]`, provando que a org A nunca lista com o token da B. (5) **Fresta nova registrada:** `DAILY_REPORT_ORG_ID` tem a mesma cegueira de Vercel do `META_CAPI_DATASET_ID` — o @devops precisa ler **as duas** envs na conta certa. (6) **Ordem de merge corrigida neste Change Log:** mergear antes do #526 não deixa a `main` vermelha — deixa a `main` **verde tendo engolido o #526 inteiro, com a migration `246`, sem gate próprio**, que passa despercebido. Suíte: **282 arquivos, 3574 passando** (+2 testes novos). Lint: **30 warnings, zero meus** — os 2 arquivos tocados que ainda aparecem têm as linhas com warning **byte-idênticas ao baseline** (`sed -n 'Np'` em HEAD × `e8ea5433`, conferido linha a linha). |
+| 2026-08-29 | @dev (Dex) | **Implementacao — `Ready for Dev` -> `Ready for Review`.** As 10 ACs cumpridas, cada propriedade com a mutacao rodada e o vermelho medido (nao relido): 6 mutacoes no `forEachActiveOrg`, 5 nas duas rotas migradas, 2 no `nicole-health`, 2 no `meta-ads-intelligence`, 4 no `meta-capi-dispatch`/`capi-client`, 3 no `followup`, **12** na AC7 (as DUAS de C10 por arquivo — sem `try/catch` **e** so sem o campo de falha), 2 na catraca do literal, e o par vermelho->verde da Task 8.8. Suite completa: **282 arquivos, 3572 passando**. **[AUTO-DECISAO] Base da branch:** `origin/main` **nao contem** a allowlist re-triada nem `allowlist-lint.ts`/`admin-client-allowlist.test.ts` (medido: vivem so no PR #526, reconfirmado aberto/`MERGEABLE`/`CLEAN` no dia) — com a branch em `main` puro a AC8 seria insatisfazivel. Base = `e8ea5433`, que e `origin/main` + o commit da `900-21b`. **[CORRIGIDO na rodada do gate — esta linha dizia "a `main` **vermelha**", que e uma mecanica que nao se sustenta, e o @qa mediu qual e:** `origin/main..HEAD` sao **3 commits**, o primeiro sendo `e8ea5433` = `headRefOid` do #526. Mergear este PR antes do #526 nao deixa a `main` vermelha — deixa a `main` **verde tendo engolido o #526 inteiro, com a migration `246`, sem o gate nem o registro daquele PR**, que e pior porque passa despercebido. A formulacao certa sempre esteve no Dev Agent Record; era o Change Log que divergia dele.**] **Consequencia para o @devops: este PR entra DEPOIS do #526.** **Quatro achados registrados, nao normalizados:** (1) o carrasco do `select` do `nicole-health` **nasceu cego** — o fake ignorava a lista de colunas e devolvia `org_id` da fixture; corrigido para projetar as colunas, so entao a mutacao acende; (2) a AC3.2 pede `Orgs afetadas` no corpo do alerta, mas o canal e o template **aprovado** `alerta_sistema_admin` de 3 parametros fixos — um 4o devolve 400 e o alerta para de sair, violando a AC9; `orgs_afetadas` foi para `metadata` + corpo HTTP, que e onde a propria verificacao da AC3 afirma; (3) alem das 3 assercoes de forma nomeadas em R3, **duas** outras mudaram e a story nao previu — `nicole-agenda-reconcile/route.test.ts:339` e `:179-181` afirmavam `logEvent` **nunca** chamado, e o helper passa a chama-lo (`CRON_*`); reescritas para "nenhum `NICOLE_*` por `logEvent`", que e mais forte que o original; (4) a AC1 prescreve `logEvent` (fire-and-forget) e o `CRON_RESUMO` e a ultima escrita antes do response — exatamente o padrao que a 87-6 diagnosticou como perda de evento em lambda; segui a AC e registrei como divida. **[RESOLVIDO na rodada do gate: `dedupe_key` e OPCIONAL, entao o bloqueio que aleguei nao existia — migrado para `await logEventOnce(...)`, e os achados (3) e (4) eram o MESMO fato.]** **Task 8.1 em commit proprio** (`e3a6f1fc`), 6->0 no `grep -c '900-20'`. **AC9 — 5 leituras read-only de producao coladas; 4 confirmaram o esperado** (1 org ativa, e o id dela **bate byte a byte** com o literal de `trifoldOrgId()`; 1 org distinta em `meta_ad_accounts`; **1** `whatsapp_config` ativa — o `PGRST116` do R1 nao esta ativo hoje). **A 5a NAO pode ser medida:** `META_CAPI_DATASET_ID` nao esta em `.env.producao` e a Vercel de producao **nao e legivel desta maquina** (`forbidden` — gotcha das duas contas). **Leitura extra decisiva: `org_integrations` NAO EXISTE em producao** (`PGRST205`) — a migration `246` nao foi aplicada la. Com 9.1-item-3 e 9.3 abertas, **o plano B da Peca 3 esta ATIVO: o codigo da AC5 (`meta-capi-dispatch` + `sendCapiEvents`) NAO sobe neste deploy**; as demais ACs nao tem essa dependencia. Tasks 9.3 e 9.5 deixadas explicitamente **desmarcadas**. |
 | 2026-08-29 | @po (Pax) | **Revalidação: GO (8,5/10).** As 10 correções C1-C10 conferidas uma a uma, com os carrascos rodados contra `e8ea5433` — não relidos. Confirmado: **C1** os 3 números batem (`grep -c '900-20'` → 6; `npx vitest run …/nicole-health/route.test.ts` → `Tests 17 passed (17)`; 12 crons em `plataforma`, e a partição fecha exatamente em 40); **C2** a régua nova mede a forma que existe, com controle positivo 6→0; **C3** a contradição sumiu (a *lógica* das 4 regras não muda, os *dados* de `MINIMOS` mudam) e a Task 8.8 ficou melhor do que eu pedi — vermelho ANTES de corrigir `MINIMOS`, verde depois, que é controle positivo sobre a própria catraca; **C4** o `try/catch` interno emite `NICOLE_LASTRO_FALHA` e **relança**, então a AC da 87-6 e a Propriedade 1 convivem (com 1 org falhando, `sucesso===0 && total===1` ⇒ 500 por `statusHttpParaResumo`, o status que o teste 🔴 87-6 afirma); **C5** a correção do Telegram acende nos dois sentidos — zero despacho com dado da org B **e** despacho preservado para a Trifold, então uma mutação que simplesmente desligasse o Telegram não passaria (o `telegramMock` já existe em `route.test.ts:181`); **C6/C7/C8** as três propriedades ganharam carrasco executável, e o par que eu queria está completo: erro de listagem **rejeita** (`rejects.toThrow` + zero callbacks) enquanto zero orgs ativas **resolve** (200 + zero callbacks) — são caminhos distinguíveis, e o segundo é o defeito; **C9** o `capi_nao_configurado` ganhou voz (`CAPI_ORG_SEM_DATASET`) mais a checagem pós-deploy da Task 9.5; **C10** campo de falha nomeado arquivo a arquivo, e a mutação decisiva foi acrescentada — reverter *só* o campo, mantendo o `try/catch`, também tem que ficar vermelho. **Ressalva registrada, não bloqueante:** o mock da sentinela (C7) precisa devolver o **mesmo** objeto por org entre chamadas, senão `toBe` compara instâncias diferentes — erra alto, nunca passa em falso. **Acrescentei a AC10 + Task 10** (autoridade de AC é do @po): o `trifoldOrgId()` é a decisão certa como mecanismo, mas como estava escrito era a porta de entrada para o próximo UUID — mora em `lib/reports/` (lugar que nenhum revisor de tenancy audita), tem JSDoc que descreve a função em vez de declarar a exceção, é medido uma vez em vez de travado por catraca, e — o achado desta rodada — `trifoldOrgId()` lendo `DAILY_REPORT_ORG_ID` **recria a dependência cruzada que a própria AC2 comemora ter fechado**, agora mais larga: apontar o relatório diário para outra org passaria a redirecionar, em silêncio, para onde vai o Telegram do cron da agenda. **R10 aplicada por mim no épico:** `§900-23` deixou de dizer "37 crons migrados" (agora a partição medida que fecha em 40, com a nota de que migrar os 19 seria regressão), `guard.ts`→`for-each-org.ts`, a ressalva de que o grep do nome não pega rename (os 2 literais que sobrevivem, e a dívida que o §900-20 herda), e `Dep: 900-20` → `Dep: 900-21b`. Segue para o @dev. |
 | 2026-08-29 | @sm (River) | **Revisão pós-NO-GO do @po** (`docs/qa/po-validation-900-23.md`), 10 correções obrigatórias aplicadas, todas remedidas contra `e8ea5433` (não redação — comandos rodados de novo). **Decisão 1 executada:** correção da referência `900-20`→`900-23` mantida NESTA story (não reabre o PR #526), com as 3 condições do @po aplicadas — contagem corrigida para **6** (não 9, C1), Task 8.0a acrescentada para a linha de Change Log na `900-21b`, e Task 8.1 isolada como commit próprio antes da re-triagem de seção. **Decisão 2 executada:** AC5.2 ganhou as 3 peças que a tornam verificável — `RETURNING`+leitura de confirmação no seed (Task 9.3), checagem pós-deploy de `capi_nao_configurado=0` (Task 9.5), e plano B nomeado de deploy dividido (Task 9.4). **C1** — 3 números remedidos: `900-20` são 6 (não 9, os 3 `.test.ts` irmãos não citam); `nicole-health/route.test.ts` tem 17 casos (não 27, `npx vitest run` colado); `plataforma` tem 12 crons implementados (não 15/16 — 16 é a contagem de entradas, 4 das quais são 3 libs + 1 teste). **C2** — carrasco da AC8.7 trocado de `grep -c '"900-20"'` (já verde hoje, mede token entre aspas que nunca existiu) para `grep -c '900-20'`, com controle positivo 6→0. **C3** — `MINIMOS["alvos-onda-2"]` em `allowlist-lint.ts` precisa mudar de 12 para 3 (Task 8.6 nova), senão a Regra 0 reprova o próprio resultado que a AC8.6 declara como sucesso; `plataforma`/`itera-orgs` subidos para o novo piso, não deixados para trás. **C4** — `nicole-agenda-reconcile` mantém `try/catch` interno que emite `NICOLE_LASTRO_FALHA` (AC da 87-6) e relança, em vez de deixar o helper engolir o evento. **C5** — o achado mais grave: a v1 afirmava que `sendTelegramAdminAlert` não vazava entre orgs; corrigido para o oposto (canal global, corpo com PII) e tratado simetricamente ao `daily-report` — despacho só para `trifoldOrgId()`, outras orgs só gravam `system_events`. **C6** — Propriedade 5 (`statusHttpParaResumo`) ganhou teste na ROTA (2 orgs 1 falha→200, ambas falham→500, 0 orgs→200+zero callback), não só na função pura. **C7** — Propriedade 2 trocou "espiar a fábrica" por identidade de sentinela (`db === sentinela(org.id)`), fechando a mutação que descartava o client escopado. **C8** — o único ponto onde o helper lança ganhou teste (`rejects.toThrow` + zero chamadas ao callback), não só JSDoc. **C9** — `capi_nao_configurado` ganhou voz: `logEvent CAPI_ORG_SEM_DATASET` por org por execução. **C10** — o "contador que já existe nos 6 arquivos" era falso em 3; nomeado campo por arquivo (`erros`/`orgs_com_erro`/entrada `{orgId,ok,erro}` no array), com carrasco afirmando sobre o corpo da resposta, não só "o 2º item rodou". **Recomendações aplicadas:** R1 (diagnóstico do `followup` corrigido — `maybeSingle()` com 2 linhas ativas devolve erro descartado, não "a primeira", e a correção via `.eq("org_id",…)` fecha isso estruturalmente graças ao índice da `900-21b`); R2 (AC9 ganhou 2 leituras de produção a mais, total 5); R3 (AC9 reescrita como "efeito observável idêntico", com as 3 asserções que mudam de forma nomeadas); R4 (`?dry=1` documentado como corpo por-org); R5 (`dedupe_key` do `nicole-agenda-reconcile` — regra de embutir `org.id` promovida a JSDoc do helper + teste estendido a 2 orgs); R6 (vocabulário "lança síncrono"→"rejeita", corrigido na Propriedade 3); R7 (`meta-ads-intelligence` — contagem corrigida para 9 usos, mais teste de `org_id` em `meta_alerts`); R11 (grep do literal UUID somado ao grep do nome, com contagem antes/depois — motivou extrair `trifoldOrgId()` para módulo compartilhado `lib/reports/trifold-org.ts`, evitando duplicar o literal em 2 rotas). **R8/R9 registradas como dívida nomeada** (não corrigidas — fora do corte desta story). **R10 é do @po** (correções do próprio épico), não aplicada aqui. |
 | 2026-08-29 | @po (Pax) | **Validação: NO-GO (6,0/10).** Parecer completo em `docs/qa/po-validation-900-23.md`. 10 correções obrigatórias, todas medidas rodando contra `e8ea5433`. As duas decisões pedidas: (1) **corrigir a referência `900-20` AQUI**, não reabrir o PR #526 — a Task 8 reescreve essas mesmas entradas de qualquer forma (conflito garantido), o #526 já carrega os 4 arquivos de governança, e corrigir lá apagaria o registro da classe do erro; condicionado a 6 (não 9), a uma linha de Change Log na `900-21b` e a commit próprio para a 8.1. (2) **A ordem de deploy do CAPI continua como AC**, mas falta torná-la verificável: recibo do seed (`RETURNING`, rowcount=1), checagem pós-deploy e voz para o `capi_nao_configurado`. Bloqueantes principais: C1 três números medidos errados (`900-20` são **6** e não 9; `nicole-health` tem **17** casos e não 27; plataforma são **12** crons e não 15/16); C2 o carrasco `git grep -c '"900-20"'` **já sai verde hoje**, antes de qualquer correção — as ocorrências são `(900-20)` em prosa, nunca token entre aspas; C3 `MINIMOS["alvos-onda-2"]=12` em `allowlist-lint.ts` reprova o estado final de 3 da AC8.6, e a AC afirma que esse arquivo "não muda"; C4 a Propriedade 1 do helper come o `NICOLE_LASTRO_FALHA` do `nicole-agenda-reconcile` (AC da 87-6, `route.ts:200-212`, teste `:302-309`), que a AC2 nunca menciona; C5 a AC2 afirma que o `sendTelegramAdminAlert` não vaza — mas é `TELEGRAM_ADMIN_CHAT_ID` global (`lib/telegram.ts:1-8`) e o corpo do alerta nomeia o lead, cita a conversa e traz deep link: sob 2 orgs, PII da org B vai para o Telegram da Trifold, a mesma armadilha do `DAILY_REPORT_RECIPIENTS` negada na segunda rota; C6/C7/C8 três das cinco propriedades do `forEachActiveOrg` sem carrasco de verdade (status HTTP nunca provado na rota, Propriedade 2 prova a chamada da fábrica e não o `db` entregue, e o único ponto onde o helper lança tem só JSDoc — se o erro de listagem virar lista vazia, banco fora do ar vira 200 "nada a fazer" em todo cron); C9 o `capi_nao_configurado` só existe numa coluna, sem log nem alerta; C10 o "contador que já existe nos 6" não existe em 3 deles (`obras-approval-reminder` não tem nenhum; `bolsao-rebalance`/`sla-alerts` devolvem array, não contador) — sem campo nomeado, `catch { console.error; continue }` passa no carrasco e a rota devolve 200 com corpo limpo. Mais 11 recomendações, incluindo duas correções no épico que são da alçada do @po (`§900-23` "37 crons migrados" → partição medida de 40; `epic-900:845` `Dep: 900-20` → `900-21b`). Status permanece `Draft`. |
 | 2026-08-29 | @sm (River) | Draft inicial. Cobre Passos 2 (`forEachActiveOrg`) e 5 (crons travados/defeituosos/isolamento) da Onda 2 do plano aprovado — Passos 4 e 6 explicitamente fora, por instrução do dono do produto. Numeração: `900-23` (número já reservado pelo próprio epic para este conteúdo — sem colisão, diferente do caso `900-16`/`900-21b`). **Achado: a allowlist já commitada pela `900-21b` cita `900-20` (número de OUTRO conteúdo do epic — stage resolver) em 9 motivos do Passo 5, por um palpite não verificado do @dev daquela story — corrigido para `900-23` nesta story (AC8.1)**. Medido linha a linha em `daily-report`, `nicole-agenda-reconcile`, `nicole-health`, `meta-ads-intelligence`, `meta-capi-dispatch`, `followup`, e os 6 arquivos de isolamento — todas as referências de código (arquivo:linha) conferidas contra HEAD em 2026-08-29, não copiadas da allowlist sem checar. Decisão de design: `nicole-health` mantém 2 das 5 ocorrências de `DEFAULT_ORG_ID` (renomeadas `PLATFORM_ALERT_ORG_ID`, papel de canal de entrega, não de filtro) — as outras 3 (2 logs do próprio alerta + a leitura, que já não tinha filtro) são removidas/complementadas. Dependência de ordem de deploy declarada explicitamente para `meta-capi-dispatch` (AC5.2/AC9): migration `246` em produção + seed do `dataset_id` real da Trifold, ambos antes do deploy do código. |
+
+---
+
+## QA Results
+
+**Gate:** `docs/qa/gates/900.23-foreachactiveorg-e-crons-corrigidos.yml`
+**Reviewer:** Quinn (Test Architect) · 2026-08-29
+**Decisão: CONCERNS** — o código está certo; o que segura o PASS é instrumento, não comportamento.
+Nada bloqueia o merge.
+
+### O que reproduzi por execução (não aceitei por relato)
+
+Suíte completa `282 arquivos / 3572 passando / 6 expected-fail` ✅ · `type-check --force` 8/8 ✅ ·
+`npx eslint src` **1210 arquivos, 0 ocorrências** de `aios/no-unscoped-admin-client` ✅ ·
+allowlist `17 / 29 / 3 / 12 / 178`, união **239**, `MINIMOS` e `TOTAL_ESPERADO` alinhados,
+`scripts/admin-client-allowlist.test.ts` 15/15 ✅ · `grep -c '900-20'` **6 em `e8ea5433` → 0 em
+HEAD** ✅.
+
+**14 mutações reproduzidas**, todas com a contagem que o @dev colou: C7 (1/14), C8 (1/14), AC10.4
+(2 vermelhos em 2 arquivos), C5 (2/20), C4 (3/19), `envList` sem escopo (2/9), `leads` sem
+`.eq(org_id)` (1/16), `followup` sem `.eq(org_id)` (3), `followup` descartando o `error` (1), C10
+no `sla-alerts` nas duas variantes, e a catraca do literal acendendo **com o nome do arquivo**.
+Mais **3 mutações minhas**, todas vermelhas: tirar só o `await` do `logEventOnce` do
+`NICOLE_LASTRO_FALHA`; fixar `ok: true` no topo do `sla-alerts`; e a igualdade de forma do commit
+`e3a6f1fc` (6 linhas removidas ≡ 6 adicionadas após normalizar `900-20`/`900-23` — prova que foi
+só a troca de número, que `--numstat` não daria).
+
+**Produção relida por mim, read-only:** 1 org ativa, `id` batendo byte a byte com o literal de
+`trifoldOrgId()`; 1 `whatsapp_config` ativa; 1 org distinta em `meta_ad_accounts`; e
+`org_integrations` → **`PGRST205`** (a tabela não existe — a `246` não está lá).
+
+### Achado principal — o carrasco cego tem três irmãos (QA-900-23-1, high)
+
+O @dev achou sozinho que o fake do `nicole-health` ignorava a lista de colunas do `.select()` e
+consertou. **Não procurou a classe nos outros fakes.** Procurei. Removendo `org_id` do `select`:
+
+| Arquivo:linha | O que a AC promete daquela linha | Suíte |
+|---|---|---|
+| `meta-capi-dispatch/route.ts:87` | AC5 passo 1 — "`select` do outbox ganha `org_id`" | **17/17 VERDE** |
+| `meta-ads-intelligence/route.ts:224` | AC4 — agrupar `accounts` por `org_id` | **7/7 VERDE** |
+| `meta-ads-intelligence/route.ts:347` | R7 — `meta_alerts` com o `org_id` de cada org | **7/7 VERDE** |
+
+Sistêmico (`email-queue:43` e `roleta-retry:48` idem). De todos os fakes desta fatia, só o de
+`nicole-health/route.test.ts:46` projeta colunas. As duas rotas afetadas são as que a própria
+story chama de mais graves, e o `org_id` no `select` é a **primeira peça** da correção da AC5.
+Conserto: copiar o padrão que já existe no repo, ~15 linhas.
+
+### Julgamentos pedidos
+
+- **Ordem de merge — CONFIRMADA, e mais grave que o Change Log diz.** Medido: `origin/main..HEAD`
+  são **3 commits**, e o primeiro é `e8ea5433`, o `headRefOid` do PR #526 (OPEN/MERGEABLE/CLEAN).
+  Mergear este PR antes do #526 não deixa a `main` vermelha — deixa a `main` **verde tendo
+  engolido o #526 inteiro**, incluindo a migration `246`, sem o gate daquele PR. A formulação
+  certa é a do Dev Agent Record, não a do Change Log.
+- **Plano B / PR que entrega código que não ativa — COERENTE, não re-fatiar.** O fail-safe tem
+  carrasco próprio, o estado tem voz (`CAPI_ORG_SEM_DATASET`), e re-fatiar obrigaria a renumerar
+  a allowlist duas vezes. O risco é de **deploy**, não de merge. **Ressalva nova:** grepei e não
+  existe caminho que devolva `meta_capi_outbox.status` de `skipped` para `pending` — se a AC5
+  subir antes do seed, os eventos daquela janela são **perdidos, não adiados**. A SQL de
+  recuperação está no gate (H4).
+- **AC3.2 — divergência CORRETA.** Verifiquei o código: `admin-whatsapp.ts:99-104` monta
+  exatamente 3 parâmetros para o template aprovado `alerta_sistema_admin`. Um 4º → 400 → o alerta
+  para de sair → AC9 violada, e a AC9 é hierarquicamente superior à forma do texto da AC3.2. A
+  própria "Verificação" da AC3 afirma sobre `metadata.orgs_afetadas`, que é onde ele pôs. Fica a
+  ressalva de que o valor de usuário (o admin humano ver as orgs na mensagem) é entrega parcial.
+- **Dívida do `logEvent` — NÃO aceitável como está, por ser barata, não por ser grave.**
+  `logger.ts:53`, escrito pela 87-6, diz literalmente *"Se o evento é a ÚLTIMA escrita antes do
+  response, use `logEventOnce` (aguardado)"* — e o `CRON_RESUMO` é exatamente isso. O bloqueio
+  alegado ("invalidaria o carrasco da Propriedade 4") não se sustenta: medi que o `dedupe_key` de
+  `logEventOnce` é **opcional** (`logger.ts:100-101`), então `await logEventOnce({…})` funciona; o
+  custo real é 3 mocks + ~3 asserções. Congelar o padrão que a 87-6 diagnosticou dentro de um
+  **mecanismo novo e compartilhado** é a parte que preocupa, não o evento de hoje.
+- **R3 (5 asserções em vez de 3) — MEIA VERDADE.** Mais forte como garantia da 87-6 (o original
+  não distinguia "nenhum `logEvent`" de "nenhum `logEvent` da Nicole"), e a lista exata
+  `toEqual(["CRON_ORG_PROCESSADA","CRON_RESUMO"])` acende com um terceiro fire-and-forget. Mas
+  como garantia de **rota** é concessão: o conjunto permitido saiu de ∅ para dois eventos — e essa
+  concessão **é** a dívida acima, vista de outro ângulo. A story trata os dois achados como
+  independentes; são o mesmo fato. Pagar a dívida devolve a asserção para `["CRON_ORG_PROCESSADA"]`
+  e fecha os dois. (Contraprova que rodei: tirar só o `await` do `logEventOnce` do
+  `NICOLE_LASTRO_FALHA` deixa 3 vermelhos — lá o `await` É medido. É o padrão a seguir.)
+- **Garantia sobre a Trifold — cobre "não muda" na dimensão que importa.** Com o conjunto de orgs
+  ativas provadamente unitário e o `id` batendo com o literal, `forEachActiveOrg` é
+  indistinguível do `DEFAULT_ORG_ID` de hoje; idem 1 grupo em `meta_ad_accounts` e 1 entrada de
+  cache no `followup`. Acrescentei uma checagem que faltava: a **forma** do corpo de resposta
+  mudou em 5 rotas, e greppei os consumidores — nenhum código da aplicação lê esses corpos, só as
+  entradas de `crons` do `vercel.json`, que olham status. Seguro. **Duas frestas, a mesma causa:**
+  `META_CAPI_DATASET_ID` (já nomeada) e **`DAILY_REPORT_ORG_ID` (nova, ninguém nomeou)** —
+  `daily-report/route.ts:65` lê essa env, ela não está em `.env.producao`, e a Vercel de produção
+  não é legível daqui; se estiver setada com valor != o id da Trifold, os telefones de
+  `DAILY_REPORT_RECIPIENTS` param de receber, em silêncio. Probabilidade baixa, custo de
+  verificação zero (mesma ida do @devops).
+
+### Correção factual ao Dev Agent Record
+
+`pnpm lint --force` dá 0 erros / 31 warnings ✅, mas **"todos pré-existentes" é 30+1**:
+`followup/templates-por-org.test.ts:37:49 '_token' is defined but never used` está num arquivo
+**criado por esta story**. Os outros 2 da interseção são falso alarme (código byte-idêntico ao
+baseline). A régua alegada (`git stash` + re-lint) é **inerte** com as mudanças já commitadas —
+`git stash` não guarda nada e o "baseline" re-lintado é a própria árvore da story. A régua que
+morde é a interseção arquivo-a-arquivo entre os warnings e `git diff --name-only e8ea5433 HEAD`.
+
+### Recomendações
+
+1. **Preferencial antes do merge:** QA-900-23-1 — projetar as colunas nos 2 fakes.
+2. Story própria: QA-900-23-2 (`await logEventOnce` no `CRON_RESUMO`, fecha o R3 junto),
+   QA-900-23-4 (catraca do literal só varre `packages/web/src`), QA-900-23-5 (indentação em
+   `sla-alerts/route.ts:293`).
+3. **@devops:** H1 (ordem de merge), H2 (ler 3 envs na Vercel), H3 (AC5 não sobe), H4 (o `skipped`
+   não se auto-cura — leve a SQL).
+
+*Nenhuma linha de código de aplicação foi alterada por este gate. Todas as mutações foram
+restauradas e a árvore reconferida limpa. Produção: somente leitura.*

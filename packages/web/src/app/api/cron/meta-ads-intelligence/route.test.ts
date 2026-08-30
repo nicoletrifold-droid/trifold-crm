@@ -29,6 +29,20 @@ let falhaEm: Array<{ tabela: string; orgId: string }> = []
 
 let proximoId = 1
 
+/**
+ * Projeta a linha nas colunas pedidas no `.select()` — como o PostgREST faz.
+ *
+ * Story 900-23 (achado do @qa, gate CONCERNS): sem isto, a mutação que a AC nomeia como a
+ * correção ("o `select` passou a trazer `org_id`") fica **VERDE** — o campo chega pela
+ * fixture, não pelo código, e a guarda não guarda. `*` e joins (`tabela(col)`) passam
+ * inteiros: quem os pede quer o objeto todo.
+ */
+function projetar<T extends Record<string, unknown>>(linha: T, colunas?: string): T {
+  if (!colunas || colunas.includes("*") || colunas.includes("(")) return linha
+  const pedidas = colunas.split(",").map((c) => c.trim())
+  return Object.fromEntries(Object.entries(linha).filter(([k]) => pedidas.includes(k))) as T
+}
+
 function combina(linha: Linha, filtros: Array<[string, string, unknown]>): boolean {
   return filtros.every(([op, col, val]) => {
     const v = linha[col]
@@ -43,6 +57,7 @@ function combina(linha: Linha, filtros: Array<[string, string, unknown]>): boole
 function criarBuilder(tabela: string) {
   const filtros: Array<[string, string, unknown]> = []
   let limite: number | null = null
+  let colunas: string | undefined
 
   const resolver = () => {
     const org = filtros.find(([op, col]) => op === "eq" && col === "org_id")?.[2] as
@@ -53,11 +68,14 @@ function criarBuilder(tabela: string) {
     }
     let linhas = (tabelas[tabela] ?? []).filter((l) => combina(l, filtros))
     if (limite !== null) linhas = linhas.slice(0, limite)
-    return { data: linhas, error: null }
+    return { data: linhas.map((l) => projetar(l, colunas)), error: null }
   }
 
   const api: Record<string, unknown> = {
-    select: () => api,
+    select: (c?: string) => {
+      colunas = c
+      return api
+    },
     eq: (c: string, v: unknown) => {
       filtros.push(["eq", c, v])
       return api

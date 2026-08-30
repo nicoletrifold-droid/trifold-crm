@@ -31,11 +31,12 @@ type LinhaConfig = {
 let configs: LinhaConfig[] = []
 /** `waba_id` → templates aprovados que a Meta devolveria. */
 let templatesDaMeta: Record<string, Array<{ name: string; body: string }>> = {}
-let chamadasAListagem: string[] = []
+/** `[wabaId, accessToken]` de cada chamada — o par TEM de ser o da mesma org. */
+let chamadasAListagem: Array<[string, string | undefined]> = []
 let listagemLanca = false
 
-const listarMock = vi.fn(async (wabaId: string, _token?: string) => {
-  chamadasAListagem.push(wabaId)
+const listarMock = vi.fn(async (wabaId: string, token?: string) => {
+  chamadasAListagem.push([wabaId, token])
   if (listagemLanca) throw new Error("Graph 401")
   return templatesDaMeta[wabaId] ?? []
 })
@@ -116,7 +117,11 @@ describe("carregarTemplatesAprovadosDaOrg — escopo por organização", () => {
     expect(a.get("abertura_a")).toBe("Olá da A")
     expect([...b.keys()]).toEqual(["abertura_b"])
     expect(b.get("abertura_b")).toBe("Olá da B")
-    expect(chamadasAListagem).toEqual(["waba-a", "waba-b"])
+    // O par waba/token nunca se cruza: a org A jamais lista com o token da B.
+    expect(chamadasAListagem).toEqual([
+      ["waba-a", "tok-a"],
+      ["waba-b", "tok-b"],
+    ])
   })
 
   it("🔴 R1 — com 2 configs ativas, o filtro de org resolve 1 linha; SEM ele seria PGRST116", async () => {

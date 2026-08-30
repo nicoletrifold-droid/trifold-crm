@@ -9,6 +9,16 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 vi.mock("server-only", () => ({}))
 
+type Evento = {
+  level: string
+  category: string
+  event_type: string
+  message: string
+  source?: string
+  org_id?: string
+  metadata?: Record<string, unknown>
+}
+
 // ─────────────────────────────────────────────────────────────────────────────────────────────
 // Fixture de `organizations` — a lista que o helper lê, e o erro que ele pode encontrar nela.
 // ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -62,23 +72,35 @@ vi.mock("@web/lib/supabase/org-scoped-admin", () => ({
   createOrgScopedAdminClient: (orgId: string) => criarEscopado(orgId),
 }))
 
-const logEventMock = vi.fn()
+/**
+ * Eventos cuja escrita COMPLETOU. Comparado com o momento em que `forEachActiveOrg` resolve.
+ *
+ * O duplo só completa a escrita num macrotask — que é o comportamento do Postgres de verdade.
+ * É isto que faz a suíte medir o `await`, e não só a chamada: tirar o `await` deixa `completados`
+ * vazio no ponto da asserção. Mesma forma de `nicole-agenda-reconcile/route.test.ts` (Story 87-6).
+ */
+let completados: Evento[] = []
+/**
+ * Geração do teste corrente. Sem isto, uma escrita ÓRFÃ (a que a falta de `await` deixa pendente)
+ * completaria DEPOIS do fim do teste e cairia no array do teste SEGUINTE — que então passaria por
+ * acidente. Foi exatamente assim que a mutação M1 da 87-6 ficou verde na primeira rodada.
+ */
+let geracao = 0
+
+const logEventOnceMock = vi.fn(async (p: Evento) => {
+  const minhaGeracao = geracao
+  await new Promise((r) => setTimeout(r, 5))
+  if (minhaGeracao !== geracao) return { inserted: false } // órfã: o teste já acabou
+  completados.push(p)
+  return { inserted: true }
+})
 vi.mock("@web/lib/logger", () => ({
-  logEvent: (...a: unknown[]) => logEventMock(...a),
+  logEventOnce: (p: Evento) => logEventOnceMock(p),
 }))
 
 const { forEachActiveOrg, statusHttpParaResumo } = await import("./for-each-org")
 
-type Evento = {
-  level: string
-  category: string
-  event_type: string
-  message: string
-  source?: string
-  org_id?: string
-  metadata?: Record<string, unknown>
-}
-const eventos = () => logEventMock.mock.calls.map((c) => c[0] as Evento)
+const eventos = () => logEventOnceMock.mock.calls.map((c) => c[0] as Evento)
 
 beforeEach(() => {
   orgsNoBanco = [ORG_A, ORG_B]
@@ -87,7 +109,9 @@ beforeEach(() => {
   tabelasCruas = []
   sentinelas.clear()
   criarEscopado.mockClear()
-  logEventMock.mockClear()
+  geracao++
+  completados = []
+  logEventOnceMock.mockClear()
 })
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -243,7 +267,7 @@ describe("Propriedade 4 — log por org + um resumo de plataforma", () => {
       { source: "api/cron/exemplo" },
     )
 
-    expect(logEventMock).toHaveBeenCalledTimes(4)
+    expect(logEventOnceMock).toHaveBeenCalledTimes(4)
     const ev = eventos()
 
     expect(ev.map((e) => e.event_type)).toEqual([
@@ -265,6 +289,29 @@ describe("Propriedade 4 — log por org + um resumo de plataforma", () => {
     expect(resumo.metadata!.falha).toBe(1)
     expect(ev.every((e) => e.source === "api/cron/exemplo")).toBe(true)
     expect(ev.every((e) => e.category === "cron")).toBe(true)
+  })
+
+  it("🔴 as 4 escritas são AGUARDADAS — tirar o `await` deixa `completados` vazio", async () => {
+    // `logEvent` (fire-and-forget) era o que a AC1 prescrevia; numa lambda a promise pendente
+    // morre no `return` do handler, e o `CRON_RESUMO` é a ÚLTIMA escrita antes do response —
+    // exatamente o caso que custou o recibo perdido da Story 87-6 em produção.
+    orgsNoBanco = [ORG_A, ORG_B, ORG_C]
+    await forEachActiveOrg(
+      async (org) => {
+        if (org.id === ORG_B.id) throw new Error("falhou")
+        return null
+      },
+      { source: "api/cron/exemplo" },
+    )
+
+    // No instante em que `forEachActiveOrg` resolve, as 4 escritas JÁ completaram.
+    expect(completados).toHaveLength(4)
+    expect(completados.map((e) => e.event_type)).toEqual([
+      "CRON_ORG_PROCESSADA",
+      "CRON_ORG_FALHOU",
+      "CRON_ORG_PROCESSADA",
+      "CRON_RESUMO",
+    ])
   })
 })
 
