@@ -47,16 +47,19 @@ const CAMINHO_JSON = join(RAIZ, "docs", "audits", "admin-client-allowlist.json")
 const allowlist = JSON.parse(readFileSync(CAMINHO_JSON, "utf-8"))
 
 /**
- * Total re-triado em 2026-08-29 (Story 900-21b) e re-medido pela Story 900-23: **242 → 239**.
+ * Total re-triado em 2026-08-29 (Story 900-21b), re-medido pela Story 900-23 (**242 → 239**) e
+ * pela Story 900-24 (**239 → 240**).
  * −4 (`daily-report` e `nicole-agenda-reconcile`, mais os dois `.test.ts`, deixaram de chamar
  * `createAdminClient()` — usam o `db` escopado que `forEachActiveOrg` injeta) +1
- * (`lib/tenancy/for-each-org.ts`, o próprio mecanismo).
+ * (`lib/tenancy/for-each-org.ts`, o próprio mecanismo) +1 (`lib/tenancy/webhook-org.ts`, a
+ * 900-24: `logOrgUnresolved` grava `webhook_logs`/`system_events` com `org_id NULL` porque, por
+ * definição, não há org conhecida no momento em que ele roda).
  *
  * **Literal de propósito**: se este número saísse do próprio JSON, o teste montaria o esperado a
  * partir da fonte que ele vigia e nunca reprovaria a fonte. Mexer na allowlist e ter que mexer
  * aqui é o custo — e é o ponto: a mudança aparece em diff, com dono.
  */
-const TOTAL_ESPERADO = 239
+const TOTAL_ESPERADO = 240
 
 const REGRA = "aios/no-unscoped-admin-client"
 
@@ -239,7 +242,7 @@ describe("validarAllowlist — controle positivo: o arquivo REAL", () => {
 // ─────────────────────────────────────────────────────────────────────────────────────────────
 
 describe("ponte entre o JSON e o `PERMITIDOS` da regra ESLint", () => {
-  it("a união das 4 seções + `legado` soma 239", () => {
+  it("a união das 4 seções + `legado` soma 240", () => {
     const uniao = new Set([
       ...Object.keys(allowlist.plataforma),
       ...Object.keys(allowlist["itera-orgs"]),
@@ -250,7 +253,7 @@ describe("ponte entre o JSON e o `PERMITIDOS` da regra ESLint", () => {
     expect(uniao.size).toBe(TOTAL_ESPERADO)
   })
 
-  it("`PERMITIDOS` da regra ESLint tem exatamente as mesmas 239 entradas", () => {
+  it("`PERMITIDOS` da regra ESLint tem exatamente as mesmas 240 entradas", () => {
     // Antes desta story `PERMITIDOS` lia só `legitimos` + `legado`: seriam 190 aqui, e 51 arquivos
     // teriam perdido a isenção em silêncio (correção B1). É esta asserção que fixa isso.
     expect(PERMITIDOS.size).toBe(TOTAL_ESPERADO)
@@ -264,6 +267,22 @@ describe("ponte entre o JSON e o `PERMITIDOS` da regra ESLint", () => {
     ])
     expect([...doJson].filter((k) => !PERMITIDOS.has(k))).toEqual([])
     expect([...PERMITIDOS].filter((k) => !doJson.has(k as string))).toEqual([])
+  })
+
+  /**
+   * Story 900-24 · AC2 — o mecanismo de resolução de org do webhook está isento POR NOME.
+   *
+   * Deliberadamente **sem** contagem: a 900-23 e a 900-24 mexem nesta allowlist em paralelo, e um
+   * total hardcoded numa asserção nova falharia por causa da OUTRA story em vez do próprio
+   * conteúdo. `TOTAL_ESPERADO` acima já cobre o eixo "a lista inteira mudou e ninguém viu"; esta
+   * cobre o eixo "a entrada da 900-24 sumiu num merge do JSON e o warning voltou em silêncio" —
+   * que é o modo pior do conflito textual que o @po mediu entre as duas branches.
+   */
+  it("900-24: `src/lib/tenancy/webhook-org.ts` está em `legitimos` e chega ao `PERMITIDOS`", () => {
+    const caminho = "src/lib/tenancy/webhook-org.ts"
+    expect(Object.keys(allowlist.legitimos)).toContain(caminho)
+    expect(allowlist.legitimos[caminho]).toContain("900-24")
+    expect(PERMITIDOS.has(caminho)).toBe(true)
   })
 })
 

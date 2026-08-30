@@ -175,8 +175,9 @@ interface SendArgs {
   leadPhone: string
   text: string
   conversationId: string | null
-  phoneNumberId: string
-  accessToken: string
+  /** Story 900-24 (C2): colunas NULLABLE em `whatsapp_config` — o tipo passa a dizer isso. */
+  phoneNumberId: string | null
+  accessToken: string | null
 }
 
 /**

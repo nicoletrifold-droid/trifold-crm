@@ -17,6 +17,12 @@ import {
   type TrackingLanding,
 } from "@web/lib/meta/landing-page-tracking"
 import { FORM_CAPI_EVENTS } from "@trifold/shared"
+import {
+  decidirModoRoteamento,
+  logOrgResolved,
+  logOrgUnresolved,
+  resolveSoleOrg,
+} from "@web/lib/tenancy/webhook-org"
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -205,16 +211,71 @@ async function processLandingPageLead(
       return { ok: true }
     }
 
-    const orgId = await resolveOrgId(adminSupabase)
-    if (!orgId) {
-      console.error("[LP-WEBHOOK] Nenhuma org ativa encontrada")
-      if (ctx.logId) {
-        await adminSupabase
-          .from("webhook_logs")
-          .update({ processing_error: "Nenhuma org ativa encontrada" })
-          .eq("id", ctx.logId)
+    // ── Story 900-24 · AC5 — dual-run com EXCEÇÃO NOMEADA de resposta HTTP ──────────────────
+    //
+    // Diferente dos outros 3 receptores, aqui "não resolveu" no legado devolve 5xx hoje (e o proxy
+    // `api/lead.js` re-tenta). A regra "não resolveu ⇒ 200 + log" vale SÓ no modo `identifier`;
+    // em `legacy`/`both` o branch abaixo continua devolvendo `{ ok: false }` → 500, byte a byte
+    // como antes desta story. Não existe caminho, em `legacy`/`both`, por onde um lead do
+    // formulário pago deixe de ser processado e a resposta vire 200.
+    //
+    // A troca de PREDICADO fica junto: o legado pergunta `whatsapp_config.status='active'`, o novo
+    // pergunta `organizations.is_active=true` — populações que já divergem no `trifold-crm-dev`
+    // hoje e coincidem em produção por configuração, não por construção. Promover o `identifier`
+    // é decisão de cutover da Onda 3, não efeito colateral desta fatia.
+    const modoRoteamento = decidirModoRoteamento()
+    let orgId: string | null = null
+
+    if (modoRoteamento === "identifier") {
+      const novo = await resolveSoleOrg(adminSupabase)
+      if (novo.status === "resolvida") {
+        orgId = novo.orgId
+        logOrgResolved({ receptor: "landing_page", via: "identifier", orgId, divergiu: null })
+      } else {
+        // Único branch novo de 200: só alcançável com `WEBHOOK_ORG_ROUTING=identifier`.
+        await logOrgUnresolved({
+          receptor: "landing_page",
+          motivo: novo.motivo,
+          quantidadeEncontrada: novo.quantidadeEncontrada,
+          // Não há identificador de org no payload de landing page (UTM colide entre tenants).
+          identificador: { quantidade_organizacoes_ativas: novo.quantidadeEncontrada },
+          webhookLogsSource: "landing_page",
+          // Task 5.4: REAPROVEITA a linha já inserida em `:97-107` (update do
+          // `processing_error`), em vez de criar uma segunda para a mesma submissão.
+          webhookLogsExistenteId: ctx.logId ?? null,
+        })
+        return { ok: true }
       }
-      return { ok: false }
+    } else {
+      const legado = await legacyResolveOrgId(adminSupabase)
+      if (modoRoteamento === "both") {
+        const novo = await resolveSoleOrg(adminSupabase)
+        if (legado) {
+          orgId = legado
+          logOrgResolved({
+            receptor: "landing_page",
+            via: "legacy",
+            orgId: legado,
+            divergiu: novo.status === "resolvida" ? novo.orgId !== legado : null,
+          })
+        }
+      } else if (legado) {
+        orgId = legado
+      }
+
+      if (!orgId) {
+        // INTOCADO: mesmo `console.error`, mesmo `processing_error`, mesmo `{ ok: false }` → 500.
+        // `logOrgUnresolved`/`WEBHOOK_ORG_UNRESOLVED` NÃO são chamados aqui — seria logar
+        // "não resolvido pelo identificador" para um caminho que nem consultou o identificador.
+        console.error("[LP-WEBHOOK] Nenhuma org ativa encontrada")
+        if (ctx.logId) {
+          await adminSupabase
+            .from("webhook_logs")
+            .update({ processing_error: "Nenhuma org ativa encontrada" })
+            .eq("id", ctx.logId)
+        }
+        return { ok: false }
+      }
     }
 
     const defaultStageId = await getDefaultStageId(adminSupabase, orgId)
@@ -483,7 +544,18 @@ function normalizePhone(raw: string): string {
   return `+${digits}`
 }
 
-async function resolveOrgId(supabase: SupabaseClient): Promise<string | null> {
+/**
+ * Story 900-24 · Task 5.1 — o caminho LEGADO, renomeado, com o corpo INTOCADO (byte a byte).
+ *
+ * Este é o resolver que produção realmente consulta (modo `both`): pergunta
+ * `whatsapp_config.status='active'`, que é ESTADO OPERACIONAL, não estrutura — não tem `CHECK` de
+ * domínio (é o `REL-001`, deixado aberto) e já teve incidente de credencial invalidada em
+ * produção (10/08/2026). Quando ele devolve `null`, o handler responde **5xx**, o proxy
+ * `api/lead.js` trata como erro e re-tenta. É por isso que o `null` daqui NÃO virou "200 + log"
+ * nesta story: fazer isso reabriria, no ponto exato, o incidente que o comentário de `:109-118`
+ * documenta ter corrigido — lead pago perdido em silêncio.
+ */
+async function legacyResolveOrgId(supabase: SupabaseClient): Promise<string | null> {
   const { data } = await supabase
     .from("whatsapp_config")
     .select("org_id")

@@ -6,8 +6,29 @@ import { logEvent } from "@web/lib/logger"
 import { transcribeAudio } from "@web/lib/transcription/transcribe"
 import { uploadInboundMedia } from "@web/lib/media/inbound-media"
 import { notifyBrokerOfAppointment } from "@web/lib/broker/notify-appointment"
+import {
+  decidirModoRoteamento,
+  logOrgResolved,
+  logOrgUnresolved,
+  resolveSoleOrg,
+  type MotivoNaoResolvida,
+} from "@web/lib/tenancy/webhook-org"
 
 export const maxDuration = 60
+
+/**
+ * Story 900-24 · Task 6.1 — o caminho LEGADO, extraído com o corpo INTOCADO.
+ *
+ * Mantém o `.limit(1).single()` sem filtro de `is_active` exatamente como estava em `:334-338`.
+ * Não vira `resolveSoleOrg`: o "legado" do dual-run precisa ser, literalmente, o comportamento de
+ * hoje — senão o modo `both` deixaria de ser sombra do que roda em produção.
+ */
+async function legacyResolveFirstOrg(
+  db: ReturnType<typeof createAdminClient>,
+): Promise<string | null> {
+  const { data: org } = await db.from("organizations").select("id").limit(1).single()
+  return (org?.id as string | undefined) ?? null
+}
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN
 const TELEGRAM_WEBHOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET
@@ -330,18 +351,64 @@ export async function POST(request: NextRequest) {
   const supabase = createAdminClient()
 
   try {
-    // Get org (use first org for staging)
-    const { data: org } = await supabase
-      .from("organizations")
-      .select("id")
-      .limit(1)
-      .single()
+    // ── Story 900-24 · AC6 — dual-run ────────────────────────────────────────────────────────
+    //
+    // O legado abaixo é o pior dos 4 pontos: `organizations` SEM filtro nenhum,
+    // `.limit(1).single()` — "a primeira linha que vier", arbitrariamente. Com duas empresas,
+    // metade das conversas do Telegram cairia na org errada sem nenhum aviso. Em `legacy`/`both`
+    // ele continua decidindo (é o comportamento de hoje, e é isso que o dual-run audita); no modo
+    // `identifier`, `resolveSoleOrg` recusa a arbitrariedade e devolve `"ambigua"`.
+    const modoRoteamento = decidirModoRoteamento()
+    let orgId: string | null = null
+    let motivoNaoResolvida: MotivoNaoResolvida = "nenhuma_correspondencia"
+    let quantidadeEncontrada = 0
 
-    if (!org) {
-      return NextResponse.json({ status: "ok" })
+    if (modoRoteamento === "identifier") {
+      const novo = await resolveSoleOrg(supabase)
+      if (novo.status === "resolvida") {
+        orgId = novo.orgId
+        logOrgResolved({ receptor: "telegram", via: "identifier", orgId, divergiu: null })
+      } else {
+        motivoNaoResolvida = novo.motivo
+        quantidadeEncontrada = novo.quantidadeEncontrada
+      }
+    } else {
+      const legado = await legacyResolveFirstOrg(supabase)
+      if (modoRoteamento === "both") {
+        const novo = await resolveSoleOrg(supabase)
+        if (legado) {
+          orgId = legado
+          logOrgResolved({
+            receptor: "telegram",
+            via: "legacy",
+            orgId: legado,
+            divergiu: novo.status === "resolvida" ? novo.orgId !== legado : null,
+          })
+        } else {
+          motivoNaoResolvida = novo.status === "nao_resolvida" ? novo.motivo : "nenhuma_correspondencia"
+          quantidadeEncontrada = novo.status === "nao_resolvida" ? novo.quantidadeEncontrada : 0
+        }
+      } else if (legado) {
+        orgId = legado
+      }
     }
 
-    const orgId = org.id
+    if (!orgId) {
+      // `webhookLogsSource: "other"` — AUTO-DECISÃO do AC6: o `CHECK` de `webhook_logs.source`
+      // (migrations 015/194) não tem `'telegram'`, e uma migration só para criar um rótulo de log
+      // seria desproporcional ao escopo desta story. Quem carrega a informação que faltaria no
+      // rótulo é `system_events`: `metadata.receptor === "telegram"` (sem `CHECK` restritivo lá),
+      // afirmado por teste na AC10 justamente porque `'other'` sozinho não discrimina receptor.
+      await logOrgUnresolved({
+        receptor: "telegram",
+        motivo: motivoNaoResolvida,
+        quantidadeEncontrada,
+        // Telegram não traz identificador de org no payload (mesmo caso da landing page).
+        identificador: { quantidade_organizacoes_ativas: quantidadeEncontrada },
+        webhookLogsSource: "other",
+      })
+      return NextResponse.json({ status: "ok" })
+    }
 
     // Find or create lead
     let { data: lead } = await supabase

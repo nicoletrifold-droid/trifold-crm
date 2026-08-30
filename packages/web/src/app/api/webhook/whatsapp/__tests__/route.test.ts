@@ -13,7 +13,7 @@
  *   - find-or-create lead: 0 rows → creates; 1 row → returns existing
  *   - normalizePhoneBR null → 200 + phone_normalize_failed log
  */
-import { describe, it, expect, beforeEach, vi } from "vitest"
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
 
 // ---- Mocks ----------------------------------------------------------------
 
@@ -45,9 +45,70 @@ const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({}) }))
 
 // Mock the logger so tests can introspect events
 const logEventMock = vi.fn()
+// Story 900-24: `lib/tenancy/webhook-org.ts` também importa `logEventOnce` (o caminho AGUARDADO
+// de "não resolveu"). Sem ele aqui, o módulo mockado devolveria `undefined` e o erro apareceria
+// como "não é função" num branch distante do que o teste mede.
+/**
+ * Story 900-24 (gate `@qa`, concern 2) — a escrita só COMPLETA num macrotask, como o Postgres de
+ * verdade. É isto que faz a suíte medir o `await logOrgUnresolved(...)` do CALL SITE, e não só a
+ * chamada: sem o `await`, a rota responde antes e `escritasCompletadas` está vazio na asserção.
+ * A mutação #5 original media o `await` INTERNO do helper — real, mas outra camada.
+ *
+ * O contador de `geracao` existe porque uma escrita ÓRFÃ (a que a falta de `await` deixa pendente)
+ * completaria depois do fim do teste e cairia no array do teste SEGUINTE, que passaria por
+ * acidente. Mesma forma de `for-each-org.test.ts` (900-23) e de `nicole-agenda-reconcile` (87-6).
+ */
+let escritasCompletadas: unknown[] = []
+let geracaoDoTeste = 0
+const logEventOnceMock = vi.fn<(...args: unknown[]) => Promise<{ inserted: boolean }>>(
+  async (...args: unknown[]) => {
+    const minhaGeracao = geracaoDoTeste
+    await new Promise((r) => setTimeout(r, 5))
+    if (minhaGeracao !== geracaoDoTeste) return { inserted: false } // órfã: o teste já acabou
+    escritasCompletadas.push(args[0])
+    return { inserted: true }
+  },
+)
+
+/**
+ * Espião de `logOrgUnresolved` que **delega ao real** — o `await` do call site continua exercitado.
+ * Existe para a asserção de PII/shape olhar o objeto que a ROTA realmente passa, e não um literal
+ * remontado no teste (a tautologia que o `@qa` mediu: 5 chaves de PII do lead entravam VERDE).
+ */
+const logOrgUnresolvedSpy = vi.fn()
 vi.mock("@web/lib/logger", () => ({
   logEvent: (...args: unknown[]) => logEventMock(...args),
+  logEventOnce: (...args: unknown[]) => logEventOnceMock(...args),
 }))
+
+/**
+ * Story 900-24 · AC10, mutação #8 — divergência FORÇADA entre os dois caminhos.
+ *
+ * O resolver novo é espionável e sobrescrevível: por padrão delega ao módulo real (nenhum teste
+ * existente muda de comportamento); os testes da mutação #8 o plantam devolvendo `org-B`, enquanto
+ * o fake do banco continua tendo só `org-1` como config ativa (o que o LEGADO resolve). Assim a
+ * divergência é real e a asserção "quem chegou ao processamento foi o legado" tem carrasco.
+ */
+const resolveOrgByWhatsAppPhoneMock =
+  vi.fn<
+    (...args: unknown[]) => Promise<unknown>
+  >()
+vi.mock("@web/lib/tenancy/webhook-org", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@web/lib/tenancy/webhook-org")>()
+  return {
+    ...real,
+    logOrgUnresolved: async (...args: unknown[]) => {
+      logOrgUnresolvedSpy(...args)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return real.logOrgUnresolved(...(args as [any]))
+    },
+    resolveOrgByWhatsAppPhone: (...args: unknown[]) =>
+      resolveOrgByWhatsAppPhoneMock.getMockImplementation()
+        ? resolveOrgByWhatsAppPhoneMock(...args)
+        : // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          real.resolveOrgByWhatsAppPhone(...(args as [any, any])),
+  }
+})
 
 // Mock email automations
 vi.mock("@web/lib/email-automations", () => ({
@@ -125,6 +186,10 @@ interface DbState {
   meta_ads: Array<Record<string, unknown>>
   meta_adsets: Array<Record<string, unknown>>
   meta_campaigns: Array<Record<string, unknown>>
+  /** Story 900-24: `logOrgUnresolved` grava aqui com `org_id: null`. */
+  webhook_logs: Array<Record<string, unknown>>
+  /** Story 900-24: destino de `logEventOnce` quando o logger NÃO está mockado. */
+  system_events: Array<Record<string, unknown>>
 }
 
 let db: DbState
@@ -149,6 +214,8 @@ function freshDb(): DbState {
     meta_ads: [],
     meta_adsets: [],
     meta_campaigns: [],
+    webhook_logs: [],
+    system_events: [],
   }
 }
 
@@ -451,6 +518,19 @@ function buildPayload(opts: { from: string; wamid: string; text: string }) {
       },
     ],
   }
+}
+
+/** Story 900-24: payload com `value.metadata.phone_number_id` — o identificador do receptor. */
+function buildPayloadComTelefone(opts: {
+  from: string
+  wamid: string
+  text: string
+  phoneNumberId: string
+}) {
+  const base = buildPayload(opts)
+  const value = base.entry[0]!.changes[0]!.value as Record<string, unknown>
+  value.metadata = { phone_number_id: opts.phoneNumberId }
+  return base
 }
 
 function signedRequest(
@@ -889,5 +969,309 @@ describe("WhatsApp webhook — Story 21.1", () => {
     const userMsg = db.messages.find((m) => m.role === "user")
     expect(userMsg!.media_url).toBeNull()
     expect(userMsg!.media_type).toBeNull()
+  })
+})
+
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Story 900-24 · AC10, mutação #8 — "o caminho novo NUNCA decide em `both`"
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+//
+// Esta é a invariante que traduz a restrição do dono do produto ("a Trifold não muda de
+// comportamento") em código verificável ANTES do deploy. Sem ela, trocar
+// `resolvido = { orgId: legado… }` por `{ orgId: novo… }` no branch `both` passaria verde do
+// começo ao fim, e a única defesa seria a leitura humana do diff.
+//
+// A asserção que importa é a (1): o `org_id` que EFETIVAMENTE chegou ao processamento (a linha de
+// `leads` gravada). A (2) — `logOrgResolved` com `via:"legacy"`/`divergiu:true` — é a fábrica, não
+// o objeto: o @po mediu que ela permanece VERDE sob a mutação.
+describe("Story 900-24 — dual-run: em `both`, quem decide é o legado", () => {
+  const APP_SECRET = "test-secret"
+  const ENV_ORIGINAL = process.env.WEBHOOK_ORG_ROUTING
+
+  beforeEach(() => {
+    db = freshDb()
+    nextId = 0
+    logEventMock.mockClear()
+    logEventOnceMock.mockClear()
+    logOrgUnresolvedSpy.mockClear()
+    geracaoDoTeste++
+    escritasCompletadas = []
+    fetchMock.mockClear()
+    coachMock.mockClear()
+    coachMock.mockResolvedValue(undefined)
+    resolveOrgByWhatsAppPhoneMock.mockReset()
+    process.env.META_APP_SECRET = APP_SECRET
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "http://localhost"
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "test-key"
+    process.env.META_WHATSAPP_VERIFY_TOKEN = "verify"
+  })
+
+  afterEach(() => {
+    if (ENV_ORIGINAL === undefined) delete process.env.WEBHOOK_ORG_ROUTING
+    else process.env.WEBHOOK_ORG_ROUTING = ENV_ORIGINAL
+  })
+
+  /** Planta identifier ⇒ `org-B`; o fake do banco mantém `org-1` como única config ativa. */
+  function plantarDivergencia() {
+    resolveOrgByWhatsAppPhoneMock.mockImplementation(async () => ({
+      status: "resolvida",
+      config: {
+        org_id: "org-B",
+        phone_number_id: "PNID-B",
+        access_token: "TOKEN-B",
+        coexistence_enabled: false,
+      },
+    }))
+  }
+
+  it("(1) o org_id que chega ao processamento é o do LEGADO (org-1), não o do identifier (org-B)", async () => {
+    process.env.WEBHOOK_ORG_ROUTING = "both"
+    plantarDivergencia()
+    const { POST } = await import("../route")
+
+    const res = await POST(
+      signedRequest(
+        buildPayload({ from: "+5544999689446", wamid: "wamid.DUAL-1", text: "oi" }),
+        APP_SECRET,
+      ),
+    )
+    await flushAsync()
+
+    expect(res.status).toBe(200)
+    expect(db.leads).toHaveLength(1)
+    expect(db.leads[0]!.org_id).toBe("org-1")
+    expect(db.leads.map((l) => l.org_id)).not.toContain("org-B")
+    expect(db.conversations[0]!.org_id).toBe("org-1")
+  })
+
+  it("(2) `logOrgResolved` registra via:'legacy' e divergiu:true — a fábrica, não o objeto", async () => {
+    process.env.WEBHOOK_ORG_ROUTING = "both"
+    plantarDivergencia()
+    const { POST } = await import("../route")
+
+    await POST(
+      signedRequest(
+        buildPayload({ from: "+5544999689447", wamid: "wamid.DUAL-2", text: "oi" }),
+        APP_SECRET,
+      ),
+    )
+    await flushAsync()
+
+    const resolvidos = logEventMock.mock.calls
+      .map((c) => c[0] as { event_type?: string; org_id?: string; metadata?: Record<string, unknown> })
+      .filter((e) => e.event_type === "WEBHOOK_ORG_RESOLVED")
+    expect(resolvidos).toHaveLength(1)
+    expect(resolvidos[0]!.org_id).toBe("org-1")
+    expect(resolvidos[0]!.metadata).toMatchObject({
+      via: "legacy",
+      divergiu: true,
+      receptor: "whatsapp",
+    })
+  })
+
+  it("sem divergência (identifier concorda), `divergiu` é false — não é sempre true", async () => {
+    process.env.WEBHOOK_ORG_ROUTING = "both"
+    resolveOrgByWhatsAppPhoneMock.mockImplementation(async () => ({
+      status: "resolvida",
+      config: {
+        org_id: "org-1",
+        phone_number_id: "PNID",
+        access_token: "TOKEN",
+        coexistence_enabled: false,
+      },
+    }))
+    const { POST } = await import("../route")
+
+    await POST(
+      signedRequest(
+        buildPayload({ from: "+5544999689448", wamid: "wamid.DUAL-3", text: "oi" }),
+        APP_SECRET,
+      ),
+    )
+    await flushAsync()
+
+    const evento = logEventMock.mock.calls
+      .map((c) => c[0] as { event_type?: string; metadata?: Record<string, unknown> })
+      .find((e) => e.event_type === "WEBHOOK_ORG_RESOLVED")
+    expect(evento!.metadata).toMatchObject({ via: "legacy", divergiu: false })
+  })
+
+  it("modo `identifier`: aí sim o caminho novo decide, e o lead nasce em org-B", async () => {
+    process.env.WEBHOOK_ORG_ROUTING = "identifier"
+    plantarDivergencia()
+    const { POST } = await import("../route")
+
+    await POST(
+      signedRequest(
+        buildPayload({ from: "+5544999689449", wamid: "wamid.DUAL-4", text: "oi" }),
+        APP_SECRET,
+      ),
+    )
+    await flushAsync()
+
+    expect(db.leads[0]!.org_id).toBe("org-B")
+    const evento = logEventMock.mock.calls
+      .map((c) => c[0] as { event_type?: string; metadata?: Record<string, unknown> })
+      .find((e) => e.event_type === "WEBHOOK_ORG_RESOLVED")
+    expect(evento!.metadata).toMatchObject({ via: "identifier", divergiu: null })
+  })
+
+  it("modo `identifier` sem correspondência: 200, nenhum lead, WEBHOOK_ORG_UNRESOLVED aguardado", async () => {
+    process.env.WEBHOOK_ORG_ROUTING = "identifier"
+    resolveOrgByWhatsAppPhoneMock.mockImplementation(async () => ({
+      status: "nao_resolvida",
+      motivo: "nenhuma_correspondencia",
+      quantidadeEncontrada: 0,
+    }))
+    const { POST } = await import("../route")
+
+    const res = await POST(
+      signedRequest(
+        buildPayload({ from: "+5544999689450", wamid: "wamid.DUAL-5", text: "oi" }),
+        APP_SECRET,
+      ),
+    )
+    await flushAsync()
+
+    expect(res.status).toBe(200)
+    expect(db.leads).toHaveLength(0)
+    expect(logEventOnceMock).toHaveBeenCalledTimes(1)
+    expect(logEventOnceMock.mock.calls[0]![0]).toMatchObject({
+      event_type: "WEBHOOK_ORG_UNRESOLVED",
+      metadata: { receptor: "whatsapp", motivo: "nenhuma_correspondencia" },
+    })
+  })
+
+  /**
+   * Gate `@qa`, concerns 1/3/4 — a régua olha o objeto que a ROTA passa, não um literal remontado.
+   * `toEqual` (não `toMatchObject`): chave a mais reprova, chave a menos reprova, valor errado
+   * reprova. É o que torna "acrescentar PII de lead ao call site" um teste vermelho.
+   */
+  it("o que a rota passa a `logOrgUnresolved` é EXATAMENTE isto — sem PII, sem chave extra", async () => {
+    process.env.WEBHOOK_ORG_ROUTING = "identifier"
+    resolveOrgByWhatsAppPhoneMock.mockImplementation(async () => ({
+      status: "nao_resolvida",
+      motivo: "ambigua",
+      quantidadeEncontrada: 2,
+    }))
+    const { POST } = await import("../route")
+
+    await POST(
+      signedRequest(
+        buildPayloadComTelefone({
+          from: "+5544999689451",
+          wamid: "wamid.PII-1",
+          text: "meu telefone é 44999990000",
+          phoneNumberId: "PNID-DESCONHECIDO",
+        }),
+        APP_SECRET,
+      ),
+    )
+    await flushAsync()
+
+    expect(logOrgUnresolvedSpy).toHaveBeenCalledTimes(1)
+    expect(logOrgUnresolvedSpy.mock.calls[0]![0]).toEqual({
+      receptor: "whatsapp",
+      motivo: "ambigua",
+      quantidadeEncontrada: 2,
+      // Identificador da PRÓPRIA org (a WABA). Nada do lead: nem `from`, nem texto, nem wamid.
+      identificador: { phone_number_id: "PNID-DESCONHECIDO" },
+      webhookLogsSource: "whatsapp",
+    })
+    // E nada do lead vaza pelo evento gravado.
+    const serializado = JSON.stringify(logEventOnceMock.mock.calls[0]![0])
+    expect(serializado).not.toContain("5544999689451")
+    expect(serializado).not.toContain("44999990000")
+    expect(serializado).not.toContain("wamid.PII-1")
+  })
+
+  /**
+   * Gate `@qa`, 11º instrumento cego — **o ARGUMENTO passado ao resolver nunca era afirmado**.
+   *
+   * O mesmo `vi.mock` que viabiliza a mutação #8 **substitui** o resolver, e isso apaga os
+   * argumentos da observação; `webhook-org.test.ts` testa o resolver isolado e não sabe que existe
+   * rota. A classe mora na costura entre as duas suítes: trocar `phoneNumberId` por `fromRaw`
+   * (o telefone do LEAD) ficava **VERDE**, porque nenhuma asserção olhava o que a rota passou.
+   *
+   * Não é forward-gate. Em `identifier` — o modo do `trifold-crm-dev` desde o dia 1, e o modo onde
+   * a prova das duas empresas vai rodar — a chave errada dá `nenhuma_correspondencia` e **toda
+   * mensagem é descartada com 200**: o defeito desta story, uma camada acima, no ambiente onde a
+   * fatia seguinte tentaria provar que multi-tenant funciona.
+   */
+  it("o resolver recebe o `phone_number_id` do payload — nunca o telefone do lead", async () => {
+    process.env.WEBHOOK_ORG_ROUTING = "identifier"
+    plantarDivergencia()
+    const { POST } = await import("../route")
+
+    await POST(
+      signedRequest(
+        buildPayloadComTelefone({
+          from: "+5544999689453",
+          wamid: "wamid.ARG-1",
+          text: "oi",
+          phoneNumberId: "PNID-DO-WABA",
+        }),
+        APP_SECRET,
+      ),
+    )
+    await flushAsync()
+
+    expect(resolveOrgByWhatsAppPhoneMock).toHaveBeenCalledTimes(1)
+    expect(resolveOrgByWhatsAppPhoneMock).toHaveBeenCalledWith(
+      expect.anything(),
+      "PNID-DO-WABA",
+    )
+  })
+
+  it("em `both` o resolver TAMBÉM recebe o identificador certo (o dual-run audita o mesmo eixo)", async () => {
+    process.env.WEBHOOK_ORG_ROUTING = "both"
+    plantarDivergencia()
+    const { POST } = await import("../route")
+
+    await POST(
+      signedRequest(
+        buildPayloadComTelefone({
+          from: "+5544999689454",
+          wamid: "wamid.ARG-2",
+          text: "oi",
+          phoneNumberId: "PNID-DO-WABA",
+        }),
+        APP_SECRET,
+      ),
+    )
+    await flushAsync()
+
+    expect(resolveOrgByWhatsAppPhoneMock).toHaveBeenCalledTimes(1)
+    expect(resolveOrgByWhatsAppPhoneMock).toHaveBeenCalledWith(
+      expect.anything(),
+      "PNID-DO-WABA",
+    )
+  })
+
+  /**
+   * Gate `@qa`, concern 2 — carrasco do `await` no CALL SITE (a mutação #5 media o await INTERNO).
+   * A escrita do duplo completa num macrotask; se a rota não aguardar, ela responde antes e
+   * `escritasCompletadas` está vazio aqui — que é exatamente a lambda congelando no `return`.
+   */
+  it("a escrita de `WEBHOOK_ORG_UNRESOLVED` COMPLETA antes de a rota responder", async () => {
+    process.env.WEBHOOK_ORG_ROUTING = "identifier"
+    resolveOrgByWhatsAppPhoneMock.mockImplementation(async () => ({
+      status: "nao_resolvida",
+      motivo: "nenhuma_correspondencia",
+      quantidadeEncontrada: 0,
+    }))
+    const { POST } = await import("../route")
+
+    const res = await POST(
+      signedRequest(
+        buildPayload({ from: "+5544999689452", wamid: "wamid.AWAIT-1", text: "oi" }),
+        APP_SECRET,
+      ),
+    )
+
+    // Sem `flushAsync()`: a asserção roda no RETORNO da rota, não depois.
+    expect(res.status).toBe(200)
+    expect(escritasCompletadas).toHaveLength(1)
   })
 })

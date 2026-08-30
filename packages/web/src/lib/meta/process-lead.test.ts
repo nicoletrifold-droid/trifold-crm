@@ -3,7 +3,7 @@
  * Cobre: falha silenciosa eliminada (AC1), idempotência por leadgen_id (AC3),
  * política de side effects / backdate na recuperação tardia (AC4).
  */
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 vi.mock("server-only", () => ({}))
 
@@ -20,6 +20,64 @@ vi.mock("@web/lib/roleta/distributor", () => ({
 vi.mock("@web/lib/roleta/detect-property", () => ({
   detectPropertyInterestId: vi.fn(async () => null),
 }))
+
+// Story 900-24: `process-lead.ts` passou a logar em `system_events` (não fazia antes).
+const logEventMock = vi.fn()
+/**
+ * Story 900-24 (gate `@qa`, concern 2) — a escrita só COMPLETA num macrotask, como o Postgres de
+ * verdade. É isto que faz a suíte medir o `await logOrgUnresolved(...)` do CALL SITE, e não só a
+ * chamada: sem o `await`, a rota responde antes e `escritasCompletadas` está vazio na asserção.
+ * A mutação #5 original media o `await` INTERNO do helper — real, mas outra camada.
+ *
+ * O contador de `geracao` existe porque uma escrita ÓRFÃ (a que a falta de `await` deixa pendente)
+ * completaria depois do fim do teste e cairia no array do teste SEGUINTE, que passaria por
+ * acidente. Mesma forma de `for-each-org.test.ts` (900-23) e de `nicole-agenda-reconcile` (87-6).
+ */
+let escritasCompletadas: unknown[] = []
+let geracaoDoTeste = 0
+const logEventOnceMock = vi.fn<(...args: unknown[]) => Promise<{ inserted: boolean }>>(
+  async (...args: unknown[]) => {
+    const minhaGeracao = geracaoDoTeste
+    await new Promise((r) => setTimeout(r, 5))
+    if (minhaGeracao !== geracaoDoTeste) return { inserted: false } // órfã: o teste já acabou
+    escritasCompletadas.push(args[0])
+    return { inserted: true }
+  },
+)
+
+/**
+ * Espião de `logOrgUnresolved` que **delega ao real** — o `await` do call site continua exercitado.
+ * Existe para a asserção de PII/shape olhar o objeto que a ROTA realmente passa, e não um literal
+ * remontado no teste (a tautologia que o `@qa` mediu: 5 chaves de PII do lead entravam VERDE).
+ */
+const logOrgUnresolvedSpy = vi.fn()
+vi.mock("@web/lib/logger", () => ({
+  logEvent: (...args: unknown[]) => logEventMock(...args),
+  logEventOnce: (...args: unknown[]) => logEventOnceMock(...args),
+}))
+
+/**
+ * Story 900-24 · AC10, mutação #8 — o resolver novo é plantável. Por padrão delega ao real (os
+ * testes que já existiam não mudam de comportamento); os testes da mutação #8 o forçam a `org-B`
+ * enquanto a fila do fake mantém `org-1` como resposta do LEGADO.
+ */
+const resolveOrgByMetaPageMock = vi.fn<(...args: unknown[]) => Promise<unknown>>()
+vi.mock("@web/lib/tenancy/webhook-org", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@web/lib/tenancy/webhook-org")>()
+  return {
+    ...real,
+    logOrgUnresolved: async (...args: unknown[]) => {
+      logOrgUnresolvedSpy(...args)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return real.logOrgUnresolved(...(args as [any]))
+    },
+    resolveOrgByMetaPage: (...args: unknown[]) =>
+      resolveOrgByMetaPageMock.getMockImplementation()
+        ? resolveOrgByMetaPageMock(...args)
+        : // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          real.resolveOrgByMetaPage(...(args as [any, any])),
+  }
+})
 
 // Fake supabase: fila de resultados por tabela + registro de chamadas p/ asserção
 type Result = { data: unknown; error: unknown }
@@ -72,6 +130,10 @@ function updatesTo(table: string) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // `vi.clearAllMocks()` limpa histórico, não estado local: a geração e o array de escritas
+  // completadas precisam de reset explícito, senão uma escrita órfã do teste anterior cai aqui.
+  geracaoDoTeste++
+  escritasCompletadas = []
   calls = []
   queues = {
     whatsapp_config: [{ data: { org_id: "org-1" }, error: null }],
@@ -323,5 +385,174 @@ describe("deriveFinalidade", () => {
     expect(deriveFinalidade([{ name: "objetivo", values: ["Investimento e renda"] }])).toBe("investimento")
     expect(deriveFinalidade([{ name: "objetivo", values: ["Ambos"] }])).toBe("ambos")
     expect(deriveFinalidade([{ name: "cidade", values: ["Maringá"] }])).toBe(null)
+  })
+})
+
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Story 900-24 · AC10, mutação #8 — em `both`, quem decide é o legado (receptor `meta_ads`)
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+describe("Story 900-24 — dual-run em process-lead", () => {
+  const ENV_ORIGINAL = process.env.WEBHOOK_ORG_ROUTING
+
+  afterEach(() => {
+    resolveOrgByMetaPageMock.mockReset()
+    if (ENV_ORIGINAL === undefined) delete process.env.WEBHOOK_ORG_ROUTING
+    else process.env.WEBHOOK_ORG_ROUTING = ENV_ORIGINAL
+  })
+
+  it("(1) o org_id do lead inserido é o do LEGADO (org-1), não o do identifier (org-B)", async () => {
+    process.env.WEBHOOK_ORG_ROUTING = "both"
+    resolveOrgByMetaPageMock.mockImplementation(async () => ({
+      status: "resolvida",
+      orgId: "org-B",
+    }))
+
+    const result = await processMetaLead("111", value, entry, "log-1")
+
+    expect(result.ok).toBe(true)
+    const inserido = calls.find((c) => c.table === "leads" && c.insert)?.insert as Record<string, unknown>
+    expect(inserido.org_id).toBe("org-1")
+    expect(inserido.org_id).not.toBe("org-B")
+    // O `webhook_logs` marcado como processado carrega a MESMA org do processamento.
+    expect(updatesTo("webhook_logs")).toContainEqual(
+      expect.objectContaining({ processed: true, org_id: "org-1" }),
+    )
+  })
+
+  it("(2) `logOrgResolved` sai com via:'legacy' e divergiu:true", async () => {
+    process.env.WEBHOOK_ORG_ROUTING = "both"
+    resolveOrgByMetaPageMock.mockImplementation(async () => ({
+      status: "resolvida",
+      orgId: "org-B",
+    }))
+
+    await processMetaLead("111", value, entry, "log-1")
+
+    const evento = logEventMock.mock.calls
+      .map((c) => c[0] as { event_type?: string; org_id?: string; metadata?: Record<string, unknown> })
+      .find((e) => e.event_type === "WEBHOOK_ORG_RESOLVED")
+    expect(evento!.org_id).toBe("org-1")
+    expect(evento!.metadata).toMatchObject({ via: "legacy", divergiu: true, receptor: "meta_ads" })
+  })
+
+  it("modo `identifier`: o page_id decide, e o lead nasce em org-B", async () => {
+    process.env.WEBHOOK_ORG_ROUTING = "identifier"
+    resolveOrgByMetaPageMock.mockImplementation(async () => ({
+      status: "resolvida",
+      orgId: "org-B",
+    }))
+
+    await processMetaLead("111", value, entry, "log-1")
+
+    const inserido = calls.find((c) => c.table === "leads" && c.insert)?.insert as Record<string, unknown>
+    expect(inserido.org_id).toBe("org-B")
+  })
+
+  it("não resolveu: `fail()` preserva o processing_error que o cron de retry lê, E loga em system_events", async () => {
+    process.env.WEBHOOK_ORG_ROUTING = "both"
+    queues.whatsapp_config = [{ data: null, error: { code: "PGRST116" } }]
+    resolveOrgByMetaPageMock.mockImplementation(async () => ({
+      status: "nao_resolvida",
+      motivo: "ambigua",
+      quantidadeEncontrada: 2,
+    }))
+
+    const result = await processMetaLead("111", value, entry, "log-1")
+
+    expect(result).toMatchObject({ ok: false })
+    // A mensagem do `fail()` é a MESMA de antes desta story — `meta-leads-retry` a lê.
+    expect(updatesTo("webhook_logs")).toContainEqual(
+      expect.objectContaining({
+        processing_error: "no_active_org: whatsapp_config sem linha status=active",
+      }),
+    )
+    expect(logEventOnceMock.mock.calls[0]![0]).toMatchObject({
+      event_type: "WEBHOOK_ORG_UNRESOLVED",
+      metadata: { receptor: "meta_ads", motivo: "ambigua", quantidade_encontrada: 2 },
+    })
+    expect(calls.filter((c) => c.table === "leads" && c.insert)).toHaveLength(0)
+  })
+
+  /**
+   * Gate `@qa`, concerns 1/3/4 — o objeto EXATO que o call site passa. Inclui o
+   * `webhookLogsExistenteId` (concern 3: só o `landing-page` guardava isso) e o
+   * `webhookLogsSource` (concern 4: só o `telegram` guardava).
+   */
+  it("o que `processMetaLead` passa a `logOrgUnresolved` é EXATAMENTE isto — sem PII do lead", async () => {
+    process.env.WEBHOOK_ORG_ROUTING = "both"
+    queues.whatsapp_config = [{ data: null, error: { code: "PGRST116" } }]
+    resolveOrgByMetaPageMock.mockImplementation(async () => ({
+      status: "nao_resolvida",
+      motivo: "nenhuma_correspondencia",
+      quantidadeEncontrada: 0,
+    }))
+
+    await processMetaLead("111", value, entry, "log-1")
+
+    expect(logOrgUnresolvedSpy).toHaveBeenCalledTimes(1)
+    expect(logOrgUnresolvedSpy.mock.calls[0]![0]).toEqual({
+      receptor: "meta_ads",
+      motivo: "nenhuma_correspondencia",
+      quantidadeEncontrada: 0,
+      // `page_id` é a PÁGINA da org. Nada do lead: nem nome, nem telefone, nem e-mail, nem
+      // leadgen_id (que é identificador do LEAD, não da org).
+      identificador: { page_id: "page-1" },
+      webhookLogsSource: "meta_ads",
+      // Concern 3: reaproveita a linha do chamador em vez de inserir uma segunda.
+      webhookLogsExistenteId: "log-1",
+    })
+    const serializado = JSON.stringify(logEventOnceMock.mock.calls[0]![0])
+    for (const pii of ["João Teste", "+5544999990000", "joao@x.com", "111"]) {
+      expect(serializado).not.toContain(pii)
+    }
+  })
+
+  /**
+   * Gate `@qa`, 11º instrumento cego — o ARGUMENTO passado ao resolver. Trocar `pageId` por
+   * `leadgenId` (identificador do LEAD, não da Página) ficava VERDE: o `vi.mock` que planta o
+   * resolver apaga os argumentos da observação, e `webhook-org.test.ts` não sabe que existe rota.
+   * `entry.id` é `"page-1"` e o `leadgenId` é `"111"` — valores distintos de propósito, para a
+   * troca ser detectável.
+   */
+  it("o resolver recebe o `page_id` de `entry` — nunca o `leadgen_id` do lead", async () => {
+    process.env.WEBHOOK_ORG_ROUTING = "identifier"
+    resolveOrgByMetaPageMock.mockImplementation(async () => ({
+      status: "resolvida",
+      orgId: "org-B",
+    }))
+
+    await processMetaLead("111", value, entry, "log-1")
+
+    expect(resolveOrgByMetaPageMock).toHaveBeenCalledTimes(1)
+    expect(resolveOrgByMetaPageMock).toHaveBeenCalledWith(expect.anything(), "page-1")
+  })
+
+  it("em `both` o resolver TAMBÉM recebe o `page_id` certo", async () => {
+    process.env.WEBHOOK_ORG_ROUTING = "both"
+    resolveOrgByMetaPageMock.mockImplementation(async () => ({
+      status: "resolvida",
+      orgId: "org-B",
+    }))
+
+    await processMetaLead("111", value, entry, "log-1")
+
+    expect(resolveOrgByMetaPageMock).toHaveBeenCalledTimes(1)
+    expect(resolveOrgByMetaPageMock).toHaveBeenCalledWith(expect.anything(), "page-1")
+  })
+
+  /** Gate `@qa`, concern 2 — carrasco do `await` no CALL SITE (escrita completa em macrotask). */
+  it("a escrita de `WEBHOOK_ORG_UNRESOLVED` COMPLETA antes de `processMetaLead` resolver", async () => {
+    process.env.WEBHOOK_ORG_ROUTING = "both"
+    queues.whatsapp_config = [{ data: null, error: { code: "PGRST116" } }]
+    resolveOrgByMetaPageMock.mockImplementation(async () => ({
+      status: "nao_resolvida",
+      motivo: "ambigua",
+      quantidadeEncontrada: 2,
+    }))
+
+    await processMetaLead("111", value, entry, "log-1")
+
+    expect(escritasCompletadas).toHaveLength(1)
   })
 })

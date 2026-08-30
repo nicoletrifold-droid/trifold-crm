@@ -70,6 +70,8 @@ contra uma `main` velha.
 
 ---
 
+---
+
 ### [TEST-002] 🟡 O `projetar()` dos fakes de cron desliga a projeção quando `org_id` divide a string com um embed
 
 **Adicionado em:** 2026-08-29 · **Origem:** `@qa` na 2ª rodada da Story `900-23` — **sexta instância** da classe "fake cego ao `select`", achada depois de fechar as cinco que a story nomeia.
@@ -138,6 +140,66 @@ validado, (b) alargar o `CHECK` para as grafias plausíveis — sabendo que cont
 literais —, ou (c) aceitar e mover a garantia para a camada que escreve, com teste. A opção (b)
 sozinha é a mais fraca das três e não deve ser escolhida por ser a mais barata.
 
+
+---
+
+**⏳ RESOLVIDO EM CÓDIGO pela `900-24` (migration `247`), aguardando PRODUÇÃO para fechar.**
+Escolha: variante de **(a)**, não (b). O `CHECK` novo não enumera grafias — casa a ESTRUTURA do
+identificador (`phone[^[:alnum:]]{0,2}number[^[:alnum:]]{0,2}id`, `~*`) contra o texto serializado
+do `jsonb` inteiro: qualquer nesting, qualquer separador não-alfanumérico de até 2 caracteres,
+qualquer caixa, sobre chaves E valores. As 4 grafias que a v1 da AC7 deixava passar
+(`Phone-Number-Id`, `phone.number.id`, `phone number id`, `phone__number__id`) passaram a ser
+bloqueadas. Custo nomeado no `COMMENT ON CONSTRAINT`: dentro do provider `whatsapp`, um VALOR de
+texto livre que cite a sequência também é bloqueado (falso positivo aceito; risco baixo porque não
+há escritor de aplicação para `config` até a `900-47`).
+Medido em `trifold-crm-dev` em 2026-08-29: pré-condição 0 linhas; 7 células de vivacidade
+(`BEGIN…ROLLBACK`, subquery por `id`) **7/7** conforme o esperado (5× `23514`, 2× sucesso).
+**Fecha quando o `@devops` aplicar a `247` em produção e repetir as 7 células (Task 7.5 da
+`900-24`)** — não no merge.
+
+---
+
+### [TEST-004] 🟡 O molde de fake do Supabase mente em `.maybeSingle()`/`.single()` — duas cópias já mergeadas
+
+**Adicionado em:** 2026-08-29 · **Origem:** condição de GO do `@po` na validação da Story `900-24`
+(`docs/qa/po-validation-900-24.md`, rodada 2, item 6). **Prioridade:** P2 ·
+**Dona: `900-25`** — *"Org Trifold Sandbox + teste de aceitação de multi-tenancy"*, epic §857,
+`Dep: 900-22, 900-24`, executor `@qa`. Escolhida por critério, não por proximidade: é a story que
+constrói a camada de teste de DUAS orgs (Passo 6 do plano) e, portanto, a primeira que vai exercitar
+esses fakes com mais de uma linha por tabela — o cenário exato em que a mentira do molde deixa de
+ser latente. Registrado com dona porque a própria `900-24` estabeleceu o critério: dívida sem
+`Dona:` é dívida órfã (foi assim que ela justificou incluir o `ARCH-001` e excluir o `REL-001`).
+Atribuição feita pelo `@dev` ao cumprir a condição de GO; o `@po` pode re-rotear.
+
+**As duas localizações, medidas:**
+
+- `packages/web/src/lib/tenancy/admin-invite.test.ts:108,113` — o molde ORIGINAL;
+- `packages/web/src/app/api/platform/orgs/[id]/resend-admin-invite/route.test.ts:80` — a cópia nº 2,
+  a linha **verbatim**.
+
+**A medição.** O comportamento real está no pacote instalado (`@supabase/postgrest-js@2.101.1`,
+`dist/index.cjs:129-140`) e foi confirmado contra o PostgREST do `trifold-crm-dev` por HTTP
+(**406**, `PGRST116`): com `linhas.length !== 1`, os dois terminais devolvem
+`{ data: null, error: { code: "PGRST116", … }, status: 406 }`. O molde devolve
+`{ data: linhas[0] ?? null, error: null }` — erra `data` **e** erra `error`. A cegueira do `error`
+é a pior das duas: é exatamente a causa raiz que a `900-24` nomeia (o `error` descartado pela
+desestruturação `const { data } = await …`), e sob o molde ela é **impossível de reprovar**.
+
+**Por que não bloqueia hoje (latentes, não vivas).** A segunda cópia cobre uma query filtrada por
+PK (`route.ts:35`, `.eq("id", orgId)`) — 2 linhas é impossível. A primeira sustenta suas asserções
+em `order`+`limit`, não no terminal singular. Nenhuma das duas está mentindo sobre um defeito real
+**hoje**.
+
+**Por que registrar assim mesmo.** É o molde que já foi copiado **três vezes** (a `900-24` seria a
+nº 3, e a primeira em que a cegueira pousaria exatamente sobre o defeito que a story existe para
+fechar). Não registrar é o mecanismo que produz a cópia nº 4.
+
+**Encaminhamento:** migrar as duas para
+`packages/web/src/lib/tenancy/__fixtures__/fake-supabase-postgrest.ts`, criado pela `900-24` —
+que já implementa `resultadoSingular()` fiel (`data` **e** `error.code`, para `.single()` e
+`.maybeSingle()`), projeta as colunas do `.select()` e honra `.eq()`/`.order()`/`.limit()`.
+A migração é mecânica; o risco é o de sempre com teste alheio — alguma asserção existente pode
+estar apoiada na mentira do molde, e é justamente isso que a migração revela.
 ---
 
 ### [REL-001] 🟡 `whatsapp_config.status` não tem `CHECK` em produção — `'Active'` evade os índices parciais
