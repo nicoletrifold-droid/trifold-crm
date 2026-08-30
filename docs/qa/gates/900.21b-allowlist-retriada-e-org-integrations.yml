@@ -1,0 +1,341 @@
+schema: 1
+story: "900.21b"
+story_title: "Allowlist de admin-client re-triada + esqueleto de org_integrations/whatsapp_config (Onda 2, Fatia 1)"
+gate: PASS
+status_reason: >-
+  As 6 ACs foram cumpridas e TODAS as alegações do @dev foram reproduzidas por execução neste gate,
+  não aceitas por relato: a aritmética 16/24/12/12/178 = 242, o zero de `aios/no-unscoped-admin-client`
+  sobre 1199 arquivos, a suíte completa (273/3501), o esqueleto da 246 no banco de teste e as
+  pré-condições de produção read-only. Acrescentei duas medições que o @dev não fez e que são as que
+  de fato sustentam a restrição do dono do produto: a `provision_org` VIVA em produção é
+  byte-equivalente ao corpo da migration 240 (logo o `CREATE OR REPLACE` da 246 não sobrescreve
+  deriva nenhuma), e todas as funções que a 246 referencia existem em produção. Nada bloqueia o
+  merge. Ficam dois achados de forma (não de AC) para viajarem na 900-24, e a verificação pós-aplicação
+  em produção, que só o @devops pode executar — os hashes pré-aplicação estão registrados abaixo para
+  que ela seja executável.
+reviewer: "Quinn (Test Architect)"
+updated: "2026-08-29T22:20:00Z"
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 1. O QUE FOI MEDIDO NESTE GATE (executado, não relatado)
+# ═════════════════════════════════════════════════════════════════════════════
+evidence:
+  ac1_aritmetica_e_nao_perda:
+    method: >-
+      Node lendo o JSON da árvore de trabalho contra `git show origin/main:docs/audits/admin-client-allowlist.json`.
+    result: >-
+      CONFERE. plataforma 16 · itera-orgs 24 · alvos-onda-2 12 · legitimos 12 (união das 4 = 64,
+      sem sobreposição) · legado 178 · TOTAL da união = 242. `legado` byte-idêntico (ordem e
+      conteúdo), `_aviso` e `congeladoEm` idênticos. perdidos = [] contra as 240 entradas de
+      origin/main; novos = exatamente `cron/nicole-health/route.ts` e `platform/orgs/route.ts`.
+      Interseção entre as 4 seções e `legado` = [] (a Regra 1 não compara com `legado`, mas a
+      asserção de união 242 fecha esse flanco por aritmética).
+  ac1_catraca_eslint:
+    method: "`npx eslint src --format=json` a partir de packages/web, contagem por ruleId."
+    result: >-
+      CONFERE. 1199 arquivos no relatório, 0 ocorrências de `aios/no-unscoped-admin-client`,
+      31 warnings totais, 0 errors. `pnpm lint --force`: 8/8 tarefas, 0 errors / 32 warnings.
+      `pnpm type-check --force`: 8/8 limpo.
+  ac1_procedencia_das_citacoes:
+    why: >-
+      A re-triagem inteira vale o que valem os `arquivo:linha`. Copiados da story, seriam a mesma
+      prosa copiada que a story existe para consertar.
+    method: "sed na linha exata de 7 citações amostradas."
+    result: >-
+      7/7 EXATAS — analytics-report:117 (`for (const org of orgs) {`), bolsao-rebalance:70-71
+      (`for (const cfg of ...)` + `const orgId = cfg.org_id`), meta-capi-dispatch:101-103
+      (`.from("leads")/.select(...)/.in("id", leadIds)` — sem `.eq("org_id")`, o defeito descrito),
+      nicole-health:31 (`const DEFAULT_ORG_ID = ...`), platform/orgs:75-76 (`createAdminClient()` +
+      `db.rpc("provision_org", ...)`), followup:168 (`.from("whatsapp_config")`) e :192
+      (`for (const rule of rules)` — o lookup ANTES do loop), meta-ads-intelligence:231
+      (`const orgId = accounts[0]!.org_id`).
+  ac2_ac3_ac5_esqueleto_no_banco:
+    method: "introspecção direta (pg_class, pg_policy, pg_constraint, pg_indexes) no trifold-crm-dev."
+    result: >-
+      CONFERE literalmente com a AC3. RLS ligada; 2 policies (`org_integrations_select` = `r`,
+      USING `org_id = user_org_id()`; `org_integrations_manage` = `*`, USING
+      `org_id = user_org_id() AND is_admin()` — sem WITH CHECK explícito, o que no Postgres faz o
+      USING valer também como WITH CHECK para INSERT/UPDATE: correto); constraints
+      `org_integrations_provider_check` (os 6 valores), `org_integrations_status_check` (3 valores),
+      `whatsapp_sem_identificador_proprio`, UNIQUE (org_id, provider), FK ON DELETE CASCADE;
+      índices `idx_org_integrations_org`, `org_integrations_meta_page_ativo`. Grants idênticos aos
+      de `whatsapp_config` (nenhum grant a PUBLIC — R6 limpa). Estado: 1 org · 6 linhas de
+      org_integrations · 1 de whatsapp_config, todas com `created_at = updated_at`.
+  ac4_provision_org_reproduzida:
+    method: >-
+      Extração do corpo `$function$…$function$` da 240 e da 246, normalização de comentário e
+      espaço, comparação linha a linha.
+    result: >-
+      CONFERE. 63 linhas normalizadas na 240, 74 na 246; prefixo comum de 61 linhas, divergindo
+      exatamente em `RETURN v_org_id;`; NENHUMA linha da 240 ausente da 246; o delta são apenas os
+      blocos 5 (whatsapp_config, WHERE NOT EXISTS) e 6 (org_integrations, 6 linhas, ON CONFLICT).
+      `REVOKE ALL ON FUNCTION provision_org(text,text) FROM PUBLIC, anon, authenticated` é a MESMA
+      linha da 240 (240:136 ≡ 246:235) — não há regressão de privilégio para a rota
+      `/platform/orgs`, que chama a função com service-role.
+  medicao_nova_1_deriva_de_producao:
+    why: >-
+      O @dev comparou a 246 contra o ARQUIVO 240. Isso não responde à pergunta que importa: e se a
+      função viva em produção tivesse derivado do arquivo? Aí o `CREATE OR REPLACE` reverteria a
+      deriva em silêncio, e "produção não muda de comportamento" seria falso justamente no caminho
+      que a story mais mexe.
+    method: "`pg_get_functiondef` em dsopqkqjkmhytudaaolv (read-only), normalizado igual ao acima."
+    result: >-
+      SEM DERIVA. corpo vivo em produção ≡ corpo da migration 240 (63/63 linhas normalizadas
+      idênticas). Logo a 246 é aditiva também em relação ao estado REAL de produção, não só ao
+      arquivo. `prosecdef = true` e `search_path = public, pg_temp` (R7 satisfeita).
+  medicao_nova_2_dependencias_existem_em_producao:
+    why: >-
+      A 246 foi aplicada e medida no banco de TESTE, cujo schema comprovadamente diverge do de
+      produção (4 tabelas só existem lá). Uma função ausente em produção só apareceria no dia da
+      aplicação.
+    method: "pg_proc em ambos os projetos."
+    result: >-
+      TODAS PRESENTES nos dois: `is_admin()`, `user_org_id()`, `user_role()`, `update_updated_at()`,
+      `provision_org(text,text)`. Sem colisão de nome de índice em produção
+      (`whatsapp_config` tem só `idx_whatsapp_config_org` e a PK).
+  ac6_producao_read_only:
+    method: "Management API, exclusivamente SELECT, com guarda que aborta qualquer não-SELECT contra o ref de produção."
+    result: >-
+      CONFERE, com controle de vivacidade em cada zero. Duplicatas `phone_number_id` e `org_id`
+      (status='active'): [] nas duas — e a MESMA query com `HAVING count(*) > 0` devolve 1 grupo em
+      cada, então o [] não é por tabela vazia. 1 org (`trifold`), 1 linha de whatsapp_config
+      (`status='active'`). Backfill de whatsapp_config afetaria 0 linhas; backfill de
+      org_integrations criaria 6. `to_regclass('public.org_integrations')` = null (tabela ainda não
+      existe lá). `git grep org_integrations -- packages/` = 0 ocorrências.
+      Escritas em `whatsapp_config` em packages/web/src: 31 referências, ZERO
+      `.insert/.update/.upsert/.delete` — o 23505 novo não alcança caminho de escrita existente.
+  producao_nao_foi_tocada:
+    why: "\"Só leitura\" também é alegação. Mede-se por carimbo, não por promessa."
+    result: >-
+      `organizations.updated_at` = 2026-08-19T13:58:54Z e `whatsapp_config.updated_at` =
+      2026-08-10T19:16:53Z — ambos ANTERIORES ao dia da story (2026-08-29). Nenhuma escrita
+      ocorreu em produção durante a implementação nem durante este gate.
+  residuo_no_banco_de_teste:
+    why: "O @po pediu explicitamente: conferir que a célula de vivacidade da AC6 não deixou resíduo em `updated_at`."
+    result: >-
+      ZERO RESÍDUO, confirmado. `org-teste-epic-900` tem `created_at = updated_at`
+      (17:39:41.436391Z) — exatamente o valor que o @dev registrou como "antes", e o trigger que
+      bombou o campo dentro da transação foi de fato desfeito pelo ROLLBACK. Nenhuma org
+      `empresa-teste-900-21b`; nenhum `waba_id` com sufixo `-x`; as 6 linhas de org_integrations e a
+      1 de whatsapp_config nunca sofreram UPDATE.
+  suite_e_arvore:
+    result: >-
+      `pnpm test`: 273 arquivos · 3501 passando · 6 expected fail · 0 falhas (execução iniciada
+      18:51:36, ANTES das minhas mutações — sem contaminação). Árvore restaurada ao fim:
+      shasum da allowlist 5015503…9a0d40 e da regra ESLint 2157a86…cca947, idênticos aos do Dev
+      Agent Record. `docs/audits/gate-tenancy-report.json` intacto no git (fixture de teste
+      preservada). Nenhum arquivo não rastreado sobrou em `packages/web/src`.
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 2. MUTAÇÕES DESTE GATE — as duas réguas são carrascos, e são DISJUNTAS
+# ═════════════════════════════════════════════════════════════════════════════
+# O @po pediu: "o gate deve conferir que R1 falha de verdade". As três mutações do @dev (M1/M2/M3)
+# são válidas, mas todas deformam o ARQUIVO de dados ou a regra. Nenhuma delas exercita o modo de
+# falha que a catraca existe para pegar no futuro: um arquivo NOVO de verdade em `src`. A célula de
+# `--stdin-filename` do @dev prova que a regra acende, mas não que a VARREDURA de `src` alcança um
+# arquivo recém-criado. Fiz as duas, para medir kill sets.
+mutations:
+  - id: "MQ-A — tirar `src/app/api/platform/orgs/route.ts` da seção `legitimos` (arquivo em disco)"
+    observed: >-
+      4 VERMELHOS: controle positivo (`validarAllowlist` do arquivo real ≠ []; Regra 0, legitimos
+      com 11 < 12), união 241 ≠ 242, `PERMITIDOS.size` 241 ≠ 242, e `eslint src` volta a acusar 2
+      ocorrências. Restaurado por cópia + conferência de shasum.
+  - id: "MQ-B — criar um arquivo NOVO e real em `src/app/api/cron/__qa_probe_900_21b__/route.ts` que importa e chama `createAdminClient()`"
+    why: >-
+      É o cenário de amanhã: alguém acrescenta uma rota que usa service-role e não passa pela
+      allowlist. A régua de FORMA não pode vê-lo, por construção.
+    observed: >-
+      1 VERMELHO, e SÓ um: `eslint src inteiro não acusa nenhum createAdminClient() fora da
+      allowlist` (14 passaram). Kill set DISJUNTO do da MQ-A: a asserção da varredura carrega
+      sozinha o caso que nenhuma outra cobre. As duas réguas não são colineares — cada uma mata o
+      que a outra não mata. Arquivo e diretório removidos; `git status` de `packages/web/src` limpo.
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 3. OS PONTOS QUE O LEAD PEDIU EXPLICITAMENTE — julgados
+# ═════════════════════════════════════════════════════════════════════════════
+julgamentos:
+  - ponto: "A verificação de \"a Trifold não mudou\" é feita onde? É suficiente?"
+    veredito: "SUFICIENTE COMO GATE PRÉ-APLICAÇÃO — insuficiente como prova final, e a story diz isso corretamente."
+    fundamentacao: >-
+      O A/B empírico das 5 consultas rodou no `trifold-crm-dev`, que não tem a org `trifold` nem
+      linha de `whatsapp_config` — ou seja, no ambiente que NÃO tem o dado de que a garantia trata.
+      O @dev acertou duas vezes aí: (1) descobriu que a AC, escrita com `slug='trifold'`, casaria
+      zero linhas e mandaria concluir "procedimento cego" — e recusou o diagnóstico falso em vez de
+      colher o verde por vacuidade (é o oposto exato do modo de falha da 900-3c); (2) registrou a
+      Divergência 2 (a contagem CRESCE no dev, 0 → 1) em vez de normalizá-la para fora da comparação.
+      O que substitui o A/B é uma DECOMPOSIÇÃO, e reexecutei cada perna dela em produção, read-only:
+      backfill de whatsapp_config afeta 0 linhas (com controle de vivacidade), org_integrations não
+      existe e não tem consumidor, não há caminho de escrita em whatsapp_config, as duas
+      pré-condições zeram com grupo não-vazio, a migration é aditiva por leitura do arquivo (só
+      CREATE/INSERT; nenhum UPDATE, DELETE ou ALTER sobre tabela existente), e produção não recebeu
+      escrita nenhuma (carimbos de updated_at anteriores à story). Acrescentei as duas medições que
+      faltavam e que eram o furo real da decomposição: a `provision_org` VIVA em produção não
+      derivou do arquivo 240, e as funções que a 246 referencia existem lá. Com isso, a única coisa
+      que resta é medível apenas DEPOIS de aplicar — que é passo do @devops, não do @dev. Por isso
+      PASS, com a verificação pós-aplicação como condição de deploy (§5) e os hashes pré-aplicação
+      registrados abaixo para que ela seja executável em vez de declarativa.
+  - ponto: "A contradição interna da AC1 (Regra 2 exige `:linha`; a AC prescrevia motivo sem `:linha` para os 5 testes-irmãos)"
+    veredito: "RESOLUÇÃO CORRETA, e pela razão certa."
+    fundamentacao: >-
+      Abrir exceção por sufixo `.test.ts` seria um buraco permanente numa régua cuja única função é
+      não deixar motivo apodrecer — e um buraco que se abre por NOME de arquivo é o mais fácil de
+      atravessar sem querer. Acrescentar o `arquivo:linha` da implementação deixa a régua uniforme e
+      o motivo mais informativo. Conferido no JSON: os 5 testes-irmãos de `itera-orgs` e os 3 de
+      `alvos-onda-2` carregam a citação real (`boleto-scan/route.ts:130`,
+      `bolsao-rebalance/route.ts:70-71`, `enrich-leads/route.ts:60`, `meta-leads-retry/route.ts:63`,
+      `roleta-retry/route.ts:74`), e nenhuma das 24 entradas de `itera-orgs` fica sem `:dígito`.
+      Ressalva menor, registrada e não bloqueante: `/:\d+/` aceita qualquer `:` seguido de dígito —
+      um motivo com `12:00` passaria sem citar linha nenhuma. A régua é de forma, não de verdade;
+      hoje as 24 citações são verdadeiras (amostrei 7, todas exatas).
+  - ponto: "A catraca do gate de tenancy acusa delta +8 — é artefato de medição? Alguma das 8 vem da 246?"
+    veredito: "ARTEFATO CONFIRMADO. NENHUMA das 8 vem da migration 246."
+    fundamentacao: >-
+      Medido sem rodar `gate:tenancy` (que reescreve `docs/audits/gate-tenancy-report.json`,
+      rastreado E fixture de teste). Tabelas que existem no dev e não em produção: `lead_facts`,
+      `lead_memories`, `trifold_migrations_aplicadas` e `org_integrations` (124 tabelas no dev, 121
+      em produção). Conjunto R1 (tabela com `org_id` e RLS desligada): `supremo_sync_log` no DEV,
+      VAZIO em produção — a violação R1 é do banco de teste, não do schema real. `org_integrations`
+      não aparece em nenhum dos conjuntos: RLS ligada, 2 policies cobrindo os 4 comandos,
+      `org_id NOT NULL` — R1, R2 e R3 satisfeitas por medição direta, não por ausência no relatório.
+  - ponto: "`alvos-onda-2` não ganhou campo `classe`; a classe virou prefixo do `motivo`"
+    veredito: "ACEITO — mas não é estritamente melhor, e sim equivalente com um custo diferente."
+    fundamentacao: >-
+      O argumento do @dev ("campo que nenhuma regra verifica apodrece calado") é verdadeiro e vale
+      igualmente para o prefixo: nenhuma regra verifica `travado:`/`defeituoso:`/`órfão não
+      agendado:` também. O que o prefixo tem a mais é que não pode existir sem motivo — a Regra 3
+      exige `motivo` não vazio, então a classe viaja presa à justificativa em vez de numa coluna
+      paralela que pode ficar em branco. Conferido: as 12 entradas trazem o prefixo, e as 3 classes
+      aparecem. O custo real é para quem quiser AGIR sobre a classe na 900-20 — vai ter que fazer
+      `startsWith` em prosa. Como a seção inteira expira em 2026-09-30 e existe para esvaziar, o
+      custo é limitado. Se sobreviver ao prazo, a story que renovar deve promover a classe a campo
+      verificado, não empurrar a data.
+  - ponto: "A R9 do gate é cega para arquivo não commitado"
+    veredito: "CONFIRMADO, por leitura do código — e é o mesmo padrão da 900-3c."
+    fundamentacao: >-
+      `rodarR9()` (scripts/gate-tenancy.ts:859) roda
+      `git diff --name-only --diff-filter=A ${base}...HEAD -- supabase/migrations/`, que compara
+      COMMITS. Com a `246` só na árvore de trabalho, a lista sai vazia e o gate imprime "R9: nenhuma
+      migration nova em relação a origin/main" — verde por vacuidade, não por ausência de colisão.
+      Não é defeito do gate; é a régua medindo o que ela mede. Vai na §5 como condição do @devops.
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 4. ACHADOS — nenhum bloqueia, os dois primeiros viajam para a 900-24
+# ═════════════════════════════════════════════════════════════════════════════
+top_issues:
+  - id: "ARCH-001"
+    severity: medium
+    finding: >-
+      O CHECK `whatsapp_sem_identificador_proprio` é evadido pela grafia mais natural em TypeScript.
+      Medido por mim no banco de teste, em BEGIN…ROLLBACK: com `provider='whatsapp'`,
+      `config = '{"phone_number_id": …}'` é bloqueado (23514, como a AC promete), MAS
+      `config = '{"phoneNumberId": …}'` PASSA e `config = '{"meta": {"phone_number_id": …}}'`
+      também PASSA. O comentário da migration diz "com ele, reabrir a decisão custa uma migration";
+      medido, custa uma troca de grafia — e `phoneNumberId` é justamente como um dev TS escreveria.
+      O @po examinou a semântica e aceitou o recorte "só a chave de topo"; a medição mostra que o
+      recorte real é "só a grafia exata da chave de topo", que é mais estreito do que o registrado.
+    suggested_action: >-
+      Não refazer a 246. Carregar a limitação para a 900-24 (a story que vai CONSUMIR o roteamento
+      por `phone_number_id`) e lá fechar por qualquer um dos dois caminhos: normalizar as chaves de
+      `config` no CHECK (`NOT (config ?| array['phone_number_id','phoneNumberId','phone'])`), ou —
+      melhor — validar a forma do `config` por provider num único ponto de escrita. Corrigir também
+      a frase "custa uma migration" no comentário da 246 quando a 900-24 tocar o arquivo.
+  - id: "REL-001"
+    severity: low
+    finding: >-
+      `whatsapp_config.status` não tem CHECK nem domínio em produção (é `varchar` livre, default
+      `'inactive'`). Os dois índices parciais da AC2 discriminam pelo literal `'active'`; medido em
+      BEGIN…ROLLBACK: duas linhas com `status='Active'` e `'ACTIVE'` e o MESMO `phone_number_id`
+      convivem sem erro. A AC2 diz que a duplicata fica "estruturalmente impossível" para 18 call
+      sites — é verdade para o literal exato, não para o campo. Hoje a exposição é só futura (não
+      existe caminho de escrita em `whatsapp_config` em `packages/web/src`, medido: 31 referências,
+      0 escritas), e é da mesma família dos 9 call sites residuais que a própria AC2 já nomeia.
+    suggested_action: >-
+      Na story de onboarding/painel que primeiro ESCREVER em `whatsapp_config` (Onda 7), acrescentar
+      `CHECK (status IN ('active','inactive'))` na mesma migration que introduzir a escrita — antes
+      disso não há o que proteger.
+  - id: "TEST-001"
+    severity: low
+    finding: >-
+      Pré-existente à story (regra nasceu na 900-14), mas relevante para o valor do "0 ocorrências":
+      a regra AST detecta `ImportSpecifier` e `CallExpression` com callee `Identifier`. Medido:
+      `import * as admin from ".../admin"; admin.createAdminClient()` → 0 hits;
+      `export { createAdminClient } from ".../admin"` → 0 hits. A forma canônica dá 2 hits e o
+      import aliasado dá 1. Nenhuma dessas formas de evasão existe hoje em `packages/web/src`
+      (medido), e não há uso de `createAdminClient` fora de `packages/web/src` a não ser a própria
+      regra, o gate e os testes — então a catraca é exata para a população atual.
+    suggested_action: >-
+      Registrar no backlog (não nesta story): cobrir `MemberExpression` e `ExportNamedDeclaration`
+      na regra, com teste de mutação para cada forma.
+  - id: "DOC-001"
+    severity: low
+    finding: >-
+      A Regra 3 é bomba-relógio por desenho: em 2026-10-01 as 12 entradas de `alvos-onda-2`
+      (`alvosExpiramEm: 2026-09-30`) vencem e `pnpm test` fica VERMELHO no controle positivo do
+      arquivo real. Isso é o comportamento pretendido, mas ninguém fora desta story sabe disso.
+    suggested_action: >-
+      @sm/@po: quando a data se aproximar, a saída correta é a 900-20 corrigir os crons (esvaziando
+      a seção) ou uma revisão explícita da classificação — NUNCA empurrar a data, que é exatamente o
+      que a régua existe para impedir.
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 5. HANDOFF PARA O @devops — condições de deploy
+# ═════════════════════════════════════════════════════════════════════════════
+handoff_devops:
+  - id: "D1 — Task 2.6: aplicar a 246 em produção"
+    estado: "PENDENTE (fora da autoridade do @dev; produção só foi lida)"
+    pre_condicoes_ja_medidas_por_mim_read_only:
+      duplicatas_phone: "0 (com controle de vivacidade: 1 grupo)"
+      duplicatas_org: "0 (com controle de vivacidade: 1 grupo)"
+      colisao_de_nome_de_indice: "nenhuma"
+      funcoes_referenciadas_existem: "is_admin, user_org_id, update_updated_at — todas presentes"
+      provision_org_viva: "≡ corpo da migration 240, sem deriva"
+      backfill_whatsapp_config: "afetaria 0 linhas"
+      backfill_org_integrations: "criaria 6 linhas (1 org × 6 providers), tabela sem consumidor"
+  - id: "D2 — A prova da AC6 em PRODUÇÃO, que só existe depois de aplicar"
+    porque: >-
+      O A/B da AC6 rodou no banco de teste, que não tem o dado da garantia. A comparação que fecha a
+      restrição do dono do produto é pré × pós EM PRODUÇÃO — e ela só é possível porque a captura PRÉ
+      já existe. Sem esta captura, depois de aplicar ninguém consegue provar que a linha não mudou.
+    captura_pre_aplicacao_medida_neste_gate_2026_08_29:
+      sha256_linha_whatsapp_config_select_estrela: "dd81ff1507fae4c78540d934e0369387abaf494b3ad2bfccc0eca0754ef54db8"
+      sha256_linha_organizations_select_estrela: "34fe14268d7d4b47cdf7896a57896970065060c1c699da5116b1f4fb20eba667"
+      whatsapp_config_nao_sensivel: "id=b1099cec-f83d-4139-9a21-08d61ae4aaf1 · org_id=…0001 · status=active · created_at=2026-04-20T14:58:11.612909Z · updated_at=2026-08-10T19:16:53.357627Z"
+      organizations_nao_sensivel: "id=…0001 · name=Trifold Engenharia · slug=trifold · is_active=true · updated_at=2026-08-19T13:58:54.059271Z"
+      whatsapp_config_por_org: "…0001 → 1 linha"
+    procedimento_pos_aplicacao: >-
+      Repetir as MESMAS consultas (`SELECT encode(digest(t::text,'sha256'),'hex') FROM whatsapp_config t`
+      e idem para `organizations`) e exigir os MESMOS dois hashes, mais `count(*) = 1` em
+      whatsapp_config e `count(*) = 6` em org_integrations. Hash diferente ⇒ a garantia do dono do
+      produto foi violada ⇒ rollback pelo bloco NFR-8 no fim da 246. Não é preciso plantar célula de
+      vivacidade em produção: a discriminação do hash já foi provada no banco de teste (o @dev mediu
+      sha1 antes ≠ dentro da célula = pós-ROLLBACK).
+  - id: "D3 — R9 do gate de tenancy só mede DEPOIS do commit"
+    acao: >-
+      `rodarR9()` compara `origin/main...HEAD` por COMMITS. Rodar `pnpm gate:tenancy` de novo APÓS
+      commitar a `246` — antes disso ele imprime "nenhuma migration nova" com a migration na árvore.
+      Mesmo padrão registrado na 900-3c.
+    cuidado: >-
+      `gate:tenancy` REESCREVE `docs/audits/gate-tenancy-report.json`, que é rastreado E é fixture do
+      teste `gate-tenancy-auditoria.test.ts`. Restaurar com `git checkout --` depois de rodar.
+      Não interpretar o `delta` desta execução: o baseline é de produção e a introspecção é do banco
+      de teste (ver §3).
+  - id: "D4 — Ordem de merge e numeração"
+    nota: >-
+      A branch não tem a migration `245` (ela vive no PR #525 / story 900-3c, ainda aberto), então a
+      sequência local salta 244 → 246. Isso é intencional (correção B8) e a varredura por TODAS as
+      refs é o que evitou a colisão. Registrado à parte, pré-existente e alheio a esta story: há
+      DUAS migrations com prefixo 240 em `supabase/migrations/` (`240_provision_org.sql` e
+      `240_followup_nicole_por_lead.sql`).
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 6. RASTREABILIDADE AC ↔ EVIDÊNCIA
+# ═════════════════════════════════════════════════════════════════════════════
+trace:
+  AC1: "PASS — aritmética 242 reproduzida; legado/_aviso/congeladoEm byte-idênticos; 0 ocorrências em 1199 arquivos; 15/15 testes; MQ-A e MQ-B vermelhas com kill sets disjuntos; 7/7 citações arquivo:linha exatas."
+  AC2: "PASS — 2 índices parciais presentes no dev; pré-condições zeradas com vivacidade nos DOIS ambientes (produção remedida por mim); ressalva REL-001 sobre o literal 'active'."
+  AC3: "PASS — tabela, 6 providers, CHECKs, UNIQUE, índice de roteamento reverso, RLS e 2 policies verificados por introspecção; ressalva ARCH-001 sobre a grafia da chave."
+  AC4: "PASS — corpo da 240 reproduzido integralmente (61 linhas de prefixo comum, 0 ausentes); delta = os 2 blocos novos; REVOKE idêntico; a função VIVA em produção não derivou do arquivo."
+  AC5: "PASS — backfill aditivo por leitura do arquivo (só INSERT); dev com 1 org × 6 linhas e todas com created_at = updated_at; em produção afetaria 0 linhas de whatsapp_config."
+  AC6: "PASS no que é mensurável antes de aplicar — decomposição inteira reexecutada em produção read-only, mais duas medições novas (sem deriva na provision_org viva; dependências presentes). A comparação pré × pós em produção fica como condição D2 do @devops, com a captura PRÉ registrada."
+
+waiver: { active: false }
