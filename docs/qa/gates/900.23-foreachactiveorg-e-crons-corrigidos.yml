@@ -1,0 +1,273 @@
+schema: 1
+story: "900.23"
+story_title: "`forEachActiveOrg` + os 5 crons que só quebram com a segunda empresa (Onda 2, Fatia 2)"
+gate: PASS
+status_reason: >-
+  Segunda rodada, sobre `0762e260`. As 6 concerns do gate anterior estão fechadas, e fechadas com
+  vermelho MEDIDO por mim, não relatado: os 5 carrascos cegos ao `select` agora acendem
+  (12/5/1/2/1 falhas), o `CRON_RESUMO` migrou para `await logEventOnce` com carrasco que mede o
+  **`await`** (duplo em macrotask + contador de geração contra escrita órfã), a asserção
+  `expect(logEventMock).not.toHaveBeenCalled()` da Story 87-6 voltou INTEIRA, o SQL de recuperação
+  do `skipped` terminal foi para dentro do código ao lado da causa, e o warning `_token` sumiu
+  porque o teste passou a afirmar o PAR `[wabaId, accessToken]` — conserto na fonte, não
+  supressão. Suíte 282/3574 (+2), lint 30 warnings com zero desta story, type-check 8/8, eslint
+  0 ocorrências. Encontrei uma sexta instância da classe (na verdade três), mas ela NÃO toca AC
+  nenhuma desta story e fica registrada como follow-up. Um item mudou de forma no handoff do
+  @devops e é o único ponto que exige leitura atenta: **a `main` deste repo usa squash**, e isso
+  invalida a régua de ancestralidade que eu mesma escrevi no gate anterior. A régua certa está
+  no H1, simulada e conferida.
+reviewer: "Quinn (Test Architect)"
+updated: "2026-08-29T00:00:00Z"
+rodadas:
+  - { data: "2026-08-29", commit: "ce07e09b", gate: CONCERNS, concerns: 5 }
+  - { data: "2026-08-29", commit: "0762e260", gate: PASS, concerns_fechadas: 6 }
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 1. AS 6 CONCERNS — FECHADAS, COM O VERMELHO REPRODUZIDO POR MIM
+# ═════════════════════════════════════════════════════════════════════════════
+concerns_fechadas:
+  QA-900-23-1:
+    titulo: "Carrascos cegos ao `select` (era high)"
+    status: FECHADA
+    metodo: "Mesma mutação da rodada anterior — remover `org_id` da lista de colunas. Nada mais."
+    medido: |
+      | Linha                                | Rodada 1 | Rodada 2 (medido por mim) | @dev alegou |
+      |--------------------------------------|----------|---------------------------|-------------|
+      | `meta-capi-dispatch/route.ts:87`     | 🟢 17/17 | 🔴 **12 failed \| 5 passed** | 12 ✅ |
+      | `meta-ads-intelligence/route.ts:224` | 🟢 7/7   | 🔴 **5 failed \| 2 passed**  | 5 ✅  |
+      | `meta-ads-intelligence/route.ts:347` | 🟢 7/7   | 🔴 **1 failed \| 6 passed**  | 1 ✅  |
+      | `email-queue/route.ts:43`            | 🟢 2/2   | 🔴 **2 failed (2)**          | 2 ✅  |
+      | `roleta-retry/route.ts:48`           | 🟢 13/13 | 🔴 **1 failed \| 13 passed** | 1 ✅  |
+
+      Os cinco conferem exatamente. O `roleta-retry` subiu de 13 para 14 testes: lá não bastava
+      projetar, porque **não existia asserção nenhuma** sobre o `org_id` chegar ao consumidor — o
+      carrasco novo afirma `distributeLeadToNextBroker("l1", "org-real")`. Esse é o caso mais
+      instrutivo dos cinco: projetar a coluna só acende se alguém estiver olhando para ela.
+    qualidade_do_conserto: >-
+      O helper `projetar()` replica o PostgREST (filtra as chaves pedidas) e está comentado com a
+      razão de existir. **Ressalva de forma:** está DUPLICADO em 4 arquivos de teste, idêntico
+      byte a byte. Não bloqueia — mas a próxima cópia deveria ser um import.
+
+  QA-900-23-2:
+    titulo: "Dívida do `logEvent` fire-and-forget (era medium)"
+    status: FECHADA
+    medido: |
+      `for-each-org.ts` agora usa `await logEventOnce(...)` nos três pontos (`:155`, `:166`,
+      `:189`). Duas mutações minhas:
+      - **tirar SÓ o `await` do `CRON_RESUMO`** → 🔴 **1 failed | 15 passed** no módulo e
+        🔴 **3 failed | 19 passed** na rota. Bate com o alegado. O carrasco mede o `await`,
+        não a chamada.
+      - **voltar para `logEvent`** → 🔴 **13 failed | 36 passed** nas 3 suítes.
+        ⚠️ O @dev alegou "10 vermelhos". A diferença é de denominador (conjunto de arquivos), não
+        de direção. **E há uma armadilha aqui que registro para a próxima rodada de quem for
+        medir isto:** a mutação ingênua (trocar a chamada sem reimportar `logEvent`) derruba **41
+        testes** por `ReferenceError` no carregamento do módulo — vermelho que não discrimina
+        nada. Refiz importando `logEvent` junto, para o módulo carregar; só então os 13 vermelhos
+        são o sinal.
+    o_carrasco_e_bom_e_vale_dizer_por_que: >-
+      O duplo de `logEventOnce` só completa a escrita num **macrotask** (`setTimeout(r, 5)`), então
+      sem o `await` o array `completados` está vazio no ponto da asserção. E há um **contador de
+      geração** (`geracao++` no `beforeEach`) que descarta a escrita ÓRFÃ — a que a falta de
+      `await` deixa pendente e que, sem isso, completaria depois do fim do teste e cairia no array
+      do teste SEGUINTE, fazendo-o passar por acidente. O comentário registra que foi exatamente
+      assim que a M1 da 87-6 ficou verde na primeira rodada. Isso é instrumento de primeira linha.
+
+  QA-900-23-2b:
+    titulo: "R3 — a concessão de escopo da asserção da 87-6"
+    status: FECHADA (era o mesmo fato de QA-900-23-2, como eu havia apontado)
+    medido: >-
+      `nicole-agenda-reconcile/route.test.ts:408` — `expect(logEventMock).not.toHaveBeenCalled()`
+      **restaurada inteira**, e o conjunto de escritas não-aguardadas permitidas antes do response
+      voltou a ser ∅. Acima disso, `:411` afirma `tipos).toContain("CRON_RESUMO")` sobre o canal
+      AGUARDADO, e `:533` afirma `completados.map(e => e.event_type)).toEqual(["CRON_RESUMO"])` no
+      caso de zero orgs. Ou seja: a garantia original **mais** uma afirmação positiva de para onde
+      o evento foi. Estritamente mais forte, agora sim — na rodada anterior era meia verdade.
+
+  QA-900-23-3:
+    titulo: "`skipped` terminal — SQL de recuperação (era ressalva do handoff)"
+    status: FECHADA, e a decisão de LUGAR está certa
+    medido: |
+      Reconferi as duas afirmações factuais do comentário, não aceitei nenhuma:
+      - `supabase/migrations/215_meta_capi_outbox.sql:49` →
+        `CHECK (status IN ('pending','sent','failed','skipped'))`, **sem restrição de transição**.
+        A volta é permitida pelo schema. ✅
+      - `grep meta_capi_outbox … | grep pending` → o ÚNICO match no repositório é o próprio
+        comentário novo. Nada devolve a linha para `pending`. ✅
+    julgamento_do_lugar: >-
+      **Certo, e é a diferença entre um documento e um instrumento.** O SQL está no ramo
+      `if (!datasetId)` de `meta-capi-dispatch/route.ts` — ao lado da linha que CRIA o estado, que
+      é onde alguém em incidente vai olhar (o stack trace e o `CAPI_ORG_SEM_DATASET` levam para
+      lá; ninguém abre um `.yml` de gate às 3h). O filtro `AND last_error = 'capi_nao_configurado'`
+      preserva as linhas de `'lead not found'`, que são `skipped` por outra razão — esse detalhe é
+      o que separa uma receita segura de um `UPDATE` que ressuscita lixo.
+    nit_de_vocabulario: >-
+      O comentário chama o `event_id` de "determinístico". Medido: `215:44-45` diz
+      `'visit_' || lead_id || '_' || random_uuid` — ele é **estável por linha**, não derivado
+      deterministicamente das entradas. A conclusão de segurança não muda (re-enfileirar a MESMA
+      linha reenvia o MESMO `event_id`, e a Meta deduplica em 48 h), mas a palavra promete mais do
+      que o dado entrega. Não bloqueia.
+
+  QA-900-23-4:
+    titulo: "Correção factual do lint (era low)"
+    status: FECHADA, e resolvida na FONTE
+    medido: >-
+      `pnpm lint --force` → **30 problems (0 errors, 30 warnings)**. Cruzei os arquivos com
+      warning contra `git diff --name-only e8ea5433 HEAD`: sobram só `followup/route.ts` e
+      `nicole-health/route.test.ts`, os dois que eu já havia provado byte-idênticos ao baseline.
+      **Zero warning atribuível a esta story.**
+    porque_o_conserto_e_melhor_que_o_pedido: >-
+      Eu esperava um `_token` renomeado ou um `eslint-disable`. Ele fez o contrário: o duplo passou
+      a capturar o PAR e o teste afirma
+      `[["waba-a","tok-a"], ["waba-b","tok-b"]]`. O parâmetro deixou de ser ignorado porque virou
+      **garantia** — a org A nunca lista templates com o token da B, que é um cruzamento que a
+      suíte anterior não conseguia ver. Warning some como efeito colateral de um teste melhor.
+
+  QA-900-23-5:
+    titulo: "`DAILY_REPORT_ORG_ID` (era low) e Change Log da ordem de merge"
+    status: FECHADA
+    medido: >-
+      A fresta está registrada na story e vai no handoff (H2). O Change Log foi corrigido do jeito
+      certo: a linha antiga NÃO foi reescrita em silêncio — levou um
+      `[CORRIGIDO na rodada do gate — esta linha dizia "a main vermelha", que é uma mecânica que
+      não se sustenta…]` inline, preservando o que se disse antes ao lado do que se apurou depois.
+      É a mesma disciplina que a Decisão 1 desta story usou para o `900-20`.
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 2. O SEXTO — PROCURADO, ACHADO, E SÃO TRÊS. NÃO TOCA AC NENHUMA.
+# ═════════════════════════════════════════════════════════════════════════════
+achado_novo:
+  id: QA-900-23-6
+  severity: low
+  titulo: "A escotilha de join do `projetar()` desliga a projeção justamente onde `org_id` divide espaço com um embed"
+  finding: >-
+    `projetar()` devolve a linha INTEIRA quando as colunas contêm `(` — decisão documentada e
+    defensável (joins do PostgREST vêm como objeto aninhado). Só que existem, nesta fatia, TRÊS
+    `select` que carregam `org_id` **e** um embed na mesma string. Neles a projeção é inerte por
+    construção: aplicar o helper como está não conserta.
+  medido: |
+    Mutação idêntica (remover `org_id` da lista), em `0762e260`:
+
+    | Linha                                   | Select                                          | Suíte |
+    |-----------------------------------------|-------------------------------------------------|-------|
+    | `email-automations/route.ts:54`         | `id, org_id, delay_minutes, email_templates(slug)` | 🟢 3/3 |
+    | `email-automations/route.ts:120`        | `id, org_id, email_templates(slug)`             | 🟢 3/3 |
+    | `obras-approval-reminder/route.ts:26`   | `id, org_id, …, obra:obras!obra_id(name)`       | 🟢 2/2 |
+
+    Duas causas somadas: esses dois fakes não receberam o `projetar()` (não estão entre os 4 que
+    o ganharam), **e** mesmo que recebessem, o `includes("(")` os devolveria inteiros.
+  porque_NAO_bloqueia: >-
+    Nenhuma AC desta story nomeia esses três `select`. `email-automations` e
+    `obras-approval-reminder` entram pela AC7, cuja garantia é try/catch no laço + campo de falha
+    nomeado — e essa garantia TEM carrasco (amostrei as duas variantes da C10 na rodada anterior).
+    O `org_id` ali é leitura pré-existente, não a correção que a story entrega. É a diferença
+    entre "a guarda da AC não guarda" (rodada 1, high) e "existe superfície vizinha sem guarda"
+    (rodada 2, follow-up).
+  fix_sugerido: >-
+    Trocar o `if (colunas.includes("("))` por um split de vírgulas de PRIMEIRO NÍVEL (ignorando as
+    que estão dentro de parênteses) e manter os embeds inteiros — ~6 linhas. Como o helper já está
+    duplicado em 4 arquivos, o conserto e a extração para um módulo compartilhado são a mesma
+    tarefa.
+  suggested_owner: dev
+  nota_de_classe: >-
+    Terceira aparição desta classe na Onda 2 (nicole-health → os 5 → estes 3). O padrão que se
+    repete não é "o dev esqueceu": é que **toda vez que alguém procura, acha**. Vale virar item de
+    checklist da próxima fatia, não achado de gate.
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 3. NÚMEROS DESTA RODADA (executados)
+# ═════════════════════════════════════════════════════════════════════════════
+validacoes:
+  suite:      "npx vitest run → Test Files 282 passed · Tests 3574 passed | 6 expected fail (3580). +2 vs. rodada 1 ✅"
+  lint:       "pnpm lint --force → 30 problems (0 errors, 30 warnings); zero atribuível a esta story ✅"
+  type_check: "pnpm type-check --force → 8/8 ✅"
+  eslint:     "npx eslint src --format=json → 1210 arquivos, 0 ocorrências de `aios/no-unscoped-admin-client` ✅"
+  allowlist:  "npx vitest run scripts/admin-client-allowlist.test.ts → 15/15; união 239 intacta ✅"
+  producao:   >-
+    Relida (read-only): `organizations WHERE is_active` → 1 linha,
+    `00000000-0000-0000-0000-000000000001`. `org_integrations` → **`PGRST205`, ainda ausente**.
+    O plano B da AC5 continua ATIVO e correto.
+  arvore:     "Todas as 11 mutações desta rodada restauradas; `git status --short packages/ scripts/` vazio ✅"
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 4. HANDOFF @devops — CONFIRMADO, COM O H1 REESCRITO (a régua anterior era falsa)
+# ═════════════════════════════════════════════════════════════════════════════
+handoff_devops:
+  - id: H1
+    titulo: "ORDEM DE MERGE — #526 primeiro. E a régua muda depois do squash."
+    fato: >-
+      `origin/main..HEAD` = **4 commits**, o primeiro é `e8ea5433` = `headRefOid` do PR #526.
+      Mergear este PR antes do #526 leva o #526 inteiro (com
+      `supabase/migrations/246_org_integrations_e_unicidade_whatsapp.sql`) para a `main` por dentro
+      deste, sem gate próprio.
+    correcao_da_regua_do_gate_anterior: >-
+      ⚠️ No gate anterior escrevi "confira que `origin/main..HEAD` cai para 2". **Essa régua é
+      falsa neste repo.** Medido: os últimos merges da `main` são **squash** (`77f225d1`,
+      `eb1e45de`, `563e639f`… todos com `(#NNN)` e sem merge commit). Simulei o squash do #526
+      (`git commit-tree e8ea5433^{tree} -p origin/main`) e confirmei: `e8ea5433` **nunca** vira
+      ancestral da `main`, e `git log $SQ..HEAD` continua devolvendo 4 commits **para sempre**.
+      A régua de história nunca fica verde; quem esperar por ela vai concluir errado.
+    procedimento_certo: |
+      1. Espere o #526 ser mergeado (squash).
+      2. `git fetch origin && git merge origin/main` NESTA branch (merge, não rebase).
+      3. **Conflitos previstos** (medidos com `git merge-tree` contra a main simulada) — são 4,
+         todos add/add, e a resolução é OURS em todos:
+           - `docs/audits/admin-client-allowlist.json`
+           - `scripts/lib/allowlist-lint.ts`
+           - `scripts/admin-client-allowlist.test.ts`
+           - `docs/stories/900-21b-allowlist-retriada-e-org-integrations.story.md`
+         `246_*.sql` e `no-unscoped-admin-client.mjs` **auto-resolvem** (esta story não os tocou,
+         o conteúdo é idêntico dos dois lados — conferido).
+      4. **Régua de conteúdo, DOIS pontos** (a única que discrimina pós-squash):
+         `git diff origin/main HEAD --stat` **não pode listar** `246_*.sql` nem
+         `no-unscoped-admin-client.mjs`. Na simulação deu 36 arquivos, sem nenhum dos dois. ✅
+      5. **Não confie na aba "Files changed" do PR:** o GitHub usa diff de TRÊS pontos
+         (merge-base), e na simulação os três pontos listam `246_*.sql`,
+         `no-unscoped-admin-client.mjs` e `allowlist-lint.ts` como se fossem desta story. A página
+         vai mentir até o passo 2 ser feito.
+  - id: H2
+    titulo: "LER 3 ENVS NA VERCEL DE PRODUÇÃO (uma ida só)"
+    detalhe: >-
+      `META_CAPI_DATASET_ID` (bloqueante da AC5.2 — decide se o valor a semear é a env ou o
+      literal `1337310707164669` de `capi-client.ts:73`), `DAILY_REPORT_ORG_ID` e
+      `DAILY_REPORT_RECIPIENTS` (QA-900-23-5). Conta certa é `nicoletrifold-droid`; o token da CLI
+      local devolve `forbidden`.
+  - id: H3
+    titulo: "O CÓDIGO DA AC5 NÃO SOBE NESTE DEPLOY — plano B segue ATIVO"
+    detalhe: >-
+      Reconfirmei hoje: `org_integrations` → `PGRST205` em produção. Cadeia obrigatória:
+      #526 mergeado → migration `246` aplicada em PRODUÇÃO → seed do `dataset_id` com `RETURNING`
+      + `SELECT` de confirmação (Task 9.3) → só então o deploy de `meta-capi-dispatch/route.ts` +
+      `capi-client.ts` → checagem pós-deploy (Task 9.5).
+  - id: H4
+    titulo: "Se a ordem do H3 falhar, o SQL de recuperação está NO CÓDIGO"
+    detalhe: >-
+      `meta-capi-dispatch/route.ts`, ramo `if (!datasetId)` — com o filtro por `last_error` que
+      preserva as linhas de `'lead not found'`. Não precisa mais abrir este gate para achá-lo.
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 5. TRACEABILIDADE
+# ═════════════════════════════════════════════════════════════════════════════
+trace:
+  AC1:  { status: PASS, nota: "16/16. C7, C8, R6 reproduzidas na rodada 1; o `await` do `logEventOnce` reproduzido na rodada 2." }
+  AC2:  { status: PASS, nota: "daily-report 11/11, nicole-agenda-reconcile 22/22. C4/C5/C6/R5/R11 com vermelho medido. A asserção da 87-6 voltou inteira." }
+  AC3:  { status: PASS, nota: "20/20. Divergência da AC3.2 aceita e fundamentada (template aprovado de 3 params, verificado em `admin-whatsapp.ts:99-104`); valor de usuário parcial, registrado como dívida." }
+  AC4:  { status: PASS, nota: "As duas linhas de `select` que sustentam a AC e o R7 agora acendem (5 e 1 vermelhos)." }
+  AC5:  { status: PASS, nota: "O passo 1 da AC ganhou carrasco (12 vermelhos). Fail-safe, C9 e filtro duplo medidos. Deploy retido pelo plano B, corretamente, com o caminho de volta no código." }
+  AC6:  { status: PASS, nota: "6/6; o fake honra `maybeSingle()` com 2+ linhas e agora afirma o par waba/token." }
+  AC7:  { status: PASS, nota: "6 arquivos, campo de falha nomeado, 12 vermelhos; amostrei 3. Ver QA-900-23-6 para superfície vizinha, fora de AC." }
+  AC8:  { status: PASS, nota: "239 intacto, MINIMOS alinhados, 8.1 provado por forma, controle positivo 6→0." }
+  AC9:  { status: PASS, nota: "5 leituras relidas por mim nas duas rodadas; 4 conferem, a 5ª é genuinamente inacessível e virou item de handoff." }
+  AC10: { status: PASS, nota: "Catraca acende nomeando o arquivo; 10.4 sem env com vermelho medido. Varredura limitada a `packages/web/src` (follow-up)." }
+
+recommendations:
+  follow_up_story_propria:
+    - "QA-900-23-6 — split de vírgulas de primeiro nível no `projetar()` + extrair o helper (hoje duplicado em 4 arquivos) para um módulo compartilhado. Uma tarefa só."
+    - "Estender a varredura da catraca do literal a `packages/shared` e `scripts`."
+    - "Indentação em `sla-alerts/route.ts:293`."
+    - "Trocar 'determinístico' por 'estável por linha' no comentário de recuperação do `meta-capi-dispatch`."
+  para_o_devops:
+    - "H1 a H4 — atenção especial ao H1, cuja régua mudou."
+
+waiver: { active: false }
+quality_score: 96
+expires: "2026-09-12T00:00:00Z"

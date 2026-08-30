@@ -2077,3 +2077,81 @@ morde é a interseção arquivo-a-arquivo entre os warnings e `git diff --name-o
 
 *Nenhuma linha de código de aplicação foi alterada por este gate. Todas as mutações foram
 restauradas e a árvore reconferida limpa. Produção: somente leitura.*
+
+---
+
+### QA Results — 2ª rodada (commit `0762e260`)
+
+**Decisão: PASS.** As 6 concerns fechadas, cada uma com o vermelho reproduzido por mim.
+Gate atualizado: `docs/qa/gates/900.23-foreachactiveorg-e-crons-corrigidos.yml`.
+
+**Os 5 carrascos cegos — confirmados, número a número.** Mesma mutação (tirar `org_id` da lista de
+colunas): `meta-capi-dispatch:87` 🔴 **12/5** · `meta-ads-intelligence:224` 🔴 **5/2** · `:347` 🔴
+**1/6** · `email-queue:43` 🔴 **2/0** · `roleta-retry:48` 🔴 **1/13** (13→14 testes). Batem com o
+alegado. O `roleta-retry` é o caso mais instrutivo: projetar não bastava porque **não havia
+asserção olhando para o campo** — projeção sem consumidor é instrumento apontado para o vazio.
+
+**`logEvent` → `await logEventOnce`.** Tirar só o `await` → 🔴 1 no módulo, 3 na rota (bate).
+Voltar para `logEvent` → 🔴 **13** (o @dev disse 10; diferença de denominador, não de direção).
+⚠️ Registro a armadilha para quem repetir: a mutação ingênua, sem reimportar `logEvent`, derruba
+**41** por `ReferenceError` de carregamento — vermelho que não discrimina. O carrasco em si é de
+primeira linha: duplo que só completa em macrotask **mais** contador de geração descartando a
+escrita órfã, que é exatamente o que fez a M1 da 87-6 passar em falso na primeira rodada.
+E o R3 fechou junto, como eu havia dito que fecharia: `expect(logEventMock).not.toHaveBeenCalled()`
+voltou inteira (`:408`), com uma afirmação positiva a mais sobre o canal aguardado (`:411`, `:533`).
+
+**`skipped` terminal — lugar certo.** Reconferi as duas afirmações do comentário em vez de aceitá-las:
+`215:49` é `CHECK (status IN (...))` **sem restrição de transição**, e o único match de
+`meta_capi_outbox` + `pending` no repositório é o próprio comentário novo. Pôr o SQL no ramo
+`if (!datasetId)` é o que separa documento de instrumento — em incidente ninguém abre um `.yml`.
+O filtro por `last_error` preservando `'lead not found'` é o detalhe que torna a receita segura.
+Nit: `event_id` é **estável por linha** (`215:44` — `'visit_' || lead_id || '_' || random_uuid`),
+não "determinístico"; a conclusão de segurança não muda.
+
+**Lint.** 30 warnings, zero desta story. E o conserto foi melhor que o pedido: em vez de renomear
+o `_token`, o duplo passou a capturar o par e o teste afirma `[["waba-a","tok-a"],["waba-b","tok-b"]]`
+— o parâmetro deixou de ser ignorado porque virou garantia (a org A nunca lista com o token da B).
+
+**Números:** suíte **282/3574** (+2) · lint 0 erros/30 warnings · type-check 8/8 · eslint 1210
+arquivos, 0 ocorrências · allowlist 15/15, união 239 intacta · produção relida: 1 org ativa,
+`org_integrations` ainda `PGRST205` (plano B segue ATIVO e correto).
+
+**O sexto que você pediu — achei, e são três, mas não bloqueiam.** A escotilha de join do
+`projetar()` (`colunas.includes("(")` devolve a linha inteira) desliga a projeção exatamente onde
+`org_id` divide a string com um embed: `email-automations:54` (🟢 3/3), `:120` (🟢 3/3) e
+`obras-approval-reminder:26` (🟢 2/2) seguem verdes sob a mutação. Dois desses fakes nem receberam
+o helper — e, se recebessem, a escotilha os devolveria inteiros do mesmo jeito. **Não bloqueia
+porque nenhuma AC desta story nomeia esses `select`:** os dois arquivos entram pela AC7, cuja
+garantia (try/catch + campo de falha nomeado) tem carrasco próprio, medido. É a diferença entre
+"a guarda da AC não guarda" (rodada 1) e "há superfície vizinha sem guarda" (agora). Conserto:
+split de vírgulas de primeiro nível, ~6 linhas — junto com extrair o `projetar()`, que hoje está
+duplicado byte a byte em 4 arquivos.
+
+#### Handoff @devops — confirmado, com o H1 REESCRITO
+
+⚠️ **A régua que escrevi no gate anterior era falsa e eu a corrijo aqui.** A `main` deste repo usa
+**squash** (`77f225d1`, `eb1e45de`, `563e639f` — todos `(#NNN)`, sem merge commit). Simulei o
+squash do #526 (`git commit-tree e8ea5433^{tree} -p origin/main`) e medi: `e8ea5433` **nunca** vira
+ancestral da `main`, e `git log $SQ..HEAD` continua devolvendo 4 commits **para sempre**. Quem
+esperar a régua de história ficar verde vai concluir errado.
+
+1. #526 mergeado primeiro — `origin/main..HEAD` são 4 commits e o 1º é o `headRefOid` do #526;
+   mergear antes leva o #526 (com a migration `246`) para a `main` sem gate próprio.
+2. Depois: `git fetch origin && git merge origin/main` **nesta branch** (merge, não rebase).
+3. **4 conflitos previstos** (medidos com `git merge-tree` contra a main simulada), todos add/add,
+   resolução **OURS** em todos: `docs/audits/admin-client-allowlist.json`,
+   `scripts/lib/allowlist-lint.ts`, `scripts/admin-client-allowlist.test.ts`,
+   `docs/stories/900-21b-…story.md`. A migration `246` e `no-unscoped-admin-client.mjs`
+   **auto-resolvem** — esta story não os tocou e o conteúdo é idêntico dos dois lados (conferido).
+4. **Régua de conteúdo, DOIS pontos** — a única que discrimina pós-squash:
+   `git diff origin/main HEAD --stat` **não pode listar** `246_*.sql` nem
+   `no-unscoped-admin-client.mjs`. Na simulação: 36 arquivos, nenhum dos dois. ✅
+5. **Não confie na aba "Files changed" do PR:** o GitHub usa diff de TRÊS pontos, e na simulação
+   os três pontos listam `246_*.sql`, `no-unscoped-admin-client.mjs` e `allowlist-lint.ts` como se
+   fossem desta story. A página mente até o passo 2 ser feito.
+6. H2 (ler `META_CAPI_DATASET_ID`, `DAILY_REPORT_ORG_ID` e `DAILY_REPORT_RECIPIENTS` na conta
+   `nicoletrifold-droid`) · H3 (o código da AC5 **não sobe** neste deploy) · H4 (se a ordem falhar,
+   o SQL de recuperação já está no código, não neste gate).
+
+*Nenhuma linha de aplicação alterada por este gate. As 11 mutações desta rodada foram restauradas
+e `git status --short packages/ scripts/` está vazio. Produção: somente leitura.*
