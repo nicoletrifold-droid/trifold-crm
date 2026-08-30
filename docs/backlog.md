@@ -6,6 +6,74 @@ Tarefas operacionais, configurações e ajustes pendentes que não requerem uma 
 
 ## Pendente
 
+### [CI] 🔴 A catraca de tenancy está **vermelha desde o #524** e ninguém lê — escalado ao `@pm`
+
+**Adicionado em:** 2026-08-29 · **Origem:** `@devops` na revisão da Story `900-3c` (PR #525), confirmado pelo `@qa`.
+**Prioridade:** **P1** — o custo não é a dívida; é o alarme morto.
+**Endereçado a:** `@pm`.
+
+O job `gate de tenancy (não-bloqueante)` comenta **`🔴 Catraca falhou`** em todo PR. Medido nos
+três últimos, e o número é **idêntico** nos três:
+
+| PR | resultado |
+|---|---|
+| #522 | `86 FAIL · 1 WARN` — `{"R2":57,"R6":22,"R7":7,"R8":1}` |
+| #524 | `86 FAIL · 1 WARN` — idem |
+| #525 | `86 FAIL · 1 WARN` — idem |
+
+**Não é regressão de nenhuma das fatias da Onda 1** — `R3: 0` confirma que as tabelas novas
+estão corretas. É dívida pré-existente (`R2` sem policy org-scoped, `R6`/`R7` `SECURITY
+DEFINER` com `EXECUTE` para `PUBLIC` e sem `SET search_path`).
+
+**O problema não é a dívida, é o sinal.** Um alarme que grita igual em todo PR, sem nunca
+mudar, deixa de ser lido — e no dia em que o número **subir** por causa de um PR de verdade,
+ninguém vai notar, porque o vermelho já é a paisagem. É o mesmo modo de falha que o
+`deploy-flow.md` tinha ("Staging" apontando para produção): o artefato existe, está errado, e
+a familiaridade faz o erro sumir de vista.
+
+**Ação (para o `@pm` decidir, não para o `@devops` executar):** uma das três —
+(a) *baseline*, congelando os 86 como dívida conhecida e falhando só quando **passar** disso,
+que é o desenho de catraca de verdade;
+(b) prazo com dono para zerar por classe (`R6`/`R7` são 29 e são mecânicos);
+(c) rebaixar para relatório e parar de chamar de catraca.
+Qualquer uma é melhor que a de hoje, que é gritar sem consequência.
+
+---
+
+### [CI] 🟡 Paginação do `tenancy-gate` — story própria, deliberadamente **não** feita na `900-3c`
+
+**Adicionado em:** 2026-08-29 · **Origem:** `@qa` na revisão da Story `900-3c` (PR #525).
+**Prioridade:** P2.
+
+O comentário do `tenancy-gate` trunca (`_…e mais 57 violações. Veja o log do job._`) e precisa
+da mesma paginação que a `900-3c` implementou para o job `migrations-do-pr`.
+
+**Está aqui, e não naquela story, por um motivo que vale registrar:** a paginação chegou a ser
+escrita **dentro do `tenancy-gate`** durante a `900-3c` — um job **pré-existente**, fora do
+escopo da fatia. Foi revertida e o job voltou a **sha256 idêntico** ao da base.
+
+**A lição, que é maior que o item:** a régua de não-reescrita da AC4 (`git diff --numstat … |
+awk '$2 != 0'`) ficou **VERDE com o job já modificado** — as linhas movidas continuavam
+existindo *verbatim* no job novo e o LCS do git representou a modificação como **inserção
+pura**, sem deleção nenhuma para a `numstat` contar. Medido nos dois commits reais:
+
+| | `f6c21b21` (defeito) | `3ad76545` (conserto) |
+|---|---|---|
+| `numstat` + `awk` | `170 0` → **exit 0, verde** | `171 0` → exit 0 |
+| forma do hunk (BASE=194) | `@@ -187,0 +188,170 @@` → começa **antes** de 194 → **exit 1** | `@@ -194,0 +195,171 @@` → OK |
+| `tenancy-gate` vs base | **≠** | **byte-idêntico** |
+
+**Verde na `numstat` não prova que nenhum job existente mudou.** O que prova é **onde o hunk
+começa**: antes da primeira linha do job novo ⇒ algo pré-existente foi tocado. Ao mexer em
+`ci.yml`, use as três réguas juntas — e `git fetch --prune origin` **antes**, senão medem
+contra uma `main` velha.
+
+---
+
+---
+
+---
+
 ### [TEST-002] 🟡 O `projetar()` dos fakes de cron desliga a projeção quando `org_id` divide a string com um embed
 
 **Adicionado em:** 2026-08-29 · **Origem:** `@qa` na 2ª rodada da Story `900-23` — **sexta instância** da classe "fake cego ao `select`", achada depois de fechar as cinco que a story nomeia.
@@ -74,6 +142,11 @@ validado, (b) alargar o `CHECK` para as grafias plausíveis — sabendo que cont
 literais —, ou (c) aceitar e mover a garantia para a camada que escreve, com teste. A opção (b)
 sozinha é a mais fraca das três e não deve ser escolhida por ser a mais barata.
 
+
+---
+
+---
+
 **⏳ RESOLVIDO EM CÓDIGO pela `900-24` (migration `247`), aguardando PRODUÇÃO para fechar.**
 Escolha: variante de **(a)**, não (b). O `CHECK` novo não enumera grafias — casa a ESTRUTURA do
 identificador (`phone[^[:alnum:]]{0,2}number[^[:alnum:]]{0,2}id`, `~*`) contra o texto serializado
@@ -87,6 +160,51 @@ Medido em `trifold-crm-dev` em 2026-08-29: pré-condição 0 linhas; 7 células 
 (`BEGIN…ROLLBACK`, subquery por `id`) **7/7** conforme o esperado (5× `23514`, 2× sucesso).
 **Fecha quando o `@devops` aplicar a `247` em produção e repetir as 7 células (Task 7.5 da
 `900-24`)** — não no merge.
+
+---
+
+### [TEST-004] 🟡 O molde de fake do Supabase mente em `.maybeSingle()`/`.single()` — duas cópias já mergeadas
+
+**Adicionado em:** 2026-08-29 · **Origem:** condição de GO do `@po` na validação da Story `900-24`
+(`docs/qa/po-validation-900-24.md`, rodada 2, item 6). **Prioridade:** P2 ·
+**Dona: `900-25`** — *"Org Trifold Sandbox + teste de aceitação de multi-tenancy"*, epic §857,
+`Dep: 900-22, 900-24`, executor `@qa`. Escolhida por critério, não por proximidade: é a story que
+constrói a camada de teste de DUAS orgs (Passo 6 do plano) e, portanto, a primeira que vai exercitar
+esses fakes com mais de uma linha por tabela — o cenário exato em que a mentira do molde deixa de
+ser latente. Registrado com dona porque a própria `900-24` estabeleceu o critério: dívida sem
+`Dona:` é dívida órfã (foi assim que ela justificou incluir o `ARCH-001` e excluir o `REL-001`).
+Atribuição feita pelo `@dev` ao cumprir a condição de GO; o `@po` pode re-rotear.
+
+**As duas localizações, medidas:**
+
+- `packages/web/src/lib/tenancy/admin-invite.test.ts:108,113` — o molde ORIGINAL;
+- `packages/web/src/app/api/platform/orgs/[id]/resend-admin-invite/route.test.ts:80` — a cópia nº 2,
+  a linha **verbatim**.
+
+**A medição.** O comportamento real está no pacote instalado (`@supabase/postgrest-js@2.101.1`,
+`dist/index.cjs:129-140`) e foi confirmado contra o PostgREST do `trifold-crm-dev` por HTTP
+(**406**, `PGRST116`): com `linhas.length !== 1`, os dois terminais devolvem
+`{ data: null, error: { code: "PGRST116", … }, status: 406 }`. O molde devolve
+`{ data: linhas[0] ?? null, error: null }` — erra `data` **e** erra `error`. A cegueira do `error`
+é a pior das duas: é exatamente a causa raiz que a `900-24` nomeia (o `error` descartado pela
+desestruturação `const { data } = await …`), e sob o molde ela é **impossível de reprovar**.
+
+**Por que não bloqueia hoje (latentes, não vivas).** A segunda cópia cobre uma query filtrada por
+PK (`route.ts:35`, `.eq("id", orgId)`) — 2 linhas é impossível. A primeira sustenta suas asserções
+em `order`+`limit`, não no terminal singular. Nenhuma das duas está mentindo sobre um defeito real
+**hoje**.
+
+**Por que registrar assim mesmo.** É o molde que já foi copiado **três vezes** (a `900-24` seria a
+nº 3, e a primeira em que a cegueira pousaria exatamente sobre o defeito que a story existe para
+fechar). Não registrar é o mecanismo que produz a cópia nº 4.
+
+**Encaminhamento:** migrar as duas para
+`packages/web/src/lib/tenancy/__fixtures__/fake-supabase-postgrest.ts`, criado pela `900-24` —
+que já implementa `resultadoSingular()` fiel (`data` **e** `error.code`, para `.single()` e
+`.maybeSingle()`), projeta as colunas do `.select()` e honra `.eq()`/`.order()`/`.limit()`.
+A migração é mecânica; o risco é o de sempre com teste alheio — alguma asserção existente pode
+estar apoiada na mentira do molde, e é justamente isso que a migração revela.
+---
 
 ---
 
@@ -296,10 +414,10 @@ um segredo de produção commitado foi o bom senso de um agente, não uma regra.
 
 ---
 
-### [CI] 🟡 `MNT-001` — `pnpm type-check` não cobre `scripts/`, e a `900-3b` aumentou o ponto cego
+### [CI] 🟠 `MNT-001` — `pnpm type-check` não cobre `scripts/`, e **duas fatias seguidas** aumentaram o ponto cego
 
 **Adicionado em:** 2026-08-29 · **Origem:** gate `@qa` da Story `900-3b` (`MNT-001`)
-**Prioridade:** **P2** — não quebra nada hoje; encurta a rede que pega o próximo erro.
+**Prioridade:** **P2 → P1** — subiu na `900-3c`. Não quebra nada hoje, mas o buraco cresce a cada fatia.
 
 `pnpm type-check` é `turbo type-check`, que roda **por pacote**. Nenhum `tsconfig.json` de
 pacote inclui o diretório `scripts/` da raiz, então **nada type-checa esses arquivos** — e o

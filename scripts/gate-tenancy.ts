@@ -154,6 +154,18 @@ const KNOWN_TABLES_PATH = join(REPO_ROOT, "docs", "audits", "tenancy-known-table
 const ALLOWLIST_PATH = join(REPO_ROOT, "docs", "audits", "tenancy-allowlist.yml")
 const REPORT_PATH = join(REPO_ROOT, "docs", "audits", "gate-tenancy-report.json")
 
+/**
+ * Story 900-3c (OBS-6). O relatório é regravado a cada execução, é **rastreado** e é a
+ * fixture de `scripts/gate-tenancy-auditoria.test.ts`. Rodar o gate contra um ref que não
+ * seja produção o enche de dados do ambiente errado e derruba a suíte.
+ */
+const AVISO_DO_RELATORIO =
+  "ARQUIVO GERADO — regravado a cada `pnpm gate:tenancy`. Ele é RASTREADO e é a fixture de " +
+  "scripts/gate-tenancy-auditoria.test.ts: se você rodar o gate contra um ref que NÃO seja " +
+  "produção (TENANCY_TARGET_REF=...), este arquivo passa a descrever o outro banco e a suíte " +
+  "quebra. Restaure com `git checkout -- docs/audits/gate-tenancy-report.json` depois de medir."
+
+
 const Q_TABLES = `
 select t.tablename as name,
        c.relrowsecurity as rowsecurity,
@@ -942,13 +954,29 @@ export async function main(): Promise<number> {
   const fails = violacoes.filter((v) => severidade(v) === "FAIL").length
   const warns = violacoes.length - fails
 
+  // OBS-6 — impresso ANTES de sobrescrever o arquivo, para quem estiver olhando o terminal.
+  if (schema.projectRef !== PROD_REF) {
+    console.warn(
+      `\n⚠️  ALVO NÃO É PRODUÇÃO (${schema.projectRef}). Este gate vai SOBRESCREVER o arquivo\n` +
+        `    RASTREADO ${REPORT_PATH},\n` +
+        `    que é a fixture de scripts/gate-tenancy-auditoria.test.ts — a suíte vai quebrar.\n` +
+        `    Depois de medir: git checkout -- docs/audits/gate-tenancy-report.json`,
+    )
+  }
+
   console.log("\nViolações por regra:", Object.keys(porRegra).length ? porRegra : "nenhuma")
   console.log(`FAIL: ${fails}   WARN: ${warns}`)
 
+  // ⚠️ Story 900-3c (OBS-6 do gate do @qa): este arquivo é RASTREADO **e** é a fixture de
+  // `scripts/gate-tenancy-auditoria.test.ts`. Rodar o gate contra um ref que não seja
+  // produção o reescreve com dados do ambiente errado e derruba a suíte — descoberto do
+  // jeito caro na 900-3c. O `_aviso` viaja dentro do próprio arquivo para que quem abrir o
+  // diff descubra antes, não depois.
   writeFileSync(
     REPORT_PATH,
     JSON.stringify(
       {
+        _aviso: AVISO_DO_RELATORIO,
         geradoEm: new Date().toISOString(),
         fonte: schema.source,
         projectRef: schema.projectRef,

@@ -60,3 +60,24 @@ tables:
     reason: "P8 — service-role only, deny-all por desenho. Posts de marketing, escritos só por rota gated."
   - table: supremo_sync_log
     reason: "P8 — log de sincronização do Supremo, escrito só por cron/service-role. Nunca lido por usuário final."
+
+  # ---------------------------------------------------------------------------------------
+  # Story 900-3c — tabela de PLATAFORMA, não de tenant.
+  #
+  # `trifold_migrations_aplicadas` descreve o SCHEMA do banco, que é único e compartilhado
+  # por todos os tenants: a migration `199` está aplicada para todo mundo ou para ninguém.
+  # Não há recorte por organização a fazer, então `org_id` não seria "esquecido" — seria
+  # errado. É a mesma classe de `docs/audits/schema-snapshot.json`: metadado de
+  # infraestrutura, não dado de produto.
+  #
+  # Sem RLS não fica desprotegida: a migration liga RLS e não cria policy nenhuma, o que é
+  # deny-all para `anon`/`authenticated`. O único caminho de escrita é o service-role usado
+  # pelos scripts de operação (`db:status`, `db:apply`, `reset:testdb`), pela Management API.
+  # Nenhuma rota de `packages/web` a lê ou escreve.
+  #
+  # ⚠️ Esta entrada é PREVENTIVA e necessária, não burocracia: R3 é FAIL absoluto sem
+  # baseline, e sem ela a catraca fica vermelha no instante em que a `245` for aplicada em
+  # produção (medido contra o banco de teste em 2026-08-29, antes de a entrada existir).
+  # ---------------------------------------------------------------------------------------
+  - table: trifold_migrations_aplicadas
+    reason: "Story 900-3c — tabela de PLATAFORMA: descreve o schema do banco, que é único para todos os tenants. org_id não se aplica. RLS ligada com ZERO policies (deny-all para anon/authenticated); escrita só por service-role via Management API, a partir dos scripts db:status/db:apply/reset:testdb. Nenhuma rota de packages/web a toca."
