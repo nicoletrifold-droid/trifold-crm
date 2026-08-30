@@ -22,7 +22,7 @@
  * `org_id` seria a mesma classe de erro num grau menor.
  */
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { consultarCatalogo } from "./ambiente"
+import { comRetryDeTransporte, consultarCatalogo } from "./ambiente"
 
 /** O slug da organização canário — a que a suíte promete NUNCA perturbar. */
 export const SLUG_CANARIO = "org-teste-epic-900"
@@ -102,9 +102,10 @@ export async function idDeOrgPorSlug(
   admin: SupabaseClient,
   slug: string,
 ): Promise<string | null> {
-  const { data, error } = await admin.from("organizations").select("id").eq("slug", slug).limit(2)
-  if (error) throw new Error(`leitura de organizations(slug=${slug}) falhou — ${error.message}`)
-  const linhas = (data ?? []) as Array<{ id: string }>
+  const linhas = await comRetryDeTransporte<{ id: string }>(
+    () => admin.from("organizations").select("id").eq("slug", slug).limit(2),
+    `leitura de organizations(slug=${slug})`,
+  )
   if (linhas.length === 0) return null
   if (linhas.length > 1) throw new Error(`slug ${slug} devolveu ${linhas.length} linhas`)
   return linhas[0]!.id
@@ -115,20 +116,36 @@ export async function idDeOrgPorSlug(
  * CAPI varre a outbox **sem filtro de org**, então "não mexi na outbox de terceiros" é uma
  * pergunta que o canário precisa saber responder.
  *
- * ## Duas tabelas ficam DE FORA de propósito, e o motivo tem que estar escrito
+ * ## `leads`, `conversations` e `webhook_logs` ENTRAM — e a razão custou uma medição
  *
- * `system_events` **não** entra: `forEachActiveOrg` grava `CRON_ORG_PROCESSADA` com o `org_id` de
- * **cada org ativa** — inclusive o canário, que é uma org ativa como qualquer outra. As AC12/AC13
- * disparam isso por desenho. Incluir `system_events` faria o canário ficar vermelho por um motivo
- * legítimo, e o vermelho legítimo que se repete é o que ensina a ignorar o instrumento.
- * `leads` também fica de fora: a suíte nunca cria lead no canário, então a contagem seria sempre
- * constante — asserção sem poder discriminante, que só engorda a saída.
+ * A primeira versão desta lista os excluía com o argumento *"a suíte nunca cria lead no canário,
+ * então a contagem seria sempre constante — asserção sem poder discriminante"*. **O argumento
+ * estava errado, e o carrasco que o derrubou foi um experimento de mutação desta própria story.**
+ * Ao mutar `resolveOrgByMetaPage` para ignorar o `page_id` e pegar "a primeira linha que vier"
+ * (`.order("created_at").limit(1)`), a org que ele resolveu foi **o canário** — a mais antiga do
+ * banco. Resultado medido: **2 leads e 2 linhas de `webhook_logs` gravados dentro do canário**, e
+ * o canário reportou `depois === antes`, verde, porque nenhuma das duas tabelas estava na lista.
+ *
+ * Ou seja: a asserção "não perturbei nada além das minhas fixtures" era **cega exatamente para a
+ * classe de defeito que esta story inteira existe para pegar** — um lead caindo na empresa errada.
+ * `conversations` entra pela mesma porta (o mesmo defeito no receptor de WhatsApp escreveria lá);
+ * `messages` não precisa, porque não tem `org_id` e só é alcançável via `conversations`.
+ *
+ * ## `system_events` continua DE FORA, e esse motivo permanece medido
+ *
+ * `forEachActiveOrg` grava `CRON_ORG_PROCESSADA` com o `org_id` de **cada org ativa** — inclusive
+ * o canário, que é uma org ativa como qualquer outra. As AC12/AC13 disparam isso **por desenho**,
+ * em toda execução correta. Incluí-lo faria o canário ficar vermelho por motivo legítimo a cada
+ * run, e vermelho legítimo recorrente é o que ensina a ignorar o instrumento.
  */
 export const TABELAS_DO_CANARIO = [
   "organizations",
   "whatsapp_config",
   "org_integrations",
   "meta_capi_outbox",
+  "leads",
+  "conversations",
+  "webhook_logs",
 ] as const
 
 export type ContagemDoCanario = Record<(typeof TABELAS_DO_CANARIO)[number], number>
@@ -140,12 +157,13 @@ export async function contarLinhasDoCanario(
   const saida = {} as ContagemDoCanario
   for (const tabela of TABELAS_DO_CANARIO) {
     const coluna = tabela === "organizations" ? "id" : "org_id"
-    const { count, error } = await admin
-      .from(tabela)
-      .select("*", { count: "exact", head: true })
-      .eq(coluna, canarioId)
-    if (error) throw new Error(`contagem do canário em ${tabela} falhou — ${error.message}`)
-    saida[tabela] = count ?? -1
+    // `count: "exact", head: true` devolve `data: null` — por isso a contagem sai do próprio
+    // `select("id")`: o helper de retry só sabe olhar `{ data, error }`.
+    const linhas = await comRetryDeTransporte<{ id: string }>(
+      () => admin.from(tabela).select("id").eq(coluna, canarioId),
+      `contagem do canário em ${tabela}`,
+    )
+    saida[tabela] = linhas.length
   }
   return saida
 }
@@ -217,7 +235,9 @@ export async function orgsRemanescentes(
   admin: SupabaseClient,
   orgIds: string[],
 ): Promise<string[]> {
-  const { data, error } = await admin.from("organizations").select("id").in("id", orgIds)
-  if (error) throw new Error(`leitura de organizations remanescentes falhou — ${error.message}`)
-  return ((data ?? []) as Array<{ id: string }>).map((l) => l.id)
+  const linhas = await comRetryDeTransporte<{ id: string }>(
+    () => admin.from("organizations").select("id").in("id", orgIds),
+    "leitura de organizations remanescentes",
+  )
+  return linhas.map((l) => l.id)
 }

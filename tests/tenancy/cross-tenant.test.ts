@@ -45,6 +45,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 import {
   aplicarEnv,
+  comRetryDeTransporte,
   credenciaisPresentes,
   criarClienteDeTeste,
   envDoBancoDeTeste,
@@ -139,12 +140,12 @@ const idsWebhookLogsDaAC9: string[] = []
 // ---------------------------------------------------------------------------
 
 async function linhasDe<T = Record<string, unknown>>(
-  construir: () => PromiseLike<{ data: unknown; error: { message: string } | null }>,
+  construir: () => PromiseLike<{ data: unknown; error: { message: string; code?: string } | null }>,
   rotulo: string,
 ): Promise<T[]> {
-  const { data, error } = await construir()
-  if (error) throw new Error(`${rotulo} falhou — ${error.message}`)
-  return (data ?? []) as T[]
+  // Repete SÓ falha de transporte (`fetch failed`), nunca resposta do banco — ver
+  // `comRetryDeTransporte` em `support/ambiente.ts`, que é onde a distinção mora.
+  return comRetryDeTransporte<T>(construir, rotulo)
 }
 
 /** Contagens por org. `messages` não tem `org_id` — o escopo é via `conversations` (ver AC8). */

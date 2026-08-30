@@ -149,6 +149,52 @@ export async function consultarCatalogo<T>(sql: string): Promise<T[]> {
 }
 
 /**
+ * Repetição APENAS para falha de TRANSPORTE — e a distinção é a coisa toda.
+ *
+ * Medido nesta suíte: ~2 execuções em 6 morriam com `TypeError: fetch failed` numa leitura de
+ * verificação qualquer (nunca a mesma), contra o Supabase remoto. É transporte: a requisição não
+ * chegou a receber resposta.
+ *
+ * **O que este helper NUNCA repete: uma resposta do banco.** Um `{ error }` do PostgREST — com
+ * `code` preenchido (`23505`, `PGRST116`, `23503`…) — é o banco RESPONDENDO, e repetir isso seria
+ * transformar "o Postgres recusou" em "tenta de novo até dar certo", que é exatamente a classe de
+ * silêncio que esta onda existe para eliminar. O discriminante é duplo e conjuntivo: **sem `code`
+ * E com mensagem de transporte**. Um erro do banco tem `code`; um `fetch` que não completou não.
+ *
+ * As chamadas que AFIRMAM erro (AC6: `expect(error!.code).toBe("23505")`) não passam por aqui, de
+ * propósito — elas leem `{ data, error }` direto.
+ */
+function ehFalhaDeTransporte(erro: { message: string; code?: string } | null): boolean {
+  if (!erro) return false
+  if (erro.code) return false // o banco respondeu, com código: NUNCA repetir
+  return /fetch failed|ECONNRESET|ETIMEDOUT|socket hang up|network|terminated/i.test(erro.message)
+}
+
+const TENTATIVAS_DE_TRANSPORTE = 3
+
+export async function comRetryDeTransporte<T>(
+  executar: () => PromiseLike<{ data: unknown; error: { message: string; code?: string } | null }>,
+  rotulo: string,
+): Promise<T[]> {
+  let ultimo: { message: string; code?: string } | null = null
+  for (let tentativa = 1; tentativa <= TENTATIVAS_DE_TRANSPORTE; tentativa++) {
+    const { data, error } = await executar()
+    if (!error) return (data ?? []) as T[]
+    ultimo = error
+    if (!ehFalhaDeTransporte(error)) break // resposta do banco: falha AGORA, nomeando
+    if (tentativa < TENTATIVAS_DE_TRANSPORTE) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[tests/tenancy] ${rotulo}: falha de TRANSPORTE (${error.message}) — tentativa ` +
+          `${tentativa}/${TENTATIVAS_DE_TRANSPORTE}, repetindo.`,
+      )
+      await new Promise((r) => setTimeout(r, 400 * tentativa))
+    }
+  }
+  throw new Error(`${rotulo} falhou — ${ultimo?.message ?? "erro desconhecido"}`)
+}
+
+/**
  * Redirecionamento de env — Dev Notes, "Como o handler real enxerga `trifold-crm-dev`".
  *
  * `createAdminClient()` (`lib/supabase/admin.ts`) lê `SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_URL` +
