@@ -61,6 +61,8 @@ import { readFileSync, readdirSync, writeFileSync, mkdirSync } from "node:fs"
 import { join } from "node:path"
 import { REFS_PERMITIDOS_PRODUCAO, extrairRef } from "./lib/db-env"
 import { ehRefDeProducao } from "../packages/shared/src/constants/supabase-refs"
+import { runSql, splitStatements } from "./lib/management-api"
+import { sha256Do, sqlDeRegistroEmLote, TABELA_LEDGER } from "./lib/migrations-ledger"
 
 /**
  * Story 900-3b · AC3/AC5 — allowlist no lugar da denylist.
@@ -249,75 +251,6 @@ function resolverAlvo(): string {
   return ref
 }
 
-async function runSql(ref: string, pat: string, sql: string): Promise<{ ok: boolean; msg: string }> {
-  const r = await fetch(`https://api.supabase.com/v1/projects/${ref}/database/query`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${pat}`,
-      "Content-Type": "application/json",
-      // sem User-Agent explícito o WAF responde "error code: 1010"
-      "User-Agent": "trifold-tenancy-reset",
-    },
-    body: JSON.stringify({ query: sql }),
-  })
-  const msg = (await r.text()).slice(0, 800)
-  return { ok: r.ok, msg }
-}
-
-/** Divide SQL em statements de topo, respeitando strings, dollar-quotes e comentários. */
-export function splitStatements(sql: string): string[] {
-  const out: string[] = []
-  let buf = ""
-  let i = 0
-  let inS = false
-  let inD = false
-  let inLineC = false
-  let inBlockC = false
-  let dollarTag: string | null = null
-
-  while (i < sql.length) {
-    const c = sql[i]
-    const n2 = sql.slice(i, i + 2)
-
-    if (inLineC) { buf += c; if (c === "\n") inLineC = false; i++; continue }
-    if (inBlockC) { if (n2 === "*/") { buf += n2; i += 2; inBlockC = false; continue } buf += c; i++; continue }
-    if (dollarTag) {
-      if (sql.startsWith(dollarTag, i)) { buf += dollarTag; i += dollarTag.length; dollarTag = null; continue }
-      buf += c; i++; continue
-    }
-    if (inS) { buf += c; if (c === "'") inS = false; i++; continue }
-    if (inD) { buf += c; if (c === '"') inD = false; i++; continue }
-
-    if (n2 === "--") { inLineC = true; buf += n2; i += 2; continue }
-    if (n2 === "/*") { inBlockC = true; buf += n2; i += 2; continue }
-    if (c === "'") { inS = true; buf += c; i++; continue }
-    if (c === '"') { inD = true; buf += c; i++; continue }
-    if (c === "$") {
-      const j = sql.indexOf("$", i + 1)
-      if (j !== -1) {
-        const corpo = sql.slice(i + 1, j)
-        if (corpo === "" || /^[A-Za-z0-9_]+$/.test(corpo)) {
-          dollarTag = sql.slice(i, j + 1)
-          buf += dollarTag
-          i = j + 1
-          continue
-        }
-      }
-    }
-    if (c === ";") {
-      buf += c
-      if (buf.replace(/;/g, "").trim()) out.push(buf.trim())
-      buf = ""
-      i++
-      continue
-    }
-    buf += c
-    i++
-  }
-  if (buf.replace(/;/g, "").trim()) out.push(buf.trim())
-  return out
-}
-
 async function limparStorage(ref: string, pat: string): Promise<void> {
   const srk = exigirEnv("TENANCY_TEST_SUPABASE_SERVICE_ROLE_KEY")
   const base = `https://${ref}.supabase.co/storage/v1`
@@ -476,6 +409,13 @@ async function main(): Promise<number> {
 
   let okInteiro = 0
   const okSplit: string[] = []
+  /**
+   * Story 900-3c · AC3 — o que registrar no ledger ao final, e com qual proveniência.
+   *
+   * `aplicados` são os arquivos que o reset VIU aplicar com sucesso (arquivo inteiro ou
+   * fallback statement-a-statement). É observação direta: `via='reset'`.
+   */
+  const aplicados: string[] = []
   const conhecidas: string[] = []
   const regressoes: Array<{ arquivo: string; erro: string }> = []
   const conhecidasQueNaoFalharam: string[] = []
@@ -500,6 +440,7 @@ async function main(): Promise<number> {
       }
       if (erros.length === 0) {
         okSplit.push(nome)
+        aplicados.push(nome)
         r = { ok: true, msg: "" }
         // AC6 — este ramo estava CEGO (achado do PR #524). Uma migration listada em
         // FALHAS_CONHECIDAS que falha como arquivo inteiro mas passa no fallback
@@ -520,6 +461,7 @@ async function main(): Promise<number> {
       }
     } else {
       okInteiro++
+      aplicados.push(nome)
       // AC6 — VERIFICAÇÃO NOS DOIS SENTIDOS. Uma conhecida que PAROU de falhar também é
       // sinal: ou a migration foi consertada (e a entrada tem de sair da lista), ou
       // alguém pré-adicionou uma migration saudável para o reset fechar. Nos dois casos o
@@ -560,6 +502,71 @@ async function main(): Promise<number> {
 
   const totalMs = Date.now() - inicioTotal
 
+  // -------------------------------------------------------------------------
+  // Story 900-3c · AC3 — o reset POPULA o ledger.
+  //
+  // Sem isto, o `drop schema public cascade` levaria junto a própria
+  // `trifold_migrations_aplicadas` (ela vive em `public`), a migration 245 a recriaria
+  // vazia, e o reset terminaria zerando o registro exatamente como já zera o
+  // `supabase_migrations.schema_migrations` — reintroduzindo o problema que o ledger existe
+  // para fechar.
+  //
+  // DUAS PROVENIÊNCIAS, PORQUE HÁ DOIS FATOS DIFERENTES A REGISTRAR:
+  //
+  //   • `via='reset'` — o reset VIU o arquivo aplicar. Observação direta.
+  //   • `via='reset-falha-conhecida'` — o arquivo está em FALHAS_CONHECIDAS e falhou, como
+  //     previsto. Ele NÃO aplicou, e registrá-lo como `reset` seria mentira. Mas deixá-lo
+  //     fora do ledger o faria aparecer como `PENDENTE` no `db:status` logo depois de um
+  //     reset bem-sucedido — e aí o `db:apply` tentaria reaplicá-lo para sempre, num arquivo
+  //     que se sabe que não aplica num banco do zero (duplicata de prefixo cujo efeito já
+  //     veio da migration original, ou backfill de dado real que não existe aqui).
+  //     O campo `via` carrega a diferença em vez de escondê-la — é para isso que ele existe.
+  //
+  // Só registra quando não houve REGRESSÃO: com regressão, o banco está num estado que
+  // ninguém conhece, e um ledger que descreve um estado desconhecido é pior que nenhum.
+  // -------------------------------------------------------------------------
+  //
+  // OBS-5 do gate do @qa: uma falha no INSERT do ledger faz o reset terminar "bem-sucedido"
+  // com o registro vazio — e a promessa da AC3 ("nada fica PENDENTE depois de um reset bem-
+  // sucedido") deixa de valer. O @qa ofereceu dois remédios: somar ao exit code **ou** ao
+  // bloco de resumo final. O coordenador decidiu que **não pesa no exit code** (o trabalho
+  // central do reset é reconstruir o schema, e ele foi reconstruído). Fica então a segunda
+  // forma, e ela precisa ser ALTA: entra no `=== RESUMO ===` como contador próprio e imprime
+  // um bloco de erro nomeando que a invariante da AC3 não vale nesta execução.
+  const falhasDeRegistro: Array<{ via: string; nomes: number; erro: string }> = []
+  if (regressoes.length === 0) {
+    const hash = (nome: string) => sha256Do(readFileSync(join(MIG_DIR, nome)))
+    const lotes: Array<[string, string[]]> = [
+      ["reset", aplicados],
+      ["reset-falha-conhecida", conhecidas],
+    ]
+    for (const [via, nomes] of lotes) {
+      if (nomes.length === 0) continue
+      // `sobrescrever: true` com a precondição escrita: o `drop schema public cascade` de
+      // `resetarSchema()` destruiu a própria tabela do ledger (ela mora em `public`), e a
+      // migration 245 a recriou VAZIA nesta mesma execução. Não há evidência a apagar porque
+      // não há linha. O `DO UPDATE` fica como rede, não como conveniência — ver o cabeçalho
+      // de scripts/lib/migrations-ledger.ts (CodeRabbit, PR #525).
+      const sql = sqlDeRegistroEmLote(
+        nomes.map((nome) => ({ arquivo: nome, sha256: hash(nome) })),
+        via,
+        { sobrescrever: true },
+      )
+      const r = await runSql(ref, pat, sql)
+      if (r.ok) {
+        console.log(`Ledger: ${nomes.length} arquivo(s) registrados em ${TABELA_LEDGER} (via='${via}')`)
+      } else {
+        falhasDeRegistro.push({ via, nomes: nomes.length, erro: r.msg.slice(0, 300) })
+        console.error(`FALHA ao registrar ${nomes.length} arquivo(s) (via='${via}') — ${r.msg.slice(0, 300)}`)
+      }
+    }
+  } else {
+    console.warn(
+      `Ledger NÃO populado: houve ${regressoes.length} regressão(ões). O banco está num ` +
+        `estado desconhecido, e registrar isso seria descrever o que ninguém sabe.`,
+    )
+  }
+
   console.log("\n=== RESUMO ===")
   console.log(`OK (arquivo inteiro):   ${okInteiro}`)
   console.log(`OK (autocommit split):  ${okSplit.length}${okSplit.length ? ` — ${okSplit.join(", ")}` : ""}`)
@@ -567,6 +574,7 @@ async function main(): Promise<number> {
   console.log(`REGRESSÕES:             ${regressoes.length}`)
   console.log(`Asserções que falharam: ${assercoesFalhas.length}`)
   console.log(`Conhecidas que NÃO falharam: ${conhecidasQueNaoFalharam.length}`)
+  console.log(`Falhas ao gravar o ledger:   ${falhasDeRegistro.length}`)
 
   gravarDuracoes(ref, medicoes, totalMs)
 
@@ -604,13 +612,64 @@ async function main(): Promise<number> {
     codigo = 1
   }
 
-  if (codigo === 0) console.log("\nBanco de teste reconstruído.")
+  // A LINHA FINAL VEM ANTES DO BLOCO DE ERRO, e é QUALIFICADA quando há falha de ledger.
+  //
+  // Depois de ~7,5 minutos, a última linha da tela é onde o olho pousa. Um
+  // "Banco de teste reconstruído." solto, impresso DEPOIS do aviso de ledger não gravado,
+  // tranquiliza sem qualificação e apaga o aviso que acabou de subir (achado do @qa).
+  if (codigo === 0) {
+    console.log(
+      falhasDeRegistro.length
+        ? "\nSchema reconstruído — MAS o ledger NÃO foi gravado. Leia o bloco abaixo antes de usar este banco."
+        : "\nBanco de teste reconstruído.",
+    )
+  }
+
+  // OBS-5 — alto, e DELIBERADAMENTE fora do exit code.
+  if (falhasDeRegistro.length) {
+    console.error(
+      `\n⚠️ O SCHEMA FOI RECONSTRUÍDO, MAS O LEDGER NÃO FOI GRAVADO ` +
+        `(${falhasDeRegistro.length} lote(s) falharam):`,
+    )
+    for (const f of falhasDeRegistro) {
+      console.error(`  - via='${f.via}' (${f.nomes} arquivo(s)): ${f.erro}`)
+    }
+    console.error(
+      `  A invariante da AC3 da Story 900-3c ("nada fica PENDENTE depois de um reset bem-\n` +
+        `  sucedido") NÃO vale nesta execução: ${TABELA_LEDGER} está vazia ou incompleta.\n` +
+        `  Rode \`pnpm db:status\` agora — ele vai listar tudo como PENDENTE — e refaça o\n` +
+        `  registro (Passo 2 de docs/runbooks/aplicar-245-registro-migrations.md) antes de\n` +
+        `  usar \`pnpm db:apply\` neste banco.\n` +
+        `\n` +
+        `  POR QUE O EXIT CODE NÃO REFLETE ISTO — decisão registrada, com dois motivos:\n` +
+        `  1. Um reset de ~7,5 min que sai 1 porque um INSERT auxiliar falhou é o sinal que as\n` +
+        `     pessoas aprendem a ignorar. É a patologia da régua sempre-vermelha, que esta onda\n` +
+        `     já documentou duas vezes: régua que quase sempre acende é descartada por quem a\n` +
+        `     roda, e aí ela deixa de pegar a vez em que importava.\n` +
+        `  2. A objeção certa é "automação lê exit code, não stderr" — e a resposta é que a\n` +
+        `     DETECÇÃO NÃO DEPENDE DE NINGUÉM LER ESTE LOG, nem deste processo: o próximo\n` +
+        `     \`pnpm db:status\` lista tudo como PENDENTE (exit 0, mas o relatório é explícito)\n` +
+        `     e o job \`migrations-do-pr\` comenta ⚠️ no PR. A detecção é redundante e vem de\n` +
+        `     FORA do reset, que é onde ela sobrevive a alguém ignorar esta tela.`,
+    )
+  }
+
   return codigo
 }
 
+/**
+ * `process.exitCode` em vez de `process.exit()`: o segundo encerra o processo **sem esperar** o
+ * dreno de `process.stdout`, e saída grande em pipe (o caso deste script) sai truncada. Com
+ * `exitCode`, o Node sai sozinho quando o event loop esvazia, depois do flush. Mesmo código de
+ * saída, sem a perda. (CodeRabbit, PR #525.)
+ */
 if (process.argv[1]?.includes("reset-tenancy-testdb")) {
-  main().then((c) => process.exit(c)).catch((e) => {
-    console.error(e instanceof Error ? e.message : e)
-    process.exit(1)
-  })
+  main()
+    .then((c) => {
+      process.exitCode = c
+    })
+    .catch((e) => {
+      console.error(e instanceof Error ? e.message : e)
+      process.exitCode = 1
+    })
 }
