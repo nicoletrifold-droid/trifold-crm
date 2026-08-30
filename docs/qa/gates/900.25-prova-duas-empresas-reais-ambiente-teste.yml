@@ -1,0 +1,430 @@
+schema: 1
+story: "900.25"
+story_title: "A Prova: Duas Empresas Reais no Ambiente de Teste (Onda 2, Fatia 4)"
+gate: CONCERNS
+status_reason: >-
+  **Tudo que o `@dev` alegou e que eu podia medir, eu medi — e tudo se sustentou.** `pnpm
+  test:tenancy` **25 passed / 0 skipped** em 4 execuções minhas. A asserção central reproduzida:
+  `orgBId`→`orgAId` acende **1 failed / 24 passed** com `AssertionError` (não erro de setup). A
+  reprovação do canário reproduzida com a mutação de `resolveOrgByMetaPage`, e eu fui um passo
+  além do que o `@dev` colou: **medi a disjunção** — sob a mutação, o delta vive INTEIRAMENTE nas
+  3 tabelas que ele acrescentou (`leads` 0→2, `webhook_logs` 0→2) e as 4 originais ficam
+  IDÊNTICAS. Ou seja, a cegueira que ele confessou está provada, não alegada: com a lista velha o
+  canário teria ficado verde. As FKs conferem com o catálogo vivo (`a`=4 · `c`=87 · `n`=1, com
+  `financial_notification_log` dentro e `webhook_logs.org_id` como único SET NULL). A guarda de
+  destino é fail-closed de verdade: `producaofalsa` (alfanumérico, fora das duas allowlists) morre
+  com a mensagem nomeando o ref, **antes de qualquer `fetch`** — que é onde a redação da AC3
+  falhava aberta. `messages` não tem `org_id` (confirmado no `information_schema`) e a
+  substituição pelo join preserva o poder da asserção. AC15 fecha pelas duas réguas. Camada A
+  **287/3693 + 6 expected fail**, lint 0 erros, type-check 8/8.
+  **As duas concerns não invalidam nenhuma asserção feita hoje — elas dizem quando a prova para de
+  provar.** A primeira eu medi: o contador do canário **satura no teto do PostgREST**
+  (`max_rows` = **1000**, lido da config do projeto), e com os contadores saturados a MESMA mutação
+  que acendia a AC14 sai **verde**. A segunda também: um erro de tipo grosseiro plantado dentro de
+  `tests/tenancy/` deixa `type-check`, `lint` **e** `pnpm test` os três verdes — nada no repositório
+  vigia o produto desta story. Nenhuma bloqueia o merge; as duas precisam de dono antes da Onda 3.
+reviewer: "Quinn (Test Architect)"
+updated: "2026-08-30T15:48:51Z"
+base: "f08aa434 (branch story/900-25-prova-duas-empresas-ambiente-teste, sem push)"
+ambiente_medido: "trifold-crm-dev (xnxvygyfyyyzwhiuoehz). Produção: NENHUM acesso."
+
+rodadas:
+  - {
+      data: "2026-08-30",
+      commit: "f08aa434",
+      gate: CONCERNS,
+      alegacoes_reproduzidas: 9,
+      concerns_novas: 2,
+      menores: 3,
+      defeitos_vivos: 0,
+    }
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 1. AS ALEGAÇÕES DO @dev — REPRODUZIDAS, UMA A UMA
+# ═════════════════════════════════════════════════════════════════════════════
+alegacoes_reproduzidas:
+  metodo: >-
+    Mutação aplicada no arquivo em disco, revertida por cópia byte-a-byte do backup, com `diff -q`
+    e `git status --short` confirmando árvore limpa e `grep` dos marcadores → 0. Todo resíduo que
+    as minhas mutações deixaram no banco compartilhado foi apagado **por id** e o estado final
+    reconferido contra a linha de base que eu tirei antes de começar.
+
+  suite_verde:
+    comando: "pnpm test:tenancy"
+    medido: "Test Files 4 passed (4) · Tests **25 passed (25)** — 4 execuções minhas, sem reset entre elas."
+    nota: "**0 skipped.** `0 passed | N skipped` seria reprovação (AC3b.2); não é o caso."
+
+  assercao_central:
+    mutacao: "`expect(conversas[0]!.org_id).toBe(orgBId)` → `orgAId` (cross-tenant.test.ts:569)"
+    medido: |
+      AssertionError: expected '0540d2d0-…' to be '0933bef4-…'  // Object.is equality
+       ❯ tests/tenancy/cross-tenant.test.ts:569:36
+       Test Files  1 failed | 3 passed (4)
+            Tests  1 failed | 24 passed (25)
+    veredicto: >-
+      `AssertionError`, não `ReferenceError`/`SyntaxError`/erro de setup — erro de compilação
+      excluído. Exatamente 1 teste morre: a mutação é cirúrgica, não derruba a suíte por arrasto.
+
+  canario_reprova_lead_na_empresa_errada:
+    mutacao: >-
+      `resolveOrgByMetaPage` ignora o `pageId` e pega `.order("created_at", asc).limit(1)` — resolve
+      para o canário, a org mais antiga do banco. É a mutação que o próprio `@dev` diz ter usado.
+    medido: |
+      × PAGE-A → org A;  AssertionError: expected '00000000-…-000000000001' to be 'dd94af82-…'
+      × PAGE-B → org B;  AssertionError: expected '00000000-…-000000000001' to be 'db1fb7d1-…'
+      × AC14 · assertion 11 — teardown por id: apaga o que disse que apagaria, e NADA além
+        {
+          "conversations": 0,
+        -  "leads": 0,          +  "leads": 2,
+          "meta_capi_outbox": 0,
+          "org_integrations": 6,
+          "organizations": 1,
+        -  "webhook_logs": 0,   +  "webhook_logs": 2,
+          "whatsapp_config": 1,
+        }
+       Tests  3 failed | 22 passed (25)
+    disjuncao_que_eu_acrescentei: >-
+      **O delta vive INTEIRAMENTE nas 3 tabelas novas.** `organizations`, `whatsapp_config`,
+      `org_integrations` e `meta_capi_outbox` — as 4 da lista ORIGINAL — saem idênticas sob a
+      mutação. Isso converte a autocrítica do `@dev` de alegação em medição: com a lista velha, o
+      canário teria ficado **verde** com 2 leads na empresa errada dentro dele. A exclusão
+      justificada era, de fato, cega para o defeito-mãe da onda.
+    ressalva: >-
+      `conversations` entrou na lista **sem carrasco próprio** — esta mutação (Meta Ads) não
+      escreve lá. A inclusão é por analogia ("o mesmo defeito no receptor de WhatsApp escreveria
+      nela"), o que é razoável e barato, mas é uma alegação, não uma medição. Ver `concerns[2]`.
+
+  fks_derivadas_em_runtime:
+    medido_pela_suite: |
+      [900-25] FKs bloqueantes derivadas de pg_constraint (4): agent_media_assets.org_id,
+      financial_notification_log.org_id, system_events.org_id, visit_feedback.org_id
+    medido_por_mim_no_catalogo: |
+      confdeltype: a=4 · c=87 · n=1
+      SET NULL (n): webhook_logs.org_id  — única
+      bloqueantes (a): agent_media_assets, financial_notification_log, system_events, visit_feedback
+    veredicto: >-
+      Bate com o N1 do parecer. **Nada hardcoded**: a query deriva tabela E coluna, e aborta
+      nomeando para FK composta ou fora do schema `public`. Li o SQL — os dois abortos existem.
+
+  guarda_de_destino_fail_closed:
+    achado_do_dev_confirmado: >-
+      A redação da AC3 (`!ref || ehRefDeProducao(ref)`) falhava ABERTA para todo ref não cadastrado,
+      e o exemplo da própria AC (`producao-falsa`, com hífen) mascarava o furo pelo parser
+      (`[a-zA-Z0-9]+` → `null` → cai no ramo `!ref`). A correção para allowlist (`ehRefDeTeste`)
+      está no código e eu a exercitei.
+    medido: |
+      TENANCY_TEST_SUPABASE_URL=https://producaofalsa.supabase.co pnpm test:tenancy
+      → Error: tests/tenancy recusa rodar: https://producaofalsa.supabase.co NÃO está na allowlist
+        de refs de teste (ref extraído: producaofalsa). …
+         Test Files  2 failed | 2 passed (4)
+              Tests  8 passed | 17 skipped (25)     exit 1
+    antes_de_qualquer_fetch: >-
+      SIM — a mensagem é a da guarda, não `{"message":"Invalid project ref: …"}` da Management API,
+      que é o sintoma que o `@dev` mediu ANTES da correção.
+    ref_de_producao: >-
+      Não executei o cenário com a URL real de produção (o classificador de permissões do ambiente
+      barrou o comando, e não contornei). Verifiquei a equivalência na fonte:
+      `REFS_PERMITIDOS_TESTE = {"xnxvygyfyyyzwhiuoehz"}` — qualquer outro ref, inclusive o de
+      produção, cai no MESMO ramo que eu exercitei acima. `alias-vivo.test.ts` já afirma
+      `ehRefDeProducao("dsopqkqjkmhytudaaolv") === true` com controle negativo.
+
+  guarda_de_credencial_dois_caminhos:
+    medido: |
+      | cenário                              | resultado medido                                   | exit |
+      |--------------------------------------|----------------------------------------------------|------|
+      | `.env.teste` presente, var VAZIA     | `Error: … .env.teste existe mas … não chegaram ao process.env — o loader … quebrou` | **1** |
+      | `.env.teste` AUSENTE (movido/restaurado) | `Test Files 2 passed \| 2 skipped` · `Tests 8 passed \| 17 skipped` | **0** |
+    veredicto: >-
+      Os dois motivos do skip têm dois caminhos, como o N2 exigia. E o skip legítimo **não** é
+      `0 passed`: `alias-vivo` + `retry-transporte` rodam sem credencial (8 passed), o que separa
+      "sem ambiente" de "`include` quebrado". `.env.teste` restaurado e conferido por `shasum -a
+      256 -c` (OK) com permissão `600` preservada.
+
+  ac8_o_join_no_lugar_de_uma_coluna_que_nao_existe:
+    medido: |
+      information_schema.columns / messages:
+      id, conversation_id, role, content, media_url, media_type, metadata, created_at
+    veredicto: >-
+      **A AC8 era mesmo insatisfazível como escrita** — `msg.org_id` seria `undefined`. A
+      substituição **mantém o poder**: o teste afirma a cadeia inteira (linha em `messages` com o
+      `wamid` EXATO → conversa dela → `conversations.org_id === orgBId` → lead da conversa →
+      `leads.org_id === orgBId`). A pergunta da AC8 é "a resposta caiu no ramo `if (!config) return
+      ok`?" — a EXISTÊNCIA da linha responde isso, e o escopo de org é respondido pelo join. Ele
+      **não** relaxou para "a mensagem existe", que era o conserto errado disponível. Confirmado no
+      código: a asserção de org está lá, não foi trocada por `toBeDefined()`.
+    prova_de_que_o_join_e_load_bearing: >-
+      A mutação da vivacidade (`orgBId`→`orgAId`) morde exatamente `conversas[0]!.org_id`. Se o
+      join fosse decorativo, ela sairia verde.
+
+  unicidade_nomeia_a_constraint:
+    indices_no_catalogo: |
+      whatsapp_config_phone_ativo      UNIQUE (phone_number_id) WHERE status='active' AND phone_number_id IS NOT NULL
+      whatsapp_config_org_ativo        UNIQUE (org_id)          WHERE status='active'
+      org_integrations_meta_page_ativo UNIQUE ((config->>'page_id')) WHERE provider='meta_ads' AND config->>'page_id' IS NOT NULL
+    ordem_de_oid_confirmada: "phone_ativo oid **79472** < org_ativo oid **79473** — a dependência que o caso isolado (org C) remove é real, não hipotética."
+    veredicto: >-
+      Os 3 `toContain(nome_do_indice)` estão no código; o controle positivo (A e B com telefones
+      distintos → sem erro, 2 linhas ativas) vem ANTES das falhas; a org C é provisionada e
+      desmontada dentro de um `try/finally` no próprio bloco. O caso isolado é estruturalmente
+      discriminante: C não tem outra linha ativa própria, então `org_ativo` não tem o que reprovar.
+
+  ac15_nao_regressao:
+    medido: |
+      merge-base(origin/main, HEAD) == origin/main == aa584dfb  → `...` e `..` medem a MESMA base
+      9 arquivos: story.md, package.json, vitest.tenancy.config.ts, tests/tenancy/**(6)
+      `git status --short -- packages/ scripts/ supabase/` → VAZIO
+    veredicto: "Zero arquivo fora dos padrões declarados. Nenhuma migration. Nenhum arquivo de produção."
+
+  camada_a_e_gates:
+    pnpm_test: "287 files / **3693 passed + 6 expected fail**"
+    lint: "0 errors / 30 warnings (nenhum em arquivo desta fatia)"
+    type_check: "8/8 tasks OK"
+    regua_da_ac2: >-
+      `grep -nE "\\[0\\] \\?\\? null"` nos 2 arquivos migrados → **0**. Controle de vivacidade da
+      régua contra os blobs de origem (`aa584dfb~1`): **2** e **1**. A régua morde.
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 2. AS 3 RENÚNCIAS — JULGADAS
+# ═════════════════════════════════════════════════════════════════════════════
+renuncias_julgadas:
+  - id: R1
+    o_que: "Não conseguiu provar que `tests/` na raiz seja coberto por algum gate."
+    veredicto: "ACEITA — e a renúncia é MENOR do que o buraco. Ver `concerns[1]`."
+    razao: >-
+      Ele mediu a metade certa (`tsc --listFiles | grep -c tests/tenancy` → 0) e registrou como
+      segundo ocupante do `[MNT-001]`. Medi a consequência inteira e ela é maior: **nem lint, nem
+      type-check, nem `pnpm test`** enxergam o arquivo. A renúncia é honesta; a concern é o
+      tamanho real dela.
+
+  - id: R2
+    o_que: >-
+      Não conseguiu exercitar o caminho de retry em campo — a instabilidade era real (2 falhas em
+      6 execuções) mas 8 execuções pós-conserto não dispararam nenhuma repetição.
+    veredicto: "ACEITA, e a substituição é a correta."
+    razao: >-
+      `retry-transporte.test.ts` (5 asserções, sem rede e sem credencial) é exatamente o que se
+      faz com mecanismo que só roda quando dá azar. Li os 5 testes: o discriminante **conjuntivo**
+      (`sem code` E mensagem de transporte) tem carrasco em AMBAS as pernas — o caso HÍBRIDO
+      (mensagem de transporte **com** `code: PGRST116`) é o que vigia o `code`, e o `23505` puro
+      vigia o regex. Os dois não são redundantes, como ele diz. Nas minhas 6 execuções da suíte,
+      **zero** repetições disparadas — a rede colaborou comigo também, o que só reforça a
+      necessidade do carrasco offline.
+    nota_de_desenho_boa: >-
+      O helper NUNCA repete resposta do banco. Numa suíte cujo propósito é não engolir erro, essa
+      era a mitigação mais perigosa disponível, e ele a fechou pelo lado certo.
+
+  - id: R3
+    o_que: "A mutação de `provision_org` exigiria alterar a função no banco compartilhado; fez leitura de confirmação por `pg_get_functiondef`."
+    veredicto: "ACEITA — a própria AC4 autoriza, e a alternativa era pior."
+    razao: >-
+      Mutar uma função no `trifold-crm-dev` compartilhado é DDL experimental em banco de terceiros
+      — a classe de efeito colateral que o D7 desta mesma story mandou escopar. Além disso a
+      renúncia é parcialmente compensada por medição indireta: a AC4 afirma idempotência
+      EXECUTANDO `provision_org` duas vezes e checando 1 linha por slug, e a AC5 conta as 6
+      `org_integrations` e o `whatsapp_config` inactive. Se a seção 1 ou a 6 sumissem, essas
+      asserções acendiam. A leitura por `pg_get_functiondef` cobre o que sobra.
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 3. O DÉCIMO SÉTIMO INSTRUMENTO CEGO — MEDIDO, NÃO ESPECULADO
+# ═════════════════════════════════════════════════════════════════════════════
+decimo_setimo_instrumento_cego:
+  pergunta_da_coordenacao: "O que esta prova não consegue observar de si mesma?"
+  resposta: >-
+    **Ela não observa o próprio teto de leitura.** O canário conta linhas com
+    `admin.from(tabela).select("id").eq(coluna, canarioId)` e usa `linhas.length` como contagem — e
+    o PostgREST deste projeto tem `max_rows` = **1000** (lido da config, não inferido). Quando
+    qualquer tabela vigiada do canário alcançar o teto, `antes` e `depois` passam a ser o MESMO
+    número constante e `expect(depois).toEqual(antes)` fica **vacuamente verdadeiro** — para
+    sempre, em silêncio, e justamente no cenário que a story teme (banco compartilhado que cresce
+    com o trabalho de outra pessoa).
+  medicao: >-
+    Simulei o teto (`.limit(1)` no contador) com a linha de base saturada (1 lead + 1 webhook_log
+    plantados no canário) e apliquei a MESMA mutação de roteamento que antes acendia a AC14.
+  resultado: |
+    sem teto simulado : Tests **3 failed** | 22 passed  → AC9(×2) + **AC14 VERMELHA**
+    com teto simulado : Tests **2 failed** | 23 passed  → AC9(×2) + **AC14 VERDE**
+  leitura: >-
+    A única coisa que sobrou vermelha foi a AC9, que responde outra pergunta ("a org dona recebeu?"),
+    não a pergunta do canário ("perturbei alguém além das minhas fixtures?"). O canário morreu em
+    silêncio.
+  hoje_e_latente: >-
+    As tabelas vigiadas do canário têm hoje 0–6 linhas. **Nenhuma asserção feita nesta story está
+    comprometida.** O que está comprometido é a durabilidade do instrumento.
+  conserto: >-
+    `select("id", { count: "exact", head: true })` e ler `count`. O comentário do código
+    explicitamente recusou essa forma porque `comRetryDeTransporte` só sabe olhar `{ data, error }`
+    — a compatibilidade com o helper escolheu, sem querer, a forma que satura. Consertar o helper
+    para propagar `count` é a correção de uma vez só.
+  registro: >-
+    Vale a mesma nota que a onda toda vem colecionando: **o instrumento também é código, e código
+    também tem teto.** Dezesseis instrumentos cegos vieram de lógica; este veio de um LIMITE DE
+    TRANSPORTE que ninguém escreveu e que nenhuma leitura do código revela.
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 4. CONCERNS
+# ═════════════════════════════════════════════════════════════════════════════
+concerns:
+  - id: QA-900-25-1
+    severidade: MEDIA
+    titulo: "O contador do canário satura no teto do PostgREST (max_rows = 1000) e perde poder discriminante em silêncio"
+    dono: "@dev"
+    bloqueia_merge: false
+    evidencia: "ver `decimo_setimo_instrumento_cego` — reprodução A/B medida por mim"
+    por_que_nao_bloqueia: >-
+      Latente: as 7 tabelas vigiadas têm 0–6 linhas hoje, e todas as asserções desta story foram
+      medidas com o instrumento vivo. O risco é de durabilidade, não de correção.
+    correcao_pedida: >-
+      Propagar `count` no `comRetryDeTransporte` (ou um helper irmão) e trocar
+      `contarLinhasDoCanario`/`contarDaOrg` para `{ count: "exact", head: true }`. Carrasco: um
+      teste que planta N+1 linhas com teto N e exige vermelho — ou, mais barato, o mesmo A/B com
+      `.limit()` que eu executei, versionado.
+
+  - id: QA-900-25-2
+    severidade: MEDIA
+    titulo: "Nada no repositório vigia o produto desta story — os três gates ficam verdes com o arquivo quebrado"
+    dono: "@devops / Onda 3"
+    bloqueia_merge: false
+    medido: |
+      Plantei em `tests/tenancy/alias-vivo.test.ts`:
+        const erroPlantadoQa: number = "isto nao e number"
+        export const naoUsado = () => { let x; return x.y.z }
+      pnpm type-check --force → Tasks: 8 successful, 8 total     (VERDE)
+      pnpm lint       --force → 0 errors, 30 warnings (idênticos) (VERDE)
+      pnpm test               → 287 files / 3693 passed          (VERDE)
+    leitura: >-
+      O `@dev` disclosou a metade do `type-check`. A consequência inteira é maior: **um PR que
+      quebre, esvazie ou APAGUE `tests/tenancy/` passa por todos os gates**. A story é OUT de job
+      de CI por decisão consciente e bem argumentada (custo de segundo escritor concorrente no
+      banco compartilhado, sem lock) — o que a torna aceitável hoje. Mas o efeito líquido é que a
+      prova da Onda 2 existe **enquanto alguém lembrar de rodá-la à mão**, e nada avisa quando
+      pararem.
+    correcao_pedida: >-
+      Quando a Onda 3 decidir lock/TTL (o handoff que a própria story nomeia), amarrar junto: (a)
+      job de CI da Camada B, e (b) enquanto isso não vier, o mínimo barato — incluir `tests/**` no
+      `type-check`/`lint` da raiz, que não precisa de rede nem credencial e já pegaria o arquivo
+      apagado/quebrado. Segundo ocupante do `[MNT-001]`, agora com o tamanho medido.
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 5. MENORES — não pedem ação antes do merge
+# ═════════════════════════════════════════════════════════════════════════════
+menores:
+  - id: m1
+    titulo: "A lista do canário é derivada de UMA mutação observada, não do write-set do código sob teste"
+    detalhe: >-
+      A lição que o `@dev` tirou ("exclusão justificada é alegação") vale um nível acima: a
+      **inclusão** também é. As 3 tabelas entraram porque uma mutação as iluminou, não porque
+      alguém enumerou onde os receptores escrevem. Medido: **99 tabelas** do `trifold-crm-dev`
+      carregam `org_id`; o canário vigia **7**. Contraexemplo concreto: `activities` tem `org_id`
+      e é alvo de escrita do próprio receptor de WhatsApp sob teste
+      (`webhook/whatsapp/route.ts`, ramo de opt-out de marketing) — fora do canário. Hoje é
+      latente (o payload-fixture não dispara aquele ramo), mas é a mesma classe. E
+      `conversations` entrou **sem carrasco próprio**.
+    sugestao: "Derivar a lista do write-set (grep dos `.from(x).insert/upsert` alcançáveis pelos handlers sob teste), não da fallout da última mutação."
+
+  - id: m2
+    titulo: "O resíduo por execução é maior do que o Dev Agent Record conta"
+    medido: |
+      system_events: 189 → 193 após UMA execução limpa (+4), sendo:
+        2 × CRON_RESUMO          org_id=null   metadata.source = 'tests/tenancy/isolamento-900-25' | 'api/cron/daily-report'
+        2 × CRON_ORG_PROCESSADA  org_id=CANÁRIO  metadata = {}   ← sem marcador nenhum
+    detalhe: >-
+      O Dev Agent Record reporta só as linhas "casando '900-25'" (as `CRON_RESUMO`). As
+      `CRON_ORG_PROCESSADA` atribuídas ao **canário** não têm `source` nem metadata e são
+      indistinguíveis de uma execução real de cron contra ele. Não é corrupção e a exclusão de
+      `system_events` do canário está corretamente justificada (`forEachActiveOrg` escreve lá para
+      toda org ativa, por desenho) — mas a frase "não perturbei nada além das minhas fixtures"
+      tem, medido, uma exceção que a documentação não nomeia com esse tamanho.
+    veredicto_sobre_a_exclusao_de_system_events: >-
+      **MANTIDA.** Incluí-la produziria vermelho legítimo em toda execução correta, e vermelho
+      recorrente ensina a ignorar o instrumento. A justificativa é de mecanismo, não de
+      conveniência — diferente da que ele derrubou sobre `leads`.
+
+  - id: m3
+    titulo: "Evidência colada envelheceu em dois pontos"
+    detalhe: |
+      (a) O bloco `--stat` da AC15 mostra **8 arquivos / 2027 insertions**; o HEAD real é
+          **9 arquivos / 2291** (o `retry-transporte.test.ts` e as edições da story entraram
+          depois da colagem). O conjunto de arquivos continua dentro dos padrões da AC15 — é a
+          colagem que ficou para trás, não o fato.
+      (b) O docblock de `retry-transporte.test.ts` diz "oito execuções seguidas da suíte saíram
+          `20 passed`"; a suíte é **25**.
+    nota: "Cosmético, mas numa story cuja disciplina inteira é 'cole o que mediu', a colagem tem que acompanhar o último commit."
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 6. O db:status DIVERGENTE — julgado
+# ═════════════════════════════════════════════════════════════════════════════
+ledger_vs_catalogo:
+  fato: "`pnpm db:status` reporta `246`/`247` PENDENTE no `trifold-crm-dev`; o ledger para na `245`."
+  o_catalogo_diz_o_contrario_medido_por_mim: |
+    whatsapp_config_phone_ativo       presente
+    whatsapp_config_org_ativo         presente
+    org_integrations_meta_page_ativo  presente
+    whatsapp_sem_identificador_proprio  CHECK (… !~* 'phone[^[:alnum:]]{0,2}number[^[:alnum:]]{0,2}id')
+      ← a grafia da **247**, que é o discriminante entre as duas versões da constraint
+  nenhuma_ac_depende_do_ledger:
+    verificado: "grep de `db:status|ledger|migrations-aplicadas|registro de migration` no bloco inteiro de ACs (linhas 216-1036) → **0 ocorrências**."
+    veredicto: >-
+      Confirmado: a dependência existe só na **Task 0.2** (pré-condição de processo), e o fato que
+      ela queria confirmar ("247 aplicada") foi confirmado por um instrumento MAIS FORTE — o
+      catálogo vivo. A Camada B exercita o catálogo, não o ledger. **Nenhuma AC fica sem lastro.**
+  consequencia_para_o_devops: >-
+    O `db:status` do banco de teste **não serve como pré-condição** enquanto isso não for
+    regularizado, e há um risco a mais que a story não nomeia: com o ledger dizendo PENDENTE, um
+    `pnpm db:apply` futuro tentaria **reaplicar** `246`/`247` no `trifold-crm-dev`. Registrar as
+    duas no ledger (sem reaplicar DDL) ou documentar por que o banco de teste fica fora dele.
+  dono: "@devops"
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 7. RESÍDUO ACEITO — julgado
+# ═════════════════════════════════════════════════════════════════════════════
+residuo_aceito:
+  webhook_logs_set_null:
+    veredicto: "ACEITO — e a documentação está no lugar certo (`fixtures.ts`, não só na story)."
+    razao: >-
+      É o comportamento correto da FK (`confdeltype='n'`, único caso do catálogo — confirmei). A
+      linha continua íntegra, só perde a referência. E a suíte faz o que dá para fazer: guarda os
+      ids das linhas que ELA criou (`idsWebhookLogsDaAC9`, `idsComOrgIdNuloDaAC10`) e apaga por id.
+      Medi o estado final: `webhook_logs` = **0** linhas no banco depois de todas as minhas
+      execuções. Na prática o resíduo desta tabela é **zero**, não "aceitável".
+  cron_resumo_org_id_null:
+    veredicto: "ACEITO."
+    razao: >-
+      `forEachActiveOrg` omite `org_id` no resumo de propósito (atribuí-lo a uma org qualquer seria
+      erro de atribuição), não devolve o id da linha, e caçá-la por `source`/janela seria
+      exatamente o `DELETE` por predicado que esta story existe para tornar impossível. **A
+      alternativa é pior que o resíduo**, e essa é a razão certa para aceitar — não "é pouca
+      linha". Custo real medido: **4 linhas por execução** (ver `menores[m2]` — são 4, não 2).
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 8. HIGIENE DO PRÓPRIO GATE
+# ═════════════════════════════════════════════════════════════════════════════
+higiene:
+  producao: "NENHUM acesso. Todas as consultas foram a xnxvygyfyyyzwhiuoehz. Nenhum valor de credencial ecoado."
+  mutacoes_aplicadas_por_mim: 4
+  todas_revertidas: "SIM — `diff -q` byte-a-byte contra backup nos 3 arquivos tocados; `git status --short -- tests/ packages/ scripts/ supabase/ vitest.tenancy.config.ts package.json` → VAZIO; `grep -rn 'MUTACAO-QA|SIMULA-TETO|PLANTADO-QA'` → 0."
+  env_teste: "movido e restaurado uma vez; `shasum -a 256 -c` → OK; permissão 600 preservada."
+  banco_de_teste_estado_final: |
+    organizations 1 (só `org-teste-epic-900`) · leads 0 · conversations 0 · messages 0
+    webhook_logs 0 · meta_capi_outbox 0 · whatsapp_config 1 · org_integrations 6
+    → IDÊNTICO à linha de base que tirei antes de começar. Todo resíduo das minhas mutações
+      (3 leads + 3 webhook_logs no canário) foi apagado **por id**.
+  gate_tenancy: "NÃO executado fora de produção, conforme a instrução."
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 9. VEREDICTO
+# ═════════════════════════════════════════════════════════════════════════════
+veredicto:
+  decisao: CONCERNS
+  merge: "LIBERADO — nenhuma concern bloqueia."
+  em_uma_frase: >-
+    A prova prova o que promete: eu reproduzi a asserção central, a reprovação do canário (e medi a
+    disjunção que o `@dev` não mediu), as três constraints nomeadas, as FKs derivadas e as duas
+    guardas fail-closed — e o critério de saída da Onda 2 passa a ter lastro executável, não
+    promessa. O que ela não observa de si mesma são duas coisas, as duas medidas por mim: o teto de
+    1000 linhas do PostgREST, que apaga o canário em silêncio quando o banco compartilhado crescer;
+    e o fato de que nenhum gate do repositório vigia o arquivo que carrega a prova.
+  ac_sem_lastro: 0
+  defeitos_vivos: 0
+  testes_falhando: 0
+  erros_de_lint: 0
+  arquivos_de_producao_tocados: 0
