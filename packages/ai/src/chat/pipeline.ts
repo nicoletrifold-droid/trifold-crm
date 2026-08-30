@@ -503,6 +503,31 @@ export function resolvePropertyInterestWrite(input: {
 /** Story 87-20 — qual dos três sinais conteve o turno. */
 export type TipoDeLoop = "conteudo_repetido" | "contagem_excessiva" | "encerramento"
 
+/**
+ * Story 87-20 (CR-87-20-2) — o `UPDATE` da contenção **pode falhar**, e o chamador
+ * precisa saber a diferença.
+ *
+ * O campo é OBRIGATÓRIO e discriminante de propósito. Enquanto a existência de
+ * `bloqueadoPorLoop` significava "contido", uma escrita que falhasse produzia o pior
+ * estado possível — e silencioso: o webhook gravava o recibo e o admin era avisado de
+ * que a Nicole tinha sido pausada, enquanto `is_ai_active` continuava `true` e
+ * `handoff_reason` vazio; o guard de reativação do AC14 não teria o que casar e a
+ * próxima mensagem do bot reiniciaria o loop. Reportar sucesso de uma escrita que não
+ * se verificou é exatamente o defeito que esta story existe para eliminar.
+ *
+ * Por que dentro de `bloqueadoPorLoop` e não num campo irmão: é `bloqueadoPorLoop` que
+ * faz o webhook PULAR o envio, e o envio tem de ser pulado nos dois casos — um turno
+ * em loop cuja contenção falhou é o último que deveria ganhar voz. Um campo separado
+ * abriria a possibilidade de um chamador tratar só um dos dois e mandar a fala.
+ *
+ * Por que campo obrigatório e não um booleano opcional: opcional tem default, e o
+ * default seria "deu certo" — a mesma mentira, agora com uma linha de tipo a mais.
+ */
+export type ResultadoDaContencao =
+  | { contencao: "aplicada" }
+  /** `erro` é a mensagem do PostgREST — é o que um humano lê para saber por onde ir. */
+  | { contencao: "falhou"; erro: string }
+
 export interface ProcessMessageResult {
   response: string
   handoff?: {
@@ -529,7 +554,7 @@ export interface ProcessMessageResult {
     ocorrencias: number
     conversationId: string
     leadId: string | null
-  }
+  } & ResultadoDaContencao
   qualificationScore: number
 }
 
@@ -739,7 +764,11 @@ export async function processMessageWithMetadata(
     tipo: TipoDeLoop,
     ocorrencias: number
   ): Promise<ProcessMessageResult> => {
-    await supabase
+    // CR-87-20-2 — o `error` do PostgREST é LIDO. Ele não rejeita a promise: devolve
+    // `{ data: null, error }`, e ignorá-lo fazia esta função reportar uma contenção
+    // que ela não verificou ter alcançado. Não é `try/catch`: engolir o erro e seguir
+    // reproduziria o mesmo defeito com mais linhas.
+    const { error: erroDaContencao } = await supabase
       .from("conversations")
       .update({
         is_ai_active: false,
@@ -748,6 +777,9 @@ export async function processMessageWithMetadata(
       })
       .eq("id", conversationId)
 
+    // O turno segue suprimido nos DOIS casos — falha de contenção não é permissão
+    // para falar. O que muda é o que o chamador ouve: quem grita é o webhook, com
+    // `await logEventOnce` em nível de erro, porque um humano precisa ir pausar à mão.
     return {
       response: "",
       bloqueadoPorLoop: {
@@ -755,6 +787,9 @@ export async function processMessageWithMetadata(
         ocorrencias,
         conversationId,
         leadId: conversation?.lead_id ?? null,
+        ...(erroDaContencao
+          ? { contencao: "falhou" as const, erro: erroDaContencao.message }
+          : { contencao: "aplicada" as const }),
       },
       qualificationScore: 0,
     }

@@ -1345,11 +1345,19 @@ export async function POST(request: NextRequest) {
         // guarda de resposta vazia, e mandar `text.body: ""` faz a Graph API recusar.
         // Mesmo padrão do `rajada_resposta_suprimida` logo acima.
         if (bloqueadoPorLoop) {
+          // CR-87-20-2 — a contenção pode ter FALHADO, e as duas situações não podem
+          // sair com o mesmo texto. O recibo canônico continua sendo emitido nos dois
+          // casos (é ele que o cron `nicole-health` varre para alertar o admin com o
+          // link da conversa — AC10), mas ele agora DIZ qual dos dois foi.
+          const contida = bloqueadoPorLoop.contencao === "aplicada"
+
           await logEventOnce({
             level: "error",
             category: "ai",
             event_type: "NICOLE_LOOP_DETECTADO",
-            message: `Loop bot-a-bot contido (${bloqueadoPorLoop.tipo}) — Nicole pausada nesta conversa`,
+            message: contida
+              ? `Loop bot-a-bot contido (${bloqueadoPorLoop.tipo}) — Nicole pausada nesta conversa`
+              : `Loop bot-a-bot detectado (${bloqueadoPorLoop.tipo}) — a CONTENCAO FALHOU: a Nicole segue ATIVA nesta conversa`,
             metadata: {
               ...bloqueadoPorLoop,
               wamid: messageId,
@@ -1357,6 +1365,29 @@ export async function POST(request: NextRequest) {
             source: "api/webhook/whatsapp",
             org_id: orgId,
           })
+
+          // E o grito. Evento PRÓPRIO, em nível de erro, com o motivo do banco: é o
+          // único estado desta story em que a máquina não resolveu o problema e um
+          // humano precisa ir pausar a conversa à mão. Sem `event_type` distinto ele
+          // ficaria indistinguível, numa consulta, de uma contenção que funcionou.
+          //
+          // Aguardado pelo mesmo motivo do recibo acima: é a última escrita antes do
+          // response e o canal fire-and-forget morre com a lambda.
+          if (!contida) {
+            await logEventOnce({
+              level: "error",
+              category: "ai",
+              event_type: "NICOLE_LOOP_CONTENCAO_FALHOU",
+              message: `Falha ao pausar a Nicole apos loop bot-a-bot (${bloqueadoPorLoop.tipo}) — pausar a mao`,
+              metadata: {
+                ...bloqueadoPorLoop,
+                wamid: messageId,
+              },
+              source: "api/webhook/whatsapp",
+              org_id: orgId,
+            })
+          }
+
           return
         }
 

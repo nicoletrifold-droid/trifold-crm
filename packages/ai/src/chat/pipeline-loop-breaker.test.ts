@@ -168,6 +168,44 @@ function escritas(fake: FakeSupabase): string[] {
   return fake.calls.filter((c) => !c.startsWith("select:") && c !== "rpc:match_knowledge")
 }
 
+/**
+ * As colunas de um `.select()` registrado, por NOME.
+ *
+ * Forma única do arquivo, de propósito — CR-87-20-1. A versão anterior do filtro do
+ * kill-switch comparava `s.cols` com o LITERAL do `.select()`
+ * (`"content, created_at, metadata"`). Reordenar as colunas ou mexer num espaço — um
+ * refator inócuo — fazia o filtro não casar nada, e `toHaveLength(0)` passava **vazio**:
+ * o carrasco ficava cego justamente para o defeito que ele mira. É a mesma classe do
+ * `grep -f` com arquivo ausente: verde por vacuidade.
+ */
+function colunasDe(cols: string): string[] {
+  return cols.split(",").map((c) => c.trim())
+}
+
+/** O conjunto que a consulta da trava projeta (`carregarMensagensRecentesDaNicole`). */
+const COLUNAS_DA_TRAVA = ["content", "created_at", "metadata"]
+
+/**
+ * As consultas da trava dentro de `fake.selects`, reconhecidas pelo CONJUNTO de colunas.
+ *
+ * Conjunto e não `includes("metadata")` porque o turno faz OUTRA leitura de `messages`
+ * que também projeta `metadata`: o histórico da 87-8 (`role, content, created_at,
+ * metadata`). Um filtro que só procurasse a coluna casaria o histórico e daria
+ * falso-vermelho com o kill-switch ligado.
+ */
+function consultasDaTrava(fake: FakeSupabase): string[] {
+  return fake.selects
+    .filter((s) => s.table === "messages" && typeof s.cols === "string")
+    .map((s) => s.cols!)
+    .filter((cols) => {
+      const nomes = colunasDe(cols)
+      return (
+        nomes.length === COLUNAS_DA_TRAVA.length &&
+        COLUNAS_DA_TRAVA.every((c) => nomes.includes(c))
+      )
+    })
+}
+
 afterEach(() => {
   delete process.env.NICOLE_LOOP_BREAKER_OFF
 })
@@ -265,6 +303,101 @@ describe("AC6 — contenção reusa o mecanismo existente, aguardada", () => {
   })
 })
 
+// ---------------------------------------------------------------------------
+// CR-87-20-2 — a contenção pode FALHAR, e o chamador precisa saber
+// ---------------------------------------------------------------------------
+
+/**
+ * O achado do CodeRabbit em `pipeline.ts:749`: o `UPDATE` da contenção tinha o `error`
+ * IGNORADO. Se a escrita falhasse, `conterLoop` devolvia `bloqueadoPorLoop` do mesmo
+ * jeito — e o resultado era o pior estado possível, escondido dentro da própria
+ * correção que a story existe para entregar: o webhook grava o recibo e avisa o admin
+ * de que a Nicole foi pausada, mas `is_ai_active` continua `true`, `handoff_reason`
+ * continua vazio, o guard de reativação do AC14 não tem o que casar, e a próxima
+ * mensagem do bot reinicia o loop.
+ *
+ * É a mesma família dos instrumentos cegos desta onda: **o mecanismo relata um estado
+ * que ele não verificou ter alcançado.**
+ *
+ * O carrasco abaixo falha se o chamador for informado de contenção bem-sucedida.
+ */
+describe("CR-87-20-2 — UPDATE que falha NÃO pode ser reportado como contenção", () => {
+  const ERRO_DO_BANCO = "permission denied for table conversations"
+
+  /** Só o `UPDATE` em `conversations` falha — as leituras do turno seguem normais. */
+  function fakeComContencaoQuebrada(): FakeSupabase {
+    return createFakeSupabase(seed(nextSaturdayIso(), DUAS_REPETICOES), {
+      failOn: (p) =>
+        p.table === "conversations" && p.mode === "update" ? { message: ERRO_DO_BANCO } : null,
+    })
+  }
+
+  async function turnoComContencaoQuebrada() {
+    const fake = fakeComContencaoQuebrada()
+    const resultado = await processMessageWithMetadata({
+      supabase: fake as unknown as SupabaseClient,
+      anthropic: fakeAnthropic(FALA),
+      conversationId: CONVERSATION,
+      message: "As 11hrs",
+      orgId: ORG,
+    })
+    return { fake, resultado }
+  }
+
+  it("o retorno diz `contencao: \"falhou\"` e carrega o motivo do banco", async () => {
+    const { resultado } = await turnoComContencaoQuebrada()
+    expect(resultado.bloqueadoPorLoop).toEqual({
+      tipo: "conteudo_repetido",
+      ocorrencias: 2,
+      conversationId: CONVERSATION,
+      leadId: LEAD,
+      contencao: "falhou",
+      erro: ERRO_DO_BANCO,
+    })
+  })
+
+  /**
+   * A asserção que dói: o estado do banco NÃO mudou. É por isso que dizer "contido"
+   * aqui é mentir — não existe pausa nenhuma para o guard do AC14 reconhecer.
+   */
+  it("`conversations` continua sem pausa — a contenção não aconteceu", async () => {
+    const { fake } = await turnoComContencaoQuebrada()
+    const conversa = fake.table("conversations")[0]!
+    expect(conversa.is_ai_active).toBeUndefined()
+    expect(conversa.handoff_reason).toBeUndefined()
+    expect(conversa.handoff_at).toBeUndefined()
+  })
+
+  /**
+   * Controle POSITIVO do par: o mesmo turno, com o `UPDATE` funcionando, diz
+   * `"aplicada"`. Sem ele, `"falhou"` poderia ser uma constante — e o teste acima
+   * concordaria com um `conterLoop` que reporta falha sempre.
+   */
+  it("controle — com o `UPDATE` normal, o mesmo turno diz `contencao: \"aplicada\"` e sem `erro`", async () => {
+    const { resultado, fake } = await rodarTurno(DUAS_REPETICOES)
+    expect(resultado.bloqueadoPorLoop).toEqual({
+      tipo: "conteudo_repetido",
+      ocorrencias: 2,
+      conversationId: CONVERSATION,
+      leadId: LEAD,
+      contencao: "aplicada",
+    })
+    expect(fake.table("conversations")[0]!.is_ai_active).toBe(false)
+  })
+
+  /**
+   * Falha de contenção NÃO vira permissão para falar: o turno segue suprimido (é um
+   * loop — mandar a fala o alimentaria) e nenhuma outra escrita da janela vaza.
+   */
+  it("o envio continua suprimido e nenhuma outra escrita da janela vaza", async () => {
+    const { fake, resultado } = await turnoComContencaoQuebrada()
+    expect(resultado.response).toBe("")
+    expect(escritas(fake)).toEqual(["update:conversations"])
+    expect(fake.table("appointments")).toHaveLength(0)
+    expect(fake.table("messages").filter((m) => m.role === "assistant")).toHaveLength(2)
+  })
+})
+
 describe("AC9 — o retorno carrega `bloqueadoPorLoop`, não uma string vazia sozinha", () => {
   it("Sinal A devolve tipo, ocorrências, conversa e lead", async () => {
     const { resultado } = await rodarTurno(DUAS_REPETICOES)
@@ -273,6 +406,9 @@ describe("AC9 — o retorno carrega `bloqueadoPorLoop`, não uma string vazia so
       ocorrencias: 2,
       conversationId: CONVERSATION,
       leadId: LEAD,
+      // CR-87-20-2 — `contencao` é obrigatório: "contido" deixou de ser implícito na
+      // existência do campo e passou a ser afirmado, porque a escrita pode falhar.
+      contencao: "aplicada",
     })
     expect(resultado.response).toBe("")
   })
@@ -347,6 +483,7 @@ describe("AC15 — Sinal B dispara ANTES de chamar a Anthropic", () => {
       ocorrencias: LOOP_COUNT_MAX,
       conversationId: CONVERSATION,
       leadId: LEAD,
+      contencao: "aplicada",
     })
     expect(escritas(fake)).toEqual(["update:conversations"])
   })
@@ -357,11 +494,20 @@ describe("AC12 — kill-switch", () => {
     process.env.NICOLE_LOOP_BREAKER_OFF = "1"
     const { fake, resultado } = await rodarTurno(DUAS_REPETICOES)
     expect(resultado.bloqueadoPorLoop).toBeUndefined()
-    // A própria consulta da trava não roda: nenhuma leitura de `messages` filtrando
-    // por `role='assistant'` com projeção de `metadata`.
-    expect(
-      fake.selects.filter((s) => s.table === "messages" && s.cols === "content, created_at, metadata")
-    ).toHaveLength(0)
+    // A própria consulta da trava não roda. Reconhecida pelo CONJUNTO de colunas, não
+    // pela string literal — ver `consultasDaTrava`.
+    expect(consultasDaTrava(fake)).toHaveLength(0)
+  })
+
+  /**
+   * CR-87-20-1 — o controle de VIVACIDADE do filtro acima, e o que impede o
+   * `toHaveLength(0)` de passar por vacuidade. Com a trava LIGADA a mesma função de
+   * filtro tem de ENCONTRAR a consulta; se ela deixar de casar (por ordem de coluna,
+   * por espaço, por renome), este teste cai e o de cima não pode mais mentir sozinho.
+   */
+  it("controle de vivacidade — com a trava LIGADA, o MESMO filtro acha a consulta", async () => {
+    const { fake } = await rodarTurno(DUAS_REPETICOES)
+    expect(consultasDaTrava(fake)).toHaveLength(1)
   })
 
   it("qualquer outro valor (inclusive vazio) mantém a trava LIGADA — fail-safe", async () => {
@@ -406,7 +552,7 @@ describe("AC4 (2ª metade) — o carregador PROJETA `metadata`", () => {
     await carregarMensagensRecentesDaNicole(fake as unknown as SupabaseClient, CONVERSATION, 30, AGORA)
     const consulta = fake.selects.find((s) => s.table === "messages")
     expect(consulta?.cols).toBeDefined()
-    expect(consulta!.cols!.split(",").map((c) => c.trim())).toContain("metadata")
+    expect(colunasDe(consulta!.cols!)).toContain("metadata")
   })
 
   /**

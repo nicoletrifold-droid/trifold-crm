@@ -1500,6 +1500,8 @@ describe("Story 87-20 — trava de loop bot-a-bot no webhook", () => {
       ocorrencias: 2,
       conversationId: CONV,
       leadId: LEAD,
+      // CR-87-20-2 — o caminho feliz agora AFIRMA que a contenção foi aplicada.
+      contencao: "aplicada" as const,
     }
 
     beforeEach(() => {
@@ -1569,6 +1571,103 @@ describe("Story 87-20 — trava de loop bot-a-bot no webhook", () => {
     it("o pipeline é chamado pela variante COM metadata", async () => {
       await entregar("wamid.LOOP4")
       expect(pipelineMock).toHaveBeenCalled()
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // CR-87-20-2 — a contenção FALHOU: o webhook precisa gritar, não repetir "contido"
+  // -------------------------------------------------------------------------
+
+  /**
+   * O outro lado do achado do CodeRabbit. Quando o `UPDATE` de `conversations` falha, a
+   * Nicole segue ATIVA: o guard de reativação do AC14 não tem `handoff_reason` para
+   * casar e a próxima mensagem do bot reinicia o loop. É o único estado desta story em
+   * que a máquina não resolveu o problema — e é por isso que ele precisa de um
+   * `event_type` próprio, em nível de erro e com o motivo do banco: alguém tem de ir
+   * pausar a conversa à mão.
+   */
+  describe("contenção FALHOU (CR-87-20-2)", () => {
+    const ERRO_DO_BANCO = "permission denied for table conversations"
+    const BLOQUEIO_SEM_CONTENCAO = {
+      tipo: "encerramento" as const,
+      ocorrencias: 2,
+      conversationId: CONV,
+      leadId: LEAD,
+      contencao: "falhou" as const,
+      erro: ERRO_DO_BANCO,
+    }
+
+    beforeEach(() => {
+      semear({})
+      pipelineMock.mockImplementation(async () => ({
+        response: "",
+        bloqueadoPorLoop: BLOQUEIO_SEM_CONTENCAO,
+        qualificationScore: 0,
+      }))
+    })
+
+    it("grava NICOLE_LOOP_CONTENCAO_FALHOU, aguardado, em nível de erro e com o motivo do banco", async () => {
+      await entregar("wamid.FALHOU1")
+
+      // Mesmo carrasco do recibo: `escritasCompletadas` só recebe o payload quando a
+      // promise do `logEventOnce` RESOLVE (macrotask). Sem `await`, fica vazio.
+      const grito = escritasCompletadas.find(
+        (e) => (e as { event_type?: string }).event_type === "NICOLE_LOOP_CONTENCAO_FALHOU"
+      ) as Record<string, unknown> | undefined
+
+      expect(grito).toBeDefined()
+      expect(grito!.level).toBe("error")
+      expect(grito!.org_id).toBe("org-1")
+      expect(grito!.metadata).toMatchObject({ contencao: "falhou", erro: ERRO_DO_BANCO })
+    })
+
+    /**
+     * O recibo canônico continua saindo — é ele que o cron `nicole-health` varre para
+     * alertar o admin com o link da conversa (AC10), e uma contenção que falhou é
+     * MAIS urgente, não menos. O que não pode é ele dizer que a Nicole foi pausada.
+     */
+    it("o recibo canônico continua saindo, mas NÃO diz mais que a Nicole foi pausada", async () => {
+      await entregar("wamid.FALHOU2")
+
+      const recibo = escritasCompletadas.find(
+        (e) => (e as { event_type?: string }).event_type === "NICOLE_LOOP_DETECTADO"
+      ) as Record<string, unknown> | undefined
+
+      expect(recibo).toBeDefined()
+      expect(String(recibo!.message)).not.toContain("pausada")
+      expect(String(recibo!.message)).toContain("CONTENCAO FALHOU")
+      expect(recibo!.metadata).toMatchObject({ contencao: "falhou" })
+    })
+
+    /**
+     * Controle NEGATIVO, e o que impede o grito de virar ruído constante: no caminho em
+     * que a contenção funcionou, o evento de falha NÃO existe e o recibo volta a dizer
+     * "pausada". Sem este par, `NICOLE_LOOP_CONTENCAO_FALHOU` poderia ser emitido
+     * sempre e o teste acima continuaria verde.
+     */
+    it("controle — contenção APLICADA não emite o grito, e o recibo diz `pausada`", async () => {
+      pipelineMock.mockImplementation(async () => ({
+        response: "",
+        bloqueadoPorLoop: { ...BLOQUEIO_SEM_CONTENCAO, contencao: "aplicada" as const, erro: undefined },
+        qualificationScore: 0,
+      }))
+      await entregar("wamid.FALHOU3")
+
+      expect(
+        escritasCompletadas.filter(
+          (e) => (e as { event_type?: string }).event_type === "NICOLE_LOOP_CONTENCAO_FALHOU"
+        )
+      ).toHaveLength(0)
+
+      const recibo = escritasCompletadas.find(
+        (e) => (e as { event_type?: string }).event_type === "NICOLE_LOOP_DETECTADO"
+      ) as Record<string, unknown> | undefined
+      expect(String(recibo!.message)).toContain("pausada")
+    })
+
+    it("o envio continua suprimido — falha de contenção não é permissão para falar", async () => {
+      await entregar("wamid.FALHOU4")
+      expect(enviosDeMensagem()).toHaveLength(0)
     })
   })
 
