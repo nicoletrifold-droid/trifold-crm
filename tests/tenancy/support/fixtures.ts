@@ -22,7 +22,11 @@
  * `org_id` seria a mesma classe de erro num grau menor.
  */
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { comRetryDeTransporte, consultarCatalogo } from "./ambiente"
+import {
+  comRetryDeTransporte,
+  consultarCatalogo,
+  contarComRetryDeTransporte,
+} from "./ambiente"
 
 /** O slug da organização canário — a que a suíte promete NUNCA perturbar. */
 export const SLUG_CANARIO = "org-teste-epic-900"
@@ -116,20 +120,37 @@ export async function idDeOrgPorSlug(
  * CAPI varre a outbox **sem filtro de org**, então "não mexi na outbox de terceiros" é uma
  * pergunta que o canário precisa saber responder.
  *
- * ## `leads`, `conversations` e `webhook_logs` ENTRAM — e a razão custou uma medição
+ * ## A lista sai do WRITE-SET do código sob teste, não da fallout de uma mutação
  *
- * A primeira versão desta lista os excluía com o argumento *"a suíte nunca cria lead no canário,
- * então a contagem seria sempre constante — asserção sem poder discriminante"*. **O argumento
- * estava errado, e o carrasco que o derrubou foi um experimento de mutação desta própria story.**
- * Ao mutar `resolveOrgByMetaPage` para ignorar o `page_id` e pegar "a primeira linha que vier"
- * (`.order("created_at").limit(1)`), a org que ele resolveu foi **o canário** — a mais antiga do
- * banco. Resultado medido: **2 leads e 2 linhas de `webhook_logs` gravados dentro do canário**, e
- * o canário reportou `depois === antes`, verde, porque nenhuma das duas tabelas estava na lista.
+ * A v1 desta lista tinha 4 tabelas e excluía `leads` com justificativa escrita (*"a suíte nunca
+ * cria lead no canário, logo a contagem é constante e não discrimina"*). Uma mutação em
+ * `resolveOrgByMetaPage` resolveu para o **canário** e gravou 2 leads + 2 `webhook_logs` dentro
+ * dele — e o canário ficou **VERDE**. A vigilância era cega exatamente para *um lead caindo na
+ * empresa errada*, o defeito-mãe da onda.
  *
- * Ou seja: a asserção "não perturbei nada além das minhas fixtures" era **cega exatamente para a
- * classe de defeito que esta story inteira existe para pegar** — um lead caindo na empresa errada.
- * `conversations` entra pela mesma porta (o mesmo defeito no receptor de WhatsApp escreveria lá);
- * `messages` não precisa, porque não tem `org_id` e só é alcançável via `conversations`.
+ * A v2 corrigiu isso, mas pelo caminho errado: **a lista veio da fallout daquela mutação**, não do
+ * write-set. Achado do `@qa` no gate: `activities` é alvo de INSERT do próprio receptor sob teste
+ * (`process-lead.ts:422`, `lead_created`, sempre) e ficou de fora — e havia **8 linhas de
+ * `activities` dentro do canário** deixadas pelos meus experimentos, que nenhuma contagem viu.
+ *
+ * Esta versão é derivada do write-set. O critério, escrito para o próximo: **entra toda tabela com
+ * `org_id` na qual um caminho SÍNCRONO exercitado por esta suíte faz INSERT/UPSERT.** São 99 as
+ * tabelas com `org_id` no schema; vigiar as 99 seria caro e ruidoso, e vigiar "as que deram
+ * problema" é vigiar o passado.
+ *
+ * | tabela | quem escreve, no código sob teste |
+ * |---|---|
+ * | `leads` | `findOrUpsertLead` (WhatsApp) · `process-lead` (Meta Ads) |
+ * | `conversations` | find-or-create do receptor de WhatsApp |
+ * | `activities` | `process-lead` (`lead_created`, sempre) · WhatsApp (opt-out) |
+ * | `webhook_logs` | rota de Meta Ads (antes de resolver) · `logOrgUnresolved` |
+ * | `meta_capi_outbox` | `meta-capi-dispatch` (varredura GLOBAL, sem filtro de org — D7) |
+ * | `organizations`, `whatsapp_config`, `org_integrations` | `provision_org` e o setup das fixtures |
+ *
+ * `messages` não entra e não precisa: **não tem `org_id`** e só é alcançável via `conversations`,
+ * que está na lista. `campaign_entries`/`campaign_events` ficam fora porque só são escritas quando
+ * existe entrada de campanha casando o telefone, e as fixtures desta suíte não criam nenhuma —
+ * mas se um dia criarem, elas entram por este mesmo critério.
  *
  * ## `system_events` continua DE FORA, e esse motivo permanece medido
  *
@@ -145,6 +166,7 @@ export const TABELAS_DO_CANARIO = [
   "meta_capi_outbox",
   "leads",
   "conversations",
+  "activities",
   "webhook_logs",
 ] as const
 
@@ -157,13 +179,12 @@ export async function contarLinhasDoCanario(
   const saida = {} as ContagemDoCanario
   for (const tabela of TABELAS_DO_CANARIO) {
     const coluna = tabela === "organizations" ? "id" : "org_id"
-    // `count: "exact", head: true` devolve `data: null` — por isso a contagem sai do próprio
-    // `select("id")`: o helper de retry só sabe olhar `{ data, error }`.
-    const linhas = await comRetryDeTransporte<{ id: string }>(
-      () => admin.from(tabela).select("id").eq(coluna, canarioId),
+    // AGREGADA, nunca `select().length` — QA-900-25-1: contar linhas satura no `max_rows` (1000)
+    // do PostgREST, e canário saturado fica VERDE com escrita na org errada dentro dele.
+    saida[tabela] = await contarComRetryDeTransporte(
+      () => admin.from(tabela).select("*", { count: "exact", head: true }).eq(coluna, canarioId),
       `contagem do canário em ${tabela}`,
     )
-    saida[tabela] = linhas.length
   }
   return saida
 }

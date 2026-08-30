@@ -20,7 +20,7 @@
  * azar, é indistinguível de um mecanismo quebrado. Estas asserções são a diferença.
  */
 import { describe, it, expect, vi, afterEach } from "vitest"
-import { comRetryDeTransporte } from "./support/ambiente"
+import { comRetryDeTransporte, contarComRetryDeTransporte } from "./support/ambiente"
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -96,6 +96,75 @@ describe("`comRetryDeTransporte` — repete transporte, NUNCA resposta do banco"
       { data: null, error: { message: "fetch failed while reading network stream", code: "PGRST116" } },
     ])
     await expect(comRetryDeTransporte(executar, "hibrido")).rejects.toThrow(/hibrido falhou/)
+    expect(estado.chamadas).toBe(1)
+    expect(aviso).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * Carrasco do QA-900-25-1 — o 17º instrumento cego, e o único desta onda que veio de **limite de
+ * transporte**, não de lógica.
+ *
+ * `max_rows = 1000` no PostgREST: contar com `select("id").length` **satura**. O `@qa` simulou o
+ * teto e mostrou que, saturado, o canário fica VERDE sob a mutação que ele existe para pegar
+ * (`3 failed` sem teto → `2 failed` com teto, a AC14 saindo da lista dos vermelhos).
+ *
+ * O conserto estrutural é `count: "exact", head: true`. O carrasco contra a REGRESSÃO é o
+ * `count === null`: qualquer volta para um `select()` de linhas devolve `count: null`, e o helper
+ * lança. Sem esta asserção, a reversão seria silenciosa — e silenciosa é como o defeito nasceu.
+ */
+function executorDeContagem(
+  respostas: Array<{ count: number | null; error: { message: string; code?: string } | null }>,
+) {
+  const estado = { chamadas: 0 }
+  const executar = async () => {
+    const resposta = respostas[Math.min(estado.chamadas, respostas.length - 1)]!
+    estado.chamadas++
+    return resposta
+  }
+  return { estado, executar }
+}
+
+describe("`contarComRetryDeTransporte` — contagem agregada, com carrasco contra a saturação", () => {
+  it("devolve o `count` agregado, numa tentativa só", async () => {
+    const { estado, executar } = executorDeContagem([{ count: 1234, error: null }])
+    await expect(contarComRetryDeTransporte(executar, "contagem")).resolves.toBe(1234)
+    expect(estado.chamadas).toBe(1)
+  })
+
+  it("`count: 0` é resposta válida — não pode virar erro nem `null`", async () => {
+    const { executar } = executorDeContagem([{ count: 0, error: null }])
+    await expect(contarComRetryDeTransporte(executar, "zero")).resolves.toBe(0)
+  })
+
+  /**
+   * A asserção que impede a volta do defeito: `select("id")` (sem `count`) devolve `count: null`.
+   * Ela é o motivo de este helper existir separado do `comRetryDeTransporte`.
+   */
+  it("`count: null` (alguém voltou a contar linhas) LANÇA nomeando a saturação", async () => {
+    const { estado, executar } = executorDeContagem([{ count: null, error: null }])
+    await expect(contarComRetryDeTransporte(executar, "regressao")).rejects.toThrow(
+      /não devolveu `count`[\s\S]*max_rows/,
+    )
+    expect(estado.chamadas).toBe(1)
+  })
+
+  it("falha de TRANSPORTE na contagem: repete e devolve o `count` bom", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+    const { estado, executar } = executorDeContagem([
+      { count: null, error: ERRO_DE_TRANSPORTE },
+      { count: 7, error: null },
+    ])
+    await expect(contarComRetryDeTransporte(executar, "transporte-contagem")).resolves.toBe(7)
+    expect(estado.chamadas).toBe(2)
+  })
+
+  it("erro do BANCO na contagem: uma tentativa só, sem repetição", async () => {
+    const aviso = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const { estado, executar } = executorDeContagem([{ count: null, error: ERRO_DO_BANCO }])
+    await expect(contarComRetryDeTransporte(executar, "banco-contagem")).rejects.toThrow(
+      /banco-contagem falhou — duplicate key/,
+    )
     expect(estado.chamadas).toBe(1)
     expect(aviso).not.toHaveBeenCalled()
   })

@@ -46,6 +46,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import {
   aplicarEnv,
   comRetryDeTransporte,
+  contarComRetryDeTransporte,
   credenciaisPresentes,
   criarClienteDeTeste,
   envDoBancoDeTeste,
@@ -148,36 +149,51 @@ async function linhasDe<T = Record<string, unknown>>(
   return comRetryDeTransporte<T>(construir, rotulo)
 }
 
-/** Contagens por org. `messages` não tem `org_id` — o escopo é via `conversations` (ver AC8). */
+/**
+ * Contagens por org, usadas nas metades "a OUTRA empresa ficou inalterada" das AC7/AC8/AC9.
+ *
+ * **Agregadas, nunca `select().length`** — mesma correção do QA-900-25-1 que o canário levou, e
+ * pela mesma razão: `max_rows = 1000` faz `select("id").length` saturar, e duas contagens saturadas
+ * são **iguais entre si** mesmo com vazamento no meio. A asserção `expect(depois).toEqual(antes)`
+ * ficaria verde exatamente quando a org vizinha estivesse cheia.
+ *
+ * `messages` não tem `org_id`: o escopo é via `conversations` (ver AC8). As conversas da org são
+ * lidas por id (poucas, por construção — são as fixtures) e usadas como filtro da contagem
+ * agregada de `messages`.
+ */
 async function contarDaOrg(orgId: string): Promise<{
   leads: number
   conversations: number
   messages: number
 }> {
-  const leads = await linhasDe<{ id: string }>(
-    () => admin.from("leads").select("id").eq("org_id", orgId),
+  const leads = await contarComRetryDeTransporte(
+    () => admin.from("leads").select("*", { count: "exact", head: true }).eq("org_id", orgId),
     `contagem leads(${orgId})`,
   )
   const conversas = await linhasDe<{ id: string }>(
     () => admin.from("conversations").select("id").eq("org_id", orgId),
+    `ids de conversations(${orgId})`,
+  )
+  const conversations = await contarComRetryDeTransporte(
+    () =>
+      admin.from("conversations").select("*", { count: "exact", head: true }).eq("org_id", orgId),
     `contagem conversations(${orgId})`,
   )
   let messages = 0
   if (conversas.length > 0) {
-    const msgs = await linhasDe<{ id: string }>(
+    messages = await contarComRetryDeTransporte(
       () =>
         admin
           .from("messages")
-          .select("id")
+          .select("*", { count: "exact", head: true })
           .in(
             "conversation_id",
             conversas.map((c) => c.id),
           ),
       `contagem messages(${orgId})`,
     )
-    messages = msgs.length
   }
-  return { leads: leads.length, conversations: conversas.length, messages }
+  return { leads, conversations, messages }
 }
 
 function assinar(corpo: string): string {

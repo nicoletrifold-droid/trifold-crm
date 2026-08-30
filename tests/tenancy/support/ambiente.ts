@@ -195,6 +195,71 @@ export async function comRetryDeTransporte<T>(
 }
 
 /**
+ * Contagem AGREGADA, com a mesma disciplina de repetição — QA-900-25-1, o 17º instrumento cego.
+ *
+ * ## O defeito, medido pelo `@qa`
+ *
+ * A versão anterior contava com `select("id")` + `.length`. O PostgREST deste projeto tem
+ * `max_rows = 1000`: **uma tabela com 1000+ linhas devolve 1000 e a contagem satura**. O `@qa`
+ * simulou o teto e aplicou a MESMA mutação que o canário existe para pegar:
+ *
+ * ```
+ * sem teto simulado : 3 failed | 22 passed  → AC14 VERMELHA
+ * com teto simulado : 2 failed | 23 passed  → AC14 VERDE
+ * ```
+ *
+ * Ou seja: com o canário saturado, dois leads gravados na empresa errada passariam despercebidos.
+ * Os dezesseis cegos anteriores desta onda vieram de **lógica**; este vem de **limite de
+ * transporte**, que nenhuma leitura do código revela.
+ *
+ * **E havia ironia:** o comentário que eu tinha escrito RECUSAVA `{ count: "exact", head: true }`
+ * "porque o helper de retry só sabe olhar `{ data, error }`" — escolhendo, sem querer, exatamente
+ * a forma que satura. A resposta certa não era escolher entre as duas coisas: era fazer o helper
+ * de retry saber contar. É o que está aqui.
+ *
+ * ## O carrasco contra a regressão
+ *
+ * `count: "exact", head: true` devolve `data: null` e `count: number`. Se alguém voltar para
+ * `select("id")` (sem `count`), `count` vem **`null`** e este helper **lança nomeando** — a
+ * reversão não tem como ficar verde em silêncio. É a diferença entre "não satura hoje" e "não
+ * pode voltar a saturar".
+ */
+export async function contarComRetryDeTransporte(
+  executar: () => PromiseLike<{
+    count: number | null
+    error: { message: string; code?: string } | null
+  }>,
+  rotulo: string,
+): Promise<number> {
+  let ultimo: { message: string; code?: string } | null = null
+  for (let tentativa = 1; tentativa <= TENTATIVAS_DE_TRANSPORTE; tentativa++) {
+    const { count, error } = await executar()
+    if (!error) {
+      if (count === null) {
+        throw new Error(
+          `${rotulo}: a consulta não devolveu \`count\` — alguém trocou ` +
+            '`select("*", { count: "exact", head: true })` por um `select()` de linhas. Contar ' +
+            "linhas satura no `max_rows` (1000) do PostgREST e faz o canário ficar VERDE com " +
+            "escrita na org errada dentro dele (QA-900-25-1).",
+        )
+      }
+      return count
+    }
+    ultimo = error
+    if (!ehFalhaDeTransporte(error)) break
+    if (tentativa < TENTATIVAS_DE_TRANSPORTE) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[tests/tenancy] ${rotulo}: falha de TRANSPORTE (${error.message}) — tentativa ` +
+          `${tentativa}/${TENTATIVAS_DE_TRANSPORTE}, repetindo.`,
+      )
+      await new Promise((r) => setTimeout(r, 400 * tentativa))
+    }
+  }
+  throw new Error(`${rotulo} falhou — ${ultimo?.message ?? "erro desconhecido"}`)
+}
+
+/**
  * Redirecionamento de env — Dev Notes, "Como o handler real enxerga `trifold-crm-dev`".
  *
  * `createAdminClient()` (`lib/supabase/admin.ts`) lê `SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_URL` +
