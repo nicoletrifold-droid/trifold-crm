@@ -23,8 +23,9 @@ import { lembreteEventKey } from "@web/lib/boleto-lembrete-key"
 // CADÊNCIA (31/08/2026) — 2 rodadas/dia: 09 e 18 BRT (12 e 21 UTC). Eram 4 (09/12/15/18
 // BRT). O corte devolve ~330 chamadas/dia à cota do Sienge, que é de 1.000/dia POR
 // ASSINATURA e estava em 844/dia (84%), com 2.018 requisições excedidas em agosto.
-// Cada rodada custa 1 getFinancialStatement por cliente ativo (~165), e esta varredura
-// era responsável por ~4/5 do consumo total da conta.
+// Cada rodada custa 1 getFinancialStatement por cliente ativo — ESTIMADOS em ~165 a
+// partir do salto de consumo de junho→julho no painel do Sienge, não medidos no banco.
+// Pela mesma estimativa, esta varredura respondia por ~4/5 do consumo total da conta.
 // TRADE-OFF ACEITO: como o webhook não cobre este caso (ver acima), a varredura é o
 // ÚNICO detector de boleto novo — a detecção passa de ~3h para até ~12h no pior caso.
 // Não reduzir abaixo de 2 sem antes filtrar quem é varrido (hoje varremos todo cliente

@@ -96,9 +96,10 @@ const CLIENTE = { id: "user-1", name: "Albert", email: "a@ex.com", phone: "55449
 beforeEach(() => {
   vi.clearAllMocks()
   // Fake apenas Date (setTimeout real → o sleep() do route continua funcionando). Default:
-  // 18 UTC = 15 BRT → passo de lembretes NÃO roda; testes de novo-boleto ficam determinísticos.
+  // 21 UTC = 18 BRT — a 2ª rodada agendada, e não a das 09 → passo de lembretes NÃO roda;
+  // testes de novo-boleto ficam determinísticos.
   vi.useFakeTimers({ toFake: ["Date"] })
-  vi.setSystemTime(new Date("2026-07-06T18:00:00Z"))
+  vi.setSystemTime(new Date("2026-07-06T21:00:00Z"))
   paused = false
   clientesRows = [CLIENTE]
   obraRow = { id: "obra-1", name: "Yarden", org_id: "org-1" }
@@ -373,11 +374,17 @@ describe("GET /api/cron/boleto-scan — agrupamento de lembretes (Story 75-147)"
 describe("boleto-scan · cadência do cron", () => {
   it("mantém 2 rodadas/dia (12 e 21 UTC = 09 e 18 BRT) no vercel.json", async () => {
     const { readFileSync } = await import("node:fs")
-    const { resolve } = await import("node:path")
+    const { resolve, dirname } = await import("node:path")
+    const { fileURLToPath } = await import("node:url")
 
-    const vercelJson = JSON.parse(
-      readFileSync(resolve(process.cwd(), "packages/web/vercel.json"), "utf-8")
-    ) as { crons: Array<{ path: string; schedule: string }> }
+    // Relativo a ESTE arquivo, não ao cwd: rodar o vitest de dentro de packages/web
+    // resolvia para packages/web/packages/web/vercel.json e o teste falhava com ENOENT
+    // em vez de assertion — um guard-rail que quebra pelo motivo errado ensina a ignorá-lo.
+    const vercelJsonPath = resolve(dirname(fileURLToPath(import.meta.url)), "../../../../../vercel.json")
+
+    const vercelJson = JSON.parse(readFileSync(vercelJsonPath, "utf-8")) as {
+      crons: Array<{ path: string; schedule: string }>
+    }
 
     const cron = vercelJson.crons.find((c) => c.path === "/api/cron/boleto-scan")
     expect(cron, "cron do boleto-scan sumiu do vercel.json").toBeDefined()
