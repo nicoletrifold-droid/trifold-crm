@@ -6,6 +6,57 @@ Tarefas operacionais, configurações e ajustes pendentes que não requerem uma 
 
 ## Pendente
 
+### [STORY] 🟠 `platformQuery()` sela o `columns` que ENTRA, não o builder que SAI — o `.select()` encadeado passa por baixo das duas redes
+
+**Adicionado em:** 2026-08-31 · **Origem:** `@qa` (Quinn), concern `QA-900-42A-1` do gate da Story
+`900-42a` (`docs/qa/gates/900.42a-fecha-embedding-em-platform-query.yml`), **remedido pelo `@dev`
+antes de registrar** — não herdado do parecer.
+**Prioridade:** **P2 — não é regressão e não bloqueou o merge da `900-42a`.** É a diferença entre
+"protegi" e "estreitei", registrada para não virar garantia herdada.
+**Endereçado a:** `@sm` (draft) → `@po` (validação).
+
+A `900-42a` fechou a metade do `SEC-001` que passa pelo **argumento**: `platformQuery()` recusa `*`
+e recusa `(` no `columns` recebido. **A outra metade continua aberta**, porque a função devolve o
+query builder do Supabase e `PostgrestTransformBuilder.select()` faz
+`url.searchParams.set("select", …)` — **`set`, não `append`: sobrescreve**.
+
+Medido no `postgrest-js@2.101.1` (mesmo objeto de builder antes e depois; `select` final
+`id,leads(name,phone)`):
+
+| Forma | Guarda de runtime | Rede estática | Resultado |
+|---|---|---|---|
+| `platformQuery("organizations", "id, leads(name, phone)")` | **lança** ✔ | acende | fechado |
+| `platformQuery("organizations", "id").select("id, leads(name, phone)")` | **passa** ✘ (só viu `"id"`) | acende **se** literal **e** dentro de `app/platform/**` ou `app/api/platform/**` | parcial |
+| `platformQuery("organizations", "id").select(variavel)` | **passa** ✘ | **não acende** | **descoberto** |
+
+A consulta da segunda linha é, byte a byte, a que devolveu **HTTP 200 com 6 linhas de `leads` e
+`phone` não-nulo** no `trifold-crm-dev` — a medição que originou o `SEC-001`.
+
+**Não é regressão:** antes da `900-42a` as duas formas passavam, e nenhum dos 13 call sites de
+produção encadeia `.select()` hoje. O que a story deixou para trás é a **afirmação** da AC1
+("nenhuma consulta que emitiria linha de tabela fora da lista chega ao Supabase"), que hoje é maior
+que o código. O limite já está escrito no docstring de
+`packages/web/src/lib/tenancy/platform-query.ts` — este item é a casa do conserto.
+
+**Ação (story nova, não reabrir a `900-42a`):** decidir entre (a) devolver de `platformQuery()` um
+builder com `select` **selado** (wrapper que recusa reencadeamento, ou tipo que não exponha
+`.select`), e (b) varrer `.select(` também fora dos 2 diretórios. **(b) sozinha não fecha** — a
+forma `.select(variavel)` é invisível para qualquer rede estática, e foi por isso que a rede de
+runtime existe. Carrasco obrigatório: mutação que derrube **só** o encadeamento e deixe verdes os
+12 `columns` reais de produção.
+
+> **Insumo junto: `QA-900-42A-2` (severidade low) — pertence à story de consolidação da AC7.**
+> `platform-guard.ts` e `admin-invite.ts` leem com service-role, **não** passam por
+> `platformQuery()` e moram em `lib/tenancy/` — **fora** dos 2 diretórios varridos
+> (`DIRETORIOS_VARRIDOS` em `platform-query-scan.test.ts` = `app/api/platform` e `app/platform`,
+> conferido). Hoje são inofensivos por razão estrutural **medida**, não presumida: os 4 `.select()`
+> são literais fixos no fonte (`"id, email, name, is_platform_admin"` ×2, `"id, auth_id, email,
+> name"` ×2, `"admin_invite_email"`), nenhum tem `(` e **nenhum recebe `columns` por parâmetro**.
+> Mas depois da `900-42a` eles são o único caminho de leitura de plataforma que **nenhuma** das
+> duas redes observa, e nada avisa se uma edição futura acrescentar `(` ali. Conserto candidato:
+> estender `DIRETORIOS_VARRIDOS` para `lib/tenancy/**` com exclusão **nomeada** dos dois arquivos
+> sancionados — nunca exclusão por padrão amplo, que é como a régua morre em silêncio.
+
 ### [OPS] 🔴 Uma conversa foi **pausada à mão** por loop bot-a-bot — a pausa tem pavio de ~24h e precisa de decisão
 
 **Adicionado em:** 2026-08-30 · **Origem:** `@devops` — contenção manual em produção.
@@ -859,6 +910,8 @@ idioma (medido 2026-08-28).
 `PLATFORM_READABLE_TABLES`, não só o token `"*"`. Limitação já documentada no topo de
 `packages/web/src/lib/tenancy/platform-query.ts`.
 
+> **[@devops 2026-08-31] Entrada desatualizada — não reescrita nem repriorizada de propósito (é do `@po`).** O furo foi **FECHADO** pela Story `900-42a` (`docs/stories/900-42a-fecha-embedding-em-platform-query.story.md`), e a **ação prescrita acima foi REJEITADA por escrito** naquela story (§ *Escolha de desenho*): parsear a sintaxe de embedding é uma superfície de bug nova onde errar significa vazar dado de cliente — a opção entregue foi recusar **qualquer** `(` no `columns`. **Quem implementar o parser descrito acima está implementando o caminho vetado.**
+
 ---
 
 ### [Epic 900] 🟡 `TEST-001` — pontos cegos medidos de `detectRawTableReads()`
@@ -887,6 +940,8 @@ entram na população — um walker que achasse 1 arquivo de 5 continuaria verde
 **Ação (900-42a):** decidir se o detector passa a usar AST (`ts-morph`/`typescript`) em vez de regex,
 e se a guarda de vivacidade passa a assertar a lista de arquivos varridos, não a contagem.
 
+> **[@devops 2026-08-31] O marcador `Dona: 900-42a` está esgotado — entrada não reescrita nem repriorizada de propósito (é do `@po`).** A `900-42a` (`docs/stories/900-42a-fecha-embedding-em-platform-query.story.md`) entregou só o fechamento do `SEC-001` e **não executou a ação acima**: `detectRawTableReads` ficou **intocada** (sha256 idêntico ao de `a7cbfc35`) e o detector novo `detectEmbeddedTableReads()` nasceu ao lado dela, também por regex — os dois pontos cegos medidos aqui seguem **abertos** e sem dona. Na mesma story a abordagem prescrita para o `SEC-001` (parser de embedding) foi **rejeitada por escrito**; ler esta entrada como aval para trocar regex por parser de sintaxe do PostgREST repete o caminho vetado.
+
 ---
 
 ### [Epic 900] 🟡 `MNT-002` — falta critério fixado para "se a régua acender, mova para `lib/tenancy/`"
@@ -909,6 +964,8 @@ efeito prático seria idêntico a afrouxar as exclusões, só que por outro cami
 **Ação (900-42a):** fixar em `.claude/rules/` ou no topo de `platform-query-scan.ts` quando mover é
 correto (a chamada é ESCRITA, ou é o próprio mecanismo sancionado) e quando é fuga (a chamada é
 LEITURA de plataforma e deveria virar `platformQuery`).
+
+> **[@devops 2026-08-31] O marcador `Dona: 900-42a` está esgotado — entrada não reescrita nem repriorizada de propósito (é do `@po`).** A `900-42a` (`docs/stories/900-42a-fecha-embedding-em-platform-query.story.md`) entregou só o fechamento do `SEC-001`, declarou a consolidação da lista fora de escopo (AC7) e **não fixou o critério** pedido acima — ele segue **aberto** e sem dona. Naquela story a abordagem prescrita para o `SEC-001` (parser de embedding) foi **rejeitada por escrito**.
 
 ---
 

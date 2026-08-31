@@ -129,3 +129,77 @@ describe("platformQuery — encadeamento e filtro por org", () => {
     expect(chamadas.some((c) => c.metodo === "eq")).toBe(false)
   })
 })
+
+/**
+ * Story 900-42a (SEC-001) — a recusa de embedding do PostgREST.
+ *
+ * Por que este bloco existe separado da recusa de `"*"`: são MECANISMOS de vazamento
+ * diferentes. `"*"` traz colunas a mais da PRÓPRIA tabela; embedding traz linhas de OUTRA
+ * tabela — uma que nem precisa estar em `PLATFORM_READABLE_TABLES`, porque o PostgREST a
+ * resolve pela FK `org_id` sem emitir `.from()` nenhum. Medido contra `trifold-crm-dev` em
+ * 2026-08-31, antes da correção: `GET /rest/v1/organizations?select=id,leads(name,phone)`
+ * devolveu HTTP 200 com 6 linhas de `leads` aninhadas, todas com `phone` não-nulo.
+ *
+ * As duas direções estão aqui de propósito (recusa E controle negativo). Uma régua que só
+ * mede o sentido "lança" fica verde tanto com a guarda certa quanto com uma guarda que recusa
+ * tudo — e recusar tudo pararia o painel inteiro.
+ */
+describe("platformQuery — recusa de embedding em columns (900-42a, SEC-001)", () => {
+  it("lança para embedding com colunas nomeadas — a forma que vazava PII de lead", () => {
+    expect(() => platformQuery("organizations", "id, leads(name, phone)")).toThrow(/embedding/)
+  })
+
+  it('lança para embedding com "*" dentro — o split por vírgula nunca via este token', () => {
+    expect(() => platformQuery("organizations", "id, users(*)")).toThrow(/embedding/)
+  })
+
+  it("não abre consulta nenhuma quando recusa embedding", () => {
+    expect(() => platformQuery("organizations", "id, leads(name, phone)")).toThrow()
+    expect(chamadas).toEqual([])
+  })
+
+  it("pega o aninhamento em qualquer posição, não só no fim", () => {
+    expect(() => platformQuery("organizations", "leads(name), id")).toThrow(/embedding/)
+    expect(() => platformQuery("organizations", "id, users(id), name")).toThrow(/embedding/)
+  })
+
+  // AC8 — a guarda fecha `(` inteiro, o que também fecha a sintaxe de agregado do PostgREST.
+  // Isso não tira capacidade nenhuma: medido em `trifold-crm-dev` em 2026-08-31,
+  // `?select=count()` → HTTP 400 `PGRST123` "Use of aggregate functions is not allowed" e
+  // `?select=id,users(count)` → HTTP 300 `PGRST201`. Se uma tela futura precisar de contagem, o
+  // caminho é `Prefer: count=exact` (2º argumento de `.select()`, ortogonal a `columns`), numa
+  // story própria que estenda a assinatura — NUNCA afrouxando esta recusa.
+  it("fecha também a sintaxe de agregado, que já vem desligada do servidor (AC8)", () => {
+    expect(() => platformQuery("organizations", "count()")).toThrow(/embedding/)
+    expect(() => platformQuery("organizations", "id, users(count)")).toThrow(/embedding/)
+  })
+
+  // CONTROLE NEGATIVO — o outro sentido da classe de equivalência.
+  it("controle negativo: colunas simples da própria tabela continuam passando", () => {
+    expect(() => platformQuery("organizations", "id, name, slug")).not.toThrow()
+    expect(() => platformQuery("users", "id, email, auth_id")).not.toThrow()
+    expect(() => platformQuery("org_integrations", "provider, status")).not.toThrow()
+  })
+
+  it("controle negativo: os columns REAIS dos call sites de produção continuam passando", () => {
+    // Levantados por `git grep -n "platformQuery(" -- packages/web/src` em 2026-08-31 (13 call
+    // sites, 5 arquivos). Se algum destes passar a lançar, é regressão — o painel para.
+    const colunasDeProducao = [
+      "id",
+      "provider, status",
+      "id, actor_type, org_id, action, metadata",
+      "id, admin_invite_email",
+      "id, auth_id, email",
+      "id, name, slug, google_oauth_tokens",
+      "provider, status, config, secret_ref, updated_at",
+      "id, action, actor_type, created_at, metadata",
+      "status, phone_number_id, updated_at",
+      "id, name, slug, is_active, created_at, admin_invite_email",
+      "org_id",
+      "org_id, id, auth_id",
+    ]
+    for (const colunas of colunasDeProducao) {
+      expect(() => platformQuery("organizations", colunas)).not.toThrow()
+    }
+  })
+})

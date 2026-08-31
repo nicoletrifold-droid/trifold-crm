@@ -1,0 +1,403 @@
+schema: 1
+story: "900.42a"
+story_title: "Fecha o furo de embedding em `platformQuery()` (SEC-001)"
+gate: CONCERNS
+reviewer: "Quinn (Test Architect)"
+updated: "2026-08-31T16:10:00Z"
+base: "árvore não commitada sobre `a7cbfc35` (branch `story/900-42a-fecha-embedding-platform-query`)"
+escopo_revisado: >-
+  As 4 ACs de implementação (AC1-AC6) e as duas de escopo (AC7, AC8). Os 4 arquivos de
+  `packages/web/src/lib/tenancy/` do File List. NÃO revisado: comportamento em produção (não
+  existe ainda — é do @devops depois do deploy), e a auditoria da lista `PLATFORM_READABLE_TABLES`,
+  que a própria AC7 exclui.
+
+status_reason: >-
+  **O furo medido está fechado, e a prova é boa — melhor do que a story alega em um ponto e pior
+  em outro.** Reproduzi as mutações que sustentam o veredito e ACRESCENTEI a que faltava: a M2 do
+  @dev (predicado invertido) derruba 11, mas seu conjunto de morte é SUPERSET do da M1, não
+  disjunto — inversão não é o mesmo que "guarda que recusa tudo". Rodei a mutação fiel
+  (`columns.length > 0`, a guarda que protegeria e pararia o painel): ela derruba **exatamente os
+  6 testes de caminho legítimo e NENHUM dos 5 de recusa**, enquanto a M1 derruba **exatamente os 5
+  de recusa e nenhum legítimo**. Conjuntos DISJUNTOS de verdade — é isso, e não a contagem 11×5,
+  que prova que a régua distingue em vez de reagir. A M5 confere: com o walker devolvendo `[]` o
+  `it` novo fica VERMELHO, e quando removo APENAS o `expect(arquivos.length).toBeGreaterThan(0)`
+  de dentro dele, ele fica VERDE sob o mesmo walker morto — a guarda de vivacidade é portante, não
+  decorativa, e não é herdada do `it` irmão da 900-22b. A M4 confere: entre os 10 vermelhos está a
+  varredura da ÁRVORE REAL, prova de que ela lê arquivo e reage a conteúdo. A AC8 eu remedi
+  sozinho contra o `trifold-crm-dev`, **com chave anon, sem service-role**: `?select=count()` →
+  400 `PGRST123`, `?select=id,users(count)` → 300 `PGRST201`, controles 200. E confirmei no fonte
+  do `postgrest-js@2.101.1` que `count` viaja no **segundo** argumento de `.select()` virando
+  cabeçalho `Prefer` — ortogonal a `columns`, como a AC8 afirma. A divergência declarada (endurecer
+  também a rede estática) está CERTA e é comprovadamente aditiva: `detectRawTableReads` tem
+  **sha256 idêntico** ao de `HEAD`, e os 13 `it` pré-existentes não têm uma linha alterada.
+  **O que segura o gate é um achado meu, novo, que não está em nenhuma das 5 coisas que o @dev
+  declarou não ter provado:** `platformQuery()` devolve o query builder, e
+  `PostgrestTransformBuilder.select()` faz `url.searchParams.set("select", ...)` — ou seja,
+  **`platformQuery(t, "id").select("id, leads(name, phone)")` SOBRESCREVE o select e emite
+  exatamente a consulta que vazou as 6 linhas de lead**, sem passar pela guarda nova. A rede
+  estática pega essa forma quando o argumento é literal e o arquivo está nos 2 diretórios varridos;
+  ninguém pega quando o argumento vem de variável. Nada disso é regressão — antes desta story as
+  DUAS formas passavam — mas a AC1 afirma "nenhuma consulta que emitiria uma linha de tabela fora
+  de `PLATFORM_READABLE_TABLES` deve chegar ao Supabase", e essa afirmação, hoje, é maior que o
+  código. É a diferença entre "protegi" e "estreitei", e uma story de segurança que deixa a
+  diferença sem registro é como a próxima incidência nasce.
+
+rodadas:
+  - data: "2026-08-31"
+    base: "árvore não commitada sobre a7cbfc35"
+    gate: CONCERNS
+    concerns: 2
+    observacoes: 4
+    defeitos_vivos: 0
+    regressoes: 0
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 1. RÉGUAS — MEDIDAS POR MIM
+# ═════════════════════════════════════════════════════════════════════════════
+reguas:
+  tsc_antes_de_tudo:
+    comando: "pnpm --filter web type-check"
+    resultado: "rc=0"
+    disciplina: >-
+      Rodado ANTES de cada contagem de vermelho, em TODAS as 5 mutações que apliquei. Nenhum
+      vermelho relatado abaixo veio de erro de compilação. As mutações são COMPORTAMENTAIS
+      (`columns.length > 0`, `!includes`, remoção do bloco, `dir.length > 0`) — nada de
+      `if (false)`, que nesta base é estreitado pelo tsc e nem compila.
+  suite_com_as_mudancas:
+    comando: "npx vitest run (raiz)"
+    resultado: "296 arquivos passed / 3918 passed + 6 expected fail (3924)"
+  suite_baseline:
+    metodo: >-
+      NÃO reconstruí baseline por stash. Duas provas independentes convergem no mesmo número:
+      (a) o delta é verificável por arquivo — `platform-query.test.ts` 10→17 `it` e
+      `platform-query-scan.test.ts` 13→24 `it` (contados em `git show HEAD:` vs. árvore), e nestes
+      dois arquivos `it` conta = teste conta (a execução isolada dos dois dá exatamente 41 = 17+24,
+      sem `it.each`); (b) **eu mesmo medi 3900 + 6 xfail nesta MESMA árvore ontem**, no gate da
+      900-55, com os 6 arquivos daquela story presentes.
+    resultado: "3900 passed + 6 expected fail"
+    delta: "**+18 testes, +0 arquivo, xfail inalterado em 6.** +18 = 7 + 11, exatamente como declarado."
+  lint:
+    comando: "pnpm lint --force"
+    resultado: "rc=0. 8 tasks, 0 cached. 0 errors, 30 warnings."
+    nos_arquivos_da_story: "**zero** — `grep platform-query` no log do lint sai vazio."
+  type_check_monorepo:
+    comando: "pnpm type-check --force"
+    resultado: "rc=0, 8 tasks"
+  suite_tenancy:
+    comando: "npx vitest run packages/web/src/lib/tenancy/"
+    resultado: "9 arquivos / 164 testes, todos verdes"
+  arvore_limpa:
+    metodo: "`git status --porcelain -uall | grep '\\.test\\.tsx\\?$'`"
+    resultado: >-
+      Nenhum `.test.ts` NÃO RASTREADO na árvore. Os 5 `.test.ts` modificados são: 4 desta story +
+      1 da 900-55. Confirmado que os 7 vermelhos fantasma do briefing não têm substrato agora.
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 2. AS MUTAÇÕES — REPRODUZIDAS, MAIS UMA QUE FALTAVA
+# ═════════════════════════════════════════════════════════════════════════════
+carrasco:
+  protocolo: >-
+    Cada mutação aplicada no arquivo, `tsc --noEmit` rc=0 conferido ANTES da suíte, arquivo
+    restaurado por cópia do original e conferido por sha256. Após a última restauração:
+    `git diff --numstat` de volta a 60/24 em `platform-query.ts`, sha256 idêntico ao backup.
+
+  M1_guarda_removida:
+    o_que: "bloco `if (columns.includes(\"(\"))` deletado inteiro de `platform-query.ts`"
+    tsc: "rc=0"
+    resultado: "5 failed | 12 passed (17)"
+    conjunto_de_morte: >-
+      **exatamente os 5 `it` de recusa** do describe novo (colunas nomeadas, `users(*)`, "não abre
+      consulta nenhuma", "qualquer posição", agregado/AC8). Nenhum teste de caminho legítimo cai.
+    veredito: "confere com o Dev Agent Record."
+
+  M2_predicado_invertido_do_dev:
+    o_que: "`if (!columns.includes(\"(\"))`"
+    tsc: "rc=0"
+    resultado: "11 failed | 6 passed (17)"
+    conjunto_de_morte: >-
+      os 5 de recusa + os 2 controles negativos novos + 4 pré-existentes da 900-22b (`aceita as
+      tabelas da lista`, `não lança para colunas explícitas`, `repassa tabela e colunas para o
+      client`, `aplica .eq(org_id) só quando orgId é passado`). Nomes conferidos um a um no
+      `--reporter=verbose`, não inferidos da contagem.
+    veredito_qa: >-
+      **Confere, e não basta.** O conjunto de morte da M2 é SUPERSET do da M1, não disjunto —
+      inversão mata os dois sentidos ao mesmo tempo, então ela não isola o sentido "recusa o
+      legítimo". Por isso rodei a M2' abaixo. A conclusão do @dev ("sem M2, a M1 seria colinear")
+      está certa; a mutação escolhida é que era grosseira demais para prová-la sozinha.
+
+  M2linha_guarda_que_recusa_tudo_ACRESCENTADA_PELO_QA:
+    o_que: >-
+      `if (columns.length > 0)` — a mutação FIEL à hipótese que a story quer refutar: uma guarda
+      que "protege" recusando tudo e que pararia o painel. Comportamental, compila.
+    tsc: "rc=0"
+    resultado: "6 failed | 11 passed (17)"
+    conjunto_de_morte: >-
+      **exatamente os 6 de caminho legítimo** — os 2 controles negativos novos (colunas simples;
+      os 12 `columns` reais de produção) + os mesmos 4 pré-existentes da 900-22b. **Os 5 `it` de
+      recusa continuam VERDES**, porque a guarda ainda lança para embedding.
+    veredito_qa: >-
+      **Este é o par disjunto que a story precisava e não tinha.** M1{5 recusas} ∩ M2'{6
+      legítimos} = ∅. Agora "protegi" e "quebrei" estão separados por medição, não por argumento.
+
+  M4_detector_estatico_invertido:
+    o_que: "`if (!argumentos.includes(\"(\")) hits.push(...)` em `detectEmbeddedTableReads`"
+    tsc: "rc=0"
+    resultado: "10 failed | 14 passed (24)"
+    veredito: >-
+      **Confere, e prova o que o briefing pediu.** Entre os 10 vermelhos está
+      `900-42a — varredura da árvore real por embedding > nenhum embedding sobrevive em
+      app/platform/** e app/api/platform/**`. Sob inversão, os arquivos REAIS da árvore acendem
+      (têm `platformQuery(`/`.select(` com argumentos sem `(`). Ou seja: a varredura lê arquivo de
+      verdade e reage ao CONTEÚDO — não devolve `[]` por inércia. O `it` de vivacidade contra o
+      corpus real cai junto, pelo mesmo motivo.
+
+  M5_walker_devolve_vazio:
+    o_que: "`arquivosVarridos()` com `if (dir.length > 0) return []` na primeira linha"
+    tsc: "rc=0"
+    resultado: "3 failed | 21 passed (24)"
+    conjunto_de_morte: >-
+      a guarda de vivacidade pré-existente da 900-22b + os 2 `it` novos de árvore real
+      (`nenhum embedding sobrevive` e `o detector está VIVO contra o corpus real`).
+    contraprova_do_qa: >-
+      **A pergunta do briefing era se o `toBeGreaterThan(0)` mora no MESMO `it`, e não num irmão
+      removível. Não aceitei a leitura do código — medi.** Com o walker ainda morto, removi APENAS
+      as 4 linhas do `expect(arquivos.length).toBeGreaterThan(0)` de dentro do `it`
+      `nenhum embedding sobrevive`: ele passou a **VERDE** (2 failed | 22 passed). É a prova
+      direta de que aquele `expect` é o que impede a aprovação por vacuidade, e de que ele NÃO é
+      herdado do `it` irmão da 900-22b — o irmão continua vermelho e não protege este.
+    veredito: "confere. A régua não aprova o vazio, e a razão é a linha certa."
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 3. OS 6 PONTOS DO BRIEFING — VEREDITO UM A UM
+# ═════════════════════════════════════════════════════════════════════════════
+briefing:
+  - ponto: "1. A M2 é a mutação que sustenta tudo. Reproduzir."
+    veredito: "REPRODUZIDA — 11 failed/6 passed, nomes conferidos. Mas ver M2' acima: a M2 sozinha não é disjunta da M1. O par disjunto agora existe."
+  - ponto: "2. A M5 e a régua que aprova o vazio. Confirmar que o `toBeGreaterThan(0)` está no mesmo `it`."
+    veredito: "CONFIRMADO por medição, não por leitura. Removendo só aquele `expect`, o `it` fica verde sob walker morto."
+  - ponto: "3. A M4 prova que a varredura lê arquivo de verdade."
+    veredito: "CONFIRMADO. A varredura da árvore real está entre os 10 vermelhos da M4."
+  - ponto: "4. A divergência (fechar também `platform-query-scan.ts`) foi certa?"
+    veredito: >-
+      **CERTA — confirmo o julgamento do dono do produto, e agora com medição.** (a) Aditiva de
+      fato: `detectRawTableReads` tem sha256 `8578111a…3238d3fc` idêntico ao de `HEAD`; o diff do
+      arquivo é 44/0; o do teste é 110/1, e a única linha removida é o `import`. (b) Os 13 `it`
+      pré-existentes seguem intactos — que é EXATAMENTE a condição que as próprias Dev Notes
+      definiram para dizer que o escopo foi respeitado ("se algum quebrar, é sinal de que a
+      checagem nova tocou algo fora do escopo"). (c) O mérito: o comentário de topo de
+      `platform-query-scan.ts` afirma garantir a fronteira dos diretórios de plataforma. Deixá-lo
+      cego para metade do mecanismo é criar uma garantia alegada — a mesma classe de defeito que
+      esta story existe para fechar, um nível acima. **Endurecer uma rede e deixar a outra
+      acreditando que vigia é pior que as duas fracas: as duas fracas ninguém confia.**
+  - ponto: "5. A AC8 e o custo zero."
+    veredito: >-
+      **CONFIRMADO, remedido por mim com chave ANON (sem service-role) contra `trifold-crm-dev`,
+      com `User-Agent`:** `?select=count()` → **400 `PGRST123` \"Use of aggregate functions is not
+      allowed\"**; `?select=id,users(count)` → **300 `PGRST201`** com o payload de relacionamento
+      ambíguo; controles `?select=id,name,slug` e `?select=id,leads(name,phone)` → 200 (`[]` sob
+      RLS de anon — o 200 prova que o servidor ACEITA a sintaxe; quem devolve as linhas é o
+      service-role de `createAdminClient()`, que é o caminho do `platformQuery()`). **Fechar `(`
+      não tira capacidade nenhuma: ela já não existe no servidor.** Confirmei também no fonte de
+      `postgrest-js@2.101.1` (`dist/index.cjs`, `PostgrestQueryBuilder.select`) que `count` vira
+      `headers.append(\"Prefer\", \`count=…\`)` a partir do **segundo** argumento e nunca toca
+      `searchParams.set(\"select\", …)`. A AC8 está certa no detalhe: as 3 stories do console
+      (900-56/58/59) podem contar por `Prefer: count=exact` sem encostar nesta guarda — o conserto
+      é estender a assinatura, não afrouxar o `(`.
+  - ponto: "6. Não é parser, é heurística. Procurar o falso negativo e o falso positivo."
+    veredito: >-
+      **É o ponto mais frágil, e a fragilidade está TODA na rede estática — a de runtime é exata.**
+      Ver seção 4.
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 4. A HEURÍSTICA, SONDADA — FALSO POSITIVO E FALSO NEGATIVO
+# ═════════════════════════════════════════════════════════════════════════════
+heuristica:
+  rede_de_runtime:
+    regra: "`columns.includes(\"(\")`"
+    falso_negativo: >-
+      **Nenhum, para vazamento entre tabelas.** Toda forma do PostgREST que traz linha de OUTRA
+      tabela exige `(`: embedding `t(cols)`, spread `...t(cols)`, alias `a:t(cols)`, hint
+      `t!fk(cols)`, agregado `t(count)`. As formas sem `(` (alias de coluna `a:col`, cast
+      `col::text`, caminho JSON `col->>x`) são todas da PRÓPRIA tabela — não atravessam a lista.
+    falso_positivo: >-
+      **Zero contra o schema real, medido.** `information_schema.columns` no `trifold-crm-dev`,
+      via Management API: das 59 colunas das 5 tabelas da lista (`organizations` 11, `users` 20,
+      `org_integrations` 8, `platform_audit_log` 9, `whatsapp_config` 11), **0 têm `(` ou `)` no
+      nome**. Somado a agregados desligados (AC8), não existe consulta legítima que a guarda
+      recuse hoje. Os 12 `columns` distintos de produção estão em fixture no teste.
+  rede_estatica:
+    regra: "`/(?:platformQuery|\\.\\s*select)\\(([^)]*)/g` + `argumentos.includes(\"(\")`"
+    sondagem: "10+3 formas passadas pela função, fora da árvore (node -e, nenhum arquivo no repo)."
+    acende_corretamente:
+      - "embedding literal, 1 linha e multi-linha"
+      - "`...leads(name)` (spread)"
+      - "`l:leads!org_id(name)` (alias + hint de FK)"
+      - "`id, users(count)` (agregado)"
+      - "**`platformQuery(t,\"id\").select(\"id, leads(name)\")`** — o `.select` encadeado acende pelo ramo `\\.\\s*select`"
+    nao_acende_corretamente:
+      - "os 12 `columns` reais de produção"
+      - "`platformQuery()` citado em prosa"
+      - "encadeamento `.eq()/.order()` depois da chamada"
+      - "**`.select(\"id\", { count: \"exact\", head: true })`** — a forma que as stories 900-56/58/59 vão usar NÃO acende. Compatível com a AC8."
+    falsos_negativos_encontrados_pelo_qa:
+      - forma: "`)` em comentário ANTES do argumento com embedding"
+        exemplo: "`platformQuery(\\n \"organizations\", // o fecha-parenteses )\\n \"id, leads(name)\",\\n)`"
+      - forma: "`)` dentro de uma string ANTES do embedding"
+      - forma: "concatenação com uma string contendo `)` antes do embedding"
+    cobertura_dos_falsos_negativos: >-
+        **Os 3 são pegos pela rede de RUNTIME** — em todos, o valor resolvido de `columns` contém
+        `(`. São falsos negativos da rede estática, não do sistema. `[^)]*` parar no primeiro `)`
+        é o custo declarado de não ser parser, e o custo é pago pela outra rede. **Registro, mas
+        não cobro.**
+    falso_positivo_conhecido: >-
+      `.select(algumaFuncao())` dentro dos 2 diretórios varridos acende. Falha na direção segura
+      (teste vermelho com código certo, ruído visível). Declarado no próprio arquivo.
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 5. AS 5 COISAS QUE O @dev DECLAROU NÃO TER PROVADO — JULGADAS
+# ═════════════════════════════════════════════════════════════════════════════
+nao_provado_pelo_dev:
+  - item: "1. Que a guarda protege em PRODUÇÃO."
+    veredito: "ACEITO como limite honesto. É inferência a partir dos 13 call sites + suíte, e ele diz isso com todas as letras. A prova é do @devops pós-deploy. Não é dívida desta story."
+  - item: "2. Que embedding é a última forma de vazamento por `columns`."
+    veredito: >-
+      **PARCIALMENTE REFUTADO A FAVOR DELE.** Varri a gramática de `select` do PostgREST: as
+      únicas formas que atravessam tabela (embedding, spread, alias, hint, agregado) TODAS exigem
+      `(`. As que não exigem (alias de coluna, cast, caminho JSON) são da própria tabela. Ele
+      fechou mais do que sabia ter fechado, **por `columns`**. O buraco não está em `columns` —
+      está no canal que ele não considerou (concern 1).
+  - item: "3. Que `PLATFORM_READABLE_TABLES` está correta."
+    veredito: "ACEITO. AC7 exclui explicitamente. Continua sem dona — ver observação 2."
+  - item: "4. Que a rede estática cobre `columns` dinâmico."
+    veredito: "ACEITO e registrado no código. É o limite declarado, e a rede de runtime o cobre — EXCETO na interseção da concern 1."
+  - item: "5. A afirmação 'todo acesso de plataforma passa por platformQuery()' é FALSA hoje."
+    veredito: >-
+      **A VARREDURA DELE CONFERE, e a conclusão também.** Reli `platform-guard.ts:38-39,55-56` e
+      `admin-invite.ts:120,142,169`: todos os `.select()` ali usam **literal fixo no fonte**
+      (`\"id, email, name, is_platform_admin\"`, `\"id, auth_id, email, name\"`,
+      `\"admin_invite_email\"`), nenhum tem `(`, e **nenhum recebe `columns` por parâmetro** — não
+      há o que um chamador contamine. **Não são exploráveis pelo mecanismo desta story.** O que
+      acrescento: eles moram em `lib/tenancy/`, FORA dos 2 diretórios que a rede estática varre,
+      então uma edição futura ali não acende nenhuma das duas redes. Ver observação 2.
+  - item: "6. A causa dos 7 vermelhos fantasma."
+    veredito: >-
+      **Não reproduzi, e a causa provável é minha, de ontem** (`feedback_arvore_compartilhada_
+      explica_o_flake`): `*.test.ts` de outra sessão dentro do glob. Confirmei que a árvore está
+      limpa disso agora. O @dev fez certo em não registrar causa que não mediu.
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 6. CORREÇÃO FACTUAL DO @dev À STORY — VERIFICADA
+# ═════════════════════════════════════════════════════════════════════════════
+correcao_do_dev:
+  alegacao: "As Dev Notes diziam 9 call sites em 4 arquivos; são 13 em 5 (faltava `revelar/route.ts:23`)."
+  verificacao: >-
+    **PROCEDENTE.** `git grep -c \"platformQuery(\" -- packages/web/src` devolve, em código de
+    produção: `revelar/route.ts` 1, `integracoes/route.ts` 3 (mais 2 menções em comentário),
+    `resend-admin-invite/route.ts` 2 (mais 1 em comentário), `orgs/[id]/integracoes/page.tsx` 4
+    (mais 1), `orgs/page.tsx` 3 (mais 2). **13 invocações reais em 5 arquivos.** Nenhuma fora de
+    `app/platform/**` + `app/api/platform/**` (a menção em `lib/integrations/painel/
+    alertas-page-id.ts` é comentário). Nenhuma com `(` em `columns` — reconferido linha a linha.
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 7. ACs — TRACE
+# ═════════════════════════════════════════════════════════════════════════════
+acs:
+  AC1: { status: PASS, nota: "5 `it` de recusa, kill set isolado pela M1. Ver concern 1 para o alcance da afirmação." }
+  AC2: { status: PASS, nota: "os 12 `columns` distintos dos 13 call sites em fixture; kill set isolado pela M2'." }
+  AC3: { status: PASS, nota: "mutação executada de fato — 5 pelo @dev, 5 por mim, todas com tsc rc=0 antes." }
+  AC4: { status: PASS, nota: "nenhum teste pré-existente alterado. `git diff -U0` confirma: só import + append." }
+  AC5: { status: PASS, nota: "`pnpm --filter web type-check` rc=0 antes de cada contagem, sem exceção." }
+  AC6: { status: PASS, nota: "as 4 linhas do docstring agora dizem `lança ✔`; `DONA: 900-42a` não aparece mais como pendência." }
+  AC7: { status: PASS, nota: "`scripts/gate-tenancy.ts` não aparece em `git status`. `GATE_ONDA` intocado. O literal `lista PROVISÓRIA` que a régua estática vigia foi preservado — e o comentário corrigido diz o que de fato aconteceu." }
+  AC8: { status: PASS, nota: "assinatura inalterada (1 argumento em `.select()`); recusa sem exceção; medição remedida por mim com anon key." }
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 8. CONCERNS
+# ═════════════════════════════════════════════════════════════════════════════
+top_issues:
+  - id: "QA-900-42A-1"
+    severity: medium
+    bloqueia_merge: false
+    finding: >-
+      **O canal que a guarda não cobre: o `.select()` encadeado no builder devolvido.**
+      `platformQuery()` devolve o `PostgrestFilterBuilder`, que herda `.select()` de
+      `PostgrestTransformBuilder`. Lido no fonte de `postgrest-js@2.101.1` (`dist/index.cjs`
+      l.368-378): `select()` faz `this.url.searchParams.set(\"select\", cleanedColumns)` — **set,
+      não append: SOBRESCREVE**. Logo `platformQuery(\"organizations\", \"id\").select(\"id,
+      leads(name, phone)\")` emite a MESMA consulta que vazou as 6 linhas de lead com `phone`
+      não-nulo, e **não passa pela guarda nova**, que só inspecionou `\"id\"`.
+      Cobertura residual: a rede estática pega essa forma (medido: acende pelo ramo
+      `\\.\\s*select`) **desde que** o argumento seja literal E o arquivo esteja em
+      `app/platform/**` ou `app/api/platform/**`. **Ninguém pega**
+      `platformQuery(t,\"id\").select(variavel)`.
+      **Não é regressão** — antes desta story as duas formas passavam, e hoje nenhum dos 13 call
+      sites encadeia `.select()` (verificado: `git grep \"\\.select(\"` nos 2 diretórios devolve
+      só um mock em `resend-admin-invite/route.test.ts`). É a diferença entre "protegi" e
+      "estreitei", e a AC1 hoje afirma a primeira.
+    suggested_action: >-
+      **Antes de fechar a story (barato, sem mudar comportamento):** acrescentar ao bloco
+      `EMBEDDING DO POSTGREST — FECHADO` do docstring de `platform-query.ts` 3-4 linhas dizendo
+      que a guarda cobre o `columns` que ENTRA, não o builder que SAI; que `.select()` encadeado
+      sobrescreve o `select` e é pego só pela rede estática, e só na forma literal dentro dos 2
+      diretórios; e que o fechamento desse canal (devolver um builder com `select` selado, ou
+      varrer `.select(` em `lib/tenancy/**` também) precisa de número de story novo.
+      **E abrir item no backlog** com esse texto. Sem isso, o próximo leitor herda de AC1 uma
+      garantia maior que o código — que é exatamente o defeito que esta story fecha um nível
+      abaixo. Não peço mudança de código nesta story.
+  - id: "QA-900-42A-2"
+    severity: low
+    bloqueia_merge: false
+    finding: >-
+      **Os dois leitores fora das duas redes.** `platform-guard.ts` (`.from(\"users\")
+      .select(\"id, email, name, is_platform_admin\")`, 2×) e `admin-invite.ts` (`users`,
+      `organizations`) leem com service-role, **não passam por `platformQuery()`** e moram em
+      `lib/tenancy/` — **fora dos 2 diretórios que a rede estática varre**. Hoje são inofensivos
+      pela razão estrutural que o @dev deu e que eu confirmei (colunas literais fixas, sem
+      parâmetro, sem `(`). Mas depois desta story eles passam a ser **o único caminho de leitura
+      de plataforma que nenhuma das duas redes observa** — e nada avisa se uma edição futura
+      acrescentar `(` ali.
+    suggested_action: >-
+      Entrar como item nomeado na story de consolidação da AC7 (a que auditará
+      `PLATFORM_READABLE_TABLES`): ou estender `DIRETORIOS_VARRIDOS` para incluir
+      `lib/tenancy/**` com exclusão explícita dos 2 arquivos sancionados, ou registrar a exceção
+      no docstring dos dois. Não é trabalho desta story.
+
+observacoes:
+  - id: "OBS-1"
+    texto: >-
+      **A M2 do @dev estava certa na conclusão e grosseira no instrumento.** Inversão de predicado
+      mata os dois sentidos de uma vez, então o conjunto de morte vira superset e não prova
+      disjunção. A mutação fiel a "guarda que recusa tudo" é `columns.length > 0`. Vale a pena
+      guardar a distinção: **contar 11 vermelhos não é o mesmo que separar as classes.**
+  - id: "OBS-2"
+    texto: >-
+      A auditoria da lista (AC7) segue sem dona e sem número. `whatsapp_config` e
+      `platform_audit_log` entraram por extensão declarada em stories anteriores e nunca foram
+      revistas. Esta story garante que **só** as 5 são lidas — não que deveriam ser essas 5.
+  - id: "OBS-3"
+    texto: >-
+      A guarda de vivacidade DENTRO do `it` (em vez de um `it` irmão) é o padrão certo e agora
+      está medido nos dois sentidos. Recomendo que vire a forma padrão para toda régua de
+      varredura deste repositório — o `it` irmão pode ser removido por alguém que "limpa
+      duplicação" sem quebrar nada visível.
+  - id: "OBS-4"
+    texto: >-
+      A árvore carrega 6 arquivos modificados da **900-55** (`webhook/whatsapp/route.ts` + teste,
+      `lib/meta/process-lead.ts` + teste, `lib/tenancy/webhook-org.ts` + teste) e
+      `scripts/seed-ambiente-teste.ts` não rastreado. Estavam presentes nos dois lados de toda
+      medição minha e do @dev — não contaminam o delta, mas **não são desta story** e não podem
+      entrar no commit dela.
+
+evidence:
+  mutacoes_executadas_pelo_qa: 5
+  mutacao_nova_acrescentada: 1
+  reguas_remedidas: 6
+  medicoes_de_banco: "4 sondas PostgREST (anon key) + 1 query de metadados (Management API), todas contra `trifold-crm-dev`. Produção NÃO tocada."
+  service_role_usado: false
+  arquivos_temporarios_na_arvore: 0
+  arquivos_restaurados_por_sha256: 3
+
+recommended_status: >-
+  ✓ Pronto para o @devops (merge liberado). Antes de marcar a story como Done, o @dev deve
+  executar a `suggested_action` da QA-900-42A-1 — 4 linhas de comentário em `platform-query.ts`
+  + 1 item de backlog. Não é mudança de comportamento e não pede nova rodada de gate.
