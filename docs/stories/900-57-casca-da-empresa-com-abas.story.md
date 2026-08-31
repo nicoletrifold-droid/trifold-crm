@@ -216,6 +216,7 @@ created_at`, sem esse campo. Pequena duplicação de fetch de `organizations` en
 | 2026-08-31 | 0.2 | **Validada pelo @po (Pax) — GO, nota 8/10.** GO. Nenhum defeito bloqueante. Acrescentadas à AC4 duas precisões medidas (18 linhas `stone-`, não 16; 2 consumidores; a régua `dashboard-platform-boundary.test.ts` que vigia `components/integrations/**`). Status Draft → Ready. | @po (Pax) |
 | 2026-08-31 | 0.3 | **Implementada.** Todas as 7 ACs entregues e verificadas no ambiente de teste com sessão real de platform admin (404 → 200 nas 6 abas; 404 de verdade para empresa inexistente). A paleta do `/dashboard` foi provada por **comparação de markup renderizado** entre `main` e a branch, não por inspeção visual. ⚠️ *Corrigido na v0.4: a frase original dizia "inalterada", e a medição sustentava menos que isso — ver QA-900-57-2.* Status Ready → Ready for Review. | @dev (Dex) |
 | 2026-08-31 | 0.4 | **Concerns do gate fechadas (QA-900-57-1/2/3).** A régua da AC4 fechou a CLASSE, não só as duas instâncias: `linhasDeCodigo()` única (filtrando `*`, `//`, `/*` e `{/*`) nas quatro asserções de texto-fonte, e recorte DELIMITADO de call site (`<Tag` até o `/>` que o fecha) no lugar do `slice` até o EOF — os três furos (q8, M3, q4c) reproduzidos VERDES antes e VERMELHOS depois, com `tsc` rc=0 nos seis casos, mais um controle positivo por furo. `campoMono` acrescentado à tabela de paletas: `` `${classes.campo} font-mono` `` concatenava e mudava a ordem dos tokens do campo de senha; agora o valor é byte a byte o da `main@1393fa68`. `rotuloDoAtor` exportado e coberto nos 4 caminhos. | @dev (Dex) |
+| 2026-08-31 | 0.5 | **Rodada 3 — os 4 achados do CodeRabbit (PR #547) fechados, e medidos.** As três telas da casca afirmavam "empresa não existe", "○ inativa", "Nenhum administrador convidado", "○ Não conectado" e "Nenhuma ação registrada" a partir de consultas que descartavam o `error`; a Trilha acendia "há mais registros" sem evidência de uma linha a mais. Novos `console-leitura.ts` (vocabulário dos três estados, `falhou` obrigatório) e `fonte-scan.ts` (os primitivos de varredura saíram de `console-paleta.test.ts`). ⚠️ **Os consertos entraram em produção ANTES de existir régua, e a mutação mostrou que três eram decorativos.** Ver Dev Agent Record → "Rodada 3", inclusive os três comentários que citavam uma régua inexistente e os dois defeitos da própria régua. | @dev (Dex) |
 
 ## Dev Agent Record
 
@@ -333,8 +334,14 @@ menção em comentário durante a construção, e o conserto foi **reescrever o 
 - `packages/web/src/components/integrations/paleta.ts`
 - `packages/web/src/lib/tenancy/console-paleta.test.ts`
 - `packages/web/src/app/platform/_components/linha-da-trilha.test.ts` *(rodada 2 — QA-900-57-3)*
+- `packages/web/src/lib/tenancy/console-leitura.ts` *(rodada 3 — o vocabulário dos três estados)*
+- `packages/web/src/lib/tenancy/fonte-scan.ts` *(rodada 3 — os primitivos de varredura de texto-fonte)*
 
 **Modificados**
+- `packages/web/src/app/platform/orgs/[id]/layout.tsx` *(rodada 3 — o `error` que virava `notFound()` por acidente)*
+- `packages/web/src/app/platform/orgs/[id]/page.tsx` *(rodada 3 — as CINCO consultas)*
+- `packages/web/src/app/platform/orgs/[id]/trilha/page.tsx` *(rodada 3 — `LIMITE + 1` e o `haMais` com evidência)*
+- `packages/web/src/lib/tenancy/console-paleta.test.ts` *(rodada 3 — helpers extraídos para `fonte-scan.ts`)*
 - `packages/web/src/app/platform/orgs/[id]/integracoes/page.tsx`
 - `packages/web/src/components/integrations/integrations-panel.tsx`
 - `packages/web/src/components/integrations/paleta.ts` *(rodada 2 — `campoMono`)*
@@ -426,6 +433,84 @@ continuam intocados). Detalhe do delta no gate irmão da `900-56`.
 | `turbo lint --force` | rc=0 — 0 erros, 30 warnings, nenhum em arquivo desta leva |
 | `turbo type-check --force` | rc=0 — 8/8 |
 | `build` de `packages/web` | rc=0; tokens de cor das duas paletas presentes no CSS emitido |
+
+### Rodada 3 — os 4 achados do CodeRabbit (PR #547) na casca da empresa
+
+**A ordem foi a errada, e está registrada como aconteceu:** os consertos entraram no código de
+PRODUÇÃO **antes** de existir régua. Só depois escrevi `console-fail-closed.test.ts` e mutei os
+consertos — **três dos quatro saíram VERDES com o conserto neutralizado**. Eram decorativos:
+certos no comportamento, indefesos contra a próxima edição. O gêmeo deste registro está na
+`900-56`; aqui ficam as três telas da casca.
+
+Os três achados desta story são a mesma classe: o PostgREST não lança em falha — devolve
+`{ data: null, error }` — e `data ?? []` transforma "não consegui ler" em "li e não havia nada",
+que vira **texto** na tela.
+
+| arquivo | o que a tela afirmava sem ter medido |
+|---|---|
+| `orgs/[id]/layout.tsx` | "empresa não existe". O destino continua `notFound()` — fail-closed — mas agora por leitura explícita do `error`, e não por acidente do `?? []`. |
+| `orgs/[id]/page.tsx` | as **cinco** consultas descartavam o `error`: `○ inativa` sobre empresa no ar, "Nenhum administrador convidado", "○ Não conectado" nos 4 tiles (a QA-900-51-2 por outra porta) e "Nenhuma ação registrada". |
+| `orgs/[id]/trilha/page.tsx` | "há mais registros que esta tela ainda não pagina" — com `.limit(LIMITE)` e exatamente `LIMITE` linhas, o aviso acendia sem existir uma 101ª linha. |
+
+`console-leitura.ts` é o vocabulário dos três estados, com o `falhou` como campo **obrigatório**:
+esquecê-lo é erro de compilação, não uma tela que mente. `fonte-scan.ts` tirou
+`linhasDeCodigo`/`codigoDe`/`callSiteDe` de `console-paleta.test.ts` porque um **segundo** arquivo
+de régua passou a precisar deles — a terceira cópia de um detector que já ficou verde três vezes
+com a prop de paleta neutralizada seria o começo do apodrecimento.
+
+#### Três comentários afirmavam uma régua que não existia
+
+Enquanto os consertos estavam sem carrasco, três comentários no código já citavam
+`console-fail-closed.test.ts` como se ele existisse. É **exatamente a classe de defeito que esta
+story persegue** — afirmar um fato que ninguém mediu — cometida dentro dela. Hoje o arquivo existe
+e mede o que os comentários prometem; houve uma janela em que a prosa era a única prova.
+
+#### As três mutações, cada uma com `tsc --noEmit` rc=0 medido ANTES da contagem
+
+| # | mutação | tsc | antes da régua | agora |
+|---|---|---|---|---|
+| r1 | `adminsIndisponiveis: adminsFalhou` → `false` no call site | rc=0 | VERDE | **3 VERMELHOS** |
+| r2 | apagar os ramos `desconhecido`/`falhou` nos 3 arquivos de tela | rc=0 | VERDE | **13 VERMELHOS** |
+| r3 | `.limit(LIMITE_DE_LINHAS)` + `haMais: linhas.length >= limite` | rc=0 | VERDE | **4 VERMELHOS** |
+
+Os 4 arquivos de produção foram restaurados e conferidos por `shasum -c`.
+
+**Correção a uma instrução recebida:** a metade `>=` da r3 **não** vive em
+`orgs/[id]/trilha/page.tsx` — a página só passou a buscar `LIMITE_DE_LINHAS + 1`. O predicado está
+em `lib/tenancy/console-leitura.ts`, em `recortarComExcedente` (`haMais: linhas.length > limite`).
+A mutação completa exige tocar os dois arquivos, e é por isso que ela mata 4 testes.
+
+#### Dois defeitos na própria régua — consertados no TESTE, com o código de produção certo
+
+1. **A asserção media no lugar errado.** A ordem "o ramo do fail-closed vem ANTES da frase que
+   afirma ausência" era medida sobre o recorte; o recorte da Trilha fecha no `</div>` do próprio
+   aviso e a frase mora fora dele, então `indexOf` devolvia `-1` e a régua reprovava uma tela
+   correta. Medir sobre o **arquivo cru** seria pior: a Trilha **cita** "Nenhuma ação registrada
+   ainda" num comentário **acima** do ramo, e a citação inverte a ordem — falso vermelho. Conserto:
+   medir só sobre **código** (`codigoDe`) e exigir as **duas âncoras únicas**
+   (`ocorrenciasNoCodigo(...) === 1`), senão o `indexOf` compara um par arbitrário.
+2. **O número esperado era conferido contra a fonte já envenenada.** No controle positivo que
+   apaga o ramo do cartão "Administrador" do Resumo. **Não** troquei 3 por 2: o `3` ficou ancorado
+   na fonte **correta** e o da envenenada passou a ser derivado como `N − 1` — é o **par** que
+   prova que o veneno apagou exatamente um ramo.
+
+#### Correção ao delta de testes que circulou
+
+O `+15` que circulou **não era desta frente**. Contado por arquivo: daqui saiu
+`console-fail-closed.test.ts` (48 testes) e um `it` novo em `console-visao-geral.test.ts`;
+`console-paleta.test.ts` só perdeu os helpers para `fonte-scan.ts`, sem mudar de contagem. O resto
+do movimento da suíte é de frentes vizinhas na mesma árvore compartilhada.
+
+#### Réguas (rodada 3)
+
+| medição | valor |
+|---|---|
+| suíte cheia | **301 arquivos · 4.034 `passed` · 6 xfail (4.040 total)** · rc=0 |
+| baseline sem o arquivo novo | 300 · 3.986 · 6 |
+| delta | **+1 arquivo · +48 testes · xfail INALTERADO** |
+| `tsc --noEmit` | rc=0 |
+| `eslint` | rc=0 |
+
 
 ## QA Results
 

@@ -263,6 +263,7 @@ paralelo é como se perde uma correção de segurança num merge. Se a assinatur
 | 2026-08-31 | 0.2 | **Validada pelo @po (Pax) — GO, nota 7/10.** GO após correção do @po. Defeito corrigido: as ACs mandavam contar com `count: "exact", head: true`, inalcançável por `platformQuery()` (um só argumento em `.select()`), e agregados do PostgREST estão desligados (`PGRST123`). AC4 reescrita, AC9 nova (saturação declarada), Dev Notes de contagem substituída. Status Draft → Ready. | @po (Pax) |
 | 2026-08-31 | 0.3 | **Implementada.** Uma divergência medida contra a AC2: `/platform/trilha` **não existe** (medido: HTTP 404 no ambiente de teste, com sessão de platform admin), então o item "Trilha" nasce desabilitado como Cobrança e Uso, em vez de `<Link>`. Ver Dev Agent Record → "Divergência". Status Ready → Ready for Review. | @dev (Dex) |
 | 2026-08-31 | 0.4 | **Concerns do gate fechadas (QA-900-56-1/2/3/4).** As 4 consultas passam a LER o `error`: `ContagemDeclarada` ganha o terceiro estado `indisponivel`, `formatarContagem` devolve `—`, e o vazio de partida ("Nenhuma empresa ainda") só renderiza quando a consulta de `organizations` SUCEDEU. "N integrações conectadas" passa a herdar saturação de `org_integrations` **e** de `whatsapp_config`, e a contar por `rotuloDeStatusDoTile(...).tom === "ok"` — a tradução única de status, em vez de uma terceira. O predicado do período saiu do `page.tsx` para `ehNovaNoPeriodo()`, com carrasco de borda. 7 mutações novas, cada uma com `tsc --noEmit` rc=0 medido antes do vermelho. | @dev (Dex) |
+| 2026-08-31 | 0.5 | **Rodada 3 — os 4 achados do CodeRabbit (PR #547) fechados, e medidos.** O achado desta story era o **consumidor cego**: a rodada 2 criou o sinal `adminsFalhou` e deixou `pendenciasDeConvite` e a coluna de admin de "Entraram recentemente" sem lê-lo — com a consulta de `users` caída, toda org com `admin_invite_email` virava pendência por falta de dado. `adminsIndisponiveis` passa a ser campo obrigatório. ⚠️ **Os quatro consertos entraram em produção ANTES de existir régua, e a mutação mostrou que três eram decorativos** (verdes com o conserto neutralizado); `console-fail-closed.test.ts` (48 testes) é o que os transforma em entrega. Ver Dev Agent Record → "Rodada 3", inclusive os dois defeitos da própria régua e a correção do delta de testes. | @dev (Dex) |
 
 
 ## Dev Agent Record
@@ -361,9 +362,13 @@ zero linhas fora de `disconnected`, `whatsapp_config` de volta a `inactive`/`nul
 - `packages/web/src/app/platform/page.tsx`
 - `packages/web/src/lib/tenancy/console-visao-geral.ts`
 - `packages/web/src/lib/tenancy/console-visao-geral.test.ts`
+- `packages/web/src/lib/tenancy/console-fail-closed.test.ts` *(rodada 3 — a régua das duas stories)*
 
 **Modificados**
 - `packages/web/src/app/platform/layout.tsx`
+- `packages/web/src/app/platform/page.tsx` *(rodada 3 — os dois consumidores cegos ao `adminsFalhou`)*
+- `packages/web/src/lib/tenancy/console-visao-geral.ts` *(rodada 3 — `adminsIndisponiveis` obrigatório)*
+- `packages/web/src/lib/tenancy/console-visao-geral.test.ts` *(rodada 3 — o `it` do consumidor cego)*
 
 ### Fechamento das concerns do gate (rodada 2) — QA-900-56-1/2/3/4
 
@@ -429,6 +434,80 @@ Os números estavam certos; os rótulos, não.
 
 O delta fecha por dois caminhos independentes: `3.985 − 3.934 = 51` e a soma dos três arquivos
 das stories (`console-paleta` 14 + `console-visao-geral` 32 + `linha-da-trilha` 5 = 51).
+
+### Rodada 3 — os 4 achados do CodeRabbit (PR #547), e o que as mutações disseram deles
+
+**A ordem foi a errada, e está registrada como aconteceu:** os quatro consertos entraram no
+código de PRODUÇÃO **antes** de existir régua. Só depois escrevi `console-fail-closed.test.ts` e
+mutei os consertos — e três dos quatro saíram **VERDES com o conserto neutralizado**. Eram
+decorativos: certos no comportamento, indefesos contra a próxima edição. O que os tornou entrega
+foi a régua, não o commit que os escreveu.
+
+O achado desta story é o **consumidor cego**: a rodada 2 criou o sinal `adminsFalhou` e deixou
+`pendenciasDeConvite` e a coluna de admin de "Entraram recentemente" sem lê-lo. Com a consulta de
+`users` caída, `adminPorOrg` nasce vazio, e "não há linha de admin" fica indistinguível de "não li
+a linha de admin": toda org com `admin_invite_email` virava pendência, com dias contados a partir
+de `organizations.created_at` e botão de reenvio. `adminsIndisponiveis` é campo **obrigatório** de
+propósito — omiti-lo é erro de compilação, e foi o `type-check` que apontou os call sites.
+
+#### Três comentários afirmavam uma régua que não existia
+
+Enquanto os consertos estavam sem carrasco, três comentários no código já citavam
+`console-fail-closed.test.ts` como se ele existisse ("é medido no texto-fonte por…"). Isso é
+**exatamente a classe de defeito que estas duas stories perseguem** — uma tela, ou um comentário,
+afirmando um fato que ninguém mediu — cometida dentro delas. Fica registrado: hoje o arquivo
+existe e mede o que os três comentários prometem, mas houve uma janela em que a prosa era a única
+prova.
+
+#### As três mutações, cada uma com `tsc --noEmit` rc=0 medido ANTES da contagem
+
+| # | mutação | tsc | antes da régua | agora |
+|---|---|---|---|---|
+| r1 | `adminsIndisponiveis: adminsFalhou` → `false` no call site | rc=0 | VERDE | **3 VERMELHOS** |
+| r2 | apagar os ramos `desconhecido`/`falhou` nos 3 arquivos de tela | rc=0 | VERDE | **13 VERMELHOS** |
+| r3 | `.limit(LIMITE_DE_LINHAS)` + `haMais: linhas.length >= limite` | rc=0 | VERDE | **4 VERMELHOS** |
+
+Os 4 arquivos de produção foram restaurados e conferidos por `shasum -c`.
+
+#### Dois defeitos na própria régua, achados pela mutação — e consertados no TESTE, não na tela
+
+1. **A asserção media no lugar errado, e o código de produção estava certo.** A ordem "o ramo do
+   fail-closed vem ANTES da frase que afirma ausência" era medida sobre o recorte, e o recorte da
+   Trilha fecha no `</div>` do próprio aviso — a frase mora fora dele, `indexOf` devolvia `-1` e a
+   comparação reprovava uma tela correta. Medir sobre o **arquivo cru** seria pior: a Trilha
+   **cita** "Nenhuma ação registrada ainda" num comentário **acima** do ramo, e a citação inverte a
+   ordem — falso vermelho por outro caminho. Conserto: medir só sobre **código** (`codigoDe`) e
+   exigir que as **duas âncoras sejam únicas** (`ocorrenciasNoCodigo(...) === 1`) — com duas
+   ocorrências o `indexOf` compara um par que ninguém escolheu, e a asserção de ordem vira sorte.
+2. **O número esperado era conferido contra a fonte já envenenada.** No controle positivo que
+   apaga um ramo do Resumo, a contagem de ocorrências do aviso era medida depois do veneno.
+   **Não** troquei 3 por 2: o `3` ficou ancorado na fonte **correta**, e o esperado da envenenada
+   passou a ser derivado como `N − 1`. É o **par** que prova que a mutação apagou exatamente um
+   ramo; um número solto ficaria verde no dia em que a fonte perdesse um cartão por outro motivo.
+
+#### Correção a uma instrução recebida
+
+A metade `>=` da terceira mutação **não** vive em `app/platform/orgs/[id]/trilha/page.tsx`. A
+página só passou a buscar `LIMITE_DE_LINHAS + 1`; o predicado está em
+`lib/tenancy/console-leitura.ts`, em `recortarComExcedente` (`haMais: linhas.length > limite`). A
+mutação completa exige tocar os dois arquivos — e é por isso que ela mata 4 testes, e não 1.
+
+#### Correção ao delta de testes que circulou
+
+O `+15` que circulou **não era desta frente**. Contado por arquivo: daqui saiu
+`console-fail-closed.test.ts` (48 testes) e **um** `it` novo em `console-visao-geral.test.ts`; o
+resto do movimento da suíte é de frentes vizinhas na mesma árvore de trabalho compartilhada.
+
+#### Réguas (rodada 3)
+
+| medição | valor |
+|---|---|
+| suíte cheia | **301 arquivos · 4.034 `passed` · 6 xfail (4.040 total)** · rc=0 |
+| baseline sem o arquivo novo | 300 · 3.986 · 6 |
+| delta | **+1 arquivo · +48 testes · xfail INALTERADO** (`4.034 − 3.986 = 48`, e o arquivo novo tem 48/48) |
+| `tsc --noEmit` | rc=0 |
+| `eslint` | rc=0 |
+
 
 ## QA Results
 
