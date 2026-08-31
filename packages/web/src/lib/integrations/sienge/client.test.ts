@@ -745,3 +745,65 @@ describe("getCashReceiptValue — a regra do Recto líquido num só lugar", () =
     ).toBe(0)
   })
 })
+
+/**
+ * Story 75-370 / achado C1 do gate — a soma dos meses tem que fechar com o
+ * acumulado. O breakdown mensal somava o valor nominal enquanto o acumulado já
+ * vinha líquido, então bastavam juros numa baixa para os dois discordarem.
+ */
+describe("computeInformeFromStatements — mensal e acumulado no mesmo critério", () => {
+  beforeEach(() => {
+    vi.stubEnv("SIENGE_SUBDOMAIN", "trifold")
+    vi.stubEnv("SIENGE_USERNAME", "user")
+    vi.stubEnv("SIENGE_PASSWORD", "pass")
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.unstubAllGlobals()
+  })
+
+  it("baixas com juros e desconto: soma dos meses == acumulado, ambos líquidos", async () => {
+    mockStatementResponse([
+      makeInstallment({
+        installmentId: 1,
+        installmentNumber: "1",
+        originalValue: 1000,
+        currentBalance: 0,
+        receipts: [
+          {
+            receiptDate: "2026-03-10",
+            receiptValue: 1000,
+            interestValue: 25,
+            netReceiptValue: 1025,
+            receiptType: "Recebimento",
+          },
+        ],
+      }),
+      makeInstallment({
+        installmentId: 2,
+        installmentNumber: "2",
+        originalValue: 1000,
+        currentBalance: 0,
+        receipts: [
+          {
+            receiptDate: "2026-04-10",
+            receiptValue: 1000,
+            discountValue: 40,
+            netReceiptValue: 960,
+            receiptType: "Recebimento",
+          },
+        ],
+      }),
+    ])
+    const installments = await getFinancialStatement(1469)
+    const informe = computeInformeFromStatements(installments, 2026)
+
+    expect(informe.totalPaidInYear).toBeCloseTo(1985) // 1.025 + 960, não 2.000
+    expect(informe.accumulatedPaid).toBeCloseTo(informe.totalPaidInYear)
+    const somaDosMeses = informe.monthlyBreakdown.reduce((s, m) => s + m.value, 0)
+    expect(somaDosMeses).toBeCloseTo(informe.accumulatedPaid)
+    // E cada lançamento do mês também no líquido.
+    expect(informe.monthlyBreakdown[0]?.installments[0]?.value).toBeCloseTo(1025)
+  })
+})

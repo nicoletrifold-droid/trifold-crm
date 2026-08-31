@@ -238,8 +238,12 @@ export function computeInformeFromStatements(
       if (!rd.startsWith(yearStr)) continue
       const month = parseInt(rd.split("-")[1] ?? "0")
       const entry = monthMap.get(month) ?? { value: 0, entries: [] }
-      entry.value += receipt.receiptValue
-      entry.entries.push({ number: inst.installmentNumber, value: receipt.receiptValue, date: rd })
+      // Mesmo critério do agregado da parcela — Recto líquido (Story 75-370).
+      // Somar o nominal aqui faria o total dos meses não fechar com o
+      // `accumulatedPaid` abaixo sempre que houvesse juros ou desconto.
+      const pago = getCashReceiptValue(receipt)
+      entry.value += pago
+      entry.entries.push({ number: inst.installmentNumber, value: pago, date: rd })
       monthMap.set(month, entry)
     }
   }

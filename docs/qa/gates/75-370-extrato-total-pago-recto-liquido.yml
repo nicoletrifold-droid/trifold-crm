@@ -1,0 +1,92 @@
+storyId: 75-370
+title: 'Extrato: "total pago" passa a usar o Recto líquido (juros e desconto entram)'
+reviewedBy: '@qa (Quinn)'
+reviewedAt: '2026-08-31'
+commit: 4e1c51ba
+verdict: PASS
+readiness: 10/10
+verdict_history:
+  - { at: '2026-08-31', verdict: CONCERNS, reason: 'C1 — dois critérios na mesma função' }
+  - { at: '2026-08-31', verdict: PASS, reason: 'C1 corrigido e coberto por teste com mutação' }
+
+checks:
+  code_review: PASS
+  unit_tests: PASS
+  acceptance_criteria: PASS
+  no_regressions: PASS
+  performance: PASS
+  security: PASS
+  documentation: PASS
+
+validations_reexecuted_by_qa:
+  - 'npx vitest run packages/web/src/lib/integrations/sienge/client.test.ts → 49 passed, exit 0'
+  - 'grep de consumidores de receiptValue em packages/web/src — 12 ocorrências auditadas uma a uma'
+  - 'diff completo de client.ts e installments.ts revisado linha a linha'
+
+issues:
+  - id: C1
+    severity: medium
+    category: code
+    title: 'computeInformeFromStatements passa a misturar dois critérios'
+    description: >
+      O breakdown mensal do informe soma `receipt.receiptValue` cru (nominal) em
+      client.ts:241-242, enquanto `accumulatedPaid` (linha 259) lê o agregado
+      `i.receiptValue`, que esta story tornou líquido. Resultado: dentro da mesma
+      função, `totalPaidInYear` fica nominal e `accumulatedPaid` fica líquido —
+      a soma dos meses não fecha com o acumulado quando há juros ou desconto.
+      A story afirma que "o informe acompanha automaticamente"; na prática só o
+      acumulado acompanhou.
+    impact: >
+      Nenhum em produção: o informe está desativado (INFORME_RENDIMENTOS_ENABLED
+      = false, lib/portal/features.ts:16). É dívida latente — morde quem religar
+      a tela, e a incoerência não tem nenhuma razão de ser.
+    recommendation: >
+      Usar getCashReceiptValue nas linhas 241-242. Não pede decisão do financeiro
+      nem cria pendência de critério fiscal: só faz a função inteira falar a
+      mesma língua. Duas linhas.
+    blocking: false
+    status: RESOLVED
+    resolution: >
+      Corrigido em client.ts:244-246 — o mensal passa pelo mesmo
+      getCashReceiptValue. Coberto pelo teste "baixas com juros e desconto: soma
+      dos meses == acumulado, ambos líquidos"; mutação revertendo ao nominal
+      reprova esse teste. Regressão completa reexecutada: vitest exit 0 (3.704
+      passed), typecheck exit 0, lint exit 0.
+
+acceptance_criteria_traceability:
+  AC1: 'PASS — getCashReceiptValue em installments.ts, regra num só lugar; nenhum ?? de netReceiptValue espalhado nas telas'
+  AC2: 'PASS — agregado em client.ts:185-188 soma pelo helper'
+  AC3: 'PASS — teste "parcela paga em atraso": 1.047,50 > originalValue 1.000, status PAGO'
+  AC4: 'PASS — teste "parcela paga com desconto": 880 < 1.000, status PAGO'
+  AC5: 'PASS — as 3 telas: total e valor em destaque leem o agregado (já líquido), lista de pagamentos passou a usar o helper. Auditado por grep: nenhuma exibição de valor pago ficou no nominal'
+  AC6: 'PASS — teste com Distrato de netReceiptValue 1.200 → receiptValue undefined, status RENEGOCIADA'
+  AC7: 'PASS — getOpenBalance inalterado; asserção em 4 testes, incluindo PARCIAL com saldo 8.000'
+  AC8: 'PASS — 10 testes, cobrindo os 6 cenários pedidos + líquido zero + parcial'
+
+strengths:
+  - >
+    A medição veio ANTES da implementação e mirou o risco certo: se
+    netReceiptValue descontasse administrativeFee/insuranceAmount, a mudança
+    inverteria o sinal do erro. 1.299/1.299 baixas reais, script versionado.
+  - >
+    Teste de mutação executado e documentado (7 de 10 reprovam o comportamento
+    antigo) — os testes provaram ser capazes de reprovar, não só de passar.
+  - >
+    Escolha de usar netReceiptValue direto em vez de recalcular a fórmula: menos
+    superfície para divergir do ERP.
+  - >
+    O caso `netReceiptValue: 0` está testado, e justifica `??` em vez de `||` —
+    desconto integral não pode cair no nominal.
+  - >
+    Débito da 75-369 (script de conciliação ad-hoc, não versionado) pago no mesmo
+    PR.
+
+notes:
+  - >
+    CodeRabbit CLI não executado — o gatilho de review deste repo é o GitHub App,
+    que roda no PR. Não reportado como executado em nenhuma etapa.
+  - >
+    Fechar o total ao centavo contra os 89 títulos de 28/08 continua pendente dos
+    extratos oficiais. Não é condição para o merge: a correção está provada pela
+    identidade aritmética, e o saldo devedor (que já fechava 89/89) não é tocado
+    por esta story.

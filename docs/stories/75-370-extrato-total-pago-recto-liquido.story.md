@@ -161,6 +161,8 @@ claude-opus-5[1m] (@dev / Dex) — modo YOLO
   comportamento antigo), **7 dos 10 testes novos falham**. Os 3 que continuam passando são
   exatamente os do fallback e do nominal, que valem nos dois comportamentos — ou seja, os testes
   são capazes de reprovar a regressão.
+- Após o fix do C1: `vitest run` → 287 arquivos, 3.704 passed + 6 expected fail, **exit 0**;
+  typecheck **exit 0**; lint **exit 0**; mutação do fix (voltar ao nominal no mensal) reprova 1 teste.
 - `tsc -p tsconfig.json` (raiz) acusa `Cannot find module '@supabase/supabase-js'` no script novo.
   Não é regressão: **17 scripts** existentes acusam o mesmo, porque a dependência vive em
   `packages/web/node_modules` e o tsconfig raiz não a resolve. O gate real do repo é
@@ -187,6 +189,12 @@ claude-opus-5[1m] (@dev / Dex) — modo YOLO
 - **CodeRabbit CLI não executado.** O binário existe nesta máquina, mas o gatilho de review deste
   repo é o GitHub App, que roda no PR (`.claude/rules/coderabbit-integration.md`). Não reportado
   como executado.
+- **Achado C1 do gate, corrigido.** O breakdown mensal de `computeInformeFromStatements` somava
+  `receipt.receiptValue` cru enquanto o `accumulatedPaid` já lia o agregado líquido — a mesma
+  função com dois critérios, e a soma dos meses deixaria de fechar com o acumulado sempre que
+  houvesse juros ou desconto. Corrigido para o helper (2 linhas) e coberto por teste que compara
+  soma dos meses × acumulado; mutação revertendo ao nominal **reprova esse teste**. Sem efeito em
+  produção (informe desativado), mas era dívida latente sem razão de existir.
 - **Pendência conhecida, não bloqueante:** fechar o total ao centavo contra os 89 títulos de
   28/08/2026 depende dos extratos oficiais, que o Marcos vai reenviar. A correção em si está
   provada pela identidade aritmética em 1.299/1.299 baixas.
@@ -195,11 +203,12 @@ claude-opus-5[1m] (@dev / Dex) — modo YOLO
 | Arquivo | Mudança |
 |---|---|
 | `docs/stories/75-370-extrato-total-pago-recto-liquido.story.md` | novo |
+| `docs/qa/gates/75-370-extrato-total-pago-recto-liquido.yml` | novo — gate CONCERNS → PASS |
 | `scripts/sienge-recto-liquido-check.ts` | novo — mede a identidade e os dois critérios contra a API |
 | `packages/web/src/lib/integrations/sienge/installments.ts` | `getCashReceiptValue` |
-| `packages/web/src/lib/integrations/sienge/client.ts` | agregado `receiptValue` pelo líquido + reexport |
+| `packages/web/src/lib/integrations/sienge/client.ts` | agregado `receiptValue` pelo líquido + reexport + fix C1 no informe |
 | `packages/web/src/lib/integrations/sienge/types.ts` | comentários dos campos de baixa e do agregado |
-| `packages/web/src/lib/integrations/sienge/client.test.ts` | +10 testes |
+| `packages/web/src/lib/integrations/sienge/client.test.ts` | +11 testes (10 da story + 1 do C1) |
 | `packages/web/src/app/portal-viewer/[vinculo_id]/financeiro/page.tsx` | linha de baixa pelo líquido |
 | `packages/web/src/app/cliente/[obra_id]/financeiro/extrato/_components/extrato-client.tsx` | linha de baixa pelo líquido |
 | `packages/web/src/lib/pdf/extrato-pdf.tsx` | linha de baixa pelo líquido |
@@ -212,3 +221,6 @@ claude-opus-5[1m] (@dev / Dex) — modo YOLO
 | 2026-08-31 | @sm | Story criada a partir da decisão do financeiro (WhatsApp 31/08) e da medição de `netReceiptValue` contra a API de produção |
 | 2026-08-31 | @po | Validação 10 pontos: GO (9/10). AC5 ampliada para incluir o valor em destaque da parcela quitada — é o número mais visível da tela e ficaria fora da redação anterior. Status Draft → Ready |
 | 2026-08-31 | @dev | T1–T6 implementadas; 49 testes no arquivo (10 novos), suíte completa, typecheck e lint verdes; mutação reprova 7/10 → Ready for Review |
+| 2026-08-31 | @qa | Gate CONCERNS (8/10): 1 achado MEDIUM não bloqueante — informe misturava critério nominal e líquido na mesma função |
+| 2026-08-31 | @dev | C1 corrigido (mensal do informe pelo mesmo helper) + teste de coerência; regressão completa verde |
+| 2026-08-31 | @qa | Re-review: C1 resolvido e coberto por teste com mutação → gate **PASS** |
