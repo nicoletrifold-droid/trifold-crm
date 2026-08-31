@@ -1,0 +1,476 @@
+schema: 1
+story: "900.51"
+story_title: "Painel self-service de integrações por empresa (antecipação da Onda 7)"
+gate: PASS
+status_reason: >-
+  Segunda rodada, sobre o commit `bc8c48ae`. **As duas concerns bloqueantes estão fechadas, e
+  fechadas com o vermelho reproduzido por mim.** QA-900-51-1: `alertarAposEscritaDeIntegracao()`
+  virou o único ponto de disparo e as duas rotas o chamam; rodei as duas mutações — matar o
+  predicado do Alerta 1 acende `/dashboard` **1 failed | 7 passed** (antes: as duas rotas verdes),
+  e remover o disparo do call site do `/dashboard` acende **2 failed | 6 passed** enquanto
+  `alertas-page-id.test.ts` segue **13 passed** — conjuntos de morte na direção certa, o carrasco
+  mora no call site. QA-900-51-2: a causa foi consertada, não o sintoma — `montarTilesDoPainel()`
+  é a única montagem, as duas telas a usam, `whatsapp_config` entrou em
+  `PLATFORM_READABLE_TABLES` lendo **só** `status`/`phone_number_id`/`updated_at`, e há régua nova
+  reprovando menção da credencial em toda a árvore de `/platform`. O cartão parou de mandar o
+  usuário para um fluxo inexistente e diz a verdade, nomeando `900-52`/`53`/`54`.
+  **A assimetria do `/platform` é achado, não buraco** — naquela superfície o Alerta 1 é
+  inalcançável por construção, e exigir vermelho ali obrigaria a fabricar um cenário impossível,
+  que é exatamente o pecado da versão anterior.
+  **O M23 do `@dev` está certo e eu confirmo o método — mas a régua final tem a MESMA cegueira,
+  um nível acima**, e isso é o décimo nono. Ele saiu de "guarda de existência do *import*" para
+  "guarda de existência da *chamada*"; medi que reverter o conserto inteiro no `/platform` (apagar
+  a leitura de `whatsapp_config` e passar `null`) traz o 18º cego de volta **intacto** e deixa
+  `pnpm test` **294/3763 verde**, `type-check --force` verde e `lint --force` com **0 erros**.
+  A régua ainda mede a CHAMADA, não o ARGUMENTO — que é literalmente a lição da M14 que ele
+  aplicou ao `technicalDetail` e ao disparo do alerta, e não aplicou à centralização que acabou de
+  criar. **Não bloqueia o merge:** o valor está correto nas duas telas hoje, nada regride, e o
+  buraco é de catraca sobre um conserto provado, não defeito vivo. Fica como **forward-gate
+  QA-900-51-3**, com conserto nomeado.
+  Números reconferidos por mim: `pnpm test` **294 files / 3763 passed**, `pnpm test:tenancy`
+  **28 passed / 0 skipped**, `turbo type-check --force` e `turbo lint --force` verdes (0 erros;
+  30 warnings, nenhum em arquivo da story).
+reviewer: "Quinn (Test Architect)"
+updated: "2026-08-30T21:00:00Z"
+base: "bc8c48ae (rodada 2) · árvore não commitada de origin/main aa584dfb (rodada 1)"
+rodadas:
+  - { data: "2026-08-30", base: "árvore não commitada", gate: CONCERNS, concerns: 2, defeitos_vivos: 0, regressoes: 0 }
+  - { data: "2026-08-30", commit: "bc8c48ae", gate: PASS, concerns_fechadas: 2, forward_gate: 1, regressoes: 0 }
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 1. O DEFEITO UNIFICADOR — MEDIDO NA SUPERFÍCIE, NÃO NO ARQUIVO
+# ═════════════════════════════════════════════════════════════════════════════
+defeito_unificador:
+  pergunta: >-
+    As duas reprovações foram pelo mesmo defeito: as garantias viviam na rota Next, não na RPC que
+    `authenticated` alcança direto. A pergunta do gate é se elas agora vivem na RPC.
+  metodo: >-
+    Não li a lista de `GRANT`/`REVOKE` do arquivo. Consultei `has_function_privilege(<role>, oid,
+    'EXECUTE')` para as 14 funções da `248` no `trifold-crm-dev` — a régua do arquivo é alegação,
+    o catálogo é o objeto.
+  medido: |
+    | função                                     | authenticated | anon  | service_role | secdef | search_path |
+    |--------------------------------------------|---------------|-------|--------------|--------|-------------|
+    | `org_integration_write_secret_as_org`      | **true**      | false | true         | true   | pinado      |
+    | `org_integration_mark_connected_as_org`    | **true**      | false | true         | true   | pinado      |
+    | `org_integration_mark_error_as_org`        | **true**      | false | true         | true   | pinado      |
+    | `org_integration_reveal_last4_as_org`      | **true**      | false | true         | true   | pinado      |
+    | `org_integration_*_as_platform` (4)        | false         | false | true         | true   | pinado      |
+    | `_org_integration_write_secret`            | false         | false | true         | true   | pinado      |
+    | `_org_integration_mark_connected`          | false         | false | true         | true   | pinado      |
+    | `_org_integration_mark_error`              | false         | false | true         | true   | pinado      |
+    | `_org_integration_reveal_last4`            | false         | false | true         | true   | pinado      |
+    | `_org_integration_ator_org`                | false         | false | true         | true   | pinado      |
+    | `platform_audit`                           | false         | false | true         | true   | pinado      |
+  conclusao: >-
+    A superfície exposta é exatamente a pretendida, e é a mais estreita possível: as 4 funções
+    `_as_org` **não têm parâmetro de org nem de ator** (endurecimento sobre o texto da AC1,
+    declarado pelo `@dev` no item 3 do Dev Agent Record). A org vem de `user_org_id()`, o ator de
+    `auth.uid()` e `actor_type` é a constante `'org_admin'` — não existe parâmetro para o corpo da
+    requisição mentir. É o que torna o `actor_type` confiável como discriminante da AC11.
+    `_org_integration_ator_org()` é avaliada como ARGUMENTO das 4 funções, logo sempre executa:
+    sem sessão, sem org ou sem a capability ⇒ `P0021`, antes de qualquer efeito.
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 2. O ACHADO R1×R7 — A EXCEÇÃO É MESMO CIRÚRGICA (MEDIDO NA FUNÇÃO VIVA)
+# ═════════════════════════════════════════════════════════════════════════════
+achado_r1_x_r7:
+  veredicto: CONFIRMADO — o achado é real e o conserto não abre mais que a nulificação.
+  metodo: >-
+    `pg_get_functiondef` de `platform_audit_log_immutavel` (a função VIVA, não o arquivo) +
+    8 mutações de FORMA do UPDATE, todas em `BEGIN…ROLLBACK` via Management API, coletando
+    `SQLSTATE` em temp table. Ressalva do próprio instrumento, registrada porque quase me enganou:
+    a primeira rodada deu `c1_reaponta_org = PASSOU`, e o motivo era o **setup**, não o trigger —
+    `trifold-crm-dev` tem **1 organização só**, então `v_org2` vinha `NULL` e o meu "reaponta"
+    era, na verdade, uma nulificação. Refiz com `COALESCE(v_org2, gen_random_uuid())`.
+  medido: |
+    | # | mutação de FORMA do UPDATE                       | esperado | **medido** |
+    |---|--------------------------------------------------|----------|------------|
+    | 1 | `org_id` → OUTRA org (não NULL)                  | bloqueia | **P0020**  |
+    | 2 | `metadata` → `|| '{"forjado":true}'`             | bloqueia | **P0020**  |
+    | 3 | `created_at` → `now() - 10 anos`                 | bloqueia | **P0020**  |
+    | 4 | `actor_type` → `'platform_admin'`                | bloqueia | **P0020**  |
+    | 5 | `action` → `'outra.acao'`                        | bloqueia | **P0020**  |
+    | 6 | `actor_user_id` → OUTRO usuário (não NULL)       | bloqueia | **P0020**  |
+    | 7 | `actor_user_id = NULL, org_id = NULL`            | PASSA    | **PASSOU** |
+    | 8 | `DELETE` da linha                                | bloqueia | **P0020**  |
+  cobertura_de_colunas: >-
+    A tabela tem 9 colunas. O predicado do trigger cobre as 9: `id`, `actor_type`, `action`,
+    `target_table`, `target_id`, `metadata`, `created_at` por `IS NOT DISTINCT FROM` estrito, e
+    `actor_user_id`/`org_id` por "igual OU NULL". Não existe coluna fora do predicado — a exceção
+    é a forma da ação referencial e nada mais.
+  privilegios_vivos:
+    sr_ins: true
+    sr_upd: false
+    sr_del: false
+    sr_trunc: false
+    authenticated_update: false
+    authenticated_select: true
+    triggers_nao_internos: 3
+    rls: true
+    force_rls: false
+  residual_declarado: >-
+    O DONO da tabela passa a poder nulificar atribuição em massa (`UPDATE … SET org_id = NULL`
+    sem `WHERE`). Está escrito no comentário da `248`, na `AC2` e em `docs/backlog.md` como item
+    P3 com dono nomeado (`900-16`). Aceito: para os demais roles o `REVOKE UPDATE` fecha, e
+    `metadata->>'actor_label'` sobrevive congelado.
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 3. AS 17 MUTAÇÕES DO @dev — AMOSTRA REPRODUZIDA
+# ═════════════════════════════════════════════════════════════════════════════
+mutacoes_conferidas:
+  metodo: >-
+    Não reproduzi as 17 (a Camada B exige mutar a função no banco compartilhado). Reproduzi a que
+    o `@dev` disse ser a mais importante, e a **mutação inversa** dela, que é a que discrimina.
+  m14_confirmada: >-
+    A tese está certa e é a lente desta story. `escrita.test.ts` prova o HELPER
+    (`montarRespostaDeErro` omite `technicalDetail` com `false`); quem escolhe o argumento é a
+    rota. O carrasco do call site existe e morde: `route.test.ts` do `/dashboard` afirma sobre o
+    JSON que sai (`Object.keys(json)` sem `technicalDetail`, e o texto sem `OAuthException` nem o
+    app id), e o par de `/platform` afirma o contrário (`technicalDetail` PRESENTE). São
+    afirmações opostas sobre a mesma sequência, decididas por rota — é o desenho certo.
+  mutacao_inversa_que_eu_rodei: >-
+    Mutei `ehEscritaDePageIdPorCliente` para `return false` (o alerta 1 da AC11 morre inteiro) e
+    rodei **só os dois testes de rota**: `2 files passed | 12 passed`. Depois rodei o teste do
+    helper: `5 failed | 8 passed`. Conjuntos de morte **não disjuntos, mas alinhados na direção
+    errada**: quem mata o alerta 1 é apenas o carrasco do helper — nenhuma rota o observa. É esse
+    resultado que vira a concern 1.
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 4. AS DUAS CONCERNS — FECHADAS, COM O VERMELHO REPRODUZIDO POR MIM (rodada 2)
+# ═════════════════════════════════════════════════════════════════════════════
+concerns_fechadas:
+  metodo: >-
+    Mesmas mutações da rodada 1, no arquivo em disco, com `assert` que ABORTA se o alvo textual não
+    existir (mutação que não encontra alvo sai verde e mente), `shasum` antes/depois e
+    `git checkout --` conferido. Baseline do commit `bc8c48ae`: `pnpm test` 294 files / 3763 passed.
+
+  itens:
+    - id: QA-900-51-1
+      veredicto: FECHADA
+      conserto: >-
+        `alertarAposEscritaDeIntegracao(provider, lerTrilha)` é o ÚNICO ponto de disparo e as DUAS
+        rotas o chamam. A janela filtra por `metadata->>provider` (a rodada 1 lia as 2 últimas linhas
+        da org sem filtrar provider — uma escrita de `sienge` podia arrastar linhas de `meta_ads`
+        para a janela). `lerTrilha` é injetada porque o transporte difere (`platformQuery` lá, client
+        RLS-scoped cá) e a DECISÃO não difere — mora numa implementação só.
+        A leitura do `/dashboard` é RLS-scoped (`platform_audit_log_select_org`), sem
+        `createAdminClient()`: confirmei que `scripts/admin-client-allowlist.test.ts` segue verde com
+        `TOTAL_ESPERADO = 242`, ou seja, nenhuma rota nova entrou na allowlist.
+      medido: |
+        | mutação                                                  | rodada 1                | **rodada 2**                          |
+        |----------------------------------------------------------|-------------------------|---------------------------------------|
+        | `ehEscritaDePageIdPorCliente → return false`              | 2 rotas **verdes** (12p)| `/dashboard` **1 failed** \| 7 passed  |
+        | disparo removido do call site `/dashboard`                | — (não existia)         | **2 failed** \| 6 passed               |
+        | ↳ e `alertas-page-id.test.ts` sob a MESMA mutação          | —                       | **13 passed** (o helper não vê)       |
+        Total nos dois arquivos de rota sob a 1ª mutação: **1 failed | 15 passed**.
+      a_assimetria_do_platform:
+        veredicto: "ACHADO, não buraco — e a argumentação dele está certa."
+        porque: >-
+          Na `/platform` toda escrita é `platform_admin` por construção (o `actor_type` é congelado
+          pelo ponto de entrada `_as_platform`), e a janela lida são as 2 linhas que a própria escrita
+          acabou de inserir. Logo `ehEscritaDePageIdPorCliente` **não pode** ser verdadeiro ali.
+          Exigir vermelho naquela superfície obrigaria a fabricar um cenário impossível — que é
+          exatamente o que a versão anterior fazia (semeava `actor_type: "org_admin"` num fake da
+          `/platform`) e o que fez o Alerta 1 parecer coberto quando não tinha caminho nenhum.
+          Kill set vazio numa superfície onde o predicado é inalcançável é o resultado CORRETO.
+        consequencia_a_registrar: >-
+          O Alerta 1 tem, de novo, **um** call site efetivo — mas agora é o certo (`/dashboard`, por
+          onde o `org_admin` grava). O Alerta 2 tem dois. A frase "único ponto de disparo chamado
+          pelas duas rotas" é verdadeira para o mecanismo e vale só para o Alerta 2 na prática; a
+          tabela do `@dev` mostra isso sem maquiar.
+        cosmetico_nao_bloqueante: >-
+          O teste de AC11 da `/platform` ainda semeia `actor_type: "org_admin"` na fixture. Ele passa
+          pelo motivo certo (afirma "MUDOU DE EMPRESA", que é o Alerta 2, e `ehReatribuicaoCrossOrg`
+          ignora `actor_type`), mas a fixture carrega um atributo impossível naquela janela e convida
+          o leitor a crer que o Alerta 1 dispara ali. Uma linha de comentário resolve.
+
+    - id: QA-900-51-2
+      veredicto: FECHADA — e ele consertou a CAUSA, não o valor.
+      conserto: >-
+        Existiam duas montagens do mesmo fato, uma por tela. Agora `montarTilesDoPainel()` é a única,
+        com `derivarEstadoDoTileWhatsapp()` isolando "o WhatsApp desta empresa está conectado?".
+        `providers.test.ts` reproduz o estado REAL de produção como fixture — inclusive o caso
+        "alguém promoveu à mão a linha morta de `org_integrations`", que continua sendo ignorada.
+        `whatsapp_config` entrou em `PLATFORM_READABLE_TABLES` **com justificativa por tabela**, como
+        a regra de crescimento exige, lendo só `status`/`phone_number_id`/`updated_at`.
+      régua_nova_de_vazamento: >-
+        `nao-consumo.test.ts` reprova a menção de `access_token` em toda a árvore de
+        `app/platform/**` + `app/api/platform/**`. É a régua certa: a "correção óbvia" seria copiar o
+        `!!access_token` do `/dashboard`, e isso puxaria a credencial do tenant para o painel da
+        Trifold (D14/AC6). Bem pensada.
+      verificado_por_mim: >-
+        Confirmei que as duas telas dão a MESMA resposta hoje. O `/dashboard` filtra
+        `.eq("status","active")` na própria consulta e por isso passa `status: "active"` literal —
+        **não é fabricação**, é o mesmo predicado dito duas vezes. Cheguei a levantar isto como
+        divergência e a medição me desmentiu; fica registrado para ninguém repetir o falso positivo.
+        Ressalva de robustez (não é achado): se alguém remover aquele `.eq` da consulta, o literal
+        vira mentira e nada acende — mesma cegueira do forward-gate abaixo.
+      cartao_reescrito: >-
+        "Ainda não há como configurar o WhatsApp por esta aplicação. Hoje a credencial é gravada
+        direto no banco. As stories 900-52/900-53/900-54 é que abrem esse caminho — até lá, fale com
+        o suporte da Trifold." Diz a verdade, nomeia o encaminhamento e parou de citar o nome de um
+        `CHECK` de banco para quem lê um painel. A divergência (a) da rodada 1 fica resolvida no que
+        me cabia; a decisão de escopo continua sendo do `@po`/dono do produto.
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 4b. O DÉCIMO NONO — A RÉGUA DE COBERTURA AINDA MEDE A CHAMADA, NÃO O ARGUMENTO
+# ═════════════════════════════════════════════════════════════════════════════
+forward_gate:
+  - id: QA-900-51-3
+    severity: medium
+    bloqueia_merge: false
+    titulo: >-
+      A centralização removeu o ramo duplicado e não criou observador do que cada página ALIMENTA
+      na função única. Reverter o conserto da QA-900-51-2 no `/platform` deixa todos os gates
+      verdes.
+    familia: >-
+      M14, terceira volta — "quem escolhe o VALOR/ARGUMENTO é a rota/página, não o helper".
+      Aplicada ao `technicalDetail` (rodada 1) e ao disparo do alerta (rodada 2); não aplicada à
+      montagem de tiles criada na própria rodada 2.
+    o_m23_do_dev_confirmado: >-
+      A lição dele está certa e o método é bom: a primeira régua era de EXISTÊNCIA
+      ("as duas páginas mencionam a função de derivação") e apagar o ramo do `whatsapp` no
+      `/platform` passava VERDE, porque o `import` sobrevive à remoção do uso. Registrar M23 com
+      resultado "PASSOU" é a conduta certa — mutação que passa é informação, não ruído.
+    mas_a_regua_final_herda_a_cegueira: >-
+      A régua virou `expect(fonte).toContain("montarTilesDoPainel(")` +
+      `expect(fonte).not.toContain("temSegredo:")`. As duas continuam sendo guardas de
+      **existência de texto**. A chamada sobrevive à NEUTRALIZAÇÃO do argumento exatamente como o
+      `import` sobrevivia à remoção do uso — o degrau subiu, a classe é a mesma.
+    medido: |
+      Mutação (reversão completa do conserto no `/platform`): apagar o
+      `platformQuery("whatsapp_config", …)` e passar `null` como 2º argumento de
+      `montarTilesDoPainel`. É literalmente o código de antes da correção.
+
+      | gate                        | resultado sob a mutação        |
+      |-----------------------------|--------------------------------|
+      | `pnpm test`                 | **294 files / 3763 passed** ✅  |
+      | `turbo type-check --force`  | **8 successful** ✅            |
+      | `turbo lint --force`        | **0 erros** (31 warnings) ✅   |
+      | régua `toContain("montarTilesDoPainel(")` | **casa** — a chamada continua lá |
+      | régua `not.toContain("temSegredo:")`      | **casa** — nada foi derivado à mão |
+
+      E o efeito da mutação é o 18º cego **intacto**: em produção, `whatsapp_config` da Trifold
+      está `status='active'` com `phone_number_id` (remedi hoje), e o tile do `/platform` voltaria a
+      dizer "Não conectado".
+    porque_nao_bloqueia: >-
+      O valor está CORRETO nas duas telas hoje, a causa (duas montagens) foi removida, e
+      `providers.test.ts` mata mutação dentro da função com o estado real de produção como fixture.
+      O que falta é catraca sobre um conserto já provado — não é defeito vivo, e nada regride em
+      relação à `main`. Mesmo tratamento que dei ao forward-gate QA-900-24-5.
+    conserto_sugerido: >-
+      Subir o mesmo movimento um degrau: se a página não escolhe o argumento, não há argumento para
+      neutralizar. Uma `carregarTilesDoPainel(porta)` que receba as DUAS leituras (org_integrations
+      e whatsapp_config) por uma porta injetada — igual ao que `alertarAposEscritaDeIntegracao` já
+      faz com `lerTrilha` — deixa cada página com transporte e zero decisão.
+      Alternativa barata, no idioma que a story já usa: acrescentar à régua estática que **cada uma
+      das duas páginas menciona `whatsapp_config`** (a mutação acima quebraria) — e, melhor ainda,
+      que nenhuma delas passa o literal `null` para a montagem. Guarda de existência com o alvo
+      certo já teria mordido.
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 5. AS TRÊS DIVERGÊNCIAS DECLARADAS — JULGADAS
+# ═════════════════════════════════════════════════════════════════════════════
+divergencias:
+  - id: "(a) whatsapp somente-leitura"
+    veredicto: "REDUÇÃO REAL — a justificativa técnica procede; a comunicação ao usuário NÃO."
+    justificativa_tecnica: >-
+      ACEITA, e é a decisão certa. `_org_integration_write_secret` levanta `P0010` para
+      `whatsapp` por desenho, o `CHECK` da `247` fecha o mesmo caminho no schema, `platform_audit`
+      está `REVOKE`ada de `authenticated`, e a migração de `whatsapp_config.access_token` para o
+      Vault está no OUT. Escrever `whatsapp_config` aqui seria escrita SEM trilha — contradiz
+      AC2/AC11. O caminho de três fatias (`900-52`/`53`/`54`, os três em `Draft`, com a `900-54`
+      explicitamente GATED) é o encaminhamento correto.
+    honestidade_na_story: >-
+      SUFICIENTE, com uma aspereza: a `AC4` continua dizendo "`whatsapp` (grava em
+      `whatsapp_config`)" — e está certo que continue, porque o `@dev` não pode editar AC. A
+      divergência está no Dev Agent Record (item 2a, com as razões na ordem em que pesaram) e no
+      Change Log v0.6. Quem ler só a AC se engana; quem ler a story inteira, não. O `@po` precisa
+      corrigir a AC4 ou registrar o waiver.
+    comunicacao_ao_usuario: >-
+      **RESOLVIDO na rodada 2.** Na rodada 1 o cartão dizia *"a configuração continua no fluxo de
+      WhatsApp"* e eu medi que esse fluxo não existe (32 call sites LEEM `whatsapp_config`, ZERO
+      escrevem). O texto novo diz: *"Ainda não há como configurar o WhatsApp por esta aplicação.
+      Hoje a credencial é gravada direto no banco. As stories 900-52/900-53/900-54 é que abrem esse
+      caminho — até lá, fale com o suporte da Trifold."* Verdadeiro, acionável, e sem citar nome de
+      `CHECK` de banco para quem lê um painel.
+    consequencia_de_produto: >-
+      Registrada para o dono do produto, sem suavizar: o pedido foi *"ele cadastra a empresa nova
+      e preenche as chaves dela"*. Para o canal de PRODUÇÃO (WhatsApp), isso continua não sendo
+      possível pelo painel. As outras 4 chaves, sim.
+
+  - id: "(b) PLATFORM_READABLE_TABLES ganhou platform_audit_log (+ whatsapp_config na rodada 2)"
+    veredicto: "AMPLIAÇÃO NECESSÁRIA E BEM REGISTRADA — aprovada."
+    verificado: >-
+      Entrou com justificativa POR TABELA no comentário de `platform-query.ts` (uma seção para
+      `org_integrations`, outra para `platform_audit_log`, esta última dizendo em voz alta "NÃO
+      está escrito na AC3"), e o teste literal de `platform-query.test.ts` foi ATUALIZADO com o
+      motivo escrito — não afrouxado nem derivado da fonte que ele vigia. É exatamente o que a
+      regra de crescimento pede. A alternativa (`.from()` cru em `app/api/platform/**`) é proibida
+      por `platform-query-scan.ts`, com razão.
+    rodada_2: >-
+      A terceira entrada (`whatsapp_config`, exigida pelo conserto da QA-900-51-2) entrou com a
+      mesma disciplina: justificativa própria, medição que a motivou, e o limite explícito **"só
+      `status`/`phone_number_id`/`updated_at` — nunca `access_token`"**, com régua que reprova a
+      menção da credencial em toda a árvore de `/platform`. A lista cresceu de 2 para 5 nesta
+      story; as três aparecem em diff, com dono e razão. É o comportamento que a regra pede.
+    ressalva_nao_bloqueante: >-
+      SEC-001 (embedding do PostgREST contorna a allowlist: `platformQuery("x", "id, users(*)")`
+      passa) continua aberto e é dívida pré-existente com dono (`900-42a`). A nova entrada não a
+      agrava: as tabelas alcançáveis por embedding a partir de `platform_audit_log` são `users` e
+      `organizations`, as duas já na lista.
+
+  - id: "(c) P0021 acrescentado, P0019 não alocado"
+    veredicto: "APROVADA — o comentário REGISTRA a recusa, não a esconde."
+    verificado: >-
+      `248:30-34` diz, textualmente: *"P0019 DELIBERADAMENTE NÃO ALOCADO. Era o código do fecho
+      sugerido pelo `@po` na Rodada 3 … O dono do produto RECUSOU esse fecho em 2026-08-30 … O
+      código fica vago para que ninguém o reuse achando que a decisão foi outra."* Nomeia quem
+      propôs, quem recusou, quando e por quê. `P0021` está na mesma tabela de códigos, com o
+      alcance certo (sem sessão / sem org / sem capability nos 4 pontos `_as_org`).
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 6. AS QUATRO RENÚNCIAS — JULGADAS
+# ═════════════════════════════════════════════════════════════════════════════
+renuncias:
+  - id: "WEBHOOK_ORG_ROUTING lido direto de produção (403)"
+    veredicto: "ACEITA — e a conclusão não depende da leitura que faltou."
+    razao: >-
+      Também não consigo ler a env do projeto canônico desta máquina. Mas o gate da Task 12 não
+      precisa dela, e isso é mais forte do que as 3 evidências indiretas: eu MEDI em produção
+      (somente leitura) que a linha `meta_ads` da única org tem `status='disconnected'` **e**
+      `config->>'page_id' = NULL`. `resolveOrgByMetaPage` casa por `config->>page_id`; com o valor
+      NULO, **nenhuma linha casa, em qualquer modo**, com ou sem o filtro novo. O filtro não pode
+      regredir o roteamento hoje nem em `identifier`. A medição extra do `@dev` está correta e é
+      ela que sustenta a decisão — não o default.
+      Confirmei o default no código: `decidirModoRoteamento()` devolve `"both"` para qualquer
+      valor que não seja exatamente `legacy`/`identifier`, inclusive ausente e inclusive erro de
+      grafia. Não lança.
+      **Continua valendo o "reconfirmar no dia do deploy"** — a env pode mudar, e o gate de
+      `identifier` na AC10 continua bloqueante por outro motivo (não há `page_id` gravado).
+  - id: "Teste manual ponta a ponta + o probe que não prova posse"
+    veredicto: "RENÚNCIA ACEITA — e a pergunta que eu levantei na rodada 1 PROCEDE, confirmada."
+    razao: >-
+      `validarMetaAds` testa com `GET /{page_id}?fields=id,name` — metadados PÚBLICOS do nó Página.
+      Prova "o token é válido" + "a Página existe"; **não prova posse**. O `@dev` confirmou e
+      escreveu a consequência inteira: com o `P0018` já declarado como zero redução de superfície e
+      a AC10 fechando só a sub-classe não-promovida, **nenhuma camada prova posse** — e o único
+      freio vivo do risco de C1 passa a ser a detecção da AC11.
+      **Não trocar o probe às cegas é a decisão certa:** rede não é exercitável aqui, e um probe
+      errado tornaria `meta_ads` inconfigurável por um caminho que nenhum teste cobre — trocaria
+      um risco declarado por uma quebra silenciosa. O experimento decisivo (dois tokens, admin e
+      não-admin, mesmo `page_id`) e as candidatas (`/{page_id}/leadgen_forms`,
+      `fields=access_token`) estão no backlog, com o raciocínio.
+    peso_que_eu_dou: >-
+      Registro que este item **não é um débito qualquer**: ele é a pré-condição do gate de
+      `identifier` da AC10. Enquanto ninguém rodar o experimento, "quem grava o `page_id` é dono
+      dele" é suposição, e a única compensação viva é um alerta com um call site. Em `both` (o modo
+      de hoje) isso não custa nada — em `identifier` custa os leads de outra empresa.
+  - id: "P0013/P0016 sem carrasco"
+    veredicto: "ACEITA, e a razão é boa."
+    razao: >-
+      São defesa em profundidade contra a linha sumir entre o `SELECT … FOR UPDATE` e o `UPDATE`;
+      o próprio `FOR UPDATE` torna o cenário inalcançável de dentro de uma transação de teste. Dito
+      em vez de fingido coberto — é a conduta certa. O caminho que importa (`v_row_id IS NULL`,
+      `P0012`) TEM carrasco e tem mutação (M7, 5 failed).
+  - id: "CodeRabbit não executado"
+    veredicto: "ACEITA — e a frase dele está certa."
+    razao: >-
+      *"Não executado ≠ passou"*. O gatilho que vale neste repositório é o App do GitHub no PR;
+      o CLI 0.7.5 desta máquina tem falha conhecida (`WebSocket closed`) registrada na rule. Eu
+      também não executei. Fica como pendência do PR, para o `@devops`.
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 7. NÚMEROS QUE EU MESMO RODEI
+# ═════════════════════════════════════════════════════════════════════════════
+evidencia_medida:
+  rodada: "2 — commit bc8c48ae"
+  suite_completa: "pnpm test → Test Files 294 passed (294) · Tests 3763 passed | 6 expected fail (3769)"
+  camada_b: "pnpm test:tenancy → 1 file passed · 28 passed (28) · 0 skipped"
+  gate_tenancy: "delta +0 sobre baseline 83 (medido na rodada 1; nada nesta rodada toca schema)"
+  type_check: "npx turbo type-check --force → 8 successful, 8 total"
+  lint: "npx turbo lint --force → 8 successful · web: 30 warnings, 0 errors · nenhum na story"
+  allowlist_admin_client: "TOTAL_ESPERADO = 242, verde — a leitura nova do /dashboard é RLS-scoped, nenhuma rota entrou"
+  producao_somente_leitura_rodada_2:
+    whatsapp_config: "org 0000…0001 · status='active' · phone_number_id PRESENTE · updated_at 2026-08-10"
+    nota: >-
+      Remedi hoje o dado que sustenta a QA-900-51-2. As duas telas concordam com este estado. A
+      divergência que eu reportei era latente para o estado `inactive` do seed — que é o estado de
+      TODA empresa nova, ou seja, o caminho de onboarding que esta story existe para servir.
+  mutacoes_que_eu_rodei_nesta_rodada:
+    - "ehEscritaDePageIdPorCliente → return false ⇒ /dashboard 1 failed | 7 passed; /platform verde (correto, ver assimetria)"
+    - "disparo removido do call site /dashboard ⇒ 2 failed | 6 passed; helper segue 13 passed"
+    - "/dashboard: status:'active' → 'inactive' no argumento ⇒ suíte VERDE (mas NÃO é defeito: a consulta já filtra .eq('status','active'))"
+    - "/platform: reversão completa do conserto (apaga leitura + passa null) ⇒ suíte VERDE, tsc VERDE, lint 0 erros ⇒ QA-900-51-3"
+  arvore_de_trabalho: "restaurada e conferida (git status) após cada mutação; cópia de segurança por arquivo e diff conferido."
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 8. ARMADILHA DE INSTRUMENTO QUE EU MESMO CAÍ (registrada para a próxima onda)
+# ═════════════════════════════════════════════════════════════════════════════
+armadilhas_do_meu_proprio_instrumento:
+  - id: "head:true mente sobre tabela inexistente"
+    o_que_aconteceu: >-
+      Minha primeira sonda de produção usou `.select("id", { head: true, count: "exact" })` para
+      perguntar se `platform_audit_log` existe. Voltou `error: null, count: null` — e eu quase
+      registrei "a tabela EXISTE em produção", o que teria invertido a leitura inteira da
+      aplicação da `248`. Uma consulta honesta (`select` de colunas nomeadas, sem `head`) devolveu
+      `PGRST205 Could not find the table`.
+    licao: "Requisição `head` não discrimina 'vazia' de 'inexistente'. Pergunte com corpo."
+  - id: "quase reportei o literal 'active' como fabricação (rodada 2)"
+    o_que_aconteceu: >-
+      Vi `status: "active"` literal no argumento que o `/dashboard` passa a `montarTilesDoPainel` e
+      montei o caso de que ele ignorava a coluna real, divergindo do `/platform`. A consulta acima,
+      que eu ainda não tinha lido, já filtra `.eq("status","active")` — o literal é o mesmo
+      predicado dito duas vezes, não uma invenção. **A mutação ficou verde e a leitura do call site
+      me desmentiu.**
+    licao: >-
+      Antes de acusar um argumento literal, leia a CONSULTA que produz o objeto. Um literal
+      redundante com o filtro não é fabricação; é acoplamento. (O acoplamento é real e está
+      registrado como ressalva de robustez em QA-900-51-2, mas não é achado.)
+  - id: "setup de 1 linha transforma 'reaponta' em 'nulifica'"
+    o_que_aconteceu: >-
+      No carrasco de cirurgia do trigger, `v_org2` veio NULL (o banco de teste tem 1 org só) e o
+      meu UPDATE "reaponta para outra org" virou, sem eu perceber, um UPDATE de nulificação — que
+      o trigger PERMITE por desenho. O falso positivo dizia que a exceção era frouxa.
+    licao: >-
+      Fixture com uma entidade só apaga a diferença entre as duas mutações que o teste existe para
+      distinguir. Afirme a pré-condição do setup (`setup_org2_existe`) antes de afirmar o
+      resultado — foi essa chave que me denunciou.
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 9. RASTREABILIDADE AC → EVIDÊNCIA
+# ═════════════════════════════════════════════════════════════════════════════
+rastreabilidade:
+  AC1: "OK — 14 funções no banco, privilégios medidos, 6 carrascos do @po presentes na Camada B (P0010/P0011/P0012/P0015/P0017/P0018), os dois sentidos em cada."
+  AC2: "OK — 4 verbos. REVOKE medido vivo (sr_upd/del/trunc=false), 3 triggers, exceção cirúrgica confirmada por 8 mutações de forma."
+  AC3: "OK com ampliação declarada — ver divergência (b)."
+  AC4: "OK na rodada 2 — 5 tiles, `google` fora do componente, e o tile `whatsapp` passou a ter FONTE (`whatsapp_config`, via a montagem única). Continua somente-leitura: é a divergência (a), que segue precisando de decisão do `@po`/dono do produto, não de código."
+  AC5: "OK — sequência de 3 passos em `escrita.ts`, uma implementação para as duas superfícies; `technicalDetail` decidido no servidor, com carrasco no CALL SITE de cada rota; 6º código `page_id_ja_configurado` reconhecido pelo NOME da constraint, não por `23505` genérico."
+  AC6: "OK — `nao-consumo.test.ts` enumera a árvore real, lista literal, vivacidade em três eixos (>500 arquivos varridos, marcas acham algo, prefixos de cron/webhook/provider proibidos separadamente)."
+  AC7: "OK — reveal audita ANTES do RETURN (na função, não na rota), devolve `right(secret,4)`, e o `actor_type` é decidido pelo ponto de entrada."
+  AC8: "OK — allowlist +2 com justificativa por rota; `TOTAL_ESPERADO` 240→242 é literal de propósito e a catraca é ESLint por AST em subprocesso dentro do `pnpm test`."
+  AC9: "OK, e é o melhor teste desta story — 3 diretórios, 4 formas de import (inclusive `await import()` dinâmico), 5 controles positivos, vivacidade POR diretório (a soma esconderia um zero) e a asserção de que o componente compartilhado é de fato importado pelas DUAS superfícies."
+  AC10: "OK — filtro aplicado, comentário antigo REESCRITO (Task 12.5, não deixado ao lado), 3 testes na Camada B incluindo o controle 'a MESMA linha casaria sem o filtro'. Gate de `identifier` continua bloqueante; a pré-condição de produção é ainda mais forte do que o gate pede (page_id NULO)."
+  AC11: "OK na rodada 2 — captura íntegra no banco para os dois `actor_type`; Alerta 2 com controle negativo; **Alerta 1 agora alcançável pela rota `/dashboard`**, com carrasco no call site e mutação medida por mim. Inalcançável na `/platform` por construção, o que é o resultado correto."
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 10. RECOMENDAÇÃO
+# ═════════════════════════════════════════════════════════════════════════════
+recomendacao:
+  gate: "PASS — as 2 concerns bloqueantes fechadas, 1 forward-gate aberto, 0 defeitos vivos, 0 regressões."
+  para_dev:
+    - "QA-900-51-3 (forward-gate, não bloqueia): a régua de cobertura mede a CHAMADA, não o ARGUMENTO — reverter o conserto no `/platform` deixa test/tsc/lint verdes. Conserto barato: acrescentar à régua estática que CADA página menciona `whatsapp_config` e que nenhuma passa `null` para a montagem. Conserto estrutural: uma `carregarTilesDoPainel(porta)` que receba as duas leituras injetadas, como `alertarAposEscritaDeIntegracao` já faz com `lerTrilha` — se a página não escolhe argumento, não há argumento para neutralizar."
+    - "Cosmético: a fixture de AC11 da rota `/platform` semeia `actor_type: \"org_admin\"`, impossível naquela janela. Passa pelo motivo certo (Alerta 2), mas convida o leitor a crer que o Alerta 1 dispara ali."
+  para_po:
+    - "Decidir a redução de escopo do `whatsapp` (divergência (a)). O cartão já diz a verdade ao usuário e nomeia `900-52`/`53`/`54`; falta o waiver formal ou a correção da AC4, que ainda descreve a escrita não implementada."
+    - "Registrar para o dono do produto: o pedido ('ele cadastra a empresa nova e preenche as chaves dela') fica cumprido para 4 dos 5 canais. O de PRODUÇÃO (WhatsApp) continua fora até a `900-53`."
+    - "Priorizar o item de backlog do probe de posse: ele é a pré-condição real do gate de `identifier` da AC10, não um débito genérico."
+  para_devops:
+    - "A `248` NÃO está em produção (medido na rodada 1: `PGRST205`/`PGRST202`, ledger em `247`). É runbook."
+    - "`R9` do gate de deploy só passou a enxergar a migration DEPOIS do commit (`origin/main...HEAD` não vê árvore suja) — comportamento correto, e vale lembrar em toda story cujo gate roda antes do commit."
+    - "Reconfirmar `WEBHOOK_ORG_ROUTING` com token que alcance `prj_s3ARh1fpDnzbx9ua4MYJf9iqdRhj` no dia do deploy."
+    - "CodeRabbit: o gatilho que vale é o App no PR. Não foi executado por ninguém."
+    - "`vitest.tenancy.config.ts`, `tests/tenancy/support/ambiente.ts` e o script `test:tenancy` são réplicas byte-idênticas da `900-25` (PR #531, não mergeada). Colapsam em 'both added, same content'; conferir no merge."
+  contexto_de_produto_que_o_gate_nao_decide:
+    - "Nenhum consumidor lê a credencial `meta_ads` por org que o painel grava: `fetchLeadData` (`lib/meta/process-lead.ts:502,521,538`) usa `process.env.META_PAGE_ACCESS_TOKEN`, env GLOBAL. Confirmei, e vale para os 4 providers graváveis — `nao-consumo.test.ts` prova que nenhum cron/webhook/cliente de provider toca `secret_ref`/`decrypted_secrets`. Isto é EXATAMENTE o que a AC6 e a D14 exigem, e está no OUT da story. Mas muda o que o painel entrega HOJE: ele guarda e testa credenciais que ainda ninguém usa. O tile já é honesto sobre FRESCOR ('não é uma verificação contínua'); não é honesto sobre CONSUMO. Não bloqueia — é decisão de produto sobre expectativa, e o dono precisa saber antes de vender a tela como 'a empresa nova já está integrada'."

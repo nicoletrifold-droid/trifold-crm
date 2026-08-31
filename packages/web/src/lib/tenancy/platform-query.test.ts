@@ -47,8 +47,26 @@ beforeEach(() => {
 })
 
 describe("PLATFORM_READABLE_TABLES (AC-B1)", () => {
-  it("nasce com a lista mínima que o épico define", () => {
-    expect([...PLATFORM_READABLE_TABLES]).toEqual(["organizations", "users"])
+  // Literal, e por dentro: derivar o esperado de `PLATFORM_READABLE_TABLES` faria este teste
+  // montar o esperado a partir da fonte que ele vigia e nunca reprovar a fonte. É por isso que
+  // acrescentar uma tabela CUSTA uma linha aqui — e é o ponto: a lista é a única fronteira entre
+  // "a Trifold vê o dado do cliente" e "não vê", então crescê-la tem que aparecer em diff.
+  //
+  // Story 900-51 (AC3) acrescentou DUAS: `org_integrations` (nomeada pela AC3) e
+  // `platform_audit_log` (extensão declarada — a trilha da AC2/AC7/AC11 precisa ser lida pelo
+  // painel, e a alternativa seria um `.from()` cru dentro de `app/api/platform/**`, que
+  // `platform-query-scan.ts` proíbe). QA-900-51-2 acrescentou a terceira, `whatsapp_config`: é a
+  // fonte que DECIDE o estado do tile de WhatsApp, e ler `org_integrations` no lugar dela fazia o
+  // painel do dono do produto dizer "Não conectado" sobre um canal `active` em produção.
+  // Ver o comentário de topo de `platform-query.ts`.
+  it("cresce só por decisão explícita — a lista, hoje, é esta", () => {
+    expect([...PLATFORM_READABLE_TABLES]).toEqual([
+      "organizations",
+      "users",
+      "org_integrations",
+      "platform_audit_log",
+      "whatsapp_config",
+    ])
   })
 
   it("carrega o comentário de topo exigido pelo épico — não 'limpar'", async () => {

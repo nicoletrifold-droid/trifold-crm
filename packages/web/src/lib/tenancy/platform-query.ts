@@ -50,7 +50,32 @@
 import { createAdminClient } from "@web/lib/supabase/admin"
 
 // lista PROVISÓRIA — consolidada por 900-42a, fechada por 900-42b
-export const PLATFORM_READABLE_TABLES = ["organizations", "users"] as const
+//
+// Story 900-51 (AC3) acrescenta DUAS entradas, e a segunda é uma extensão declarada:
+//
+//   • `org_integrations` — é o que a AC3 nomeia. O painel de `/platform` lê status e
+//     identificadores públicos por org (nunca `secret_ref` como valor útil: ele é um ponteiro
+//     para o Vault e o segredo não volta ao navegador em nenhuma resposta).
+//   • `platform_audit_log` — NÃO está escrito na AC3, e está aqui por consequência direta da
+//     AC2/AC7/AC11: a trilha precisa ser LIDA pelo painel (o cliente vê a dele por RLS; a
+//     Trifold vê a de todas as orgs, e para isso o caminho sancionado é este). A alternativa
+//     seria um `.from("platform_audit_log")` cru dentro de `app/api/platform/**` — que
+//     `platform-query-scan.ts` proíbe, com razão. Registrado como divergência em vez de
+//     acrescentado em silêncio.
+//   • `whatsapp_config` — acréscimo de QA-900-51-2. O tile de WhatsApp lia `org_integrations`,
+//     que para esse provider é uma linha ESTRUTURALMENTE inescrevível (`CHECK` da `247` +
+//     `P0010`): medido em produção, o canal estava `active` com credencial e o painel do dono do
+//     produto dizia "Não conectado". A fonte que decide esse estado é `whatsapp_config`.
+//     **Só `status`/`phone_number_id`/`updated_at` são lidos daqui — nunca `access_token`**: a
+//     Trifold puxar a credencial de um tenant para o painel é o que a AC6 existe para impedir, e
+//     `nao-consumo.test.ts` reprova qualquer menção a `access_token` na árvore de `/platform`.
+export const PLATFORM_READABLE_TABLES = [
+  "organizations",
+  "users",
+  "org_integrations",
+  "platform_audit_log",
+  "whatsapp_config",
+] as const
 
 export type PlatformReadableTable = (typeof PLATFORM_READABLE_TABLES)[number]
 

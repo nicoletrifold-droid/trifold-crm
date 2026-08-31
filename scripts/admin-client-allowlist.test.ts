@@ -58,8 +58,13 @@ const allowlist = JSON.parse(readFileSync(CAMINHO_JSON, "utf-8"))
  * **Literal de propósito**: se este número saísse do próprio JSON, o teste montaria o esperado a
  * partir da fonte que ele vigia e nunca reprovaria a fonte. Mexer na allowlist e ter que mexer
  * aqui é o custo — e é o ponto: a mudança aparece em diff, com dono.
+ *
+ * Re-medido pela Story 900-51 (**240 → 242**): +2 em `plataforma`, as duas rotas de escrita/reveal
+ * de `/platform/orgs/[id]/integracoes`. As rotas do CLIENTE (`app/api/configuracoes/integracoes/**`)
+ * NÃO entram — elas usam o client RLS-scoped e as RPCs `_as_org`, e é esta régua que transforma
+ * essa afirmação da AC8 em catraca em vez de promessa.
  */
-const TOTAL_ESPERADO = 240
+const TOTAL_ESPERADO = 242
 
 const REGRA = "aios/no-unscoped-admin-client"
 
