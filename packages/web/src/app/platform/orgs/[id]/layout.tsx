@@ -28,6 +28,7 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { platformQuery } from "@web/lib/tenancy/platform-query"
+import { leituraFalhou } from "@web/lib/tenancy/console-visao-geral"
 import { AbasDaEmpresa } from "../_components/abas-da-empresa"
 
 export const dynamic = "force-dynamic"
@@ -51,13 +52,19 @@ export default async function EmpresaLayout({
 
   // Só a identidade. `google_oauth_tokens` e `admin_invite_email` continuam sendo lidos pelas
   // páginas que precisam deles — a casca não carrega dado que a casca não desenha.
-  const { data } = await platformQuery(
+  const resposta = await platformQuery(
     "organizations",
     "id, name, slug, is_active, created_at",
   ).eq("id", orgId)
-  const org = ((data ?? []) as unknown as OrgDaCasca[])[0]
+  const org = ((resposta.data ?? []) as unknown as OrgDaCasca[])[0]
 
-  if (!org) notFound()
+  // CodeRabbit #547 — o `error` era descartado, e o `?? []` transformava "não consegui ler" em
+  // "não existe". Aqui as duas coisas levam ao MESMO destino, e é uma escolha: `notFound()` numa
+  // falha de leitura é fail-closed — a tela não afirma nada sobre uma empresa que ela não leu.
+  // O que NÃO é aceitável é o inverso: seguir e desenhar `org.name`/`org.is_active` a partir de
+  // um objeto que não veio. Ler o `error` explicitamente é o que impede a próxima edição de
+  // trocar este `notFound()` por um "empresa sem nome" sem perceber que está afirmando.
+  if (leituraFalhou(resposta) || !org) notFound()
 
   return (
     <div className="space-y-6">

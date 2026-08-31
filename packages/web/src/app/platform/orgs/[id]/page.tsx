@@ -26,7 +26,13 @@
 
 import Link from "next/link"
 import { platformQuery } from "@web/lib/tenancy/platform-query"
-import { deriveAdminInviteStatus } from "@web/lib/tenancy/admin-invite"
+import { leituraFalhou } from "@web/lib/tenancy/console-visao-geral"
+import {
+  AVISO_DE_LEITURA_QUE_NAO_VOLTOU,
+  estadoDaEmpresaDeclarado,
+  estadoDaLeitura,
+  statusDeAdminDeclarado,
+} from "@web/lib/tenancy/console-leitura"
 import {
   DEFINICOES_DE_PROVIDER,
   montarTilesDoPainel,
@@ -68,24 +74,39 @@ export default async function ResumoDaEmpresaPage({
   // A casca (`layout.tsx`) já garantiu que a org existe e já chamou `notFound()` se não existia.
   // Esta consulta repete `organizations` porque precisa de `admin_invite_email`, que a casca não
   // desenha. Pequena duplicação de fetch entre layout e página é o padrão do repositório.
-  const { data: orgsBrutas } = await platformQuery(
+  //
+  // CodeRabbit #547 — as CINCO consultas desta página descartavam o `error`. Duas telas do mesmo
+  // console fazem requisições independentes: a da casca pode voltar e a daqui não. Por isso o
+  // `notFound()` do layout não cobre esta leitura.
+  const respostaOrg = await platformQuery(
     "organizations",
     "id, name, slug, is_active, created_at, admin_invite_email",
   ).eq("id", orgId)
-  const org = ((orgsBrutas ?? []) as unknown as OrgDoResumo[])[0]
+  const orgFalhou = leituraFalhou(respostaOrg)
+  const org = ((respostaOrg.data ?? []) as unknown as OrgDoResumo[])[0]
 
   // `created_at ASC` é o MESMO desempate da escrita (`ensureAdminInvited`) — REL-001. A org
   // "Trifold" legada tem mais de uma linha `role='admin'`, e ler uma enquanto o botão age sobre
   // outra produz `400 NO_PENDING_INVITE` sem explicação possível na tela.
-  const { data: adminsBrutos } = await platformQuery("users", "id, auth_id, email", orgId)
+  const respostaAdmins = await platformQuery("users", "id, auth_id, email", orgId)
     .eq("role", "admin")
     .order("created_at", { ascending: true })
-  const admin = ((adminsBrutos ?? []) as unknown as AdminDoResumo[])[0] ?? null
+  const adminsFalhou = leituraFalhou(respostaAdmins)
+  const admin = ((respostaAdmins.data ?? []) as unknown as AdminDoResumo[])[0] ?? null
 
-  const statusConvite = deriveAdminInviteStatus({
+  // As DUAS leituras entram no `falhou`, e não só a de `users`: `admin_invite_email` é coluna de
+  // `organizations`, e é ela que decide "pending" quando ainda não há linha de admin. Com a
+  // consulta de orgs caída, `org?.admin_invite_email ?? null` vira `null` por falta de dado e o
+  // card diria "Nenhum administrador convidado" sobre uma empresa com convite em aberto.
+  const statusConvite = statusDeAdminDeclarado({
+    falhou: adminsFalhou || orgFalhou,
     adminInviteEmail: org?.admin_invite_email ?? null,
     admin: admin ? { id: admin.id, authId: admin.auth_id } : null,
   })
+
+  // Desativar uma empresa é a ação mais cara do console. O operador não pode ler "○ inativa"
+  // saído de uma consulta que não voltou — ver `estadoDaEmpresaDeclarado`.
+  const estadoDaEmpresa = estadoDaEmpresaDeclarado({ falhou: orgFalhou, org })
 
   // Só `provider, status`: o Resumo mostra o selo, não o formulário. Em particular NÃO pede a
   // coluna que aponta para o cofre do Vault — ela só serve para dizer "configurado / não
@@ -95,33 +116,45 @@ export default async function ResumoDaEmpresaPage({
   //
   // Consequência aceita e explícita: o "tem segredo?" que a montagem compartilhada devolve nasce
   // `false` aqui, e por isso é DESCARTADO logo abaixo — o Resumo usa só `provider` e `status`.
-  const { data: integracoesBrutas } = await platformQuery(
+  const respostaIntegracoes = await platformQuery(
     "org_integrations",
     "provider, status",
     orgId,
   )
+  const integracoesFalhou = leituraFalhou(respostaIntegracoes)
 
   // A fonte que DECIDE o estado do WhatsApp é `whatsapp_config` — a linha de `org_integrations`
   // é estruturalmente inescrevível para esse provider (QA-900-51-2). Só colunas não-secretas.
-  const { data: waBrutas } = await platformQuery(
+  const respostaWhatsApp = await platformQuery(
     "whatsapp_config",
     "status, phone_number_id",
     orgId,
   )
+  const whatsappFalhou = leituraFalhou(respostaWhatsApp)
 
+  // `montarTilesDoPainel` devolve SEMPRE os quatro providers — ausência de linha vira
+  // `disconnected`, que a tela escreve como "○ Não conectado". Com qualquer das duas leituras
+  // caída, a lista inteira afirmaria "não conectado" sobre canais que podem estar no ar; é
+  // literalmente o defeito QA-900-51-2 por outra porta. As duas entram: quem decide o WhatsApp é
+  // `whatsapp_config`, e sem ela o tile do WhatsApp mente mesmo com `org_integrations` inteira.
+  const tilesIndisponiveis = integracoesFalhou || whatsappFalhou
   const tiles = montarTilesDoPainel(
-    (integracoesBrutas ?? []) as unknown as LinhaDeIntegracaoDoPainel[],
-    ((waBrutas ?? []) as unknown as LinhaWhatsAppConfig[])[0] ?? null,
+    (respostaIntegracoes.data ?? []) as unknown as LinhaDeIntegracaoDoPainel[],
+    ((respostaWhatsApp.data ?? []) as unknown as LinhaWhatsAppConfig[])[0] ?? null,
   ).map((t) => ({ provider: t.provider, status: t.status }))
 
-  const { data: trilhaBruta } = await platformQuery(
+  const respostaTrilha = await platformQuery(
     "platform_audit_log",
     "id, action, actor_type, created_at, metadata",
     orgId,
   )
     .order("created_at", { ascending: false })
     .limit(5)
-  const trilha = (trilhaBruta ?? []) as unknown as LinhaDeTrilhaDaPlataforma[]
+  const trilha = (respostaTrilha.data ?? []) as unknown as LinhaDeTrilhaDaPlataforma[]
+  const estadoDaTrilha = estadoDaLeitura({
+    falhou: leituraFalhou(respostaTrilha),
+    quantidade: trilha.length,
+  })
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
@@ -136,14 +169,22 @@ export default async function ResumoDaEmpresaPage({
             {org ? new Date(org.created_at).toLocaleDateString("pt-BR") : "—"}
           </dd>
           <dt className="text-slate-400">Status</dt>
-          <dd className={org?.is_active ? "text-emerald-400" : "text-slate-400"}>
-            {org?.is_active ? "● ativa" : "○ inativa"}
+          <dd className={estadoDaEmpresa === "ativa" ? "text-emerald-400" : "text-slate-400"}>
+            {/* O MESMO travessão dos cards da Visão geral: `—` é "não medido", e nunca um dos
+                dois estados reais. Ver `estadoDaEmpresaDeclarado`. */}
+            {estadoDaEmpresa === "desconhecido"
+              ? "—"
+              : estadoDaEmpresa === "ativa"
+                ? "● ativa"
+                : "○ inativa"}
           </dd>
         </dl>
       </Cartao>
 
       <Cartao titulo="Administrador">
-        {statusConvite === "none" ? (
+        {statusConvite === "desconhecido" ? (
+          <p className="text-sm text-amber-400">{AVISO_DE_LEITURA_QUE_NAO_VOLTOU}</p>
+        ) : statusConvite === "none" ? (
           <p className="text-sm text-slate-400">
             Nenhum administrador convidado para esta empresa.
           </p>
@@ -159,6 +200,9 @@ export default async function ResumoDaEmpresaPage({
       </Cartao>
 
       <Cartao titulo="Integrações">
+        {tilesIndisponiveis ? (
+          <p className="text-sm text-amber-400">{AVISO_DE_LEITURA_QUE_NAO_VOLTOU}</p>
+        ) : (
         <ul className="space-y-1 text-sm">
           {tiles.map((tile) => {
             const rotulo = rotuloDeStatusDoTile(tile.status)
@@ -182,6 +226,7 @@ export default async function ResumoDaEmpresaPage({
             )
           })}
         </ul>
+        )}
         <Link
           href={`/platform/orgs/${orgId}/integracoes`}
           className="mt-3 inline-block text-xs text-amber-400 hover:underline"
@@ -191,7 +236,11 @@ export default async function ResumoDaEmpresaPage({
       </Cartao>
 
       <Cartao titulo="Últimas ações da plataforma">
-        {trilha.length === 0 ? (
+        {/* Três estados, não dois: "Nenhuma ação registrada" é uma AFIRMAÇÃO sobre a trilha desta
+            empresa, e uma consulta que não voltou não autoriza fazê-la. */}
+        {estadoDaTrilha === "falhou" ? (
+          <p className="text-sm text-amber-400">{AVISO_DE_LEITURA_QUE_NAO_VOLTOU}</p>
+        ) : estadoDaTrilha === "vazio" ? (
           <p className="text-sm text-slate-400">Nenhuma ação registrada.</p>
         ) : (
           <ListaDeTrilha>

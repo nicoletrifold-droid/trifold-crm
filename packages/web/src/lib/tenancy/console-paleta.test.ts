@@ -30,6 +30,7 @@ import {
   classesDaPaleta,
   type ClassesDaPaleta,
 } from "@web/components/integrations/paleta"
+import { callSiteDe, codigoDe, linhasDeCodigo } from "./fonte-scan"
 
 const AQUI = path.dirname(fileURLToPath(import.meta.url))
 const SRC = path.resolve(AQUI, "../..") // packages/web/src
@@ -73,56 +74,16 @@ function linhasComEscala(fonte: string, escala: string): string[] {
 }
 
 /**
- * As linhas de `fonte` que são CÓDIGO — usada por TODA asserção positiva sobre texto-fonte.
- *
- * Comentário não prova nada: ele é conteúdo do arquivo, e `toContain` sobre o arquivo inteiro
- * não distingue "a chamada existe" de "alguém escreveu a chamada em prosa". As quatro formas
- * filtradas são as quatro que existem num `.tsx` — corpo de bloco (` * `), linha (`//`),
- * abertura de bloco (`/*`) e comentário JSX (`{/*`). A quarta é a idiomática dentro de JSX e
- * foi a que escapou da primeira versão desta régua.
- *
- * Só as asserções POSITIVAS usam este filtro. A varredura de cor (`linhasComEscala`) mede o
- * arquivo inteiro de propósito: lá, ignorar comentário afrouxaria uma afirmação absoluta.
+ * `linhasDeCodigo`, `codigoDe` e `callSiteDe` moram em `fonte-scan.ts` desde que um SEGUNDO
+ * arquivo de régua (`console-fail-closed.test.ts`) passou a precisar deles. Eram locais aqui, e
+ * a terceira cópia de um detector que já ficou verde três vezes seria o começo do apodrecimento:
+ * cada cópia deixa de aprender o que as outras aprenderam. As três formas que os motivam — o
+ * comentário em prosa, o comentário JSX e o recorte até o fim do arquivo — estão documentadas lá.
  */
-function linhasDeCodigo(fonte: string): string[] {
-  return fonte
-    .split("\n")
-    .map((l) => l.trim())
-    .filter(
-      (l) =>
-        !l.startsWith("*") &&
-        !l.startsWith("//") &&
-        !l.startsWith("/*") &&
-        !l.startsWith("{/*"),
-    )
-}
-
-/** Só o código de `fonte`, como um texto só. */
-function codigoDe(fonte: string): string {
-  return linhasDeCodigo(fonte).join("\n")
-}
 
 /** As linhas de CÓDIGO que pedem a paleta do console. Comentário citando a prop não conta. */
 function linhasComPropDePaleta(fonte: string): string[] {
   return linhasDeCodigo(fonte).filter((l) => l.includes('palette="slate"'))
-}
-
-/**
- * O código do call site de `tag`, DELIMITADO: de `<Tag` até o `/>` que o fecha.
- *
- * A versão anterior fatiava `fonte.slice(fonte.indexOf("<Badge"))` — ou seja, ia até o FIM DO
- * ARQUIVO e engolia o call site do `<Tile>`, que fica ~5,7 KB adiante. O conjunto de morte da
- * asserção do Badge virava um SUPERSET do da asserção do Tile: ela só acendia quando os DOIS
- * perdessem a prop. Delimitar é o que torna os dois conjuntos disjuntos.
- *
- * Fail-closed: tag ausente, ou call site sem fechamento, devolve vazio — e vazio reprova.
- */
-function callSiteDe(fonte: string, tag: string): string {
-  const inicio = fonte.indexOf(tag)
-  if (inicio < 0) return ""
-  const fim = fonte.indexOf("/>", inicio)
-  if (fim < 0) return ""
-  return codigoDe(fonte.slice(inicio, fim))
 }
 
 describe("AC4 — a tabela de paletas", () => {
