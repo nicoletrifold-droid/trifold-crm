@@ -171,6 +171,7 @@ claude-opus-5[1m] (@dev / Dex)
 | 2026-08-28 | @dev | T1–T5 implementadas; testes, typecheck e lint verdes → Ready for Review |
 | 2026-08-28 | @devops | PR #520 mergeado (`ba6291b6`), deploy de produção concluído |
 | 2026-08-28 | @qa | Conciliação com os extratos oficiais do Vind e do Yarden: 89/89 no saldo, R$ 721,78 no total pago. C1 encerrado → gate PASS → Done |
+| 2026-08-31 | @po | Respostas do financeiro às duas questões da conciliação: Q1 = Recto líquido (vira story nova), Q2 = manter no abatimento (encerrada, sem código) |
 
 ---
 
@@ -284,7 +285,7 @@ R$ 3.044,26.
 ### Duas questões novas — fora do escopo desta story
 
 Nenhuma é da lista de tipos de baixa. Ambas foram devolvidas ao financeiro em 28/08/2026 e
-**aguardam decisão**; nenhuma bloqueia o que está em produção.
+**respondidas em 31/08/2026** (ver subseção abaixo); nenhuma bloqueia o que está em produção.
 
 1. **Juros de atraso e desconto no "total pago"** — o portal soma `receiptValue` (valor da baixa);
    o Sienge soma o recebido líquido. Nos 89 títulos: R$ 4.706,22 de acréscimo e R$ 1.608,34 de
@@ -298,3 +299,28 @@ Nenhuma é da lista de tipos de baixa. Ambas foram devolvidas ao financeiro em 2
 
 Documento entregue ao financeiro: `conciliacao-portal-sienge-vind-yarden.pdf` (4 páginas), com as
 duas questões em formato de decisão.
+
+### Decisão do financeiro sobre as duas questões (Robson, 31/08/2026, WhatsApp)
+
+| Questão | Resposta | Efeito |
+|---|---|---|
+| 1. Juros de atraso e desconto no "total pago" | **"Sim, entram no total pago"** — usar o Recto líquido | **Story nova** (fora da 75-369) |
+| 2. Adiantamento × Abatimento | **"Manter, contar no abatimento"** | **Nenhum** — ratifica o que já está em produção |
+
+**Q2 encerrada.** O critério do portal (contar no Abatimento de Adiantamento, e não na entrada do
+adiantamento como o Sienge faz) foi ratificado pelo financeiro com a divergência já conhecida à
+vista. Não há mudança de código; a regra da 75-369 permanece como está.
+
+**Q1 vira mudança nova, ainda não aberta.** O que já está levantado:
+
+- Ponto único de troca: `client.ts` monta o `receiptValue` agregado da parcela somando
+  `r.receiptValue`. Todos os consumidores (extrato do cliente, portal-viewer, PDF) leem esse campo
+  agregado — sem cache nem coluna persistida, o deploy corrige o histórico sozinho.
+- A API já entrega o campo: `netReceiptValue`, além de `interestValue`, `additionalValue`,
+  `discountValue`, `administrativeFee` e `insuranceAmount`. O tipo `SiengeReceipt` já declara
+  `netReceiptValue?` — nunca foi usado.
+- **Aberto:** não está provado que o `netReceiptValue` da API é exatamente o "Recto líquido" do
+  extrato (valor + acréscimo − desconto). Se ele também subtrair `administrativeFee` e
+  `insuranceAmount`, o portal passa a ficar *abaixo* do oficial em vez de bater. Só a comparação
+  título a título decide — o Marcos vai enviar novo extrato do Sienge para isso, e o script de
+  comparação será commitado (o da conciliação de 28/08 foi ad-hoc e não ficou versionado).
