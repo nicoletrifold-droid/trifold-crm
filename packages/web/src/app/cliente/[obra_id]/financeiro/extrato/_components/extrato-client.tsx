@@ -3,7 +3,11 @@
 import { useState, useMemo } from "react"
 import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import type { FormattedInstallment } from "@web/lib/integrations/sienge/types"
-import { getNonCashLabel, getOpenBalance } from "@web/lib/integrations/sienge/installments"
+import {
+  getCashReceiptValue,
+  getNonCashLabel,
+  getOpenBalance,
+} from "@web/lib/integrations/sienge/installments"
 
 const CONDITION_LABEL: Record<string, string> = {
   AT: "À Vista",
@@ -269,7 +273,7 @@ export function ExtratoClient({ obraId, installments, unidadeInicial, de, ate }:
                       </p>
                       {inst.receipts.map((r, ri) => (
                         <p key={ri} className="mt-0.5 text-xs text-stone-500">
-                          {formatDate(r.receiptDate)} — {formatCurrency(r.receiptValue)}
+                          {formatDate(r.receiptDate)} — {formatCurrency(getCashReceiptValue(r))}
                         </p>
                       ))}
                     </div>

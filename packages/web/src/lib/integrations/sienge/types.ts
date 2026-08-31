@@ -37,9 +37,20 @@ export interface SiengeReceipt {
    * Ver `CASH_RECEIPT_TYPES` e `isCashReceipt()` em installments.ts.
    */
   receiptType?: string | null
+  /**
+   * "Recto líquido" do extrato oficial: valor + acréscimo (juros/multa) −
+   * desconto. **É o campo que representa o dinheiro que entrou** e o que o
+   * portal soma desde a Story 75-370 (decisão do financeiro, 31/08/2026) —
+   * `receiptValue` acima é o valor nominal baixado. Leia sempre pelo
+   * `getCashReceiptValue()`, nunca direto, para o fallback ficar num só lugar.
+   */
   netReceiptValue?: number
+  /** Desconto concedido na baixa. Já está descontado em `netReceiptValue`. */
   discountValue?: number
+  /** Juros/multa de atraso na baixa. Já está somado em `netReceiptValue`. */
   interestValue?: number
+  /** Segundo campo de acréscimo da API; também já está em `netReceiptValue`. */
+  additionalValue?: number
 }
 
 export interface SiengeInstallment {
@@ -133,7 +144,13 @@ export interface FormattedInstallment {
   nonCashReceipts: SiengeReceipt[]
   /** Data da última baixa em dinheiro. */
   receiptDate?: string
-  /** Somatório das baixas em dinheiro. */
+  /**
+   * Somatório das baixas em dinheiro, pelo **Recto líquido** de cada uma — com
+   * juros de atraso e sem o desconto concedido (Story 75-370, decisão do
+   * financeiro de 31/08/2026). Por isso pode ficar acima do `originalValue` numa
+   * parcela paga em atraso, e abaixo numa parcela com desconto: quem decide o
+   * status é o `currentBalance`, não este valor.
+   */
   receiptValue?: number
 }
 

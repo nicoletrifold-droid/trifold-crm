@@ -13,6 +13,7 @@ import {
   computeInformeFromStatements,
   getOpenBalance,
   getNonCashLabel,
+  getCashReceiptValue,
   collectUnknownReceiptTypes,
 } from "./client"
 import type { SiengeInstallment } from "./types"
@@ -546,5 +547,263 @@ describe("getNonCashLabel — rótulo pelo tipo real da baixa", () => {
     ])
     const [inst = null!] = await getFinancialStatement(1469)
     expect(getNonCashLabel(inst)).toBe(esperado)
+  })
+})
+
+/**
+ * Story 75-370 — o total pago passa a ser o Recto líquido: juros de atraso pagos
+ * pelo cliente entram, desconto concedido sai (decisão do financeiro, 31/08/2026).
+ *
+ * Números conferidos contra a API de produção em 31/08/2026 (1.299 baixas do Vind
+ * e do Yarden): `netReceiptValue` == valor + juros + adicional − desconto em
+ * 1.299 de 1.299 casos.
+ */
+describe("getFinancialStatement — total pago pelo Recto líquido", () => {
+  beforeEach(() => {
+    vi.stubEnv("SIENGE_SUBDOMAIN", "trifold")
+    vi.stubEnv("SIENGE_USERNAME", "user")
+    vi.stubEnv("SIENGE_PASSWORD", "pass")
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.unstubAllGlobals()
+  })
+
+  it("parcela paga em atraso: juros entram, pago fica ACIMA do valor da parcela e o status segue PAGO", async () => {
+    mockStatementResponse([
+      makeInstallment({
+        originalValue: 1000,
+        currentBalance: 0,
+        receipts: [
+          {
+            receiptDate: "2026-05-10",
+            receiptValue: 1000,
+            interestValue: 47.5,
+            discountValue: 0,
+            netReceiptValue: 1047.5,
+            receiptType: "Recebimento",
+          },
+        ],
+      }),
+    ])
+    const [inst = null!] = await getFinancialStatement(1469)
+    expect(inst.receiptValue).toBeCloseTo(1047.5)
+    expect(inst.receiptValue!).toBeGreaterThan(inst.originalValue)
+    expect(inst.status).toBe("PAGO")
+    // O status vem do saldo devedor, não do valor pago.
+    expect(getOpenBalance(inst)).toBe(0)
+  })
+
+  it("parcela paga com desconto: pago fica ABAIXO do valor da parcela e continua PAGO", async () => {
+    mockStatementResponse([
+      makeInstallment({
+        originalValue: 1000,
+        currentBalance: 0,
+        receipts: [
+          {
+            receiptDate: "2026-05-10",
+            receiptValue: 1000,
+            interestValue: 0,
+            discountValue: 120,
+            netReceiptValue: 880,
+            receiptType: "Recebimento",
+          },
+        ],
+      }),
+    ])
+    const [inst = null!] = await getFinancialStatement(1469)
+    expect(inst.receiptValue).toBeCloseTo(880)
+    expect(inst.receiptValue!).toBeLessThan(inst.originalValue)
+    expect(inst.status).toBe("PAGO")
+    expect(getOpenBalance(inst)).toBe(0)
+  })
+
+  it("juros e desconto na mesma baixa: usa o líquido do Sienge, não recalcula a fórmula", async () => {
+    mockStatementResponse([
+      makeInstallment({
+        originalValue: 2000,
+        currentBalance: 0,
+        receipts: [
+          {
+            receiptDate: "2026-06-02",
+            receiptValue: 2000,
+            interestValue: 63.21,
+            discountValue: 15.4,
+            netReceiptValue: 2047.81,
+            receiptType: "Recebimento",
+          },
+        ],
+      }),
+    ])
+    const [inst = null!] = await getFinancialStatement(1469)
+    expect(inst.receiptValue).toBeCloseTo(2047.81)
+  })
+
+  it("várias baixas na mesma parcela somam os líquidos, não os nominais", async () => {
+    mockStatementResponse([
+      makeInstallment({
+        originalValue: 5000,
+        currentBalance: 0,
+        receipts: [
+          {
+            receiptDate: "2026-04-05",
+            receiptValue: 2000,
+            interestValue: 30,
+            netReceiptValue: 2030,
+            receiptType: "Recebimento",
+          },
+          {
+            receiptDate: "2026-05-05",
+            receiptValue: 3000,
+            discountValue: 50,
+            netReceiptValue: 2950,
+            receiptType: "Recebimento",
+          },
+        ],
+      }),
+    ])
+    const [inst = null!] = await getFinancialStatement(1469)
+    // Nominal somaria 5.000,00; líquido soma 4.980,00.
+    expect(inst.receiptValue).toBeCloseTo(4980)
+  })
+
+  it("baixa sem netReceiptValue cai para receiptValue (fallback defensivo)", async () => {
+    mockStatementResponse([
+      makeInstallment({
+        originalValue: 1000,
+        currentBalance: 0,
+        receipts: [
+          { receiptDate: "2026-05-10", receiptValue: 1000, receiptType: "Recebimento" },
+        ],
+      }),
+    ])
+    const [inst = null!] = await getFinancialStatement(1469)
+    expect(inst.receiptValue).toBe(1000)
+  })
+
+  it("netReceiptValue em baixa que NÃO é pagamento continua ignorado (allowlist da 75-369 intacta)", async () => {
+    mockStatementResponse([
+      makeInstallment({
+        originalValue: 1000,
+        currentBalance: 0,
+        receipts: [
+          {
+            receiptDate: "2026-05-10",
+            receiptValue: 1000,
+            interestValue: 200,
+            netReceiptValue: 1200,
+            receiptType: "Distrato",
+          },
+        ],
+      }),
+    ])
+    const [inst = null!] = await getFinancialStatement(1469)
+    expect(inst.receiptValue).toBeUndefined()
+    expect(inst.nonCashReceipts).toHaveLength(1)
+    expect(inst.status).toBe("RENEGOCIADA")
+    expect(getOpenBalance(inst)).toBe(0)
+  })
+
+  it("parcela com baixa parcial em atraso: PARCIAL, líquido somado, saldo devedor intacto", async () => {
+    mockStatementResponse([
+      makeInstallment({
+        originalValue: 10000,
+        currentBalance: 8000,
+        receipts: [
+          {
+            receiptDate: "2026-05-10",
+            receiptValue: 2000,
+            interestValue: 18.33,
+            netReceiptValue: 2018.33,
+            receiptType: "Recebimento",
+          },
+        ],
+      }),
+    ])
+    const [inst = null!] = await getFinancialStatement(1469)
+    expect(inst.status).toBe("PARCIAL")
+    expect(inst.receiptValue).toBeCloseTo(2018.33)
+    expect(getOpenBalance(inst)).toBe(8000)
+  })
+})
+
+describe("getCashReceiptValue — a regra do Recto líquido num só lugar", () => {
+  it("usa netReceiptValue quando presente", () => {
+    expect(
+      getCashReceiptValue({ receiptDate: "2026-01-01", receiptValue: 100, netReceiptValue: 137.4 })
+    ).toBe(137.4)
+  })
+
+  it("cai para receiptValue quando netReceiptValue está ausente", () => {
+    expect(getCashReceiptValue({ receiptDate: "2026-01-01", receiptValue: 100 })).toBe(100)
+  })
+
+  it("respeita netReceiptValue zero — desconto integral não vira o nominal", () => {
+    expect(
+      getCashReceiptValue({ receiptDate: "2026-01-01", receiptValue: 100, netReceiptValue: 0 })
+    ).toBe(0)
+  })
+})
+
+/**
+ * Story 75-370 / achado C1 do gate — a soma dos meses tem que fechar com o
+ * acumulado. O breakdown mensal somava o valor nominal enquanto o acumulado já
+ * vinha líquido, então bastavam juros numa baixa para os dois discordarem.
+ */
+describe("computeInformeFromStatements — mensal e acumulado no mesmo critério", () => {
+  beforeEach(() => {
+    vi.stubEnv("SIENGE_SUBDOMAIN", "trifold")
+    vi.stubEnv("SIENGE_USERNAME", "user")
+    vi.stubEnv("SIENGE_PASSWORD", "pass")
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.unstubAllGlobals()
+  })
+
+  it("baixas com juros e desconto: soma dos meses == acumulado, ambos líquidos", async () => {
+    mockStatementResponse([
+      makeInstallment({
+        installmentId: 1,
+        installmentNumber: "1",
+        originalValue: 1000,
+        currentBalance: 0,
+        receipts: [
+          {
+            receiptDate: "2026-03-10",
+            receiptValue: 1000,
+            interestValue: 25,
+            netReceiptValue: 1025,
+            receiptType: "Recebimento",
+          },
+        ],
+      }),
+      makeInstallment({
+        installmentId: 2,
+        installmentNumber: "2",
+        originalValue: 1000,
+        currentBalance: 0,
+        receipts: [
+          {
+            receiptDate: "2026-04-10",
+            receiptValue: 1000,
+            discountValue: 40,
+            netReceiptValue: 960,
+            receiptType: "Recebimento",
+          },
+        ],
+      }),
+    ])
+    const installments = await getFinancialStatement(1469)
+    const informe = computeInformeFromStatements(installments, 2026)
+
+    expect(informe.totalPaidInYear).toBeCloseTo(1985) // 1.025 + 960, não 2.000
+    expect(informe.accumulatedPaid).toBeCloseTo(informe.totalPaidInYear)
+    const somaDosMeses = informe.monthlyBreakdown.reduce((s, m) => s + m.value, 0)
+    expect(somaDosMeses).toBeCloseTo(informe.accumulatedPaid)
+    // E cada lançamento do mês também no líquido.
+    expect(informe.monthlyBreakdown[0]?.installments[0]?.value).toBeCloseTo(1025)
   })
 })
