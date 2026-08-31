@@ -3,6 +3,8 @@ import { requireAuth } from "@web/lib/api-auth"
 import { fetchCreativesForLeads, resolveCreativeForLead, canSeeCreatives } from "@web/lib/pipeline/fetch-creatives"
 import { staleCutoffMs } from "@web/lib/broker/stale-cutoff"
 import { parseQualificacao } from "@web/lib/leads/qualificacao"
+import { fetchImobiliariaNomePorLead } from "@web/lib/imob/lead-imobiliaria"
+import { createOrgScopedAdminClient } from "@web/lib/supabase/org-scoped-admin"
 
 const DEFAULT_LIMIT = 50
 const MAX_LIMIT = 100
@@ -140,9 +142,24 @@ export async function GET(req: NextRequest) {
     ? await fetchCreativesForLeads(supabase, filtered, appUser.org_id)
     : new Map()
 
+  // Pipeline IMOB (2026-08-31) — paridade com a página: o card do IMOB mostra a
+  // imobiliária parceira no lugar do X/3, e o "Carregar mais" tem que trazer o
+  // mesmo dado. `imobiliarias` tem RLS sem policy (migration 131) → precisa de
+  // service-role, então vai pelo client ESCOPADO à org (Story 900-14). Só no
+  // segmento imob: nenhum custo no funil principal.
+  const nomePorLead =
+    segmento === "imob"
+      ? await fetchImobiliariaNomePorLead(
+          createOrgScopedAdminClient(appUser.org_id),
+          appUser.org_id,
+          filtered.map((l) => l.id as string)
+        )
+      : new Map<string, string>()
+
   const enrichedLeads = filtered.map((l) => ({
     ...normalizeLead(l),
     creative: resolveCreativeForLead(l, creativesMap),
+    imobiliaria_nome: nomePorLead.get(l.id as string) ?? null,
   }))
 
   return NextResponse.json({

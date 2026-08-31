@@ -59,6 +59,9 @@ interface Lead {
   creative?: CreativeData | null
   // Story 75-91: minutos aguardando atendimento (kanban do dashboard)
   waitingMinutes?: number | null
+  // Pipeline IMOB (2026-08-31): imobiliária parceira resolvida server-side
+  // (página do IMOB + /api/pipeline/leads?segmento=imob).
+  imobiliaria_nome?: string | null
 }
 
 export interface InitialStageState {
@@ -579,6 +582,7 @@ export function KanbanBoard({
                 loading={state?.loading ?? false}
                 onLoadMore={() => handleLoadMore(stage.id)}
                 onSelectLead={setSelectedLeadId}
+                segmento={segmento}
               />
               </div>
             )
@@ -591,6 +595,7 @@ export function KanbanBoard({
               lead={activeLead}
               propertyName={activeLead.properties?.name}
               brokerName={activeLead.users?.name}
+              segmento={segmento}
             />
           )}
         </DragOverlay>

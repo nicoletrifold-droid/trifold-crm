@@ -4,6 +4,7 @@ import { createAdminClient } from "@web/lib/supabase/admin"
 import { canAccess } from "@web/lib/permissions"
 import { KanbanBoard, type InitialStageState } from "@web/components/pipeline/kanban-board"
 import { ImobTabs } from "../_components/imob-tabs"
+import { fetchImobiliariaNomePorLead } from "@web/lib/imob/lead-imobiliaria"
 
 // Story 75-99 — Pipeline do mundo IMOB (mesmas etapas, só leads segmento='imob').
 export const dynamic = "force-dynamic"
@@ -16,7 +17,7 @@ const LEADS_SELECT = `id, name, phone, stage_id, qualification_score, interest_l
        users:assigned_broker_id(name)`
 
 type RawLead = Record<string, unknown>
-function normalizeLead(l: RawLead) {
+function normalizeLead(l: RawLead): RawLead {
   return {
     ...l,
     properties: Array.isArray(l.properties) ? (l.properties[0] ?? null) : (l.properties ?? null),
@@ -56,7 +57,19 @@ export default async function ImobPipelinePage() {
     })
   )
 
-  const initialLeadsPerStage = perStage as unknown as InitialStageState[]
+  // Pipeline IMOB (2026-08-31) — nome da imobiliária parceira no card (no lugar
+  // do X/3 de cadastro). Uma leitura para o board inteiro; best-effort.
+  const nomePorLead = await fetchImobiliariaNomePorLead(
+    admin,
+    user.orgId,
+    perStage.flatMap((s) => s.leads.map((l) => l.id as string))
+  )
+  const perStageComImobiliaria = perStage.map((s) => ({
+    ...s,
+    leads: s.leads.map((l) => ({ ...l, imobiliaria_nome: nomePorLead.get(l.id as string) ?? null })),
+  }))
+
+  const initialLeadsPerStage = perStageComImobiliaria as unknown as InitialStageState[]
   const total = perStage.reduce((acc, s) => acc + s.totalCount, 0)
 
   return (

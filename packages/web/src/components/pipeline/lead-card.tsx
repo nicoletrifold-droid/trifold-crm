@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { Building2 } from "lucide-react"
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { MANDATORY_FIELDS } from "@trifold/shared"
@@ -35,10 +36,19 @@ interface LeadCardProps {
     creative?: CreativeData | null
     // Story 75-91: minutos aguardando atendimento (só leads em "Aguardando" não atendidos).
     waitingMinutes?: number | null
+    // Pipeline IMOB (2026-08-31): imobiliária parceira resolvida server-side
+    // (fetchImobiliariaNomePorLead). Só o board do IMOB preenche.
+    imobiliaria_nome?: string | null
   }
   propertyName?: string
   brokerName?: string
   onSelect?: (leadId: string) => void
+  /**
+   * Pipeline IMOB (2026-08-31) — 'imob' troca o progresso X/3 do cadastro (que
+   * a equipe IMOB não usa) pelo nome da imobiliária parceira. Default: funil
+   * principal, card inalterado.
+   */
+  segmento?: string
 }
 
 type PropertyBadge = { label: string; bg: string; text: string; dot: string }
@@ -71,7 +81,7 @@ function getMissingMandatoryLabels(lead: LeadCardProps["lead"]): string[] {
   return missing
 }
 
-export function LeadCard({ lead, propertyName, brokerName, onSelect }: LeadCardProps) {
+export function LeadCard({ lead, propertyName, brokerName, onSelect, segmento }: LeadCardProps) {
   // Story 50-2: estado do modal de preview do criativo (cada card gerencia o próprio)
   const [previewOpen, setPreviewOpen] = useState(false)
 
@@ -90,6 +100,9 @@ export function LeadCard({ lead, propertyName, brokerName, onSelect }: LeadCardP
     opacity: isDragging ? 0.4 : 1,
     touchAction: 'none' as const,
   }
+
+  // Pipeline IMOB: variante do card (X/3 → imobiliária parceira).
+  const isImob = segmento === "imob"
 
   const score = lead.qualification_score ?? 0
   const scoreColor =
@@ -216,17 +229,32 @@ export function LeadCard({ lead, propertyName, brokerName, onSelect }: LeadCardP
             </>
           )}
 
-          <div className="flex flex-1 items-center gap-1.5" title={fillTitle}>
-            <div className="h-1 flex-1 rounded-full bg-stone-100 dark:bg-stone-700">
-              <div
-                className="h-1 rounded-full bg-orange-400 transition-all"
-                style={{ width: `${fillPercent}%` }}
-              />
+          {/* Pipeline IMOB (2026-08-31) — no IMOB o X/3 do cadastro não diz nada
+              (decisão do Marcos): o que importa é DE QUAL parceira o lead veio.
+              Sem imobiliária resolvida, nada é renderizado. */}
+          {isImob ? (
+            lead.imobiliaria_nome && (
+              <span
+                className="inline-flex min-w-0 flex-1 items-center justify-end gap-1 text-[10px] font-medium text-stone-500 dark:text-stone-400"
+                title={`Imobiliária parceira: ${lead.imobiliaria_nome}`}
+              >
+                <Building2 className="h-2.5 w-2.5 shrink-0" />
+                <span className="truncate">{lead.imobiliaria_nome}</span>
+              </span>
+            )
+          ) : (
+            <div className="flex flex-1 items-center gap-1.5" title={fillTitle}>
+              <div className="h-1 flex-1 rounded-full bg-stone-100 dark:bg-stone-700">
+                <div
+                  className="h-1 rounded-full bg-orange-400 transition-all"
+                  style={{ width: `${fillPercent}%` }}
+                />
+              </div>
+              <span className="text-[9px] tabular-nums text-stone-300 dark:text-stone-500">
+                {filledCount}/{totalMandatory}
+              </span>
             </div>
-            <span className="text-[9px] tabular-nums text-stone-300 dark:text-stone-500">
-              {filledCount}/{totalMandatory}
-            </span>
-          </div>
+          )}
         </div>
 
         {/* AI Summary Preview */}

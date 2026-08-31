@@ -5,7 +5,7 @@ import { CAPABILITY_SEED } from "@web/lib/capabilities"
 import { usePathname } from "next/navigation"
 import { createClient } from "@web/lib/supabase/client"
 import Link from "next/link"
-import { X, Phone, MessageCircle, Mail, Calendar, Check, Plus, Trash2, Clock, XCircle, AlertTriangle, ChevronDown, Pencil, History, UserCheck, BellRing, BellOff } from "lucide-react"
+import { X, Phone, MessageCircle, Mail, Calendar, Check, Plus, Trash2, Clock, XCircle, AlertTriangle, ChevronDown, Pencil, History, UserCheck, BellRing, BellOff, Building2 } from "lucide-react"
 import { QuickHistoryModal } from "@web/app/broker/_components/quick-history-modal"
 import { INTEREST_LEVEL_LABELS as interestLevelLabels, INTEREST_LEVEL_COLORS as interestLevelColors, LOST_REASON_GROUP_LABELS, SOURCE_LABELS } from "@web/lib/constants"
 import { ehIdMeta } from "@web/lib/leads/meta-utm"
@@ -51,6 +51,12 @@ interface LeadQuickData {
   // carregam IDs do Meta ({{campaign.id}}/{{ad.id}}); null se o sync não conhece.
   utm_campaign_nome: string | null
   utm_content_nome: string | null
+  /**
+   * Pipeline IMOB (2026-08-31) — imobiliária parceira do lead, resolvida pelo
+   * GET /api/leads/[id] a partir do agendamento. Só vem preenchido em lead
+   * segmento='imob'; no funil principal é sempre null.
+   */
+  imobiliaria_nome: string | null
   ai_summary: string | null
   lost_reason: string | null
   lost_reason_grupo: string | null
@@ -368,6 +374,8 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
             utm_content: (raw.utm_content as string | null) ?? null,
             utm_campaign_nome: (raw.utm_campaign_nome as string | null) ?? null,
             utm_content_nome: (raw.utm_content_nome as string | null) ?? null,
+            // Pipeline IMOB (2026-08-31) — parceira resolvida pelo GET (só segmento='imob').
+            imobiliaria_nome: (raw.imobiliaria_nome as string | null) ?? null,
             ai_summary: (raw.ai_summary as string | null) ?? null,
             lost_reason: (raw.lost_reason as string | null) ?? null,
             lost_reason_grupo: (raw.lost_reason_grupo as string | null) ?? null,
@@ -684,6 +692,18 @@ function LeadDetailContent({ leadId, onClose }: { leadId: string; onClose: () =>
                   source={lead.source}
                   label={lead.source === "website" && lead.utm_content ? lead.utm_content : undefined}
                 />
+              )}
+              {/* Pipeline IMOB (2026-08-31) — quem é a parceira, ao lado da origem
+                  ("Link Imob"): no IMOB o lead SEMPRE pertence a uma imobiliária, e
+                  saber qual é a primeira pergunta de quem abre o lead. */}
+              {lead.imobiliaria_nome && (
+                <span
+                  className="inline-flex max-w-[220px] items-center gap-1 rounded-md bg-stone-100 px-2 py-1 text-xs font-medium text-stone-600 dark:bg-stone-800 dark:text-stone-300"
+                  title={`Imobiliária parceira: ${lead.imobiliaria_nome}`}
+                >
+                  <Building2 className="h-3 w-3 shrink-0" />
+                  <span className="truncate">{lead.imobiliaria_nome}</span>
+                </span>
               )}
             </div>
             {/* Story 84-2 (Epic 84) — histórico de mudanças da Qualificação Comercial (mesmo
