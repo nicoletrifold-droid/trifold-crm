@@ -19,6 +19,16 @@ import { lembreteEventKey } from "@web/lib/boleto-lembrete-key"
 // vencimento (venc_hoje) e no atraso (+5d/+15d). Dedup por MARCO+parcela, com chaves
 // prefixadas distintas (não colidem com a chave de "novo boleto"). getFinancialStatement
 // vira status=PAGO/hasBoleto=false quando o cliente paga → o ciclo para sozinho.
+//
+// CADÊNCIA (31/08/2026) — 2 rodadas/dia: 09 e 18 BRT (12 e 21 UTC). Eram 4 (09/12/15/18
+// BRT). O corte devolve ~330 chamadas/dia à cota do Sienge, que é de 1.000/dia POR
+// ASSINATURA e estava em 844/dia (84%), com 2.018 requisições excedidas em agosto.
+// Cada rodada custa 1 getFinancialStatement por cliente ativo (~165), e esta varredura
+// era responsável por ~4/5 do consumo total da conta.
+// TRADE-OFF ACEITO: como o webhook não cobre este caso (ver acima), a varredura é o
+// ÚNICO detector de boleto novo — a detecção passa de ~3h para até ~12h no pior caso.
+// Não reduzir abaixo de 2 sem antes filtrar quem é varrido (hoje varremos todo cliente
+// ativo, inclusive quem não tem parcela próxima do vencimento).
 
 const EVENT_TYPE = "BOLETO_SCAN"
 const PAGE_DELAY_MS = 300
@@ -101,8 +111,8 @@ export async function GET(request: NextRequest) {
 
   const admin = createAdminClient()
 
-  // Story 75-141 — o passo de lembretes só roda na rodada das 09 BRT (= 12 UTC). As demais
-  // rodadas (12/15/18 BRT) mantêm APENAS a detecção de novo boleto (75-101, inalterada).
+  // Story 75-141 — o passo de lembretes só roda na rodada das 09 BRT (= 12 UTC). A outra
+  // rodada (18 BRT) mantém APENAS a detecção de novo boleto (75-101, inalterada).
   const now = new Date()
   const hoje = hojeSaoPaulo(now)
   const rodarLembretes = horaSaoPaulo(now) === 9
@@ -176,7 +186,7 @@ export async function GET(request: NextRequest) {
         .filter((i) => i.hasBoleto)
         .sort((a, b) => (a.dueDate < b.dueDate ? -1 : a.dueDate > b.dueDate ? 1 : 0))
 
-      // ── Passo 1: detecção de NOVO BOLETO (75-101, roda em TODAS as 4 rodadas) ──
+      // ── Passo 1: detecção de NOVO BOLETO (75-101, roda em TODAS as rodadas) ──
       let sentForClient = false
 
       for (const inst of abertos) {

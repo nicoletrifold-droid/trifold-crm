@@ -267,8 +267,8 @@ describe("GET /api/cron/boleto-scan — lembretes (Story 75-141)", () => {
     expect(notifyNovoBoletoMock).toHaveBeenCalledTimes(1)
   })
 
-  it("AC6: rodada das 15 BRT (18 UTC) → NENHUM lembrete, mas novo-boleto roda normalmente", async () => {
-    vi.setSystemTime(new Date("2026-07-10T18:00:00Z")) // 15 BRT
+  it("AC6: rodada das 18 BRT (21 UTC) → NENHUM lembrete, mas novo-boleto roda normalmente", async () => {
+    vi.setSystemTime(new Date("2026-07-10T21:00:00Z")) // 18 BRT — 2ª rodada do dia
     getFinancialStatementMock.mockResolvedValue([
       { billReceivableId: 11045, installmentId: 11, dueDate: "2026-07-10", hasBoleto: true, currentBalance: 100, generatedBillet: true },
     ])
@@ -276,7 +276,7 @@ describe("GET /api/cron/boleto-scan — lembretes (Story 75-141)", () => {
     const json = await res.json()
     expect(json.lembretes).toBe(false)
     expect(notifyBoletoLembreteMock).not.toHaveBeenCalled()
-    // Não-regressão: novo-boleto continua rodando nas 4 rodadas.
+    // Não-regressão: novo-boleto continua rodando em TODAS as rodadas agendadas.
     expect(json.notified).toBe(1)
     expect(notifyNovoBoletoMock).toHaveBeenCalledTimes(1)
   })
@@ -361,5 +361,32 @@ describe("GET /api/cron/boleto-scan — agrupamento de lembretes (Story 75-147)"
     expect(notifyBoletoLembreteMock).toHaveBeenCalledTimes(2)
     const marcos = notifyBoletoLembreteMock.mock.calls.map((c) => (c[0] as { marco: string }).marco)
     expect(marcos).toEqual(expect.arrayContaining(["venc_hoje", "atraso5"]))
+  })
+})
+
+// Cadência do cron (31/08/2026) — guarda de custo, não de comportamento.
+//
+// Esta varredura custa 1 chamada ao Sienge por cliente ativo (~165) POR RODADA, e a cota
+// da assinatura é de 1.000/dia compartilhada com todo o resto do CRM. Com 4 rodadas ela
+// sozinha consumia ~4/5 da conta e gerava excedente. Voltar a subir a frequência aqui é
+// barato de escrever e caro de descobrir — daí o teste.
+describe("boleto-scan · cadência do cron", () => {
+  it("mantém 2 rodadas/dia (12 e 21 UTC = 09 e 18 BRT) no vercel.json", async () => {
+    const { readFileSync } = await import("node:fs")
+    const { resolve } = await import("node:path")
+
+    const vercelJson = JSON.parse(
+      readFileSync(resolve(process.cwd(), "packages/web/vercel.json"), "utf-8")
+    ) as { crons: Array<{ path: string; schedule: string }> }
+
+    const cron = vercelJson.crons.find((c) => c.path === "/api/cron/boleto-scan")
+    expect(cron, "cron do boleto-scan sumiu do vercel.json").toBeDefined()
+
+    const horas = cron!.schedule.split(" ")[1]!.split(",")
+    expect(horas).toEqual(["12", "21"])
+
+    // A rodada das 12 UTC (09 BRT) é a única que dispara lembretes (Story 75-141).
+    // Se ela sair, os lembretes de vencimento/atraso param silenciosamente.
+    expect(horas).toContain("12")
   })
 })
