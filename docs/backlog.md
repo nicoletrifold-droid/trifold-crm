@@ -110,38 +110,50 @@ fechada exatamente onde as ACs a mediram; o que sobra é o resto da superfície.
 
 ---
 
-### [ARCH-001] 🟠 O `CHECK whatsapp_sem_identificador_proprio` morde **só a grafia** — `phoneNumberId` passa
+### [ARCH-001] ✅ RESOLVIDO — `CHECK whatsapp_sem_identificador_proprio` passou a casar a ESTRUTURA do identificador
 
 **Adicionado em:** 2026-08-29 · **Origem:** gate `@qa` da Story `900-21b` (`ARCH-001`, medium).
-**Prioridade:** P1 · **Dona: `900-24`** (a story dos webhooks) — não é dívida órfã, tem destino.
+**Fechado em:** 2026-08-30 por `@devops` · **Dona: `900-24`** (PR #528, migration `247`).
 
-A migration `246` cria
-`CONSTRAINT whatsapp_sem_identificador_proprio CHECK (provider <> 'whatsapp' OR NOT (config ? 'phone_number_id'))`
-e a própria migration afirma que reabrir a decisão "custa uma migration". **Custa uma troca de
-grafia.** O operador `?` do `jsonb` testa **chave de topo, string exata** — qualquer outra forma de
-escrever o mesmo identificador entra sem tocar o `CHECK`.
+Fecha na APLICAÇÃO em produção, não no merge — e foi aplicada: `247_org_integrations_check_whatsapp_grafias.sql`,
+registrada no ledger com `via='apply'` (observação direta, não declaração).
 
-Medido por `@devops` em 2026-08-29 contra o Postgres de produção (avaliação de expressão pura,
-**read-only**, nenhuma tabela lida):
+O `CHECK` deixou de testar chave de topo em grafia exata (`config ? 'phone_number_id'`) e passou a casar a
+**estrutura** — três palavras, nesta ordem, com até 2 caracteres não-alfanuméricos entre elas, qualquer caixa,
+em qualquer profundidade do JSON, sobre chaves E valores:
 
-| valor de `config` | o `CHECK` bloqueia? |
-|---|---|
-| `{"phone_number_id":"1"}` | **sim** |
-| `{"phoneNumberId":"1"}` | **não** |
-| `{"meta":{"phone_number_id":"1"}}` | **não** |
-| `{"phone_number":"1"}` | **não** |
+```sql
+CHECK (provider <> 'whatsapp'
+       OR config::text !~* 'phone[^[:alnum:]]{0,2}number[^[:alnum:]]{0,2}id')
+```
 
-**Por que importa:** a invariante que a `900-21b` quis travar é *"o WhatsApp resolve por
-`whatsapp_config.phone_number_id`, nunca por `org_integrations`, para não haver duas fontes de
-verdade do mesmo identificador"*. Um `CHECK` que só reconhece uma grafia não trava a invariante —
-trava um literal. A segunda fonte de verdade nasce no dia em que alguém escrever a chave em
-camelCase, e nasce **em silêncio**.
+Não é a opção (b) do texto original (enumerar grafias plausíveis, rejeitada por ser a mais fraca): não enumera
+grafia nenhuma, casa a forma.
 
-**Ação (`900-24`):** decidir entre (a) normalizar a forma de `config` por provider com um schema
-validado, (b) alargar o `CHECK` para as grafias plausíveis — sabendo que continua enumerando
-literais —, ou (c) aceitar e mover a garantia para a camada que escreve, com teste. A opção (b)
-sozinha é a mais fraca das três e não deve ser escolhida por ser a mais barata.
+**As 7 células de vivacidade, executadas contra PRODUÇÃO em 2026-08-30 logo após aplicar** (cada uma em
+`BEGIN … ROLLBACK`; a contagem certa é 7, não as 5 da prosa antiga do B3):
 
+| # | célula | provider | esperado | medido |
+|---|---|---|---|---|
+| 1 | `{"phoneNumberId":"…"}` | whatsapp | `23514` | **`23514`** |
+| 2 | `{"meta":{"phone_number_id":"…"}}` | whatsapp | `23514` | **`23514`** |
+| 3 | `{"Phone-Number-Id":"…"}` | whatsapp | `23514` | **`23514`** |
+| 4 | `{"phone_number_id":"…"}` (grafia original) | whatsapp | `23514` | **`23514`** |
+| 5 | `{"phone_number_id":"…"}` | meta_ads | sucesso | **sucesso** |
+| 6 | `{"phone_number":"…"}` (sem `id`) | whatsapp | sucesso | **sucesso** |
+| 7 | texto livre citando `phone_number_id` (FP aceito) | whatsapp | `23514` | **`23514`** |
+
+**Controle negativo da própria régua** (para "`23514` em tudo" não ser indistinguível de uma régua funcionando):
+a forma v1 das células, com `UPDATE … LIMIT` (sintaxe MySQL), devolve `42601` — erro de sintaxe, não violação
+de `CHECK`. A régua discrimina.
+
+**Zero resíduo:** o sha256 de `org_integrations` e o `max(updated_at)` são idênticos antes e depois das 7
+células (`efc59ae8…be832a39`, `2026-08-30 14:08:40.542267+00`) — os `ROLLBACK` seguraram, inclusive contra o
+trigger `set_updated_at`.
+
+**Custo nomeado e aceito** (está no `COMMENT ON CONSTRAINT`): dentro do provider `whatsapp` — só dele —,
+qualquer VALOR de texto livre que contenha a sequência é bloqueado como falso positivo (célula 7). Não cobre
+`phone_number` sem `id` (célula 6, fora do escopo original) nem ofuscação deliberada (fora do modelo de ameaça).
 
 ---
 
