@@ -1,7 +1,7 @@
 # Story 75-370 — Extrato: "total pago" passa a usar o Recto líquido (juros e desconto entram)
 
 **Story ID:** 75-370
-**Epic:** 75 (CRM Trifold) · **Status:** Ready for Review · **Estimativa:** S (~2 pts)
+**Epic:** 75 (CRM Trifold) · **Status:** Done · **Estimativa:** S (~2 pts)
 
 - **executor:** @dev · **quality_gate:** @qa · **quality_gate_tools:** [vitest, typecheck, lint]
 - **Dependências:** continuação da Story `75-369` (allowlist de tipos de baixa, PR #520). Toca
@@ -224,3 +224,4 @@ claude-opus-5[1m] (@dev / Dex) — modo YOLO
 | 2026-08-31 | @qa | Gate CONCERNS (8/10): 1 achado MEDIUM não bloqueante — informe misturava critério nominal e líquido na mesma função |
 | 2026-08-31 | @dev | C1 corrigido (mensal do informe pelo mesmo helper) + teste de coerência; regressão completa verde |
 | 2026-08-31 | @qa | Re-review: C1 resolvido e coberto por teste com mutação → gate **PASS** |
+| 2026-08-31 | @devops | PR #538 mergeado (`7dd5bf59`), CI verde, deploy de produção → Done |
