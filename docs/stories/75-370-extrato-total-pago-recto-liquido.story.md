@@ -45,16 +45,25 @@ também `administrativeFee` e `insuranceAmount`. Se o líquido já descontasse t
 o campo faria o portal ficar **abaixo** do oficial em vez de bater.
 
 Medido contra a API de produção com `scripts/sienge-recto-liquido-check.ts` (só GET), nos clientes
-do Vind e do Yarden — **1.299 baixas em dinheiro, 116 títulos, 72 clientes**:
+do Vind e do Yarden — **1.298 baixas em dinheiro, 116 títulos, 72 clientes**:
 
 | Verificação | Resultado |
 |---|---|
-| `netReceiptValue == receiptValue + interestValue + additionalValue − discountValue` | **1.299 de 1.299** — zero divergências |
+| `netReceiptValue == receiptValue + interestValue + additionalValue − discountValue` | **1.298 de 1.298** — zero divergências |
 | Baixas sem `netReceiptValue` | **0** |
 | Baixas com `administrativeFee` ou `insuranceAmount` > 0 | **0** |
-| Total pago por `receiptValue` (hoje) | R$ 18.368.165,72 |
-| Total pago por `netReceiptValue` | R$ 18.370.903,18 |
+| Total pago por `receiptValue` (hoje) | R$ 17.954.165,72 |
+| Total pago por `netReceiptValue` | R$ 17.956.903,18 |
 | Diferença que a mudança produz | **+ R$ 2.737,46** |
+
+> **Correção dos números publicados no PR #538.** A primeira execução contou em dobro os títulos
+> com dois titulares (cônjuges): a API devolve o mesmo título na consulta de cada cliente. Reportei
+> na época 1.299 baixas e R$ 18.368.165,72 de total nominal; os números corretos, após a guarda de
+> deduplicação, são **1.298 baixas** e **R$ 17.954.165,72**. A identidade da prova não é afetada
+> (é verificada baixa por baixa, independente de repetição) e a diferença que a mudança produz é a
+> mesma ao centavo — a baixa duplicada não tinha juros nem desconto. O mesmo erro apareceu no
+> script de conciliação e foi o que denunciou o problema: títulos com o portal mostrando exatamente
+> o dobro do oficial.
 
 Conclusão: `netReceiptValue` **é** o Recto líquido, não desconta taxa administrativa nem seguro
 nesta base, e vem preenchido em 100% das baixas em dinheiro. O fallback para `receiptValue` existe
@@ -62,8 +71,41 @@ por segurança, não por necessidade rotineira.
 
 > A base de hoje (116 títulos) é maior que a da conciliação (89 títulos, porque só entraram os que
 > apareciam nos dois extratos), então o total não é comparável ao oficial de R$ 14.522.414,77 — o
-> que é comparável é a diferença que a mudança produz. Fechar o número ao centavo contra os 89
-> títulos depende dos extratos de 28/08.
+> que é comparável é a diferença que a mudança produz. O fechamento ao centavo contra os 89 títulos
+> está na seção abaixo.
+
+### Conciliação final com os 89 títulos oficiais (31/08/2026)
+
+Fecha a pendência que sobrou do merge. O Marcos enviou os extratos "Extrato Cliente Histórico" do
+Yarden (53 títulos) e do Vind (36 títulos), correção até 28/08/2026, e cada título foi comparado
+com o que o portal calcula chamando `getFinancialStatement()` — o mesmo código de produção.
+Casamento por `billReceivableId`. Script versionado: `scripts/sienge-conciliar-extrato-pdf.ts`.
+
+**89 de 89 títulos localizados nos dois lados.**
+
+| | Extrato oficial | Portal | Delta |
+|---|---:|---:|---:|
+| **Total pago — regra nova (líquido)** | R$ 14.522.414,77 | R$ 14.524.773,15 | **+ R$ 2.358,38** |
+| **Total pago — regra antiga (nominal)** | R$ 14.522.414,77 | R$ 14.521.692,99 | − R$ 721,78 |
+
+| Critério | Títulos batendo ao centavo |
+|---|---|
+| **Regra nova (Recto líquido)** | **88 de 89** |
+| Regra antiga (valor nominal) | 57 de 89 |
+
+O `−721,78` da regra antiga reproduz **exatamente** o número da conciliação de 28/08 registrado na
+Story 75-369 — o script novo, escrito de forma independente, chegou ao mesmo valor histórico ao
+centavo. É a melhor evidência de que ele está medindo a coisa certa.
+
+**A única divergência é a Q2, e é deliberada.** Título 10578 (CT.VIND-904): oficial
+R$ 98.551,65 × portal R$ 100.910,03, delta de R$ 2.358,38. Conferido baixa por baixa: as parcelas
+6 e 7 são `Abatimento de Adiantamento` de 02/05/2024, com líquido de R$ 1.178,01 e R$ 1.180,37 —
+soma **R$ 2.358,38**, exatamente o delta. O extrato deixa o Recto líquido dessas duas linhas em
+branco porque o Sienge conta o dinheiro na **entrada** do adiantamento (título 10609, que não está
+neste extrato); o financeiro decidiu o contrário em 31/08/2026 ("manter, contar no abatimento").
+
+Ou seja: **não há divergência não explicada.** 88 títulos batem ao centavo e o 89º difere pelo
+valor exato da regra que o financeiro escolheu manter.
 
 ### Informe de rendimentos
 
@@ -205,6 +247,7 @@ claude-opus-5[1m] (@dev / Dex) — modo YOLO
 | `docs/stories/75-370-extrato-total-pago-recto-liquido.story.md` | novo |
 | `docs/qa/gates/75-370-extrato-total-pago-recto-liquido.yml` | novo — gate CONCERNS → PASS |
 | `scripts/sienge-recto-liquido-check.ts` | novo — mede a identidade e os dois critérios contra a API |
+| `scripts/sienge-conciliar-extrato-pdf.ts` | novo — concilia o portal com o PDF oficial, título a título |
 | `packages/web/src/lib/integrations/sienge/installments.ts` | `getCashReceiptValue` |
 | `packages/web/src/lib/integrations/sienge/client.ts` | agregado `receiptValue` pelo líquido + reexport + fix C1 no informe |
 | `packages/web/src/lib/integrations/sienge/types.ts` | comentários dos campos de baixa e do agregado |
@@ -225,3 +268,4 @@ claude-opus-5[1m] (@dev / Dex) — modo YOLO
 | 2026-08-31 | @dev | C1 corrigido (mensal do informe pelo mesmo helper) + teste de coerência; regressão completa verde |
 | 2026-08-31 | @qa | Re-review: C1 resolvido e coberto por teste com mutação → gate **PASS** |
 | 2026-08-31 | @devops | PR #538 mergeado (`7dd5bf59`), CI verde, deploy de produção → Done |
+| 2026-08-31 | @qa | Conciliação final com os 89 títulos oficiais: 88/89 ao centavo (antes: 57/89); a única divergência é o adiantamento do CT.VIND-904, no valor exato da decisão Q2. Corrigidos os números do PR #538 (dupla contagem de títulos com dois titulares) |
