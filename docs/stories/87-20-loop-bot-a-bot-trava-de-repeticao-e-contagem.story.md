@@ -582,7 +582,8 @@ verificado no código.
 | Data | Versão | Descrição | Autor |
 |------|--------|-----------|-------|
 | 2026-08-30 | 1.0 | Story criada a partir do incidente real (Nicole em loop com outro bot, contido manualmente). Números remedidos contra o banco (22/11, não 21/10). Desenho de dois sinais (repetição + contagem) calibrado com 203 conversas/14 dias e um controle negativo real. | @sm (River) |
-| 2026-08-30 | 1.10 | **Correção do achado da revisão COMPLETA do CodeRabbit no PR #535 (@dev), escopo mínimo — nenhuma AC, nenhum limiar e nenhum veredito mudaram; gate segue `CONCERNS` não bloqueante.** *Por que só agora:* as passadas incrementais vinham **pulando commits** e publicando `success` assim mesmo — verde que era *skip*; o @devops forçou uma revisão completa e o denominador maior achou isto. **O defeito (`route.ts:1109`):** se a leitura de `conversations` falhasse, `convRow` ficava `undefined`, `contidaPorLoop` virava `false` e a Nicole era **reativada numa conversa que a trava havia contido** — a oscilação permanente que o AC14 existe para matar, de volta inteira e em silêncio. **A medição acrescentou um andar:** `handoff_at` some junto, `resolveTakeoverAnchor(null, null)` devolve `null` e `shouldReactivateAi(null)` é `true` **por contrato** (63-13) — então o fail-open **reativava incondicionalmente**, atropelando também a regra temporal de 63-13/63-15; um handoff de 60 s reativava. **É o mesmo pecado da v1.7 do lado do LEITOR:** assim como `conterLoop` parou de chamar de sucesso o `UPDATE` que não escreveu, **não conseguir LER o motivo do handoff não é o mesmo que ter lido "não foi contida por loop"**; no estado *não sei* a ação **irreversível** (reativar) não acontece. **E não é fail-closed que cala:** grito próprio `NICOLE_REATIVACAO_ESTADO_DESCONHECIDO`, nível `error`, com o motivo do banco em `metadata.erro` e `await logEventOnce`. `shouldReactivateAi`/`resolveTakeoverAnchor` **intocadas** — o conserto é no CHAMADOR. **Carrasco ANTES, e o instrumento que faltava:** o fake do webhook só sabia produzir *achei* e *não achei*; a injeção de `{ data: null, error }` por **predicado (tabela + colunas literais)** foi acrescentada, porque sem ela nenhum teste podia sequer EXPRESSAR o defeito. Vermelho medido 🔴 **3 / 39**, `tsc --noEmit` **rc=0 antes** da contagem. **4 mutantes, 4 vermelhos**, todos com `tsc` rc=0: M-CR3a (a obrigatória — erro volta a ser *não contida*) 🔴 2, **M-CR3b controle negativo** (fail-closed para todo mundo) 🔴 1 matando o teste **pré-existente** de reativação, M-CR3c (grito sem guarda) 🔴 1 e M-CR3d (`await` → `void`) 🔴 1 — **kill sets de a e b disjuntos**, que é o que prova que o teste distingue *não sei* de *não é loop*. **Destinatário medido, não presumido:** `coletarLoops` filtra outro `event_type` e o branch de erro descarta a frase em `classificarErroIA` ⇒ os leitores deste grito são `system_events` e o log de erro do Vercel, **não** o alerta de WhatsApp — mesma situação já declarada de `NICOLE_LOOP_CONTENCAO_FALHOU`. **Os outros 5 achados da revisão: TODOS de 2ª classe, triados com medição e declarados, nenhum consertado** — a régua SQL que não exclui `t = ''` (divergência **conservadora por construção**: só pode aumentar a contagem, e o número publicado é 1); a migration 248×**247** no parecer do @po (já declarada em 2 lugares, documento de outro dono); o contrato sem mock do barrel (**já coberto**: renomear os símbolos faz `tsc` rc=1 em `route.ts:1254` e `:23` — os imports são tipados); o `level` isento no fake do cron (**buraco real e medido: remover `.eq("level","error")` sai 35/35 VERDE**, mas o filtro é da 87-19 e degrada precisão de alerta, não a contenção); e os 2 nitpicks (o teste de denominador sem vivacidade — cuja metade positiva **já** é provada 3× no mesmo arquivo — e a normalização de `motivo`, **inalcançável pelos 2 chamadores atuais**, enumerados). **Varredura da CLASSE do meu próprio conserto, antes do gate:** a leitura IRMÃ de `messages`, no **mesmo `Promise.all`**, segue com o `error` não lido — 4ª linha da tabela de irmãos, com o raio medido (atinge 63-13/63-15, **não** o AC14) e com o motivo de não ir junto (fail-closed ali congelaria toda reativação da plataforma). **Duas imprecisões de REGISTRO corrigidas — e a segunda estava errada no enunciado:** *(1)* a régua larga de hora de parede acusa **2** linhas novas, não 1 — a de R3 **e a própria linha meta que a descreve**; *(2)* `f2fc9c8f` **é** reproduzível do histórico — `git show 5ee0bf2b:…/route.ts \| shasum -a 1` devolve `f2fc9c8f…`, idem em `02e2de5e`, ambos em `origin/main..HEAD`. A varredura que deu zero usou **`sha256`**, e **`shasum` sem flag é SHA-1**. A triagem original era **vaga** (não nomeava o algoritmo), não falsa; registrar *"estado de trabalho não commitado"* teria posto uma afirmação **falsa** no registro. Corrigida nos 3 lugares, agora nomeando o algoritmo e os 2 commits. **Suíte 289 arq · 3.805 · 6 xfail** rc=0 (**+3**, exatamente os 3 testes novos; xfail inalterado), `lint --force` rc=0 (0 erros, 30 warnings pré-existentes), `type-check --force` rc=0, `pnpm --filter @trifold/web build` rc=0. **Higiene e régua de células GFM reexecutadas depois de escrito este registro.** Sem push, sem PR, sem merge, produção não tocada, a conversa contida **não despausada**. | @dev (Dex) |
+| 2026-08-30 | 1.11 | **Dois itens de REGISTRO (@dev), escopo mínimo — nenhuma linha de código de produção, nenhum teste, nenhuma AC e nenhum veredito mudaram; gate segue `CONCERNS` não bloqueante e o conserto de `afa6964f` foi reproduzido e validado pelo @qa.** **(1) QA-87-20-8 — a régua de higiene aprovava o vazio, e o conserto anterior NÃO PEGOU:** a v1.10 afirma ter refeito a higiene com aborto em entrada vazia, mas isso existia só como **prosa numa célula de tabela** — a única régua com CÓDIGO da story seguia sendo a da seção 9, e **frase não roda**. Reproduzi o defeito: com lista de alvos vazia ela sai **`rc=0` sem saída** ("limpo"), e com a **File List inteira digitada errada** também — o `[ -f "$f" ]` descarta caminho inexistente **em silêncio**. Pesa mais que o rótulo `low`: é a régua que guardou **seis rodadas** de expurgo de dado de cliente. **`set -euo pipefail` sozinho NÃO resolve, medido:** com lista vazia continua `rc=0`; com a lista toda errada sai `rc=1` **por acidente** (`grep` sem casamento sob `pipefail`), o mesmo `rc` de uma varredura legitimamente limpa em R2/R3. A régua nova valida a lista **antes** de varrer — **`rc=2`** em lista vazia, **`rc=3`** nomeando cada caminho ausente, **`rc=0`** na File List correta — e os `grep` de R1/R2/R3 são **byte a byte os mesmos**, para os números das rodadas anteriores seguirem comparáveis. Registrada como **CÓDIGO** na seção 9 (o enunciado dizia "seção 8"; a ≈linha 949 está certa, a seção é a 9). **O que está na story é o que rodou:** script e lista **extraídos do bloco** e comparados por `cmp` contra os arquivos medidos — **idênticos**, e os três `rc` se repetem no extraído. **(2) QA-87-20-7 — a razão declarada estava ERRADA; a decisão, não:** eu escrevera que consertar a leitura irmã de `messages` *"congelaria toda reativação da plataforma"*; o erro é **por requisição e por conversa** e a mensagem seguinte tenta de novo — o mesmo custo que **aceitei** do lado da `conversations`. O @qa mediu o **defeito vivo com controle positivo**: derrubando **só** a leitura de `messages`, a Nicole reativa por cima de um corretor que respondeu há 1 hora **e não grita**. A razão falsa **saiu** (não foi amaciada) e entraram duas medidas: **raio menor** (atinge 63-13/63-15, **não** desfaz a contenção do AC14) e **dívida pré-existente** — `git log -S` aponta `fcd80264`, Story **63-13** (a v1.10 dizia 63-15), linha **idêntica** na base `aa584dfb`. **Raio medido em produção:** **310 de 452** pausadas têm mensagem de corretor posterior ao handoff; **0 expostas neste instante** (as **3** com corretor de <24h têm `handoff_at` de <24h, e a consulta que agora falha fechado segura). **(3) O andar a mais, com o fecho que faltava:** `conterLoop` grava `handoff_at`/`handoff_reason` e **nenhuma mensagem `role='broker'`** — então **toda conversa contida nasce exatamente na forma em que a âncora é nula**, e o fail-open reativaria **no minuto seguinte à contenção**. Produção: **452 pausadas, 449 frias, 3 com corretor ativo**. Advérbio corrigido: "incondicionalmente" vale com âncora **nula ou fria**; com corretor de <24h a leitura irmã ainda segura. **(4) `f2fc9c8f` — a lição, não só a correção:** **régua que não nomeia o algoritmo é infalsificável** — no digest errado "refuta", no certo "confirma", e o registro não diz qual rodou; alegação de hash só é falsificável com **algoritmo + fonte + revisão**. **Suíte 289 arq · 3.805 · 6 xfail** rc=0 (idêntica — nada de código foi tocado), `lint --force` rc=0 (0 erros, 30 warnings pré-existentes), `type-check --force` rc=0. Higiene nova reexecutada **depois** de escrito este registro: **`rc` 2/3/0**, **0 valores distintos não triados**, R2 **0**, R3 **28 linhas todas triadas**. Régua de células GFM com controle positivo e vivacidade no alvo. `git diff --stat`: **1 arquivo**, a story. Sem push, sem PR, sem merge; produção **só lida** (agregados) e a conversa contida **não despausada**. | @dev (Dex) |
+| 2026-08-30 | 1.10 | **Correção do achado da revisão COMPLETA do CodeRabbit no PR #535 (@dev), escopo mínimo — nenhuma AC, nenhum limiar e nenhum veredito mudaram; gate segue `CONCERNS` não bloqueante.** *Por que só agora:* as passadas incrementais vinham **pulando commits** e publicando `success` assim mesmo — verde que era *skip*; o @devops forçou uma revisão completa e o denominador maior achou isto. **O defeito (`route.ts:1109`):** se a leitura de `conversations` falhasse, `convRow` ficava `undefined`, `contidaPorLoop` virava `false` e a Nicole era **reativada numa conversa que a trava havia contido** — a oscilação permanente que o AC14 existe para matar, de volta inteira e em silêncio. **A medição acrescentou um andar:** `handoff_at` some junto, `resolveTakeoverAnchor(null, null)` devolve `null` e `shouldReactivateAi(null)` é `true` **por contrato** (63-13) — então o fail-open **reativava incondicionalmente**, atropelando também a regra temporal de 63-13/63-15; um handoff de 60 s reativava. **É o mesmo pecado da v1.7 do lado do LEITOR:** assim como `conterLoop` parou de chamar de sucesso o `UPDATE` que não escreveu, **não conseguir LER o motivo do handoff não é o mesmo que ter lido "não foi contida por loop"**; no estado *não sei* a ação **irreversível** (reativar) não acontece. **E não é fail-closed que cala:** grito próprio `NICOLE_REATIVACAO_ESTADO_DESCONHECIDO`, nível `error`, com o motivo do banco em `metadata.erro` e `await logEventOnce`. `shouldReactivateAi`/`resolveTakeoverAnchor` **intocadas** — o conserto é no CHAMADOR. **Carrasco ANTES, e o instrumento que faltava:** o fake do webhook só sabia produzir *achei* e *não achei*; a injeção de `{ data: null, error }` por **predicado (tabela + colunas literais)** foi acrescentada, porque sem ela nenhum teste podia sequer EXPRESSAR o defeito. Vermelho medido 🔴 **3 / 39**, `tsc --noEmit` **rc=0 antes** da contagem. **4 mutantes, 4 vermelhos**, todos com `tsc` rc=0: M-CR3a (a obrigatória — erro volta a ser *não contida*) 🔴 2, **M-CR3b controle negativo** (fail-closed para todo mundo) 🔴 1 matando o teste **pré-existente** de reativação, M-CR3c (grito sem guarda) 🔴 1 e M-CR3d (`await` → `void`) 🔴 1 — **kill sets de a e b disjuntos**, que é o que prova que o teste distingue *não sei* de *não é loop*. **Destinatário medido, não presumido:** `coletarLoops` filtra outro `event_type` e o branch de erro descarta a frase em `classificarErroIA` ⇒ os leitores deste grito são `system_events` e o log de erro do Vercel, **não** o alerta de WhatsApp — mesma situação já declarada de `NICOLE_LOOP_CONTENCAO_FALHOU`. **Os outros 5 achados da revisão: TODOS de 2ª classe, triados com medição e declarados, nenhum consertado** — a régua SQL que não exclui `t = ''` (divergência **conservadora por construção**: só pode aumentar a contagem, e o número publicado é 1); a migration 248×**247** no parecer do @po (já declarada em 2 lugares, documento de outro dono); o contrato sem mock do barrel (**já coberto**: renomear os símbolos faz `tsc` rc=1 em `route.ts:1254` e `:23` — os imports são tipados); o `level` isento no fake do cron (**buraco real e medido: remover `.eq("level","error")` sai 35/35 VERDE**, mas o filtro é da 87-19 e degrada precisão de alerta, não a contenção); e os 2 nitpicks (o teste de denominador sem vivacidade — cuja metade positiva **já** é provada 3× no mesmo arquivo — e a normalização de `motivo`, **inalcançável pelos 2 chamadores atuais**, enumerados). **Varredura da CLASSE do meu próprio conserto, antes do gate:** a leitura IRMÃ de `messages`, no **mesmo `Promise.all`**, segue com o `error` não lido — 4ª linha da tabela de irmãos, com o raio medido (atinge 63-13/63-15, **não** o AC14) e com o motivo de não ir junto — **cuja razão declarada estava ERRADA e foi trocada na v1.11 (QA-87-20-7)**. **Duas imprecisões de REGISTRO corrigidas — e a segunda estava errada no enunciado:** *(1)* a régua larga de hora de parede acusa **2** linhas novas, não 1 — a de R3 **e a própria linha meta que a descreve**; *(2)* `f2fc9c8f` **é** reproduzível do histórico — `git show 5ee0bf2b:…/route.ts \| shasum -a 1` devolve `f2fc9c8f…`, idem em `02e2de5e`, ambos em `origin/main..HEAD`. A varredura que deu zero usou **`sha256`**, e **`shasum` sem flag é SHA-1**. A triagem original era **vaga** (não nomeava o algoritmo), não falsa; registrar *"estado de trabalho não commitado"* teria posto uma afirmação **falsa** no registro. Corrigida nos 3 lugares, agora nomeando o algoritmo e os 2 commits. **Suíte 289 arq · 3.805 · 6 xfail** rc=0 (**+3**, exatamente os 3 testes novos; xfail inalterado), `lint --force` rc=0 (0 erros, 30 warnings pré-existentes), `type-check --force` rc=0, `pnpm --filter @trifold/web build` rc=0. **Higiene e régua de células GFM reexecutadas depois de escrito este registro.** Sem push, sem PR, sem merge, produção não tocada, a conversa contida **não despausada**. | @dev (Dex) |
 | 2026-08-30 | 1.9 | **Correção de RENDERIZAÇÃO (@dev), escopo mínimo — nenhum código, teste, fixture, AC, limiar ou veredito mudou; gate segue `CONCERNS` não bloqueante, liberado.** Achado pelo CodeRabbit e reproduzido pelo @devops: **3 linhas de tabela** tinham mais células que o cabeçalho porque o GFM divide a célula em todo `\|` não escapado **inclusive dentro de crase**, e **descarta o excedente** — as linhas 1.7 e 1.8 deste Change Log e a 3ª linha da tabela de irmãos renderizavam **truncadas, sem a última coluna**. Culpados: `if (error \|\| !data) return []` (2 linhas), `"aplicada" \| "falhou"` e `2 failed \| 21 passed (23)`. **Conserto = escape e nada além** (`\|` só dentro dos code spans das 3 linhas de tabela); as mesmas cadeias em **prosa** (1173, 1195) ficaram intocadas de propósito, porque fora de tabela `\|` renderiza a barra. **Equivalência provada por bytes, não por leitura:** desfazendo o escape, as 3 linhas voltam **idênticas ao `HEAD`**, o nº de linhas não muda e o delta é **+6 bytes**. **Régua com controle positivo exigido ANTES:** não há `markdownlint` no repo, então contei as células de **cada linha de cada tabela** com regra GFM — no `HEAD` acusa **exatamente as 3 conhecidas** (23 tabelas / 148 linhas, `rc=1`), depois **0** (`rc=0`); mais um canário sintético onde a linha **já escapada** passa e só a defeituosa é acusada. **E a régua pegou o autor dela:** ao escrever o registro eu introduzi **2** defeitos novos da mesma classe e ela os acusou — vermelho não encenado. **Irmãos varridos:** `po-validation-87-20.md` **0 excedentes** (7 tabelas / 25 linhas); o gate `.yml` faz `load` sem erro e suas 10 tabelas embutidas dão **0** — **só leitura, nada tocado** (é do @qa). **Achado 1 do CodeRabbit RECUSADO com razão registrada:** a agregação **fail-closed** de `nicole-health/route.ts:131` fica como está — *last-wins* inverteria a assimetria e passaria a **calar** quando a contenção falhou, que é o modo de falha que esta story existe para eliminar. **Imprecisão do gate declarada, não consertada:** `higiene.r3` atribui 8 das 29 linhas a `loop-breaker.test`, mas são de `packages/ai/src/chat/pipeline-loop-breaker.test.ts` — o `packages/ai/src/flows/loop-breaker.test.ts` tem **0**; o total 29 e a composição estão certos, é rótulo confundível. **Suíte 289 arq · 3.802 · 6 xfail** rc=0, `lint --force` rc=0, `type-check --force` rc=0 — inalterados, que é exatamente o que uma mudança em `.md` deve provar. **Higiene reexecutada: 0 valores distintos não triados.** Sem push, sem PR, sem merge, produção não tocada, a conversa contida **não despausada**. | @dev (Dex) |
 | 2026-08-30 | 1.8 | **Correção da QA-87-20-6 + 2 acertos de registro + a 3ª linha da tabela de irmãos (@dev), escopo mínimo — nenhuma AC, nenhum limiar e nenhum veredito mudaram; gate segue `CONCERNS` não bloqueante, liberado.** **O conserto (único item de código):** o grito `NICOLE_LOOP_CONTENCAO_FALHOU` que a v1.7 acrescentou **não tinha destinatário** — reproduzi a medição do @qa: `coletarLoops` filtra por `NICOLE_LOOP_DETECTADO` e não casa o grito; o branch de erro do mesmo cron passa toda `message` por `classificarErroIA`, que casa 8 assinaturas de API de IA e devolve `null` para a frase dele (`if (!tipo) continue`, descartado); e o `{{1}}` que chega ao admin era **CONSTANTE**. O admin recebia a **mesma frase** quer a Nicole tivesse sido contida, quer a contenção tivesse falhado — a verdade existia só no `metadata` do recibo, e `system_events` não tem tela. Mesma família do defeito que a story ataca. Correção onde o texto nasce e em mais lugar nenhum: `LoopAgregado.contencaoConfirmada`, alimentado por `meta.contencao === "aplicada"` — **o mesmo predicado do escritor, na mesma polaridade**, com **ausência não confirmando** (tratar ausência como sucesso reintroduziria no LEITOR o defeito que o campo obrigatório matou no ESCRITOR) — agregação **fail-closed** por conversa, e o `motivo` com dois braços: o contido **byte-a-byte o de antes**, o não confirmado dizendo `a CONTENÇÃO FALHOU: a Nicole segue ATIVA — pause a conversa à mão em {link}`. **Sem `event_type` novo, sem severidade nova, sem branch novo e sem 4º parâmetro no template aprovado.** **Carrasco escrito ANTES:** vermelho inicial 🔴 **3 / 3.808**, e **4 mutantes, 4 vermelhos**, todos com `tsc --noEmit` rc=0 antes da contagem — M-CR6a (o obrigatório: `motivo` volta a ser constante) 🔴 3, **M-CR6b controle negativo** (`motivo` sempre grita) 🔴 2, matando inclusive um teste **pré-existente**, M-CR6c (ausência vira sucesso) 🔴 1 e M-CR6d (agregação fail-open) 🔴 1 — os três últimos com kill sets **disjuntos**. **Falso-verde meu, declarado:** a 1ª fixture do caso "sem `contencao`" passava `undefined`, e parâmetro com default recebe o default quando o argumento é `undefined` — a fixture gerava `"aplicada"` e o teste media a fixture; virou o rótulo `"ausente"`. **Dois acertos de REGISTRO na v1.7** (apontados pelo @qa, sem risco de dado): "R1 = 4 valores distintos" contradizia a seção 10 do mesmo commit — o certo é **5**; e "0 linhas adicionadas com token de 8 hex" era **falso** (são 3, todas autorreferência ao commit-tip, a classe benigna que o próprio registro declara duas linhas acima). Ambas reescritas para contar **valores distintos NÃO TRIADOS**, não ocorrências brutas — a formulação que torna a régua imune a si mesma. **3ª linha da tabela de irmãos** (QA-87-20-5, opcional, aceita): a LEITURA de `coletarLoops` (`if (error \|\| !data) return []`) falha **ABERTA** e é **código NOVO desta story**, não dívida herdada como as outras duas — declarada, não consertada, com o raio medido (1 ciclo de 10 min; a janela de 15 min sobrepõe, e a contenção não depende do cron — AC11). Registrado também que meu predicado de varredura foi "escritas" enquanto a classe que eu mesmo nomeei inclui **leituras**. **Declarado e não ampliado:** o `message` do recibo `NICOLE_LOOP_ALERTA` ainda diz "contido" no caso que falhou — mesma classe, custa um ternário, devolvido ao coordenador em vez de consertado em silêncio. **Suíte 289 arq · 3.802 · 6 xfail** rc=0 (+3 sobre 3.799; xfail inalterado), `lint --force` rc=0, `type-check --force` rc=0, `packages/web build` rc=0. **Higiene reexecutada: 0 valores distintos não triados.** Sem push, sem PR, sem merge, produção não tocada, a conversa contida **não despausada**. | @dev (Dex) |
 | 2026-08-30 | 1.7 | **Correção dos 2 achados do CodeRabbit no PR #535 (@dev), escopo mínimo — nenhuma AC, nenhum limiar e nenhum veredito mudaram; gate segue `CONCERNS` não bloqueante.** **Achado 1 (não cosmético):** `conterLoop` (`pipeline.ts`) **ignorava o `error`** do `UPDATE` de contenção — o PostgREST não rejeita, devolve `{ data: null, error }` — e devolvia `bloqueadoPorLoop` de qualquer jeito. Era o pior estado possível escondido dentro da própria correção: recibo gravado e admin avisado de que a Nicole tinha sido pausada, com `is_ai_active` ainda `true`, `handoff_reason` vazio, o guard do AC14 sem o que casar e a próxima mensagem do bot reiniciando o loop — **o mecanismo relatando um estado que não verificou ter alcançado**, que é literalmente o defeito que esta story existe para eliminar. Correção: `contencao` virou campo **obrigatório e discriminante** (`"aplicada" \| "falhou"`, com `erro` = a mensagem do banco) **dentro** de `bloqueadoPorLoop` — obrigatório porque booleano opcional teria default, e o default seria "deu certo"; dentro porque é `bloqueadoPorLoop` que faz o webhook pular o envio, e o envio tem de ser pulado nos dois casos. O webhook passou a **gritar**: `NICOLE_LOOP_CONTENCAO_FALHOU`, nível `error`, com o motivo do banco e `await logEventOnce`, porque nesse caminho um humano precisa ir pausar à mão; o recibo canônico continua saindo (é ele que o cron varre para o AC10) mas deixou de afirmar "Nicole pausada" quando ela não foi. **Sem `try/catch` que só loga e segue — isso reproduz o defeito com mais linhas.** Carrasco escrito ANTES (`failOn` injetando `error` só no `update:conversations`): vermelho medido `2 failed \| 21 passed (23)` antes da correção. **4 mutantes, 4 vermelhos**, um deles controle negativo (o grito sem guarda, `if (true)`) — todos 🔴 1/3.805 com `tsc` rc=0. **Achado 2:** o filtro do kill-switch comparava `s.cols` com o **literal** do `.select()`; reordenar colunas fazia `toHaveLength(0)` passar **vazio** — cego para o defeito que ele mira. Adotada a forma resistente da linha 409 do próprio arquivo (`split(",")`+`trim`), extraída em `colunasDe()` e compartilhada pelos dois pontos, comparando por **conjunto** (o histórico da 87-8 também projeta `metadata` e um filtro por pertinência daria falso-vermelho), mais um **controle de vivacidade** que exige o mesmo filtro achar a consulta com a trava ligada. **Prova em 2 × 2 medido:** filtro antigo + mutação que reintroduz a consulta **e reordena o `.select()`** = 🟢 3.798 rc=0 (**cego**); filtro novo, mesma mutação = 🔴 1/3.805; ambos 🔴 contra a mutação ingênua — o filtro antigo é cego **só** ao refator de projeção, e declarar mais que isso seria mais forte que a medição. **Varredura da classe, declarada e não consertada:** o `UPDATE` de reativação de 24h (pré-existente na `main`, 63-13/63-15) e o `.delete()` de compensação do cron (irmão idêntico do da 87-19, já na `main`) ignoram o `error` pela mesma razão — consertar um e não o gêmeo na mesma função seria pior que declarar os dois. **Suíte 289 arq · 3.799 · 6 xfail rc=0** (+9 testes sobre o baseline de 3.790; xfail inalterado), `lint --force` rc=0 (0 erros, 30 warnings pré-existentes), `type-check --force` rc=0, `packages/web build` rc=0. **Higiene reexecutada:** R1 = **5** valores distintos e **0 valores não triados** — os 4 já triados **mais o commit-tip desta branch**, que é commit público e aparece porque este próprio registro o cita; R2 = 0; R3 = 29 (idêntico); e **0 linhas adicionadas** com data-hora, telefone, e-mail ou token de 8 hex **não triado**. *(Duas imprecisões desta linha corrigidas na v1.8, ambas apontadas pelo @qa e ambas de REGISTRO, sem risco de dado: a v1.7 dizia "R1 = 4" e contradizia a seção 10 do mesmo commit, que diz 5; e "0 linhas com token de 8 hex" era falso — são 3, todas autorreferência ao commit-tip. A régua agora conta **valores distintos não triados**, não ocorrências brutas, que é o que a torna imune a si mesma.)* Sem push, sem PR, sem merge, produção não tocada, a conversa contida **não despausada**. | @dev (Dex) |
@@ -946,11 +947,19 @@ não existe na máquina de quem revisa, e a régua saía verde por vacuidade; (b
 se sabia procurar**. A régua abaixo **enumera** todo token de 8 hex e **tria um a um**: autocontida,
 reproduzível por qualquer um, e é ela que acha o que ninguém listou.
 
+⚠️ **E a régua que o parágrafo acima anuncia foi APOSENTADA por sua vez — ela APROVAVA O VAZIO**
+(QA-87-20-8, corrigida na v1.11). O **método** dela continua valendo, e os números desta seção foram
+medidos com ela; o que não valia era o **instrumento**: com lista de alvos vazia, ou com a File List
+inteira digitada errada, ela imprimia nada e saía `rc=0` — "limpo". O código dela **saiu do
+registro** para ninguém copiar o furo; quem quiser conferir a forma exata acha em
+`git show afa6964f:docs/stories/87-20-loop-bot-a-bot-trava-de-repeticao-e-contagem.story.md`.
+A que está abaixo é a mesma varredura com um **portão** na frente: os `grep` de R1/R2/R3 são **byte
+a byte os mesmos**, então os números das rodadas anteriores seguem comparáveis. O defeito, os
+controles positivos e os três `rc` estão na **seção 14**.
+
 ```bash
-# alvos: a File List inteira, NUL-separated (não só os .md). Caminhos não são segredo.
-alvos() {
-  sed -e '/^#/d' -e '/^[[:space:]]*$/d' <<'EOF' \
-    | while IFS= read -r f; do [ -f "$f" ] && printf '%s\0' "$f"; done
+# ─── A LISTA — a File List inteira, um caminho por linha (caminhos não são segredo) ───
+cat > /tmp/87-20-alvos.txt <<'EOF'
 packages/ai/src/flows/loop-breaker.ts
 packages/ai/src/flows/loop-breaker.test.ts
 packages/ai/src/flows/__fixtures__/loop-87-20.ts
@@ -972,17 +981,79 @@ docs/qa/po-validation-87-20.md
 .claude/agent-memory/aios-dev/project_trifold_handoff_reason_texto_livre.md
 .claude/agent-memory/aios-po/feedback_janela_curta_produz_margem_imaginaria.md
 EOF
-}
 
-# R1 — ENUMERA todo token de 8 hex e conta por valor distinto. Tria-se a saída, não se casa lista.
-alvos | xargs -0 grep -InEo '\b[0-9a-f]{8}\b' | sed 's/.*://' | sort | uniq -c | sort -rn
+# ─── A RÉGUA — bash, NÃO zsh (`$VAR` não citado não faz word-splitting em zsh) ───
+cat > /tmp/87-20-higiene.sh <<'EOF'
+#!/usr/bin/env bash
+# Higiene 87-20 — régua de expurgo que FALHA FECHADO.
+# Uso: bash higiene.sh <arquivo-com-a-lista-de-alvos>
+#   rc=0  rodou sobre uma lista não-vazia cujos caminhos TODOS existem
+#   rc=2  lista de alvos vazia            (antes: saía 0 e imprimia "limpo")
+#   rc=3  algum caminho da lista não existe (antes: descartado em silêncio por [ -f ])
+set -uo pipefail
 
-# R2 — qualquer UUID completo fora da família sintética. Autocontida. Esperado: 0 linhas.
-alvos | xargs -0 grep -InEo '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' \
-  | grep -v '00000000-'
+listaf="${1:?ABORTO: informe o arquivo com a lista de alvos}"
+[ -f "$listaf" ] || { echo "ABORTO(4): arquivo de lista inexistente: $listaf" >&2; exit 4; }
 
-# R3 (NOVA — é a que teria pego a base T0) — data-hora absoluta com precisão de MINUTO.
-alvos | xargs -0 grep -InE '[0-9]{4}-[0-9]{2}-[0-9]{2}([T ][0-9]{2}:[0-9]{2}|.{0,12}[0-9]{2}:[0-9]{2})'
+alvos=()
+while IFS= read -r linha; do
+  linha="${linha%%#*}"
+  linha="$(printf '%s' "$linha" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+  [ -n "$linha" ] && alvos+=("$linha")
+done < "$listaf"
+
+# GUARDA 1 — lista vazia. É o caso que o `set -euo pipefail` NÃO pega: nenhum
+# comando falha; `grep` sem alvo nenhum simplesmente não imprime, e "não imprimiu"
+# era lido como "limpo". Aborta ANTES de qualquer grep.
+if [ "${#alvos[@]}" -eq 0 ]; then
+  echo "ABORTO(2): lista de alvos VAZIA — zero ocorrências aqui não é limpeza, é ausência de medição." >&2
+  exit 2
+fi
+
+# GUARDA 2 — caminho inexistente. A versão anterior fazia `[ -f "$f" ] && …`, que
+# descarta em silêncio: uma File List inteira digitada errada devolvia "limpo".
+faltando=0
+for f in "${alvos[@]}"; do
+  if [ ! -f "$f" ]; then
+    echo "ABORTO(3): caminho da lista não existe no disco: $f" >&2
+    faltando=$((faltando + 1))
+  fi
+done
+[ "$faltando" -eq 0 ] || { echo "ABORTO(3): $faltando caminho(s) inexistente(s) de ${#alvos[@]}." >&2; exit 3; }
+
+echo "== alvos: ${#alvos[@]} arquivo(s), todos existentes =="
+
+# R1 — ENUMERA todo token de 8 hex e conta por valor distinto (não casa contra lista).
+echo "-- R1: tokens de 8 hex, por valor distinto --"
+grep -InEo '\b[0-9a-f]{8}\b' "${alvos[@]}" | sed 's/.*://' | sort | uniq -c | sort -rn
+
+# R1-triagem — a triagem é aplicada À SAÍDA da enumeração, nunca à busca.
+# Todos públicos e auditáveis: `git cat-file -t` devolve `commit` para os prefixos
+# de commit; `f2fc9c8f` é o prefixo SHA-1 (shasum SEM flag) de route.ts em 5ee0bf2b
+# e 02e2de5e; `00000000` é a família de UUID sintética desta story.
+triados='^(00000000|aa584dfb|51d21d1e|f2fc9c8f|5ee0bf2b|5cebdbd9|02e2de5e|ced550b1|fcd80264|afa6964f|574441ea|b24fa075)$'
+naotriados="$(grep -hEo '\b[0-9a-f]{8}\b' "${alvos[@]}" | sort -u | grep -Ev "$triados" || true)"
+if [ -n "$naotriados" ]; then
+  echo "-- R1: valores distintos NÃO TRIADOS --"; printf '%s\n' "$naotriados"
+else
+  echo "-- R1: 0 valores distintos NÃO TRIADOS --"
+fi
+
+# R2 — UUID completo fora da família sintética. Esperado: 0 linhas.
+echo "-- R2: UUID fora da família sintética --"
+grep -InEo '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' "${alvos[@]}" \
+  | grep -v '00000000-' || true
+
+# R3 — data-hora absoluta com precisão de MINUTO.
+echo "-- R3: data-hora com precisão de minuto --"
+r3='[0-9]{4}-[0-9]{2}-[0-9]{2}([T ][0-9]{2}:[0-9]{2}|.{0,12}[0-9]{2}:[0-9]{2})'
+grep -InE "$r3" "${alvos[@]}" || true
+printf 'R3 total: %s linha(s)\n' "$(grep -hIE "$r3" "${alvos[@]}" | wc -l | tr -d ' ')"
+
+exit 0
+EOF
+
+bash /tmp/87-20-higiene.sh /tmp/87-20-alvos.txt; echo "rc=$?"
 ```
 
 **R1 — medido: 74 ocorrências / 32 valores distintos ANTES, 28 / 4 DEPOIS.** Os 4 que sobram são
@@ -1273,7 +1344,7 @@ com o motivo de não ter ido junto.
 | `route.ts` — `UPDATE` de **reativação** de 24h (`is_ai_active: true, handoff_at: null, …`) | **pré-existente na `origin/main`** (63-13/63-15); a 87-20 só acrescentou `&& !contidaPorLoop` à condição | **não consertado.** Mesma classe (falha ⇒ `isAiActive = true` em memória contra um banco que segue pausado), fora do achado e fora do escopo. |
 | `nicole-health/route.ts` — `.delete()` de compensação do dedup | a 87-20 acrescentou o **segundo**; o primeiro (87-19) já estava na `main` com a mesma forma | **não consertado.** Consertar um e não o irmão idêntico, na mesma função, seria pior que declarar os dois. |
 | `nicole-health/route.ts:95-102` — a **LEITURA** de `coletarLoops`: `if (error \|\| !data) return []` | **código NOVO desta story** (`ced550b1`) — ao contrário dos dois de cima, **não é dívida herdada**; a divergência de convenção dentro da mesma função foi introduzida aqui | **não consertado** (QA-87-20-5, `low`, não bloqueante). Mesma classe, na direção da **detecção**: falha de leitura vira "zero conversas em loop" e a rota devolve `ok: true` — o ciclo some em silêncio. O irmão **10 linhas acima**, pré-existente na `main`, falha **FECHADA** (`500`). **Raio: 1 ciclo** — o cron roda a cada 10 min com janela de 15 min (sobreposição), então o ciclo seguinte recupera o alerta; e a CONTENÇÃO não depende deste cron (AC11), só a latência do aviso. Declarado, com dono, não pendente em silêncio. |
-| `route.ts` — a **LEITURA** irmã, no MESMO `Promise.all` do conserto da v1.10: a última msg `role='broker'` (`lastBrokerMsg`) segue com o `error` **não lido** | **pré-existente na `origin/main`** (63-15); a v1.10 leu o `error` da consulta de `conversations` e **deixou o da consulta de `messages` onde estava | **não consertado, e declarado sem esperar o @qa perguntar.** Meu predicado foi *"a leitura que o achado nomeia"*; a CLASSE é *"as leituras deste bloco"* — a lição de "achei a classe e parei no primeiro", aplicada desta vez **antes** do gate. **Raio medido:** falha só nesta consulta ⇒ `lastBrokerAt = null` ⇒ âncora = `handoff_at` (que foi lido) ⇒ pode reativar com corretor ativo há < 24h. Atinge a regra temporal de **63-13/63-15**; **não** atinge o AC14, porque `contidaPorLoop` depende da outra consulta, que passou a falhar fechado. **Por que não foi junto:** `messages` fora do ar congelaria **toda** reativação da plataforma — um fail-closed mais largo que o achado, com custo de disponibilidade que ninguém pediu e que esta story não mediu. |
+| `route.ts` — a **LEITURA** irmã, no MESMO `Promise.all` do conserto da v1.10: a última msg `role='broker'` (`lastBrokerMsg`) segue com o `error` **não lido** | **pré-existente na `origin/main`** — `git log -S "data: lastBrokerMsg"` aponta `fcd80264`, da Story **63-13** (a v1.10 dizia 63-15: a 63-15 só passou a COMBINAR esta leitura com `handoff_at` em `resolveTakeoverAnchor`, a consulta já vinha de antes, e já vinha com o `error` não lido). Linha **idêntica** na base `aa584dfb`. A v1.10 leu o `error` da consulta de `conversations` e **deixou o da consulta de `messages` onde estava | **não consertado, e declarado sem esperar o @qa perguntar.** Meu predicado foi *"a leitura que o achado nomeia"*; a CLASSE é *"as leituras deste bloco"* — a lição de "achei a classe e parei no primeiro", aplicada desta vez **antes** do gate. **Raio medido:** falha só nesta consulta ⇒ `lastBrokerAt = null` ⇒ âncora = `handoff_at` (que foi lido) ⇒ pode reativar com corretor ativo há < 24h. Atinge a regra temporal de **63-13/63-15**; **não** atinge o AC14, porque `contidaPorLoop` depende da outra consulta, que passou a falhar fechado. **Por que não foi junto — 2 razões, e a que eu tinha escrito não era nenhuma delas (QA-87-20-7, corrigido na v1.11):** *(1)* **raio menor** — atinge 63-13/63-15 e **não desfaz a contenção do AC14**; *(2)* **dívida pré-existente** — `fcd80264` (63-13), linha idêntica na base `aa584dfb`, e esta story não a piorou. **População medida em produção:** **310 de 452** conversas pausadas têm mensagem de corretor posterior ao handoff — é essa a população que a perda desta leitura desprotege — e **0 estão expostas neste instante**: as **3** pausadas com corretor de <24h têm `handoff_at` também de <24h, então a outra consulta, **que agora falha fechado**, segura. ⚠️ **A razão que eu tinha dado — *“fail-closed ali congelaria toda reativação da plataforma”* — está ERRADA e foi RETIRADA, não amaciada:** o erro é **por requisição e por conversa**, e a mensagem seguinte tenta de novo — exatamente o custo que eu **aceitei** do lado da `conversations`. O @qa derrubou a razão medindo o **defeito vivo com controle positivo**: derrubando **só** a leitura de `messages`, a Nicole reativa por cima de um corretor que respondeu há 1 hora, **e não grita**. A decisão continua a mesma; o que era falso era o argumento. |
 
 Medido, não presumido: `git show origin/main:…` confirma o `UPDATE` de reativação na `main` e
 **1** `.delete()` no cron da `main` contra **2** no `HEAD`. Ambos ficam **declarados** para o @qa
@@ -1639,6 +1710,128 @@ seção 10, com o raio medido — declarada, não consertada, e desta vez antes 
 | Higiene R3 (data-hora com precisão de minuto) | **0 linhas adicionadas** |
 | Higiene — telefone / e-mail | **0 / 0** |
 | Higiene — régua larga (hora de parede com fuso) | **2 linhas adicionadas** — a linha meta da v1.9 que eu reescrevi para dizer "2", **e esta própria linha, que a declara** recitando `06:05 BRT`/`09:05 UTC` de novo. **Escrevi "1", reexecutei a régua DEPOIS de escrever e ela devolveu 2** — a mesma armadilha da imprecisão que esta passada veio corrigir, reencenada ao vivo no ato de corrigi-la. Sexta e sétima vez. Autorreferência declarada, valores já presentes em 2 arquivos versionados; **0 valores novos**. |
+
+### 14. Correção pós-delta — QA-87-20-8 e QA-87-20-7 (dois itens de REGISTRO)
+
+**Nenhuma linha de código de produção, nenhuma AC e nenhum veredito mudaram.** O delta do @qa
+manteve **CONCERNS não bloqueante** e validou o conserto de `afa6964f`, reproduzido por ele de forma
+independente. Esta passada é registro: uma régua que estava errada e uma razão que estava errada.
+
+#### QA-87-20-8 — a régua aprovava o vazio, e o conserto anterior NÃO PEGOU
+
+O registro anterior (v1.10) afirma que a higiene foi refeita "com aborto em entrada vazia
+(`rc=2`)". **O @qa foi executar e não achou o que executar.** A afirmação existia só como **prosa
+dentro de uma célula de tabela**; a única régua **com código** da story continuava sendo a da
+seção 9. Frase não roda. É a mesma classe de "conserto de régua não registrado não é herdado" — e
+desta vez fui eu quem a cometeu.
+
+**O defeito, reproduzido por mim, não aceito de palavra.** Rodando a régua **como estava
+registrada** contra listas de alvos degradadas:
+
+| entrada | régua ANTIGA (registrada até a v1.10; forma exata em `afa6964f`, o commit-pai deste) | régua NOVA |
+|---|---|---|
+| lista de alvos **vazia** | `rc=0`, **0 linhas de saída** — devolve "zero ocorrências, limpo" | `rc=2`, aborta antes de qualquer `grep` |
+| **File List inteira** digitada errada (20/20 inexistentes) | `rc=0`, **0 linhas de saída** — o `[ -f "$f" ]` descarta em silêncio | `rc=3`, nomeia cada caminho ausente |
+| File List correta (20/20 existentes) | `rc=0`, 12 valores distintos | `rc=0`, 12 valores distintos |
+
+**Por que isto pesa mais do que o rótulo `low` sugere:** é a régua que guardou **seis rodadas** de
+expurgo de dado de cliente. Se ela aprova o vazio, o verde dela nunca significou o que dissemos que
+significava — e as duas primeiras rodadas de expurgo **já foram** o caso em que "não achei" não era
+"não tem".
+
+**`set -euo pipefail` sozinho NÃO resolve — medido, não presumido.** Acrescentei as três flags à
+régua antiga e reexecutei: com lista vazia ela continua saindo **`rc=0` e sem saída**. Nenhum
+comando falha; `grep` sem alvo nenhum lê o pipe vazio e simplesmente não imprime. Pior: com a lista
+toda errada ela passa a sair `rc=1` — mas **por acidente** (`grep` sem casamento sob `pipefail`), o
+mesmo `rc` que uma varredura **legitimamente limpa** produz em R2 e R3. Isso é ruído, não portão.
+
+**O conserto é o portão, não o `grep`.** A régua nova valida a lista **antes** de varrer: aborta em
+lista vazia (`rc=2`), aborta nomeando cada caminho inexistente (`rc=3`), e só então roda R1/R2/R3 —
+cujas expressões são **byte a byte as mesmas** da antiga, para os números das rodadas anteriores
+continuarem comparáveis. Está registrada **como CÓDIGO**, no lugar da antiga, na seção 9.
+
+⚠️ **Um acerto ao enunciado que recebi:** o pedido dizia "seção 8, ≈linha 949". A ≈linha 949 está
+certa, mas ela cai na **seção 9** (*Expurgo de identificadores de cliente*) — a seção 8 é a
+QA-87-20-1. Registrei onde o código está, não onde o ponteiro apontava.
+
+**Os três `rc`, e a prova de que o que está na story é o que rodou.** Extraí o script **de volta**
+do bloco da seção 9 e rodei o extraído: `cmp` contra o arquivo medido dá **idêntico** (script e
+lista), e os três `rc` se repetem.
+
+| execução | `rc` |
+|---|---|
+| lista de alvos **vazia** | **2** |
+| lista com **caminho inexistente** | **3** |
+| **File List correta** (20 caminhos) | **0** |
+
+#### QA-87-20-7 — a razão declarada estava errada; a decisão, não
+
+Declarei que não consertar a leitura irmã de `messages` se justificava porque *"fail-closed ali
+congelaria toda reativação da plataforma"*. **O @qa derrubou a razão:** o erro é **por requisição e
+por conversa**, e a mensagem seguinte tenta de novo — exatamente o custo que eu **aceitei** do lado
+da `conversations`. E mediu o **defeito vivo com controle positivo**: derrubando **só** a leitura de
+`messages`, a Nicole reativa por cima de um corretor que respondeu há 1 hora, **e não grita**.
+
+A decisão continua de pé, por **duas razões melhores**, que substituíram a errada na tabela de
+irmãos da seção 10 (não foram acrescentadas ao lado dela — argumento falso sai):
+
+1. **Raio menor:** atinge 63-13/63-15 e **não** desfaz a contenção do AC14.
+2. **Dívida pré-existente:** `git log -S "data: lastBrokerMsg"` aponta `fcd80264` — Story **63-13**,
+   não 63-15, como a v1.10 dizia. A linha está **idêntica** na base `aa584dfb`, já sem ler o `error`.
+
+**Raio medido em produção (agregados, leitura sem escrita):** das **452** conversas pausadas,
+**310** têm mensagem de corretor **posterior** ao handoff — é essa a população que a perda desta
+leitura desprotege. E **0 estão expostas neste instante**: as **3** pausadas com corretor de <24h
+têm `handoff_at` também de <24h, então a consulta de `conversations` — **que agora falha fechado** —
+segura sozinha.
+
+#### O andar a mais, com o fecho que faltava
+
+`conterLoop` (`pipeline.ts`) grava `is_ai_active: false`, `handoff_at` e `handoff_reason` — e
+**nenhuma mensagem `role='broker'`**. Então **toda conversa contida pela trava nasce exatamente na
+forma em que a âncora é nula**: sem corretor na tabela `messages`, a única âncora possível é o
+`handoff_at` que a leitura ilegível fazia sumir. O fail-open não reativaria "algum dia": reativaria
+**no minuto seguinte à contenção**, sobre a população que o AC14 existe para proteger. Produção
+hoje: **452 pausadas, 449 frias, 3 com corretor ativo**.
+
+**E o advérbio, corrigido.** "Reativava **incondicionalmente**" vale quando a âncora é **nula ou
+fria**; com corretor de <24h a leitura irmã de `messages` ainda segura — ela não falha no mesmo
+cenário. A frase segue **exata para a população que ela governa** (conversa contida ⇒ âncora nula
+por construção) e é larga demais lida como universal. O comentário de `route.ts` que a usa **não
+foi tocado**: esta passada é de registro, e o comentário fica onde a guarda do AC14 está, cuja
+população é justamente a de âncora nula. Declarado para o @qa decidir, não corrigido em silêncio.
+
+#### `f2fc9c8f` — eu estava certo, e a lição é maior que a correção
+
+O @qa confirmou o que a v1.10 registrou: `shasum` **sem flag é SHA-1**, e é por isso que a
+varredura por `sha256` "refutava" um valor verdadeiro. Mas a lição que importa não é quem acertou:
+**régua que não nomeia o algoritmo é infalsificável.** No digest errado ela "refuta", no digest
+certo ela "confirma", e o registro não diz qual rodou — então o verde e o vermelho dela valem o
+mesmo, que é nada. Uma alegação de hash só é falsificável quando carrega **algoritmo + fonte +
+revisão**: `git show 5ee0bf2b:…/route.ts` sob `shasum -a 1` devolve `f2fc9c8f…`, idem em
+`02e2de5e`. É esse o formato, e é ele que a triagem da régua nova carrega em comentário.
+
+#### Réguas desta passada
+
+| prova | resultado |
+|---|---|
+| Suíte inteira | **289 arquivos · 3.805 passando · 6 expected-fail** (3.811) · `rc=0` — **idêntica** ao registro anterior; esta passada não toca teste nem código |
+| `lint --force` | **rc=0** (0 erros, **30** warnings pré-existentes — mesma contagem) |
+| `type-check --force` | **rc=0** |
+| Régua de higiene **nova** — controle positivo (lista vazia) | **`rc=2`** |
+| Régua de higiene **nova** — controle positivo (caminho inexistente) | **`rc=3`** |
+| Régua de higiene **nova** — alvo (File List, 20 caminhos) | **`rc=0`** |
+| Régua de higiene — o que está na story **é** o que rodou | script e lista **extraídos do bloco da seção 9** e comparados por `cmp` contra os arquivos medidos: **idênticos**; os três `rc` se repetem no extraído |
+| Higiene R1 (8 hex) | **0 valores distintos NÃO TRIADOS** · 12 valores distintos, todos públicos: **10 prefixos de commit** (`git cat-file -t` ⇒ `commit` nos 10), `f2fc9c8f` (SHA-1 de `route.ts` versionado) e `00000000` (família de UUID sintética) |
+| Higiene R2 (UUID fora da família sintética) | **0 linhas** |
+| Higiene R3 (data-hora com precisão de minuto) | **28 linhas**, todas triadas — 13 da família sintética declarada (`2020-01-01` / `1970-01-01`) e 15 **pré-existentes em `origin/main`** (`git grep` por valor confirma cada uma). **Zero data-hora de conversa.** Eram 29 na v1.10: a linha a menos é o `updated:` do gate, que o @qa reescreveu sem precisão de minuto |
+| Régua de células GFM — **controle positivo** | canário com uma linha defeituosa (`\|` **não** escapado dentro de crase), uma limpa e uma **já escapada**: acusa **só a defeituosa** · `rc=1` |
+| Régua de células GFM — **vivacidade no ALVO** | desescapando **1** `\|` de uma célula que ESTA passada escreveu, a régua acusa `3 x 2 (EXCEDE)` na linha 1824 · `rc=1`; restaurado, `cmp` **idêntico** |
+| Régua de células GFM — alvo | **0 linhas excedentes** · story sozinha **31 tabelas / 216 linhas**, com o parecer do @po **38 / 241** · `rc=0`. ⚠️ Medi **215 / 240**, escrevi, e a linha de vivacidade logo acima — que eu tinha acabado de acrescentar — moveu o denominador em **+1**. Reexecutei DEPOIS de escrever e corrigi: a régua contando a tabela que a registra é a mesma armadilha da higiene, **oitava vez** nesta story. |
+| Escopo | `git status --short -- docs packages supabase scripts` confere **2** arquivos sujos: a **story** (esta passada) e o **gate**, que é o delta do @qa desta rodada e vai em **commit próprio**, como na 2ª passada. Nenhum `.ts`, nenhuma fixture, nenhuma migration |
+
+Sem push, sem PR, sem merge. Produção **não** foi escrita — as duas consultas de raio foram
+`SELECT` de agregados. A conversa contida **não** foi despausada.
 
 ### Debug Log References
 
