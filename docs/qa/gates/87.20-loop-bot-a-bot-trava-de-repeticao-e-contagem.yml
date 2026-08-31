@@ -27,7 +27,7 @@ status_reason: >-
   **24h após a contenção** (na PRÓXIMA mensagem de entrada depois disso). Deploy dentro da janela
   = 1 ciclo curto no pior caso. Deploy depois = loop sem trava nenhuma.
 reviewer: "Quinn (Test Architect)"
-updated: "2026-08-30T21:40:00Z (delta da 2ª passada — ver seção 9)"
+updated: "2026-08-30 (delta da 3ª passada sobre afa6964f — ver seções 12-14; o delta da 2ª está nas 9-11)"
 base: "aa584dfb (árvore de trabalho, nada commitado)"
 branch: "story/87-20-loop-bot-a-bot"
 rodadas:
@@ -674,3 +674,339 @@ veredito_delta:
     adicionadas com token de 8 hex" é falsa (são 3, todas `5ee0bf2b` auto-referente e benignas) —
     reescrever como "0 linhas adicionadas com token de 8 hex NÃO-TRIADO". E, opcionalmente, incluir
     o terceiro irmão da QA-87-20-5 na tabela de classe, para a varredura ficar completa.
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 12. DELTA PÓS-GATE — 3ª PASSADA (commit afa6964f sobre 5cebdbd9)
+# ═════════════════════════════════════════════════════════════════════════════
+delta_pos_gate_3:
+  escopo: "afa6964f (código + teste + registro), sobre 5cebdbd9. NÃO empurrado — o tip de `origin/story/87-20-loop-bot-a-bot` no PR #535 segue `5cebdbd9`."
+  veredito: "CONCERNS não bloqueante — CONTINUA. O delta MELHORA a story: fecha um fail-open VIVO na leitura, com carrasco que distingue os dois estados, e não introduz regressão."
+  defeitos_vivos_novos: 0
+  concerns_novas: 2   # QA-87-20-7, QA-87-20-8
+  concerns_fechadas: 0
+  arvore_apos_minhas_mutacoes: >-
+    Os 4 arquivos que mutei (`webhook/route.ts`, `webhook/__tests__/route.test.ts`,
+    `cron/nicole-health/route.ts`, `packages/ai/src/chat/index.ts`) conferem sha256 IDÊNTICO ao de
+    `HEAD` depois do restauro. `git status --short -- packages/ docs/` limpo, fora de 3 stories
+    900-5x de outro agente que já estavam untracked antes desta passada.
+
+  # ───────────────────────────────────────────────────────────────────────────
+  ponto_1_o_andar_a_mais_do_achado:
+    veredito: "CONFIRMADO na substância — e é, sim, mais grave do que o CodeRabbit relatou. Com UMA correção de precisão no advérbio."
+    o_que_confirmei_lendo_o_contrato: >-
+      `broker-takeover-status.ts:120` — `resolveTakeoverAnchor(null, null)` cai em
+      `if (!handoffAt) return lastBrokerAt` e devolve `null`. `broker-takeover-status.ts:91` —
+      `shouldReactivateAi(null)` faz `if (!lastBrokerAt) return true`. Encadeado: leitura de
+      `conversations` falhando ⇒ `handoff_at` some ⇒ âncora `null` ⇒ reativa. O fail-open não
+      pulava só a guarda do AC14: derrubava junto a regra temporal de 63-13/63-15.
+    a_correcao_de_precisao: >-
+      "INCONDICIONALMENTE" é exato para a população que IMPORTA, e largo demais como frase geral.
+      A leitura de `messages` é uma promise IRMÃ e INDEPENDENTE no mesmo `Promise.all`: se ela
+      sobrevive e devolve uma msg `role='broker'` de menos de 24h, a âncora vem DELA e a Nicole
+      NÃO reativa, mesmo com `convRow` nulo. Logo o fail-open reativava sempre que `lastBrokerAt`
+      fosse nulo OU frio — não sempre.
+    e_por_que_a_ressalva_NAO_baixa_a_gravidade: >-
+      Porque a população de `lastBrokerAt` NULO é exatamente a que esta story CRIA. `conterLoop`
+      (`pipeline.ts:772-777`) escreve `is_ai_active=false`, `handoff_at` e `handoff_reason` e
+      NENHUMA mensagem `role='broker'`. Toda conversa contida pela trava nasce na forma
+      (handoff_at fresco, lastBrokerAt nulo) — que é a forma em que
+      `resolveTakeoverAnchor(null,null)=null` e a reativação é incondicional. O mesmo vale para
+      handoff por agendamento (63-15). Ou seja: o fail-open desfazia a contenção do AC14 no
+      minuto seguinte a ela ter sido aplicada.
+    medido_contra_producao_read_only: >-
+      452 conversas com `is_ai_active=false` hoje. `sem_msg_de_broker` = 0, `broker_ativo_24h` = 3,
+      `broker_frio_24h` = 449. Leitura honesta: para as 449 o fail-open destruía a guarda do AC14
+      (a regra temporal já reativaria de qualquer forma); para as 3 ele NÃO reativava, porque a
+      irmã segurava a âncora; e para a população que a 87-20 vai criar em produção (contidas por
+      loop, sem msg de corretor) ele reativava em segundos. Zero eventos da família 87-20 em 30
+      dias — código ainda não deployado, como esperado.
+    registro_no_gate: "SIM. Fica registrado como severidade MAIOR que a relatada pelo CodeRabbit: o relatório descreve `error` não lido; a consequência medida é a reativação da conversa recém-contida."
+
+  # ───────────────────────────────────────────────────────────────────────────
+  ponto_2_os_4_mutantes:
+    baseline: "39/39 verde no arquivo, `HEAD` = afa6964f, árvore limpa."
+    protocolo: "Cada mutante: `npx tsc --noEmit -p packages/web` ANTES de contar o vermelho. Nenhum mutante por constante (`if (false)` / `const x = null`) — mutei COMPORTAMENTO, para o narrowing do TS não transformar o vermelho em erro de compilação."
+    m_cr3a:
+      mutacao: "removi `&& !motivoDesconhecido` do `if` de reativação"
+      tsc: "rc=0"
+      vermelho: "2 / 39"
+      kill_set:
+        - "erro de leitura NÃO reativa — a mesma fixture que reativa quando a leitura funciona"
+        - "erro de leitura não anula a regra temporal: handoff de 60s segue contido"
+    m_cr3b:
+      mutacao: "`!!erroConvRow` → `!erroConvRow` — `motivoDesconhecido` fica verdadeiro em TODOS os caminhos (fecha a porta para todo mundo). Mutação de operador, não de constante: compila."
+      tsc: "rc=0"
+      vermelho: "1 / 39"
+      kill_set:
+        - "controle: `broker_reply` com 30h REATIVA a Nicole normalmente (sem regressão)  [teste PRÉ-EXISTENTE]"
+    m_cr3c:
+      mutacao: "apaguei o bloco `if (motivoDesconhecido) { await logEventOnce(...) }` inteiro — fail-closed que CALA"
+      tsc: "rc=0"
+      vermelho: "1 / 39"
+      kill_set: ["e GRITA: evento de erro com o motivo do banco"]
+    m_cr3d:
+      mutacao: "`await logEventOnce(` → `void logEventOnce(`"
+      tsc: "rc=0"
+      vermelho: "1 / 39"
+      kill_set: ["e GRITA: evento de erro com o motivo do banco"]
+      por_que_este_e_o_que_eu_mais_duvidava: >-
+        É a armadilha que a QA-87-20-1 pagou nesta mesma suíte, e a que eu já vi apagar carrasco de
+        `await` em outra story (mock de 5 ms contra helper que drena 60 ms). Aqui ela NÃO apaga:
+        `logEventOnceMock` só empurra em `escritasCompletadas` depois de um macrotask de 5 ms, o
+        contador de geração descarta a escrita órfã, e no caminho fail-closed a Nicole não é
+        reativada — o callback do `after()` termina logo depois, sem folga para a promise órfã
+        completar. O `await` é carregado de verdade.
+    kill_sets_disjuntos:
+      veredito: "CONFIRMADO — disjuntos, sem interseção."
+      por_que_isso_e_a_prova_que_importa: >-
+        M-CR3a morre pelos dois testes de 'não reativa'; M-CR3b morre pelo controle pré-existente de
+        'reativa'. Nenhum teste aparece nos dois conjuntos. É isso que prova que a suíte distingue
+        'NÃO SEI' de 'NÃO É LOOP', em vez de só ter aprendido a trancar a porta.
+
+  # ───────────────────────────────────────────────────────────────────────────
+  ponto_3_o_instrumento_que_faltava:
+    a_afirmacao: "O fake só produzia 'achei' e 'não achei'; sem o terceiro estado nenhum teste podia EXPRESSAR o defeito."
+    veredito: "CONFIRMADA. E o predicado estreito (tabela + colunas literais) é LOAD-BEARING, não decorativo."
+    prova_estatica: >-
+      As 6 chamadas `.from("conversations")` do `route.ts` foram enumeradas. Só UMA projeta
+      `handoff_at`: a da reativação (L1075, `select("handoff_at, handoff_reason")`). As outras
+      são `select("lead_id")` (L334), `select("id, is_ai_active")` (L1721), um `update` de
+      `last_message_at` (L978), o `update` de reativação (L1157) e um `insert` (L1746). O predicado
+      não pode alcançar nenhuma delas.
+    controle_positivo_que_eu_rodei: >-
+      Alarguei o predicado para `table === "conversations"` (sem a checagem de colunas): a suíte
+      cai para 2 falhando / 39, e falha por OUTRO motivo — o find-or-create quebra e a rota nem
+      chega ao bloco de reativação. Ou seja, o predicado largo mediria outra coisa, exatamente como
+      o @dev declarou. A escolha é necessária, não estética.
+    isolamento: "`falharLeitura = null` no `beforeEach` do describe: a injeção é opt-in por teste e não pode vazar para o resto da suíte. Conferido no diff."
+    observacao_menor: >-
+      O 2º teste ('handoff de 60s') asserta SÓ `is_ai_active === false`, então ele sozinho também
+      ficaria verde se a rota tivesse simplesmente quebrado. Quem o ancora é o par: o 1º teste do
+      mesmo describe exige `handoff_reason` intacto e 0 envios, e o controle pré-existente exige a
+      REATIVAÇÃO com a mesma fixture. O par basta; registro para que ninguém mova o 2º teste para
+      fora do par achando que ele se sustenta sozinho.
+
+  # ───────────────────────────────────────────────────────────────────────────
+  ponto_4_a_fronteira_respeitada:
+    veredito: "CONFIRMADO. `shouldReactivateAi` e `resolveTakeoverAnchor` INTOCADAS."
+    prova: "`git show afa6964f --stat` lista 3 arquivos: a story, o teste do webhook e `webhook/route.ts`. `packages/web/src/lib/broker/broker-takeover-status.ts` não aparece em NENHUM commit de `origin/main..HEAD`."
+    por_que_importa: >-
+      É a mesma fronteira que o AC14 respeitou desde o início: os dois helpers de 63-13/63-15
+      continuam puramente temporais e agnósticos ao motivo; a condição de 'não sei' mora no
+      CHAMADOR. Meter `motivoDesconhecido` dentro de `shouldReactivateAi` teria contaminado uma
+      função pura de outra story com um conceito de I/O.
+
+  # ───────────────────────────────────────────────────────────────────────────
+  ponto_5_os_5_declarados_e_o_6o:
+    criterio_do_dev: "Conserta o que DESFAZ uma garantia da story; declara o que DEGRADA um sinal."
+    veredito_do_criterio: "É o critério certo, e ele o aplicou com honestidade nos 5. Onde eu discordo é da RAZÃO dada para o 6º — não da decisão."
+    achado_regua_sql_pico_a:
+      medicao_minha: "`loop-breaker.ts:176-177` tem mesmo `const alvo = input.candidato.trim(); if (alvo === \"\") return { bloquear: false, ... }`. A régua SQL não exclui `t = \"\"`, então ela só pode SUPERESTIMAR — e o número publicado é 1. Divergência conservadora por construção."
+      concordo: "sim — declarar"
+    achado_migration_248:
+      medicao_minha: "`ls supabase/migrations` termina em `247_org_integrations_check_whatsapp_grafias.sql`. O parecer do @po diz 248. Erro factual, documento de outro dono."
+      concordo: "sim — declarar"
+    achado_contrato_sem_mock_do_barrel:
+      medicao_minha: >-
+        Renomeei `processMessageWithMetadata` no barrel `packages/ai/src/chat/index.ts`:
+        `tsc --noEmit -p packages/web` vai a **rc=2**, enquanto o arquivo de teste do webhook segue
+        **39/39 VERDE** (ele mocka o módulo). Confirma as DUAS coisas: o teste é cego ao rename, e o
+        contrato ESTÁ coberto — pelo type-checker, que está nas réguas de CI.
+      concordo: "sim — declarar"
+    achado_level_isento_no_fake_do_cron:
+      medicao_minha: "REPRODUZIDO exatamente. Baseline `nicole-health/route.test.ts` = 35/35. Removendo `.eq(\"level\", \"error\")` de `nicole-health/route.ts:186`: `tsc` rc=0 e **35/35 VERDE**. O fake tem a linha explícita `if (col === \"level\") return true`."
+      ironia_registrada: >-
+        O comentário do próprio fake (linhas 50-53) diz que ele existe para que 'um fake cego às
+        duas deixaria passar VERDE a remoção de qualquer um dos filtros' NÃO aconteça — e ele é cego
+        a `level`, por uma linha deliberada. Comentário autorrefutado. Não é da 87-20; é da 87-19.
+      concordo: "sim — declarar. Degrada precisão de alerta (ruído), não a contenção."
+    nitpicks:
+      concordo: "sim — declarar. A enumeração dos 2 chamadores de `alertarAdminWhatsApp` e das 3 construções de `motivo` é medição, não impressão."
+    o_6o_a_leitura_irma_de_messages:
+      veredito: "O ACHADO É REAL E ESTÁ VIVO — e eu o medi, não deduzi. A DECISÃO de declarar se sustenta; a RAZÃO dada NÃO."
+      como_medi: >-
+        Escrevi um probe temporário na suíte (removido; a árvore confere sha256 com `HEAD`), com
+        controle positivo — (A) conversa pausada, `handoff_at` de 30h, msg `role='broker'` de 1h
+        atrás, tudo lendo: a Nicole fica SILENTE, 🟢. (B) mesma fixture, derrubando SÓ a leitura de
+        `messages` (`select("created_at")`): `is_ai_active` vira `true` — a Nicole REATIVA por
+        cima de um corretor que respondeu há 1 hora. (C) e não grita: ZERO eventos
+        `NICOLE_REATIVACAO_ESTADO_DESCONHECIDO`. Fail-open silencioso, confirmado com A verde.
+      raio_medido_em_producao: >-
+        Das 452 conversas pausadas, **310** têm `ultimo_broker > handoff_at` — nelas a âncora vem da
+        `messages`, e perder a leitura só pode ENVELHECER a âncora, isto é, só pode empurrar para
+        reativar. Expostas NESTE INSTANTE (corretor de menos de 24h + `handoff_at` de mais de 24h):
+        **0**. A janela é móvel: qualquer conversa dessas 310 entra nela no dia em que o corretor
+        responder de novo.
+      a_razao_que_eu_derrubo: >-
+        'Fail-closed ali congelaria toda reativação da plataforma' NÃO procede. O erro é por
+        requisição e por conversa, exatamente como o da `conversations` que ele CONSERTOU: a
+        mensagem seguinte do lead tenta de novo. Não há congelamento de plataforma — há uma
+        conversa parada enquanto a leitura falha, que é precisamente o custo que ele aceitou (e
+        defendeu bem) do outro lado do mesmo `Promise.all`. A assimetria não se explica pelo motivo
+        declarado.
+      a_razao_que_SUSTENTA_a_decisao: >-
+        Duas, e são boas: (a) o raio é MENOR — a leitura de `messages` falhando não desfaz o AC14
+        (o `handoff_reason` continua legível), só a regra temporal de 63-15; (b) é DÍVIDA
+        PRÉ-EXISTENTE, não código desta story: `git log -S "data: lastBrokerMsg"` aponta
+        `fcd80264` (Story 63-13), e a linha está igual na base do PR (`aa584dfb`). Consertar aqui
+        seria escopo de outra story. Com ESSAS razões eu assino; com a razão declarada, não.
+      vira: "QA-87-20-7 (low, não bloqueante)"
+
+  # ───────────────────────────────────────────────────────────────────────────
+  ponto_6_as_duas_correcoes_de_registro:
+    hora_de_parede_1_vs_2:
+      veredito: "aceito. É contagem de linha em texto que o próprio @dev escreveu; não há risco de dado e a autorreferência está declarada."
+    f2fc9c8f_a_correcao_contra_mim:
+      veredito: "O @dev ESTÁ CERTO e eu estava errado. Recusa correta, e a recusa era obrigatória."
+      o_que_eu_medi_para_confirmar:
+        - "`git show 5ee0bf2b:packages/web/src/app/api/webhook/whatsapp/route.ts | shasum` (SEM flag) → `f2fc9c8f858e5f6281ad71f1…`"
+        - "`… | shasum -a 1` → o MESMO valor. `shasum` sem flag É SHA-1."
+        - "`… | shasum -a 256` → `9bb18596b4abd360d34d7288…` — outro valor, e é por isso que a varredura do @devops deu zero."
+        - "`02e2de5e` produz o mesmo prefixo SHA-1."
+        - "Os dois commits estão em `origin/main..HEAD` (`git rev-list origin/main..HEAD` confirma ambos)."
+      o_que_eu_mandei_e_teria_sido_pior: >-
+        Mandei registrar 'hash de um estado de trabalho não commitado, não reproduzível pelo
+        histórico'. Isso é FALSO e teria entrado no registro só para satisfazer um pedido meu de
+        correção. A triagem original era VAGA — 'prefixo do shasum de arquivo versionado' —, não
+        falsa; o que faltava era nomear o algoritmo.
+      a_licao_que_fica_registrada: >-
+        RÉGUA QUE NÃO NOMEIA O ALGORITMO É INFALSIFICÁVEL. Enquanto 'shasum' não diz qual digest, uma
+        varredura no algoritmo errado 'refuta' a alegação e uma no certo a 'confirma', sem que nada
+        no registro permita saber qual foi rodada. O conserto certo não é apagar a alegação: é
+        nomear o algoritmo e citar os commits que a tornam recomputável — que é o que ele fez, nos
+        3 lugares.
+      e_uma_observacao_sobre_o_meu_proprio_papel: >-
+        Eu repassei a varredura do @devops como se fosse conclusiva sem perguntar em que digest ela
+        foi feita. Um agente que aceita a instrução do coordenador contra a própria medição teria
+        posto a mentira no registro. Ele mediu antes de escrever. É o comportamento correto.
+
+  # ───────────────────────────────────────────────────────────────────────────
+  ponto_7_a_regua_que_aprovou_o_vazio:
+    o_que_o_dev_denunciou: "A 1ª execução da higiene devolveu 0 em tudo porque em `zsh` parâmetro não citado não sofre word-splitting: `git diff -- $FILES` virou UM caminho inexistente e o diff saiu vazio."
+    o_conserto_alegado: "refeita com 3 caminhos explícitos (434 linhas de diff) e com ABORTO em entrada vazia (rc=2)."
+    veredito: "O CONSERTO NÃO ESTÁ REGISTRADO — só a anedota. Não consegui confirmá-lo porque não há o que executar."
+    o_que_eu_procurei: >-
+      A ÚNICA régua de higiene com código na story é a da seção 8 (bloco `bash`, linha 949): a
+      função `alvos()` com a File List NUL-separated e `xargs -0 grep`. A régua do delta — a que
+      usa `git diff` sobre os 3 caminhos — não aparece em bloco de código em lugar nenhum da story,
+      do gate ou de `docs/qa/`. O 'aborto em entrada vazia (rc=2)' existe como PROSA numa célula de
+      tabela.
+    e_a_regua_que_ESTA_registrada_ainda_aprova_o_vazio: >-
+      Rodei a régua da linha 949 com entrada vazia: R1 (`| xargs -0 grep -InEo '\b[0-9a-f]{8}\b' |
+      sort | uniq -c`) imprime NADA e não aborta — 'zero ocorrências', limpo. Pior: `alvos()` filtra
+      cada caminho com `[ -f "$f" ]`, então um caminho errado é DESCARTADO EM SILÊNCIO em vez de
+      dar erro. Se a File List inteira fosse digitada errada, a régua registrada devolveria 0 e
+      pareceria limpa.
+    vira: "QA-87-20-8 (low, não bloqueante) — a régua consertada precisa ser registrada como código, não como frase."
+
+  # ───────────────────────────────────────────────────────────────────────────
+  reguas_reproduzidas_por_mim:
+    suite_inteira: "289 arquivos · 3.805 passando · 6 expected fail (3.811) · rc=0 — bate exatamente. `xfail` INALTERADO em 6."
+    delta_de_testes: "+3 sobre 3.802 — exatamente os 3 testes do describe novo. Nenhum teste sumiu."
+    lint_force: "rc=0 — `30 problems (0 errors, 30 warnings)`, mesma contagem de antes."
+    type_check_force: "rc=0"
+    build_web: "`pnpm --filter @trifold/web build` rc=0"
+    arquivo_do_carrasco: "39/39 verde no baseline; os 4 mutantes reproduzem os 4 vermelhos declarados."
+    producao_read_only: >-
+      Só `SELECT` agregado via Management API (`dsopqkqjkmhytudaaolv`), sem service-role e sem
+      script na árvore. NENHUMA escrita. A conversa contida segue PAUSADA e NÃO foi despausada:
+      `is_ai_active=false`, `handoff_at` presente, `handoff_reason` de texto livre
+      ('loop bot-a-bot detectado …'), 4 mensagens `role='broker'`. Confirma de novo o furo do AC16
+      já registrado na seção 3: o `handoff_reason` dela NÃO é a constante, então o guard do AC14
+      não casaria com ela.
+    push: "NENHUM. PR #535 OPEN com tip `5cebdbd9`; `afa6964f` não está no remoto."
+
+  observacao_menor_sem_concern: >-
+    `logEventOnce` é chamado SEM `dedupe_key`, e sem ela o helper (`lib/logger.ts:100-107`) não
+    deduplica nada — é um insert que tolera violação de unicidade. Na prática o grito sai UMA VEZ
+    POR MENSAGEM DE ENTRADA enquanto a leitura falhar, e o `metadata.wamid` já os torna distintos de
+    qualquer forma. Volume esperado é baixo (mensagens de um lead numa conversa quebrada) e o padrão
+    é o MESMO de `NICOLE_LOOP_CONTENCAO_FALHOU`. Não é concern; fica registrado porque o nome do
+    helper sugere 'uma vez' e aqui significa 'toda vez'.
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 13. CONCERNS DO DELTA 3
+# ═════════════════════════════════════════════════════════════════════════════
+concerns_delta_3:
+  - id: QA-87-20-7
+    severidade: low
+    bloqueia_deploy: false
+    titulo: "A leitura IRMÃ de `messages`, no mesmo `Promise.all`, falha ABERTA e em SILÊNCIO — medida viva, com controle positivo"
+    onde: "`packages/web/src/app/api/webhook/whatsapp/route.ts:1086-1093` (`{ data: lastBrokerMsg }`, sem `error`)"
+    o_que_medi: |
+      Probe temporário na suíte, removido depois (os 4 arquivos que toquei conferem sha256 com `HEAD`):
+      A) `handoff_at` de 30h + msg `role='broker'` de 1h, tudo lendo  → Nicole SILENTE. 🟢 (controle positivo)
+      B) mesma fixture, derrubando SÓ a leitura de `messages`        → `is_ai_active` vira `true`. 🔴
+      C) e nenhum evento `NICOLE_REATIVACAO_ESTADO_DESCONHECIDO`      → o fail-open é MUDO. 🔴
+      Produção (agregado, read-only): 310 de 452 conversas pausadas têm `ultimo_broker > handoff_at`
+      — nelas a âncora vem da `messages` e perdê-la só pode empurrar para reativar. Expostas neste
+      instante (corretor < 24h e `handoff_at` >= 24h): 0. A janela é móvel.
+    por_que_NAO_bloqueia:
+      - "Não desfaz o AC14: com a `conversations` legível, `contidaPorLoop` continua valendo — uma conversa contida por loop NÃO reativa nem com este fail-open."
+      - "É dívida PRÉ-EXISTENTE: `git log -S` aponta `fcd80264` (Story 63-13); a linha está idêntica na base do PR (`aa584dfb`). Não é código da 87-20."
+      - "Exposição medida agora: 0 conversas."
+    a_razao_do_dev_que_eu_DERRUBO: >-
+      'Fail-closed ali congelaria toda reativação da plataforma' não procede: o erro é por
+      requisição e por conversa, e a mensagem seguinte do lead tenta de novo — exatamente como no
+      lado da `conversations`, que ele consertou aceitando esse mesmo custo. A decisão de declarar
+      está certa pelas razões de RAIO e de PRÉ-EXISTÊNCIA; não por essa.
+    conserto_sugerido: >-
+      Uma linha, quando alguém tocar em 63-15: ler `error: erroLastBroker` e somar
+      `|| !!erroLastBroker` a `motivoDesconhecido` — e NÃO `|| !lastBrokerMsg`, que é nulo
+      legítimo (conversa sem corretor) e trancaria a reativação de todo mundo.
+    o_que_o_dev_precisa_fazer_agora: "NADA. A declaração na tabela de irmãos já está na story. Se quiser fechar a classe com o mesmo rigor das outras, acrescentar o RAIO medido (310/452, 0 expostas) e trocar a razão declarada pela de pré-existência."
+
+  - id: QA-87-20-8
+    severidade: low
+    bloqueia_deploy: false
+    titulo: "A régua de higiene que aprovou o vazio foi consertada na sessão, mas o conserto não foi REGISTRADO — a próxima passada herda a anedota, não o aborto"
+    onde: "story, bloco `bash` da seção 8 (linha 949) e célula 'A régua aprovou o vazio — e foi pega' na tabela de réguas da v1.10"
+    o_que_medi: |
+      A única régua de higiene com CÓDIGO na story é a da linha 949 (`alvos()` + `xargs -0 grep`).
+      Rodei-a com entrada vazia: R1 imprime NADA, sem abortar — indistinguível de 'zero ocorrências'.
+      E `alvos()` descarta caminho inexistente em silêncio (`[ -f "$f" ]`), então uma File List
+      inteira digitada errada devolveria 'limpo'.
+      A régua do delta (a de `git diff` com 3 caminhos e `rc=2` em entrada vazia) não existe como
+      código em lugar nenhum: story, gate ou `docs/qa/`. Só como frase numa célula de tabela.
+    por_que_isso_importa: >-
+      Foi a 2ª vez hoje que uma régua aprovou o vazio. O que impede a 3ª é código registrado, não a
+      memória de quem rodou. Uma régua sem `set -u` e sem aborto em entrada vazia é uma régua que
+      responde 'limpo' para 'não medi'.
+    por_que_NAO_bloqueia: "É instrumento de registro, não produto. As medições desta passada foram reexecutadas por mim de forma independente e batem."
+    conserto_sugerido: "Colar a régua consertada num bloco `bash` da story (ou em `docs/qa/`), com os caminhos citados, `set -euo pipefail`, e o `[ -s ]` que aborta com rc=2 quando o diff sai vazio."
+    o_que_o_dev_precisa_fazer_agora: "NADA bloqueante. No próximo toque na story, registrar o código da régua."
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 14. VEREDITO FINAL DO DELTA 3
+# ═════════════════════════════════════════════════════════════════════════════
+veredito_delta_3:
+  gate: CONCERNS
+  bloqueia_deploy: false
+  mudou_para_pior: false
+  resumo: >-
+    O andar a mais PROCEDE e é achado mais grave que o do CodeRabbit: confirmei no contrato
+    (`resolveTakeoverAnchor(null,null)` = `null`, `shouldReactivateAi(null)` = `true`) e confirmei
+    que `conterLoop` cria a conversa contida EXATAMENTE na forma em que a âncora é nula — logo o
+    fail-open reativava a conversa no minuto seguinte à contenção. Corrijo só o advérbio:
+    'incondicionalmente' vale quando `lastBrokerAt` é nulo ou frio; com um corretor de menos de 24h
+    a promise irmã ainda segurava a âncora (3 conversas assim hoje, contra 449 frias e 0 sem msg de
+    corretor). Os 4 mutantes reproduzem os 4 vermelhos, todos com `tsc` rc=0 e nenhum por
+    constante, e os kill sets de M-CR3a e M-CR3b são DISJUNTOS — é essa disjunção que prova que a
+    suíte distingue 'não sei' de 'não é loop'. O instrumento novo é necessário e está corretamente
+    estreitado: alargar o predicado para toda leitura de `conversations` quebra 2 testes por outro
+    motivo (a rota nem chega ao bloco). `shouldReactivateAi`/`resolveTakeoverAnchor` intocadas em
+    todo `origin/main..HEAD`. Dos 6 achados declarados eu reproduzi os 3 que dão para medir barato —
+    o `level` isento sai 35/35 VERDE, o rename no barrel leva `tsc` a rc=2 com o teste 39/39 verde,
+    e a última migration é 247 — e o critério de triagem ('conserta o que desfaz garantia, declara o
+    que degrada sinal') está aplicado com honestidade. Na correção de registro contra mim, ele está
+    certo e eu estava errado: `shasum` sem flag é SHA-1, o prefixo bate em `5ee0bf2b` e `02e2de5e`,
+    ambos em `origin/main..HEAD`, e registrar 'não reproduzível pelo histórico' teria posto uma
+    afirmação falsa no registro. Réguas: 289 · 3.805 · 6 xfail · rc=0 (+3, exatamente os 3 testes
+    novos), lint rc=0 (0 erros / 30 warnings), type-check rc=0, build rc=0. Produção só em leitura;
+    a conversa contida NÃO foi despausada. Duas concerns novas, ambas low e nenhuma bloqueante.
+  o_que_falta: >-
+    NADA bloqueante. Dois itens de registro, no próximo toque: (a) QA-87-20-7 — trocar a razão
+    declarada do 6º irmão ('congelaria toda reativação da plataforma', que eu derrubo) pela de RAIO
+    e PRÉ-EXISTÊNCIA (`fcd80264`, Story 63-13), e acrescentar o raio medido 310/452 com 0 expostas;
+    (b) QA-87-20-8 — registrar como CÓDIGO a régua de higiene com aborto em entrada vazia, porque
+    hoje o aborto existe só como frase e a régua que está registrada ainda aprova o vazio.
