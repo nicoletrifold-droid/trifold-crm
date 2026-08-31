@@ -36,7 +36,80 @@ import { logEvent, logEventOnce } from "@web/lib/logger"
  * `system_events` com `event_type='WEBHOOK_ORG_RESOLVED'` agrupado por `metadata->>'via'`.
  */
 
-export type MotivoNaoResolvida = "nenhuma_correspondencia" | "ambigua" | "erro_consulta"
+/**
+ * ## `legado_ambiguo_novo_resolveu` (Story 900-55 · AC1) — o motivo que nasceu porque o
+ * anterior MENTIA
+ *
+ * No modo `both`, quando o caminho LEGADO devolve `null` e o caminho NOVO **resolve**, os dois
+ * árbitros (`webhook/whatsapp/route.ts` e `lib/meta/process-lead.ts`) registravam
+ * `"nenhuma_correspondencia"` — literalmente *"não achei config para este identificador"*. A
+ * verdade é o oposto exato: **achei, e quem estava quebrado era o árbitro.**
+ *
+ * Esse é o estado que a segunda empresa produz no primeiro minuto: com duas linhas
+ * `whatsapp_config` ativas, o `.maybeSingle()` do legado devolve `PGRST116`/406, o `error` morre
+ * na desestruturação, `legado` vem `null` — e o `else` do modo `both` **não cai** para o resolver
+ * novo. A mensagem das DUAS empresas é descartada com `200 {status:"ok"}`.
+ *
+ * O motivo antigo mandava quem fosse depurar procurar uma linha de `whatsapp_config` que está lá.
+ * Este nomeia o estado real. Ele é, hoje, o ÚNICO sinal que a produção emite nesse minuto — daí
+ * também o nível `error` (ver {@link nivelDoMotivo}).
+ *
+ * Não é uma correção de comportamento: em `both` o legado continua sendo quem decide, e a
+ * mensagem continua sendo descartada. Quem corrige o comportamento é o corte para
+ * `WEBHOOK_ORG_ROUTING=identifier`, que é o resto da 900-55. Este motivo é a rede que torna esse
+ * corte — e a ausência dele — **consultável**.
+ *
+ * ⚠️ **Consultável, não entregue** (QA-900-55-1, medido em 2026-08-31). Este evento não chega a
+ * ninguém sozinho, e há três elos medidos que explicam por quê:
+ * 1. O único leitor de `level='error'` no repositório é `api/cron/nicole-health/route.ts`, que
+ *    classifica a `message` por `classificarErroIA` e faz `if (!tipo) continue`; nenhuma das 8
+ *    assinaturas de `lib/alerts/erro-ia.ts` casa com esta frase.
+ * 2. Nenhum consumidor seleciona `WEBHOOK_ORG_UNRESOLVED` por `event_type`.
+ * 3. O painel `/dashboard/sistema` **também não vê**: `api/system-events` filtra
+ *    `.eq("org_id", user.orgId)` e `get_system_events_summary` tem `WHERE org_id = p_org_id`,
+ *    enquanto `logOrgUnresolved` grava com `org_id = null` (não há org a atribuir — é justamente
+ *    o que falhou). `= <uuid>` nunca casa `NULL`.
+ * O que sobra de observável é o `console.error` de `lib/logger.ts` no runtime da Vercel e uma
+ * consulta direta a `system_events`. O runbook §1 da 900-55 diz isso com todas as letras e
+ * prescreve a conferência manual; não trate este `error` como alarme entregue.
+ */
+export type MotivoNaoResolvida =
+  | "nenhuma_correspondencia"
+  | "ambigua"
+  | "erro_consulta"
+  | "legado_ambiguo_novo_resolveu"
+
+/**
+ * Story 900-55 · AC1 — o NÍVEL do evento é derivado do motivo, não escolhido pelo call site.
+ *
+ * `legado_ambiguo_novo_resolveu` é o único motivo em que **mensagem de cliente está sendo
+ * descartada com HTTP 200 enquanto o dado necessário para roteá-la existe no banco**. Os outros
+ * três descrevem ausência ou falha de leitura — `warn` é o nível certo para eles.
+ *
+ * Derivar (em vez de passar `level` por parâmetro) é deliberado por DOIS motivos — e nenhum deles
+ * é o que esta linha dizia antes (ver a correção abaixo):
+ *
+ * 1. **A severidade é propriedade do estado, não do relator.** Quem lê o runbook §6 decide o
+ *    rollback pelo MOTIVO; colar o nível ao motivo impede que os dois divirjam quando um quarto
+ *    call site aparecer.
+ * 2. **Põe o mapa `motivo → nível` num ponto único e NOMEADO**, o que torna a mutação de um ponto
+ *    só expressável: "`nivelDoMotivo` devolve sempre `warn`" e o seu inverso "devolve sempre
+ *    `error`" matam conjuntos DISJUNTOS de testes (M3 × M3r na story). Com `level` por parâmetro,
+ *    o controle negativo "os outros 3 motivos continuam `warn`" viraria asserção sobre call
+ *    sites, e os testes de mapa em `webhook-org.test.ts` não existiriam.
+ *
+ * **Correção (QA-900-55-1 / gate da 900-55):** a justificativa original — *"um `level` por
+ * parâmetro deixaria a mutação do ternário com o `error` órfão, verde numa das duas asserções"* —
+ * era FALSA sob a forma do teste que existe: o `toMatchObject` do carrasco é ÚNICO e cobre `level`
+ * e `motivo` juntos, então a mutação do ternário o derruba de qualquer jeito. A decisão continua
+ * certa; o argumento que a sustentava não era. Registrado em vez de apagado.
+ *
+ * **Preço, nomeado:** nenhum call site futuro poderá emitir `legado_ambiguo_novo_resolveu` em
+ * outro nível sem mexer neste mapa. Hoje isso é correto — o motivo tem uma semântica só.
+ */
+function nivelDoMotivo(motivo: MotivoNaoResolvida): "warn" | "error" {
+  return motivo === "legado_ambiguo_novo_resolveu" ? "error" : "warn"
+}
 
 export interface ResolucaoNaoResolvida {
   status: "nao_resolvida"
@@ -364,10 +437,11 @@ export async function logOrgUnresolved(params: {
 }): Promise<void> {
   const admin = createAdminClient()
   const marcaDeErro = `org_unresolved:${params.motivo}`
+  const nivel = nivelDoMotivo(params.motivo)
   const { identificador, chavesRecusadas } = filtrarIdentificador(params.identificador)
   await Promise.all([
     logEventOnce({
-      level: "warn",
+      level: nivel,
       category: "webhook",
       event_type: "WEBHOOK_ORG_UNRESOLVED",
       source: `api/webhook/${params.receptor}`,

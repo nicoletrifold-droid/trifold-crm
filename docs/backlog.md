@@ -6,6 +6,32 @@ Tarefas operacionais, configurações e ajustes pendentes que não requerem uma 
 
 ## Pendente
 
+### [STORY] 🔴 `landing_page` perde os leads **da Trifold** assim que existir a 2ª empresa — co-requisito do primeiro onboarding
+
+**Adicionado em:** 2026-08-31 · **Origem:** `@po` na validação da Story `900-55` (AC4), com a
+correção de enquadramento do `@qa` (QA-900-55-6) confirmada no código.
+**Prioridade:** **P1 — mas com gatilho, não com data:** vence no **onboarding da primeira empresa
+cliente**, não na "Onda 3" genérica. **Endereçado a:** `@sm` (draft) → `@po` (validação).
+
+`webhooks/landing-page/route.ts` e `telegram` **não têm identificador de tenant no payload**
+(decisão travada: UTM colide entre tenants e não serve de chave de roteamento). Os dois usam
+`resolveSoleOrg`, que lê `organizations WHERE is_active LIMIT 2` e devolve `"ambigua"` assim que
+houver **duas orgs ativas** — **em qualquer modo de `WEBHOOK_ORG_ROUTING`**. O caminho legado
+(`whatsapp_config .eq(status,'active').single()`) devolve `null` pelo mesmo motivo.
+
+**O ponto que inverte a prioridade:** `resolveSoleOrg` **não distingue de quem é o lead**. Os
+~5 leads/semana medidos em `webhook_logs` (7 dias até 2026-08-31; `telegram` = 0, é canal de
+staging) são da operação **da própria Trifold**. Embarcar o primeiro cliente sem fechar isto é
+embarcar um buraco conhecido na operação de casa — por isso é **co-requisito do onboarding**, com
+a mesma disciplina de ordem que a `900-55` AC7 impõe ao corte.
+
+**Não é regressão do corte da `900-55`:** o gatilho é a **segunda org ativa**, não o flip da
+variável. E o corte até **melhora** a observabilidade — em `both`/`legacy` a perda é silenciosa
+(`logOrgUnresolved` não é chamado, só `console.error` + `processing_error`); no modo `identifier`
+o evento passa a existir em `system_events`. **Efeito colateral a nomear na story:** nesse ramo a
+resposta ao proxy `api/lead.js` passa de **500** para **200**, então a retentativa do proxy some
+(o desfecho não muda — a ambiguidade é determinística).
+
 ### [OPS] 🔴 Uma conversa foi **pausada à mão** por loop bot-a-bot — a pausa tem pavio de ~24h e precisa de decisão
 
 **Adicionado em:** 2026-08-30 · **Origem:** `@devops` — contenção manual em produção.
