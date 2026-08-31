@@ -2,7 +2,11 @@ import { redirect } from "next/navigation"
 import { requireViewerAccess, getViewerVinculo } from "@web/lib/portal/viewer"
 import { getVinculoFinancialStatement } from "@web/lib/portal/obra-financeiro"
 import type { FormattedInstallment } from "@web/lib/integrations/sienge/types"
-import { getNonCashLabel, getOpenBalance } from "@web/lib/integrations/sienge/installments"
+import {
+  getCashReceiptValue,
+  getNonCashLabel,
+  getOpenBalance,
+} from "@web/lib/integrations/sienge/installments"
 
 const CONDITION_LABEL: Record<string, string> = {
   AT: "À Vista",
@@ -226,7 +230,7 @@ export default async function ViewerFinanceiroPage({
                       </p>
                       {inst.receipts.map((r, ri) => (
                         <p key={ri} className="mt-0.5 text-xs text-stone-500">
-                          {formatDate(r.receiptDate)} — {formatCurrency(r.receiptValue)}
+                          {formatDate(r.receiptDate)} — {formatCurrency(getCashReceiptValue(r))}
                         </p>
                       ))}
                     </div>

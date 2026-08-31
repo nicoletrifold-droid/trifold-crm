@@ -80,6 +80,33 @@ export function isCashReceipt(receipt: SiengeReceipt): boolean {
 }
 
 /**
+ * Quanto dinheiro a baixa representa — o **Recto líquido** do extrato oficial.
+ *
+ * `receiptValue` é o valor nominal baixado; `netReceiptValue` é a conta fechada
+ * do Sienge: valor + acréscimo (juros/multa) − desconto. São coisas diferentes
+ * quando o cliente paga com atraso ou ganha abatimento, e a coluna que o extrato
+ * oficial apresenta como recebido é a segunda.
+ *
+ * Decisão do financeiro (Robson, 31/08/2026): juros de atraso pagos pelo cliente
+ * entram no total pago, e desconto concedido sai — ou seja, o portal passa a usar
+ * o Recto líquido (Story 75-370). Antes somava o nominal, e era a diferença de
+ * R$ 721,78 que sobrou na conciliação da Story 75-369.
+ *
+ * Medido contra a API de produção em 31/08/2026 (1.299 baixas em dinheiro do Vind
+ * e do Yarden, `scripts/sienge-recto-liquido-check.ts`): `netReceiptValue` bate
+ * com valor + juros + adicional − desconto em 1.299 de 1.299, vem preenchido em
+ * 100% das baixas e **não** desconta `administrativeFee` nem `insuranceAmount`.
+ * Por isso o campo é usado direto, sem recalcular a fórmula — refazer a conta do
+ * ERP seria arriscar divergir dela.
+ *
+ * O fallback para `receiptValue` é defensivo (baixa antiga sem o campo), não
+ * rotineiro: na base medida ele nunca foi usado.
+ */
+export function getCashReceiptValue(receipt: SiengeReceipt): number {
+  return receipt.netReceiptValue ?? receipt.receiptValue
+}
+
+/**
  * Rótulo para a parcela baixada sem pagamento, derivado do tipo real da baixa.
  *
  * Sem isso a tela chamaria de "Renegociada" um distrato, um cancelamento ou uma

@@ -1,6 +1,10 @@
 import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer"
 import type { FormattedInstallment } from "@web/lib/integrations/sienge/types"
-import { getNonCashLabel, getOpenBalance } from "@web/lib/integrations/sienge/installments"
+import {
+  getCashReceiptValue,
+  getNonCashLabel,
+  getOpenBalance,
+} from "@web/lib/integrations/sienge/installments"
 
 const BRAND = "#E8856A"
 const DARK = "#1C1917"
@@ -347,7 +351,7 @@ export function ExtratoPDF({
                       Baixa {ri + 1} de {inst.receipts.length} — {fmtDate(r.receiptDate)}
                     </Text>
                     <Text style={[s.receiptText, { width: "14%", textAlign: "right" }]}>
-                      {fmtCurrency(r.receiptValue)}
+                      {fmtCurrency(getCashReceiptValue(r))}
                     </Text>
                     <Text style={{ width: "43%" }} />
                   </View>

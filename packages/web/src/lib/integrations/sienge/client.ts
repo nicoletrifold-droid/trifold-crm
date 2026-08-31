@@ -18,11 +18,13 @@ import type {
 } from "./types"
 import {
   isCashReceipt,
+  getCashReceiptValue,
   getOpenBalance,
 } from "./installments"
 
 export {
   isCashReceipt,
+  getCashReceiptValue,
   getOpenBalance,
   getNonCashLabel,
   collectUnknownReceiptTypes,
@@ -178,8 +180,10 @@ export async function getFinancialStatement(
           receipts,
           nonCashReceipts,
           receiptDate: receipts[receipts.length - 1]?.receiptDate,
+          // Recto líquido, não valor nominal da baixa: juros de atraso entram e
+          // desconto sai (decisão do financeiro, 31/08/2026 — Story 75-370).
           receiptValue: receipts.length > 0
-            ? receipts.reduce((sum, r) => sum + r.receiptValue, 0)
+            ? receipts.reduce((sum, r) => sum + getCashReceiptValue(r), 0)
             : undefined,
         })
       }
