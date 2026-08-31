@@ -10,6 +10,7 @@ import { STAGE_IDS } from "@trifold/shared"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { syncFutureVisitsWithLeadOwner } from "@web/lib/appointments/sync-visit-owner"
 import { resolverNomesUtm } from "@web/lib/leads/meta-utm"
+import { qualificacaoEstaMudando } from "@web/lib/leads/qualificacao"
 import { fetchImobiliariaNomePorLead } from "@web/lib/imob/lead-imobiliaria"
 import { createOrgScopedAdminClient } from "@web/lib/supabase/org-scoped-admin"
 
@@ -125,16 +126,6 @@ export async function PATCH(
     return NextResponse.json({ error: "lost_reason_grupo inválido" }, { status: 400 })
   }
 
-  // Story 84-1 — Qualificação Comercial é manual e independente do gate de edição
-  // geral do lead (linha 54 acima): exige a permissão específica `leads.qualificacao`
-  // além de já poder editar o lead.
-  if (
-    fields.qualificacao_comercial !== undefined &&
-    !(await canAccess(appUser.id, appUser.org_id, "leads.qualificacao"))
-  ) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-  }
-
   // Transferência de corretor → o lead volta para "Aguardando atendimento"
   // (STAGE_IDS.novo), independente do estágio anterior. Só aplica se o corretor
   // REALMENTE mudou e o stage não foi definido explicitamente nesta requisição
@@ -160,6 +151,31 @@ export async function PATCH(
       .eq("org_id", appUser.org_id)
       .single()
     atual = (cur as LeadEstadoAtual | null) ?? null
+  }
+
+  // Os forms de lead reenviam `qualificacao_comercial` em TODO save (quem mexe
+  // só no telefone manda o campo junto). Reenvio do MESMO valor não é mudança:
+  // sai do payload antes do gate — senão o 403 abaixo barra qualquer save de
+  // quem não tem `leads.qualificacao` (foi o que travou o perfil imob na ficha
+  // do lead IMOB) e o histórico da 84-2 ganharia entrada sem mudança nenhuma.
+  // `atual` null (leitura falhou) mantém o comportamento antigo: exige a
+  // capability, porque aí não há como saber se mudou.
+  if (
+    fields.qualificacao_comercial !== undefined &&
+    atual &&
+    !qualificacaoEstaMudando(atual.qualificacao_comercial, fields.qualificacao_comercial)
+  ) {
+    delete fields.qualificacao_comercial
+  }
+
+  // Story 84-1 — Qualificação Comercial é manual e independente do gate de edição
+  // geral do lead (linha 54 acima): exige a permissão específica `leads.qualificacao`
+  // além de já poder editar o lead. Só barra quem está MUDANDO o valor.
+  if (
+    fields.qualificacao_comercial !== undefined &&
+    !(await canAccess(appUser.id, appUser.org_id, "leads.qualificacao"))
+  ) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
   if (fields.assigned_broker_id !== undefined && body.stage_id === undefined) {
