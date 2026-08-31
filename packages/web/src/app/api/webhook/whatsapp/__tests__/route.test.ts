@@ -267,6 +267,24 @@ import { normalizePhoneBR } from "@trifold/shared"
 /** Story 87-20 — todo `.select()` executado, com a lista LITERAL de colunas. */
 let selectsPorTabela: Array<{ table: string; cols: string | null }> = []
 
+/**
+ * Story 87-20 · CR-87-20-3 — **injeção de ERRO DE LEITURA.**
+ *
+ * O fake só sabia produzir dois estados: "achei" e "não achei" (`data: []`). O
+ * PostgREST tem um TERCEIRO — `{ data: null, error }` — e é nele que mora o
+ * defeito que o carrasco abaixo mira: **não conseguir ler o motivo do handoff
+ * não é o mesmo que ter lido "não foi contida por loop"**. Sem poder produzir
+ * esse estado, nenhum teste desta suíte conseguia sequer EXPRESSAR o defeito.
+ *
+ * O predicado recebe tabela **e a lista literal de colunas** de propósito:
+ * `conversations` é lida em vários pontos do mesmo turno (find-or-create,
+ * `last_message_at`), e derrubar todas mediria outra coisa — a rota nem chegaria
+ * ao bloco de reativação.
+ */
+let falharLeitura:
+  | ((table: string, cols: string | null) => string | null)
+  | null = null
+
 /** Colunas de uma projeção simples, ou `null` (`*`, embed, `->>`, agregados). */
 function parseProjecao(cols: string | null): string[] | null {
   if (!cols) return null
@@ -298,6 +316,8 @@ function buildSupabaseMock() {
       action: "select" | "insert" | "upsert" | "update" | "delete"
       /** Story 87-20 — colunas do `.select()`, ou `null` quando não é projeção simples. */
       cols?: string[] | null
+      /** Story 87-20 (CR-87-20-3) — o argumento LITERAL, para o predicado de falha. */
+      colsLiteral?: string | null
       payload?: unknown
       onConflict?: string
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -366,6 +386,7 @@ function buildSupabaseMock() {
         }
         const cols = typeof args[0] === "string" ? (args[0] as string) : null
         selectsPorTabela.push({ table: String(table), cols })
+        state.colsLiteral = cols
         state.cols = parseProjecao(cols)
         return builder
       },
@@ -459,6 +480,12 @@ function buildSupabaseMock() {
       const rows = db[table] as Record<string, unknown>[]
 
       if (state.action === "select") {
+        // CR-87-20-3 — o estado que o fake não sabia produzir: leitura que FALHA.
+        const motivoDaFalha =
+          falharLeitura?.(String(table), state.colsLiteral ?? null) ?? null
+        if (motivoDaFalha) {
+          return Promise.resolve({ data: null, error: { message: motivoDaFalha } })
+        }
         const result = projetar(applyFilters(rows), state.cols ?? null)
         return Promise.resolve({ data: result, error: null })
       }
@@ -1405,6 +1432,8 @@ describe("Story 87-20 — trava de loop bot-a-bot no webhook", () => {
     // podem entrar na conta de `drenarAfter()` deste bloco.
     afterPromises = []
     selectsPorTabela = []
+    // CR-87-20-3 — a injeção de erro de leitura é opt-in por teste.
+    falharLeitura = null
     logEventMock.mockClear()
     logEventOnceMock.mockClear()
     fetchMock.mockClear()
@@ -1746,6 +1775,87 @@ describe("Story 87-20 — trava de loop bot-a-bot no webhook", () => {
       await entregar("wamid.RECENTE1")
 
       expect(db.conversations.find((c) => c.id === CONV)!.is_ai_active).toBe(false)
+    })
+
+    /**
+     * CR-87-20-3 — o MESMO pecado da contenção, do lado do LEITOR.
+     *
+     * `conterLoop` já foi consertado para não chamar de sucesso o `UPDATE` que
+     * não conseguiu escrever. Aqui é a leitura cometendo o análogo: **não
+     * conseguir ler o motivo do handoff não é o mesmo que ter lido "não foi
+     * contida por loop"**. Com `{ data: null, error }`, `convRow` fica
+     * `undefined`, `contidaPorLoop` vira `false` — e, pior, `handoff_at` também
+     * some, `resolveTakeoverAnchor` devolve `null` e `shouldReactivateAi(null)`
+     * é `true` POR CONTRATO (63-13: "nunca houve corretor → reassume"). Ou seja:
+     * um erro de leitura reativava a Nicole **incondicionalmente**, desfazendo a
+     * contenção do AC14 *e* a regra temporal de 63-13/63-15 na mesma linha.
+     *
+     * O par com o controle negativo é o que dá dente a estes testes: o primeiro
+     * teste deste `describe` usa **exatamente esta fixture** (`broker_reply`,
+     * 30h) e exige que a Nicole REATIVE. Aqui só uma coisa muda — a leitura
+     * falha — e o resultado tem de se inverter. Fechar a porta para todo mundo
+     * mata aquele controle; deixá-la aberta mata estes.
+     */
+    describe("leitura do handoff que FALHA (CR-87-20-3)", () => {
+      const ERRO_DE_LEITURA = "permission denied for table conversations"
+
+      /** Derruba SÓ a consulta de reativação — as outras leituras seguem vivas. */
+      beforeEach(() => {
+        falharLeitura = (table, cols) =>
+          table === "conversations" && (cols ?? "").includes("handoff_at")
+            ? ERRO_DE_LEITURA
+            : null
+      })
+
+      it("erro de leitura NÃO reativa — a mesma fixture que reativa quando a leitura funciona", async () => {
+        semear({
+          is_ai_active: false,
+          handoff_at: HANDOFF_ANTIGO,
+          handoff_reason: "broker_reply",
+        })
+        await entregar("wamid.LEITURAFALHOU1")
+
+        const conversa = db.conversations.find((c) => c.id === CONV)!
+        expect(conversa.is_ai_active).toBe(false)
+        // O handoff continua intacto: nem o `handoff_reason` foi limpo.
+        expect(conversa.handoff_reason).toBe("broker_reply")
+        expect(enviosDeMensagem()).toHaveLength(0)
+      })
+
+      it("erro de leitura não anula a regra temporal: handoff de 60s segue contido", async () => {
+        semear({
+          is_ai_active: false,
+          handoff_at: new Date(Date.now() - 60_000).toISOString(),
+          handoff_reason: "broker_reply",
+        })
+        await entregar("wamid.LEITURAFALHOU2")
+
+        expect(db.conversations.find((c) => c.id === CONV)!.is_ai_active).toBe(false)
+      })
+
+      /**
+       * Fail-closed que CALA é a troca de um defeito por outro: a conversa fica
+       * parada e ninguém sabe por quê. O motivo do banco tem de aparecer, pelo
+       * mesmo motivo que o grito da contenção que falhou teve de aparecer.
+       */
+      it("e GRITA: evento de erro com o motivo do banco", async () => {
+        semear({
+          is_ai_active: false,
+          handoff_at: HANDOFF_ANTIGO,
+          handoff_reason: "broker_reply",
+        })
+        await entregar("wamid.LEITURAFALHOU3")
+
+        const grito = escritasCompletadas.find(
+          (e) =>
+            (e as { event_type?: string }).event_type ===
+            "NICOLE_REATIVACAO_ESTADO_DESCONHECIDO"
+        ) as Record<string, unknown> | undefined
+
+        expect(grito).toBeDefined()
+        expect(grito!.level).toBe("error")
+        expect(JSON.stringify(grito!.metadata)).toContain(ERRO_DE_LEITURA)
+      })
     })
   })
 })

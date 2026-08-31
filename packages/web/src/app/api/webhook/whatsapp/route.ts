@@ -1067,7 +1067,10 @@ export async function POST(request: NextRequest) {
         // por envio do corretor OU por agendamento da Nicole) e a última msg
         // `role='broker'`. Sem isso, um handoff por agendamento (lastBrokerAt=null)
         // reativaria a Nicole na mensagem seguinte e anularia o handoff.
-        const [{ data: convRow }, { data: lastBrokerMsg }] = await Promise.all([
+        const [
+          { data: convRow, error: erroConvRow },
+          { data: lastBrokerMsg },
+        ] = await Promise.all([
           supabase
             .from("conversations")
             // Story 87-20 (AC14) — `handoff_reason` PRECISA estar na projeção.
@@ -1106,7 +1109,49 @@ export async function POST(request: NextRequest) {
         // agnósticas ao motivo — nenhuma linha delas é tocada.
         const contidaPorLoop = convRow?.handoff_reason === LOOP_BOT_HANDOFF_REASON
 
-        if (shouldReactivateAi(anchor) && !contidaPorLoop) {
+        // CR-87-20-3 — o mesmo pecado da contenção, do lado do LEITOR.
+        //
+        // `conterLoop` deixou de chamar de sucesso o `UPDATE` que não conseguiu
+        // escrever. Aqui é a LEITURA cometendo o análogo: **não conseguir ler o
+        // motivo do handoff não é o mesmo que ter lido "não foi contida por
+        // loop"**. O PostgREST devolve `{ data: null, error }` — `convRow` fica
+        // `undefined` e `contidaPorLoop` vira `false` sozinho.
+        //
+        // E o estrago não para no AC14: `handoff_at` some junto, então
+        // `resolveTakeoverAnchor` devolve `null` e `shouldReactivateAi(null)` é
+        // `true` POR CONTRATO (63-13: "nunca houve corretor → reassume"). Um
+        // erro de leitura reativava a Nicole **incondicionalmente** — desfazendo
+        // a contenção do AC14 e a regra temporal de 63-13/63-15 na mesma linha,
+        // e devolvendo inteira a oscilação permanente que o AC14 existe para
+        // matar. Em silêncio.
+        //
+        // Reativar é a ação IRREVERSÍVEL; não reativar custa uma conversa parada
+        // até um humano olhar — e o evento abaixo é como ele fica sabendo.
+        const motivoDesconhecido = !!erroConvRow || !convRow
+
+        // Fail-closed que CALA troca um defeito por outro. O motivo do banco tem
+        // de APARECER, pela mesma razão que o grito da contenção que falhou teve
+        // de aparecer. `await` (e não o canal fire-and-forget) porque isto roda
+        // dentro do `after()` e a promise pendente morre com a lambda.
+        if (motivoDesconhecido) {
+          await logEventOnce({
+            level: "error",
+            category: "ai",
+            event_type: "NICOLE_REATIVACAO_ESTADO_DESCONHECIDO",
+            message:
+              "Estado de handoff ILEGIVEL — reativacao automatica de 24h NAO aplicada; a conversa segue pausada ate acao humana",
+            metadata: {
+              conversationId: conversation!.id,
+              erro: erroConvRow?.message ?? null,
+              linhaAusente: !convRow,
+              wamid: messageId,
+            },
+            source: "api/webhook/whatsapp",
+            org_id: orgId,
+          })
+        }
+
+        if (shouldReactivateAi(anchor) && !contidaPorLoop && !motivoDesconhecido) {
           // Reassume: limpa o handoff para não influenciar cálculos futuros.
           await supabase
             .from("conversations")
