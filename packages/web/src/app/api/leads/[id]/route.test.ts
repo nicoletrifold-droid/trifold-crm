@@ -54,6 +54,8 @@ let currentLead: Record<string, unknown> = {
   qualificacao_comercial: null,
 }
 let updatedLead: Record<string, unknown> = { id: "lead-1", name: "Lead Teste" }
+// Fix 31/08/2026 — o que REALMENTE foi para o UPDATE (o gate agora pode descartar campo).
+let capturedUpdate: Record<string, unknown> | null = null
 
 function fakeSupabase() {
   return {
@@ -61,8 +63,9 @@ function fakeSupabase() {
       let isUpdate = false
       const chain: Record<string, unknown> = {
         select: () => chain,
-        update: () => {
+        update: (payload: Record<string, unknown>) => {
           isUpdate = true
+          capturedUpdate = payload
           return chain
         },
         eq: () => chain,
@@ -90,6 +93,7 @@ beforeEach(() => {
   auditCalls.length = 0
   currentLead = { assigned_broker_id: null, interest_level: null, qualificacao_comercial: null }
   updatedLead = { id: "lead-1", name: "Lead Teste" }
+  capturedUpdate = null
 })
 
 describe("PATCH /api/leads/[id] — qualificacao_comercial (Story 84-1)", () => {
@@ -126,6 +130,49 @@ describe("PATCH /api/leads/[id] — qualificacao_comercial (Story 84-1)", () => 
 
     const specificAudit = auditCalls.find((c) => c.action === "lead.qualificacao_comercial_updated")
     expect(specificAudit?.metadata).toEqual({ old_value: "bom", new_value: "regular" })
+  })
+
+  // Fix 31/08/2026 — o perfil imob (Daiana) levava 403 ao salvar QUALQUER campo da
+  // ficha do lead IMOB: o form reenvia `qualificacao_comercial` em todo save e o gate
+  // olhava só a PRESENÇA do campo. Reenvio do mesmo valor não é mudança.
+  it("reenvio do MESMO valor sem leads.qualificacao → 200, sem persistir nem auditar o campo", async () => {
+    qualificacaoAccess = false
+    currentLead.qualificacao_comercial = null
+    const res = await PATCH(makeRequest({ qualificacao_comercial: null, tem_pet: "nao" }), {
+      params: Promise.resolve({ id: "lead-1" }),
+    })
+    expect(res.status).toBe(200)
+    expect(capturedUpdate).not.toHaveProperty("qualificacao_comercial")
+    expect(capturedUpdate?.tem_pet).toBe("nao")
+    expect(auditCalls.find((c) => c.action === "lead.qualificacao_comercial_updated")).toBeUndefined()
+  })
+
+  it("reenvio do mesmo valor JÁ DEFINIDO sem a capability também passa", async () => {
+    qualificacaoAccess = false
+    currentLead.qualificacao_comercial = "bom"
+    const res = await PATCH(makeRequest({ qualificacao_comercial: "bom", name: "Claudir" }), {
+      params: Promise.resolve({ id: "lead-1" }),
+    })
+    expect(res.status).toBe(200)
+    expect(capturedUpdate).not.toHaveProperty("qualificacao_comercial")
+  })
+
+  it("MUDAR o valor sem a capability continua 403 (a proteção da 84-1 fica de pé)", async () => {
+    qualificacaoAccess = false
+    currentLead.qualificacao_comercial = "bom"
+    const res = await PATCH(makeRequest({ qualificacao_comercial: "ruim" }), {
+      params: Promise.resolve({ id: "lead-1" }),
+    })
+    expect(res.status).toBe(403)
+  })
+
+  it("LIMPAR o valor sem a capability continua 403", async () => {
+    qualificacaoAccess = false
+    currentLead.qualificacao_comercial = "bom"
+    const res = await PATCH(makeRequest({ qualificacao_comercial: null }), {
+      params: Promise.resolve({ id: "lead-1" }),
+    })
+    expect(res.status).toBe(403)
   })
 
   it("payload sem qualificacao_comercial não exige o gate nem audita a Qualificação", async () => {
