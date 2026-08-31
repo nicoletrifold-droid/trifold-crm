@@ -92,10 +92,13 @@ export function isCashReceipt(receipt: SiengeReceipt): boolean {
  * o Recto líquido (Story 75-370). Antes somava o nominal, e era a diferença de
  * R$ 721,78 que sobrou na conciliação da Story 75-369.
  *
- * Medido contra a API de produção em 31/08/2026 (1.299 baixas em dinheiro do Vind
+ * Medido contra a API de produção em 31/08/2026 (1.298 baixas em dinheiro do Vind
  * e do Yarden, `scripts/sienge-recto-liquido-check.ts`): `netReceiptValue` bate
- * com valor + juros + adicional − desconto em 1.299 de 1.299, vem preenchido em
+ * com valor + juros + adicional − desconto em 1.298 de 1.298, vem preenchido em
  * 100% das baixas e **não** desconta `administrativeFee` nem `insuranceAmount`.
+ * Conciliado depois contra o extrato oficial dos 89 títulos: 88 batem ao centavo
+ * (`scripts/sienge-conciliar-extrato-pdf.ts`); o 89º é a divergência deliberada
+ * do adiantamento, decidida pelo financeiro.
  * Por isso o campo é usado direto, sem recalcular a fórmula — refazer a conta do
  * ERP seria arriscar divergir dela.
  *

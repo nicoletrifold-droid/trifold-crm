@@ -206,6 +206,11 @@ async function main() {
   const divergencias: Divergencia[] = []
   const tiposVistos = new Map<string, number>()
 
+  // Um título com dois titulares (cônjuges) volta na consulta de CADA um deles.
+  // Sem esta guarda as baixas seriam contadas duas vezes e os totais sairiam
+  // inflados — a identidade da Prova 1 não muda (é por baixa), mas os
+  // somatórios da Prova 2 e as contagens, sim.
+  const titulosProcessados = new Set<number>()
   let i = 0
   for (const customerId of customerIds) {
     i++
@@ -223,6 +228,8 @@ async function main() {
 
     for (const statement of data.results ?? []) {
       for (const bill of statement.billsReceivable ?? []) {
+        if (titulosProcessados.has(bill.billReceivableId)) continue
+        titulosProcessados.add(bill.billReceivableId)
         let billTemPagamento = false
         for (const inst of bill.installments ?? []) {
           for (const r of inst.receipts ?? []) {

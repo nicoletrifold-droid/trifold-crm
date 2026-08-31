@@ -81,6 +81,41 @@ strengths:
     Débito da 75-369 (script de conciliação ad-hoc, não versionado) pago no mesmo
     PR.
 
+conciliacao_final:
+  data: '2026-08-31'
+  fonte: 'Extrato Cliente Histórico — Yarden (53 títulos) + Vind (36 títulos), correção até 28/08/2026'
+  script: 'scripts/sienge-conciliar-extrato-pdf.ts'
+  titulos_localizados: '89/89'
+  batendo_ao_centavo:
+    regra_nova_liquido: '88/89'
+    regra_antiga_nominal: '57/89'
+  totais:
+    oficial: 14522414.77
+    portal_liquido: 14524773.15
+    portal_nominal: 14521692.99
+  unica_divergencia:
+    titulo: 10578
+    documento: CT.VIND-904
+    delta: 2358.38
+    explicacao: >
+      Parcelas 6 e 7 são Abatimento de Adiantamento (02/05/2024) com líquido de
+      1.178,01 e 1.180,37 — soma 2.358,38, exatamente o delta. O extrato deixa o
+      Recto líquido em branco nessas linhas porque o Sienge conta o dinheiro na
+      entrada do adiantamento (título 10609, fora deste extrato). O financeiro
+      decidiu o contrário na Q2 ("manter, contar no abatimento"), então a
+      divergência é deliberada e não é defeito.
+  validacao_do_proprio_script: >
+    O total pela regra antiga (14.521.692,99, delta −721,78) reproduz ao centavo
+    o número da conciliação de 28/08 registrado na Story 75-369, apesar de o
+    script ter sido escrito de forma independente.
+  correcao_de_numeros_do_pr_538: >
+    A primeira medição contava em dobro os títulos com dois titulares — a API
+    devolve o mesmo título na consulta de cada cliente. Números corretos:
+    1.298 baixas (não 1.299) e total nominal R$ 17.954.165,72 (não 18.368.165,72).
+    A identidade da prova é por baixa e não muda; a diferença produzida pela
+    mudança é a mesma ao centavo. Guarda de deduplicação adicionada aos dois
+    scripts.
+
 notes:
   - >
     CodeRabbit CLI não executado — o gatilho de review deste repo é o GitHub App,
