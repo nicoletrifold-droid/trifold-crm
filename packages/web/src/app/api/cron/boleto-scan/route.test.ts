@@ -389,7 +389,12 @@ describe("boleto-scan · cadência do cron", () => {
     const cron = vercelJson.crons.find((c) => c.path === "/api/cron/boleto-scan")
     expect(cron, "cron do boleto-scan sumiu do vercel.json").toBeDefined()
 
-    const horas = cron!.schedule.split(" ")[1]!.split(",")
+    // Minuto E hora — só a hora deixaria passar um "30 12,21", que atrasaria a rodada
+    // das 09 BRT e, com ela, os lembretes de vencimento.
+    const [minuto, campoHoras] = cron!.schedule.split(" ")
+    expect(minuto).toBe("0")
+
+    const horas = campoHoras!.split(",")
     expect(horas).toEqual(["12", "21"])
 
     // A rodada das 12 UTC (09 BRT) é a única que dispara lembretes (Story 75-141).

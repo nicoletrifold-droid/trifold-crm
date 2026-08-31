@@ -27,7 +27,12 @@ import { lembreteEventKey } from "@web/lib/boleto-lembrete-key"
 // partir do salto de consumo de junho→julho no painel do Sienge, não medidos no banco.
 // Pela mesma estimativa, esta varredura respondia por ~4/5 do consumo total da conta.
 // TRADE-OFF ACEITO: como o webhook não cobre este caso (ver acima), a varredura é o
-// ÚNICO detector de boleto novo — a detecção passa de ~3h para até ~12h no pior caso.
+// ÚNICO detector de boleto novo — a detecção passa de ~3h para até 15h no pior caso.
+// Os intervalos são desiguais de propósito: 9h entre as rodadas (09→18 BRT) e 15h da
+// noite para a manhã (18→09). Equalizar em 12h+12h exigiria rodar às 21 BRT, e a rodada
+// dispara notificação ao cliente — WhatsApp de boleto às nove da noite é pior que a
+// latência. As 15h caem inteiras na madrugada: boleto gerado depois das 18h é visto
+// às 09h, o que na prática é "de manhã".
 // Não reduzir abaixo de 2 sem antes filtrar quem é varrido (hoje varremos todo cliente
 // ativo, inclusive quem não tem parcela próxima do vencimento).
 
