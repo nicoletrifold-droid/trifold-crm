@@ -1,6 +1,6 @@
 {
   "story": "87-0",
-  "captured_at": "2026-08-19T17:05:24.773Z",
+  "captured_at": "2026-08-31T10:06:30.042Z",
   "org_id": "00000000-0000-0000-0000-000000000001",
   "source": {
     "table": "agent_prompts",
@@ -25,7 +25,7 @@
       "raw_sha256": "ef89ede4bd5e4ff1350d8c49a283166925e3cb5d49ee8624a3df5cbb7b5a15d0",
       "file": "guardrails.txt",
       "org_id": "00000000-0000-0000-0000-000000000001",
-      "captured_at": "2026-08-19T17:05:24.773Z"
+      "captured_at": "2026-08-31T10:06:30.042Z"
     },
     {
       "slug": "handoff-summary",
@@ -39,7 +39,7 @@
       "raw_sha256": "f54514cdd1ae5245cef97bd1d0bab3884a7ddb788fd24929599aa5be785542f8",
       "file": "handoff-summary.txt",
       "org_id": "00000000-0000-0000-0000-000000000001",
-      "captured_at": "2026-08-19T17:05:24.773Z"
+      "captured_at": "2026-08-31T10:06:30.042Z"
     },
     {
       "slug": "off-hours",
@@ -53,21 +53,21 @@
       "raw_sha256": "0aacca8f7e1e597b33e7065c950a07a75e1d72e3d73a16622a55935647662d3f",
       "file": "off-hours.txt",
       "org_id": "00000000-0000-0000-0000-000000000001",
-      "captured_at": "2026-08-19T17:05:24.773Z"
+      "captured_at": "2026-08-31T10:06:30.042Z"
     },
     {
       "slug": "property-presentation",
       "name": "Apresentacao de Empreendimentos",
       "type": "system",
       "is_active": true,
-      "updated_at": "2026-08-19T16:55:16.093766+00:00",
-      "char_count": 5265,
-      "sha256": "276ea4803b996d3841b904993992f12367a3546a4ee3d33275d06d9545fb34b2",
-      "raw_char_count": 5266,
-      "raw_sha256": "162025c7f202b22ba11d5ae12bca17f7b0c4dcc670119cc08aab567d86c78433",
+      "updated_at": "2026-08-31T10:06:25.201972+00:00",
+      "char_count": 5510,
+      "sha256": "bfaf26b019bb46937d72d39477fbb3e8cd2500a57908bbafe645fb49acfbb7ad",
+      "raw_char_count": 5511,
+      "raw_sha256": "a0d6338aa75963e8bb07b8e97fbee4dd308ebc85356273203973c9e390e600af",
       "file": "property-presentation.txt",
       "org_id": "00000000-0000-0000-0000-000000000001",
-      "captured_at": "2026-08-19T17:05:24.773Z"
+      "captured_at": "2026-08-31T10:06:30.042Z"
     },
     {
       "slug": "qualification-flow",
@@ -81,7 +81,7 @@
       "raw_sha256": "e114314a50a6bb6153011120e53f568ac9713b1354e8be49d801958cbc7c9f6d",
       "file": "qualification-flow.txt",
       "org_id": "00000000-0000-0000-0000-000000000001",
-      "captured_at": "2026-08-19T17:05:24.773Z"
+      "captured_at": "2026-08-31T10:06:30.042Z"
     },
     {
       "slug": "system-personality",
@@ -95,7 +95,7 @@
       "raw_sha256": "3d71bcd7b9632c3c1585b72ad98078bf52007d2fad25a26bcc6946499295d671",
       "file": "system-personality.txt",
       "org_id": "00000000-0000-0000-0000-000000000001",
-      "captured_at": "2026-08-19T17:05:24.773Z"
+      "captured_at": "2026-08-31T10:06:30.042Z"
     },
     {
       "slug": "visit-scheduling",
@@ -109,7 +109,7 @@
       "raw_sha256": "407f6bfa6211adcca3129faef63e3b1477e9886d4b51c6c2b2a291f8d9eee23b",
       "file": "visit-scheduling.txt",
       "org_id": "00000000-0000-0000-0000-000000000001",
-      "captured_at": "2026-08-19T17:05:24.773Z"
+      "captured_at": "2026-08-31T10:06:30.042Z"
     }
   ]
 }
