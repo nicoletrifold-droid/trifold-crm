@@ -500,6 +500,66 @@ describe("logOrgUnresolved", () => {
     })
   })
 
+  /**
+   * Story 900-55 · AC1 — o NÍVEL é `error` no motivo novo, e continua `warn` nos outros.
+   *
+   * Os dois sentidos são obrigatórios. Só o primeiro passaria verde sob a mutação "devolver
+   * sempre `error`", que apagaria a distinção inteira: um alerta que dispara em todo webhook de
+   * empresa não configurada é ruído, e ruído é a forma mais barata de tornar o sinal deste ramo
+   * inútil justamente no minuto em que ele importa.
+   *
+   * As strings de nível estão escritas como LITERAL aqui, nunca derivadas de `nivelDoMotivo` —
+   * uma régua que monta o esperado a partir da fonte que testa não reprova a fonte.
+   */
+  it("motivo `legado_ambiguo_novo_resolveu` sobe o evento para `error`", async () => {
+    await logOrgUnresolved({
+      receptor: "whatsapp",
+      motivo: "legado_ambiguo_novo_resolveu",
+      quantidadeEncontrada: 1,
+      identificador: { phone_number_id: "PNID-A" },
+      webhookLogsSource: "whatsapp",
+    })
+    expect(logEventOnceMock.mock.calls[0]![0]).toMatchObject({
+      level: "error",
+      event_type: "WEBHOOK_ORG_UNRESOLVED",
+      metadata: { motivo: "legado_ambiguo_novo_resolveu", quantidade_encontrada: 1 },
+    })
+  })
+
+  it.each(["nenhuma_correspondencia", "ambigua", "erro_consulta"] as const)(
+    "motivo `%s` continua em `warn` — o `error` não é o novo default",
+    async (motivo) => {
+      await logOrgUnresolved({
+        receptor: "whatsapp",
+        motivo,
+        quantidadeEncontrada: 0,
+        webhookLogsSource: "whatsapp",
+      })
+      expect(logEventOnceMock.mock.calls[0]![0]).toMatchObject({
+        level: "warn",
+        metadata: { motivo },
+      })
+    },
+  )
+
+  /**
+   * O `processing_error` de `webhook_logs` carrega o motivo cru (`org_unresolved:<motivo>`) — é
+   * por ele que a marca do incidente aparece na tabela que o cron `meta-leads-retry` lê, e não só
+   * em `system_events`.
+   */
+  it("`webhook_logs.processing_error` carrega o motivo novo, não o antigo", async () => {
+    await logOrgUnresolved({
+      receptor: "whatsapp",
+      motivo: "legado_ambiguo_novo_resolveu",
+      quantidadeEncontrada: 1,
+      identificador: { phone_number_id: "PNID-A" },
+      webhookLogsSource: "whatsapp",
+    })
+    const payload = adminEscritas.find((e) => e.tabela === "webhook_logs")!
+      .payload as Record<string, unknown>
+    expect(payload.processing_error).toBe("org_unresolved:legado_ambiguo_novo_resolveu")
+  })
+
   it("grava `webhook_logs` com org_id NULL e o `processing_error` nomeado", async () => {
     await logOrgUnresolved({
       receptor: "meta_ads",

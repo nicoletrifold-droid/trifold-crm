@@ -160,9 +160,17 @@ export async function processMetaLead(
             orgId: legado,
             divergiu: novo.status === "resolvida" ? novo.orgId !== legado : null,
           })
+        } else if (novo.status === "resolvida") {
+          // Story 900-55 · AC1 — mesmo ramo que mentia no árbitro do WhatsApp, mesma correção.
+          //
+          // Legado nulo (`.single()` em `whatsapp_config` com 0 OU 2+ linhas ativas) E o
+          // `page_id` do payload resolvendo uma org em `org_integrations`. O motivo antigo
+          // (`"nenhuma_correspondencia"`) descrevia o oposto do que aconteceu.
+          motivoNaoResolvida = "legado_ambiguo_novo_resolveu"
+          quantidadeEncontrada = 1
         } else {
-          motivoNaoResolvida = novo.status === "nao_resolvida" ? novo.motivo : "nenhuma_correspondencia"
-          quantidadeEncontrada = novo.status === "nao_resolvida" ? novo.quantidadeEncontrada : 0
+          motivoNaoResolvida = novo.motivo
+          quantidadeEncontrada = novo.quantidadeEncontrada
         }
       } else if (legado) {
         orgId = legado

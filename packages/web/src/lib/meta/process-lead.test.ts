@@ -556,3 +556,106 @@ describe("Story 900-24 — dual-run em process-lead", () => {
     expect(escritasCompletadas).toHaveLength(1)
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Story 900-55 · AC1 — o mesmo ramo que mentia, no árbitro do `meta_ads`
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+//
+// Aqui o legado é `legacyResolveActiveOrgId`, que faz `.single()` em `whatsapp_config` — com 0 OU
+// 2+ linhas ativas ele recebe `PGRST116` e o `error` morre na desestruturação. Duas empresas
+// ativas produzem esse estado, e nele TODO lead pago do Meta é descartado.
+//
+// `resolveOrgByMetaPageMock` fica sem implementação de propósito: o resolver REAL roda contra a
+// fila do fake, então a asserção mede a cadeia inteira (`org_integrations` → `ResolucaoOrg` →
+// árbitro), não o retorno de um duplo montado no próprio teste.
+describe("Story 900-55 — AC1 em process-lead: legado ambíguo + page_id que resolve", () => {
+  const ENV_ORIGINAL = process.env.WEBHOOK_ORG_ROUTING
+
+  afterEach(() => {
+    resolveOrgByMetaPageMock.mockReset()
+    if (ENV_ORIGINAL === undefined) delete process.env.WEBHOOK_ORG_ROUTING
+    else process.env.WEBHOOK_ORG_ROUTING = ENV_ORIGINAL
+  })
+
+  /** `.single()` com 2 linhas `status='active'`: o que o PostgREST devolve, e o legado descarta. */
+  function legadoAmbiguo() {
+    queues.whatsapp_config = [
+      {
+        data: null,
+        error: {
+          code: "PGRST116",
+          message: "JSON object requested, multiple (or no) rows returned",
+        },
+      },
+    ]
+  }
+
+  function eventoUnresolved() {
+    return escritasCompletadas.find(
+      (e) => (e as { event_type?: string }).event_type === "WEBHOOK_ORG_UNRESOLVED",
+    ) as { level?: string; metadata?: Record<string, unknown> } | undefined
+  }
+
+  it("page_id conhecido ⇒ motivo `legado_ambiguo_novo_resolveu` em `error`", async () => {
+    process.env.WEBHOOK_ORG_ROUTING = "both"
+    legadoAmbiguo()
+    queues.org_integrations = [{ data: [{ org_id: "org-A" }], error: null }]
+
+    const result = await processMetaLead("111", value, entry, "log-1")
+
+    // Comportamento inalterado: em `both` o legado decide, e ele não decidiu nada.
+    expect(result.ok).toBe(false)
+    expect(calls.find((c) => c.table === "leads" && c.insert)).toBeUndefined()
+
+    expect(logOrgUnresolvedSpy).toHaveBeenCalledTimes(1)
+    expect(logOrgUnresolvedSpy.mock.calls[0]![0]).toMatchObject({
+      receptor: "meta_ads",
+      motivo: "legado_ambiguo_novo_resolveu",
+      quantidadeEncontrada: 1,
+      identificador: { page_id: "page-1" },
+    })
+    expect(eventoUnresolved()).toMatchObject({
+      level: "error",
+      metadata: { motivo: "legado_ambiguo_novo_resolveu", receptor: "meta_ads" },
+    })
+  })
+
+  /**
+   * O sentido inverso: mesma ambiguidade no legado, mas nenhuma linha `org_integrations` casa o
+   * `page_id`. O motivo tem de voltar a `nenhuma_correspondencia`, em `warn` — é o que reprova a
+   * mutação "emitir sempre o motivo novo quando o legado for nulo".
+   */
+  it("page_id SEM linha correspondente ⇒ `nenhuma_correspondencia` em `warn`", async () => {
+    process.env.WEBHOOK_ORG_ROUTING = "both"
+    legadoAmbiguo()
+    queues.org_integrations = [{ data: [], error: null }]
+
+    await processMetaLead("111", value, entry, "log-1")
+
+    expect(logOrgUnresolvedSpy.mock.calls[0]![0]).toMatchObject({
+      motivo: "nenhuma_correspondencia",
+      quantidadeEncontrada: 0,
+    })
+    expect(eventoUnresolved()).toMatchObject({ level: "warn" })
+  })
+
+  /**
+   * Terceiro sentido: o resolver novo devolve `ambigua` (dois `page_id` iguais em orgs
+   * diferentes). Não é o ramo novo — o motivo do RESOLVER continua sendo repassado intacto.
+   */
+  it("resolver novo `ambigua` ⇒ o motivo dele é repassado, não substituído", async () => {
+    process.env.WEBHOOK_ORG_ROUTING = "both"
+    legadoAmbiguo()
+    queues.org_integrations = [
+      { data: [{ org_id: "org-A" }, { org_id: "org-B" }], error: null },
+    ]
+
+    await processMetaLead("111", value, entry, "log-1")
+
+    expect(logOrgUnresolvedSpy.mock.calls[0]![0]).toMatchObject({
+      motivo: "ambigua",
+      quantidadeEncontrada: 2,
+    })
+    expect(eventoUnresolved()).toMatchObject({ level: "warn" })
+  })
+})

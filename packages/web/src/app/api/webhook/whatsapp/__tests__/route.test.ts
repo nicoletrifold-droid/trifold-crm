@@ -263,6 +263,25 @@ function newId(prefix: string): string {
 }
 
 import { normalizePhoneBR } from "@trifold/shared"
+/**
+ * Story 900-55 · AC1 — os terminais singulares deste fake passam a ser os MESMOS do fake fiel da
+ * 900-24 (`lib/tenancy/__fixtures__/fake-supabase-postgrest.ts`), em vez de uma segunda
+ * implementação que diverge dele.
+ *
+ * O `maybeSingle()` local devolvia `linhas[0] ?? null` com `error: null` — ou seja, com DUAS
+ * linhas `whatsapp_config` ativas ele respondia "achei a primeira". Sob esse fake, o defeito que
+ * esta story existe para tornar audível é **insatisfazível**: `legacyResolveActiveConfig` nunca
+ * devolveria `null`, o ramo `else` do modo `both` nunca seria alcançado, e um teste do motivo
+ * novo ficaria vermelho por causa do instrumento — ou, pior, verde medindo outra coisa.
+ *
+ * Comportamento real (medido na 900-24 contra `@supabase/postgrest-js@2.101.1` e contra o
+ * PostgREST do `trifold-crm-dev`): `.maybeSingle()` erra com 2+ linhas; `.single()` erra com 0 ou
+ * 2+. `PGRST116`/406, `data: null`.
+ */
+import {
+  resultadoMaybeSingle,
+  resultadoSingular,
+} from "@web/lib/tenancy/__fixtures__/fake-supabase-postgrest"
 
 /** Story 87-20 — todo `.select()` executado, com a lista LITERAL de colunas. */
 let selectsPorTabela: Array<{ table: string; cols: string | null }> = []
@@ -433,23 +452,18 @@ function buildSupabaseMock() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       single(): Promise<any> {
         return execute().then((res) => {
-          if (!res.data || (Array.isArray(res.data) && res.data.length === 0)) {
-            return { data: null, error: { code: "PGRST116", message: "no rows" } }
-          }
-          return {
-            data: Array.isArray(res.data) ? res.data[0] : res.data,
-            error: null,
-          }
+          if (res.error) return { data: null, error: res.error }
+          if (!Array.isArray(res.data)) return { data: res.data ?? null, error: null }
+          return resultadoSingular(res.data as Record<string, unknown>[])
         })
       },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       maybeSingle(): Promise<any> {
-        return execute().then((res) => ({
-          data: Array.isArray(res.data)
-            ? res.data[0] ?? null
-            : res.data ?? null,
-          error: res.error ?? null,
-        }))
+        return execute().then((res) => {
+          if (res.error) return { data: null, error: res.error }
+          if (!Array.isArray(res.data)) return { data: res.data ?? null, error: null }
+          return resultadoMaybeSingle(res.data as Record<string, unknown>[])
+        })
       },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       then(onFulfilled: (v: any) => unknown, onRejected?: (e: unknown) => unknown) {
@@ -1857,5 +1871,246 @@ describe("Story 87-20 — trava de loop bot-a-bot no webhook", () => {
         expect(JSON.stringify(grito!.metadata)).toContain(ERRO_DE_LEITURA)
       })
     })
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Story 900-55 · AC1 — o carrasco do ramo de diagnóstico que MENTE
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+//
+// Estado reproduzido: DUAS linhas `whatsapp_config` com `status='active'`, em orgs distintas —
+// exatamente o que a primeira empresa cliente cria no minuto em que o WhatsApp dela é cadastrado,
+// e exatamente o que os índices únicos da migration 246 PERMITEM (são por telefone e por org,
+// nunca globais).
+//
+// Sob esse estado, `legacyResolveActiveConfig` (`.eq("status","active").maybeSingle()`, sem filtro
+// de telefone) recebe `PGRST116`/406, o `error` morre na desestruturação `const { data }`, e
+// `legado` vem `null`. No modo `both` o `else` NÃO cai para o resolver novo: a mensagem das duas
+// empresas é descartada com `200 {status:"ok"}`.
+//
+// Estes testes NÃO mudam esse comportamento — em `both` quem decide continua sendo o legado
+// (invariante da 900-24, com carrasco próprio logo acima). Eles medem a única coisa que a 900-55
+// muda antes do corte: **o que o sistema DIZ nesse minuto.**
+//
+// `resolveOrgByWhatsAppPhoneMock` fica sem implementação de propósito — o resolver REAL roda
+// contra o fake do banco, senão o teste mediria o próprio mock.
+describe("Story 900-55 — AC1: o motivo deixa de mentir quando o legado é ambíguo", () => {
+  const APP_SECRET = "test-secret"
+  const ENV_ORIGINAL = process.env.WEBHOOK_ORG_ROUTING
+
+  beforeEach(() => {
+    db = freshDb()
+    nextId = 0
+    logEventMock.mockClear()
+    logEventOnceMock.mockClear()
+    logOrgUnresolvedSpy.mockClear()
+    geracaoDoTeste++
+    escritasCompletadas = []
+    fetchMock.mockClear()
+    coachMock.mockClear()
+    coachMock.mockResolvedValue(undefined)
+    resolveOrgByWhatsAppPhoneMock.mockReset()
+    process.env.META_APP_SECRET = APP_SECRET
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "http://localhost"
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "test-key"
+    process.env.META_WHATSAPP_VERIFY_TOKEN = "verify"
+  })
+
+  afterEach(() => {
+    if (ENV_ORIGINAL === undefined) delete process.env.WEBHOOK_ORG_ROUTING
+    else process.env.WEBHOOK_ORG_ROUTING = ENV_ORIGINAL
+  })
+
+  /** A segunda empresa. `freshDb()` já traz `org-1`/`PNID` ativa. */
+  function cadastrarSegundaEmpresa() {
+    db.whatsapp_config.push({
+      org_id: "org-2",
+      phone_number_id: "PNID-2",
+      access_token: "TOKEN-2",
+      coexistence_enabled: false,
+      status: "active",
+    })
+  }
+
+  function eventoUnresolved() {
+    return escritasCompletadas.find(
+      (e) => (e as { event_type?: string }).event_type === "WEBHOOK_ORG_UNRESOLVED",
+    ) as { level?: string; metadata?: Record<string, unknown> } | undefined
+  }
+
+  it("2 empresas ativas + telefone conhecido ⇒ motivo `legado_ambiguo_novo_resolveu` em `error`", async () => {
+    process.env.WEBHOOK_ORG_ROUTING = "both"
+    cadastrarSegundaEmpresa()
+    const { POST } = await import("../route")
+
+    const res = await POST(
+      signedRequest(
+        buildPayloadComTelefone({
+          from: "+5544999680055",
+          wamid: "wamid.AC1-AMBIGUO",
+          text: "oi",
+          phoneNumberId: "PNID",
+        }),
+        APP_SECRET,
+      ),
+    )
+    await flushAsync()
+
+    // O comportamento de hoje, nomeado em vez de suposto: 200 e mensagem descartada.
+    expect(res.status).toBe(200)
+    expect(db.leads).toHaveLength(0)
+    // O legado não decidiu nada — se tivesse decidido, haveria `WEBHOOK_ORG_RESOLVED`.
+    expect(
+      logEventMock.mock.calls.filter(
+        (c) => (c[0] as { event_type?: string }).event_type === "WEBHOOK_ORG_RESOLVED",
+      ),
+    ).toHaveLength(0)
+
+    // O que a 900-55 muda: o motivo que o árbitro PASSA, olhado no objeto real do call site.
+    expect(logOrgUnresolvedSpy).toHaveBeenCalledTimes(1)
+    expect(logOrgUnresolvedSpy.mock.calls[0]![0]).toMatchObject({
+      receptor: "whatsapp",
+      motivo: "legado_ambiguo_novo_resolveu",
+      quantidadeEncontrada: 1,
+      identificador: { phone_number_id: "PNID" },
+    })
+
+    // E o evento que a produção emite nesse minuto — nível incluído.
+    expect(eventoUnresolved()).toMatchObject({
+      level: "error",
+      metadata: { motivo: "legado_ambiguo_novo_resolveu", receptor: "whatsapp" },
+    })
+  })
+
+  /**
+   * O SENTIDO INVERSO, sem o qual o teste acima é colinear.
+   *
+   * Mesma ambiguidade no banco (2 linhas ativas, legado igualmente nulo), mas o telefone do
+   * payload não pertence a nenhuma das duas — o resolver novo devolve `nao_resolvida`. O motivo
+   * tem de VOLTAR a `nenhuma_correspondencia`, em `warn`.
+   *
+   * É este teste que reprova a mutação "emitir sempre `legado_ambiguo_novo_resolveu` quando o
+   * legado for nulo": o discriminante do ramo é `novo.status === "resolvida"`, não "legado nulo".
+   */
+  it("2 empresas ativas + telefone DESCONHECIDO ⇒ volta a `nenhuma_correspondencia` em `warn`", async () => {
+    process.env.WEBHOOK_ORG_ROUTING = "both"
+    cadastrarSegundaEmpresa()
+    const { POST } = await import("../route")
+
+    await POST(
+      signedRequest(
+        buildPayloadComTelefone({
+          from: "+5544999680056",
+          wamid: "wamid.AC1-AMBIGUO-SEM-DONO",
+          text: "oi",
+          phoneNumberId: "PNID-DE-NINGUEM",
+        }),
+        APP_SECRET,
+      ),
+    )
+    await flushAsync()
+
+    expect(db.leads).toHaveLength(0)
+    expect(logOrgUnresolvedSpy.mock.calls[0]![0]).toMatchObject({
+      motivo: "nenhuma_correspondencia",
+      quantidadeEncontrada: 0,
+    })
+    expect(eventoUnresolved()).toMatchObject({
+      level: "warn",
+      metadata: { motivo: "nenhuma_correspondencia" },
+    })
+  })
+
+  /**
+   * O caso clássico continua clássico: nenhuma config ativa. O legado é nulo pela razão que o
+   * motivo antigo descrevia, e o motivo antigo é o certo aqui.
+   */
+  it("NENHUMA config ativa ⇒ `nenhuma_correspondencia` em `warn`, como sempre foi", async () => {
+    process.env.WEBHOOK_ORG_ROUTING = "both"
+    db.whatsapp_config = []
+    const { POST } = await import("../route")
+
+    await POST(
+      signedRequest(
+        buildPayloadComTelefone({
+          from: "+5544999680057",
+          wamid: "wamid.AC1-VAZIO",
+          text: "oi",
+          phoneNumberId: "PNID",
+        }),
+        APP_SECRET,
+      ),
+    )
+    await flushAsync()
+
+    expect(logOrgUnresolvedSpy.mock.calls[0]![0]).toMatchObject({
+      motivo: "nenhuma_correspondencia",
+    })
+    expect(eventoUnresolved()).toMatchObject({ level: "warn" })
+  })
+
+  /**
+   * Com UMA empresa só — o estado de produção HOJE — nada disso acontece: o legado resolve, o
+   * lead nasce, e `logOrgUnresolved` nem é chamado. Sem esta asserção, um bug que fizesse o
+   * árbitro cair no ramo de não-resolução SEMPRE passaria verde nos três testes acima.
+   */
+  it("com UMA empresa ativa nada muda — o legado resolve e o lead nasce", async () => {
+    process.env.WEBHOOK_ORG_ROUTING = "both"
+    const { POST } = await import("../route")
+
+    await POST(
+      signedRequest(
+        buildPayloadComTelefone({
+          from: "+5544999680058",
+          wamid: "wamid.AC1-UMA-SO",
+          text: "oi",
+          phoneNumberId: "PNID",
+        }),
+        APP_SECRET,
+      ),
+    )
+    await flushAsync()
+
+    expect(db.leads).toHaveLength(1)
+    expect(db.leads[0]!.org_id).toBe("org-1")
+    expect(logOrgUnresolvedSpy).not.toHaveBeenCalled()
+  })
+
+  /**
+   * O corte da 900-55, medido no mesmo dado que hoje derruba as duas empresas: em `identifier` o
+   * `phone_number_id` do payload roteia, e a mensagem chega à empresa dona do número — inclusive
+   * quando a dona é a SEGUNDA.
+   *
+   * Duas orgs num `it.each` porque um sentido só é colinear: com `phoneNumberId: "PNID"` fixo,
+   * a mutação "ignorar o telefone e pegar a primeira linha ativa" ficaria verde.
+   */
+  it.each([
+    ["PNID", "org-1"],
+    ["PNID-2", "org-2"],
+  ])("modo `identifier`: telefone %s roteia para %s, com as duas empresas ativas", async (
+    phoneNumberId,
+    orgEsperada,
+  ) => {
+    process.env.WEBHOOK_ORG_ROUTING = "identifier"
+    cadastrarSegundaEmpresa()
+    db.kanban_stages.push({ id: "stage-2", org_id: "org-2", is_default: true })
+    const { POST } = await import("../route")
+
+    await POST(
+      signedRequest(
+        buildPayloadComTelefone({
+          from: "+5544999680059",
+          wamid: `wamid.AC1-CORTE-${phoneNumberId}`,
+          text: "oi",
+          phoneNumberId,
+        }),
+        APP_SECRET,
+      ),
+    )
+    await flushAsync()
+
+    expect(logOrgUnresolvedSpy).not.toHaveBeenCalled()
+    expect(db.leads).toHaveLength(1)
+    expect(db.leads[0]!.org_id).toBe(orgEsperada)
   })
 })

@@ -465,9 +465,28 @@ export async function POST(request: NextRequest) {
           orgId: legado.org_id,
           divergiu: novo.status === "resolvida" ? novo.config.org_id !== legado.org_id : null,
         })
+      } else if (novo.status === "resolvida") {
+        // Story 900-55 · AC1 — O RAMO QUE MENTIA.
+        //
+        // Chegar aqui significa: o legado devolveu `null` E o resolver novo ACHOU a org deste
+        // `phone_number_id`. Com uma empresa só isso é impossível; com duas linhas
+        // `whatsapp_config` ativas é o caminho normal — `.maybeSingle()` devolve `PGRST116`/406,
+        // o `error` morre na desestruturação de `legacyResolveActiveConfig`, e a mensagem das
+        // DUAS empresas é descartada com 200.
+        //
+        // O ternário anterior registrava `"nenhuma_correspondencia"` aqui: mandava quem fosse
+        // depurar a queda procurar uma linha de config que ESTÁ no banco. O comportamento não
+        // muda (em `both` quem decide continua sendo o legado — invariante da 900-24); o que
+        // muda é que o único sinal emitido nesse minuto passa a apontar para o lugar certo, em
+        // nível `error`.
+        motivoNaoResolvida = "legado_ambiguo_novo_resolveu"
+        // O caminho novo achou EXATAMENTE uma (`resolveOrgByWhatsAppPhone` só devolve
+        // `resolvida` com `linhas.length === 1`). Quantas o legado viu é justamente o que o
+        // `.maybeSingle()` jogou fora — não há número honesto a reportar por ele.
+        quantidadeEncontrada = 1
       } else {
-        motivoNaoResolvida = novo.status === "nao_resolvida" ? novo.motivo : "nenhuma_correspondencia"
-        quantidadeEncontrada = novo.status === "nao_resolvida" ? novo.quantidadeEncontrada : 0
+        motivoNaoResolvida = novo.motivo
+        quantidadeEncontrada = novo.quantidadeEncontrada
       }
     } else if (legado) {
       config = legado
