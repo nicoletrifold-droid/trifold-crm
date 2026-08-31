@@ -321,6 +321,22 @@ async function main() {
   let totalNominal = 0
   let encontrados = 0
   const naoEncontrados: TituloOficial[] = []
+  /** Detalhe por título — consumido por `relatorio-conciliacao-financeiro.tsx`. */
+  const detalhe: Array<{
+    billReceivableId: number
+    documento: string
+    empreendimento: string
+    cliente: string
+    oficial: number
+    portalLiquido: number
+    portalNominal: number
+    valorBaixa: number
+    acrescimo: number
+    desconto: number
+    baixasComMotivo: number
+    bateRegraNova: boolean
+    bateRegraAntiga: boolean
+  }> = []
   const divergentesLiquido: Array<{
     t: TituloOficial
     p: LadoPortal
@@ -343,6 +359,21 @@ async function main() {
     if (Math.abs(p.nominal - t.rectoLiquido) > CENTAVO) {
       divergentesNominal.push(t.billReceivableId)
     }
+    detalhe.push({
+      billReceivableId: t.billReceivableId,
+      documento: t.documento,
+      empreendimento: t.empreendimento,
+      cliente: t.clienteNome,
+      oficial: t.rectoLiquido,
+      portalLiquido: p.liquido,
+      portalNominal: p.nominal,
+      valorBaixa: t.valorBaixa,
+      acrescimo: t.acrescimo,
+      desconto: t.desconto,
+      baixasComMotivo: t.baixasComMotivo,
+      bateRegraNova: Math.abs(delta) <= CENTAVO,
+      bateRegraAntiga: Math.abs(p.nominal - t.rectoLiquido) <= CENTAVO,
+    })
   }
 
   console.log("── Base ─────────────────────────────────────────────────")
@@ -415,6 +446,7 @@ async function main() {
             documento: t.documento,
             oficial: t.rectoLiquido,
           })),
+          detalhe,
         },
         null,
         2

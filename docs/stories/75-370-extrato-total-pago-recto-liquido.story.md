@@ -248,6 +248,7 @@ claude-opus-5[1m] (@dev / Dex) — modo YOLO
 | `docs/qa/gates/75-370-extrato-total-pago-recto-liquido.yml` | novo — gate CONCERNS → PASS |
 | `scripts/sienge-recto-liquido-check.ts` | novo — mede a identidade e os dois critérios contra a API |
 | `scripts/sienge-conciliar-extrato-pdf.ts` | novo — concilia o portal com o PDF oficial, título a título |
+| `packages/web/scripts/relatorio-conciliacao-financeiro.tsx` | novo — gera o PDF de conferência do financeiro a partir do JSON da conciliação |
 | `packages/web/src/lib/integrations/sienge/installments.ts` | `getCashReceiptValue` |
 | `packages/web/src/lib/integrations/sienge/client.ts` | agregado `receiptValue` pelo líquido + reexport + fix C1 no informe |
 | `packages/web/src/lib/integrations/sienge/types.ts` | comentários dos campos de baixa e do agregado |
@@ -268,4 +269,5 @@ claude-opus-5[1m] (@dev / Dex) — modo YOLO
 | 2026-08-31 | @dev | C1 corrigido (mensal do informe pelo mesmo helper) + teste de coerência; regressão completa verde |
 | 2026-08-31 | @qa | Re-review: C1 resolvido e coberto por teste com mutação → gate **PASS** |
 | 2026-08-31 | @devops | PR #538 mergeado (`7dd5bf59`), CI verde, deploy de produção → Done |
+| 2026-08-31 | @dev | Relatório da conciliação em PDF para o financeiro (`portal-sienge-fechamento-das-duas-decisoes.pdf`, 3 páginas), gerado a partir do JSON da conciliação — nenhum número digitado à mão |
 | 2026-08-31 | @qa | Conciliação final com os 89 títulos oficiais: 88/89 ao centavo (antes: 57/89); a única divergência é o adiantamento do CT.VIND-904, no valor exato da decisão Q2. Corrigidos os números do PR #538 (dupla contagem de títulos com dois titulares) |
