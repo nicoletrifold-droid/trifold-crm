@@ -99,6 +99,33 @@ export const DEFINICOES_DE_PROVIDER: Readonly<Record<ProviderDoPainel, Definicao
   },
 }
 
+/**
+ * Story 900-57 — o rótulo e o TOM de um status de tile, num lugar só.
+ *
+ * Nasceu dentro de `integrations-panel.tsx`, onde ficava certo enquanto o painel era a única
+ * tela que mostrava status de integração. A `900-57` acrescenta uma segunda superfície (o card
+ * "Integrações" do Resumo da empresa), e duas traduções do mesmo `status` são o começo de duas
+ * telas do console discordando sobre o mesmo fato — que é literalmente o defeito QA-900-51-2.
+ *
+ * Devolve TOM, não classe: verde e vermelho valem nas duas paletas, mas o neutro depende de qual
+ * escala a superfície usa (`stone` no CRM do cliente, `slate` no console). Quem sabe a escala é
+ * quem renderiza.
+ */
+export type TomDoStatus = "ok" | "erro" | "neutro"
+
+const ROTULO_DE_STATUS: Readonly<Record<string, { texto: string; tom: TomDoStatus }>> = {
+  connected: { texto: "Conectado", tom: "ok" },
+  active: { texto: "Conectado", tom: "ok" },
+  error: { texto: "Com erro", tom: "erro" },
+  disconnected: { texto: "Não conectado", tom: "neutro" },
+  inactive: { texto: "Não conectado", tom: "neutro" },
+}
+
+/** Status desconhecido aparece com o próprio nome e tom neutro — nunca como "conectado". */
+export function rotuloDeStatusDoTile(status: string): { texto: string; tom: TomDoStatus } {
+  return ROTULO_DE_STATUS[status] ?? { texto: status, tom: "neutro" }
+}
+
 export function ehProviderDoPainel(valor: string): valor is ProviderDoPainel {
   return (PROVIDERS_DO_PAINEL as readonly string[]).includes(valor)
 }
