@@ -3,7 +3,7 @@ import { SupabaseClient } from "@supabase/supabase-js"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import crypto from "crypto"
 import type { MediaBlock } from "@trifold/ai"
-import { logEvent } from "@web/lib/logger"
+import { logEvent, logEventOnce } from "@web/lib/logger"
 import { triggerAutomations } from "@web/lib/email-automations"
 import { notifyBrokerOfAppointment } from "@web/lib/broker/notify-appointment"
 import { notifyBrokerOnReply } from "@web/lib/broker/notify-on-reply"
@@ -14,6 +14,13 @@ import {
   resolveTakeoverAnchor,
 } from "@web/lib/broker/broker-takeover-status"
 import { normalizePhoneBR } from "@trifold/shared"
+// Story 87-20 — caminho PROFUNDO de propósito. `@trifold/ai` (o barrel) arrasta o SDK
+// da Anthropic e todos os flows; é exatamente por isso que o pipeline é carregado por
+// `await import()` lá embaixo, dentro do caminho assíncrono. Este módulo é puro e sem
+// dependências — importá-lo estaticamente não recria o custo que o dynamic import
+// existe para evitar. Reescrever a string aqui criaria uma segunda definição do mesmo
+// motivo, que diverge no primeiro typo.
+import { LOOP_BOT_HANDOFF_REASON } from "@trifold/ai/src/flows/loop-breaker"
 import type { WhatsAppReferral } from "@trifold/shared"
 import { buildCtwaMetadata } from "@web/app/api/webhook/whatsapp/ctwa-metadata"
 import { ehPedidoDeOptOut } from "@web/lib/followup/template-fallback"
@@ -1060,10 +1067,20 @@ export async function POST(request: NextRequest) {
         // por envio do corretor OU por agendamento da Nicole) e a última msg
         // `role='broker'`. Sem isso, um handoff por agendamento (lastBrokerAt=null)
         // reativaria a Nicole na mensagem seguinte e anularia o handoff.
-        const [{ data: convRow }, { data: lastBrokerMsg }] = await Promise.all([
+        const [
+          { data: convRow, error: erroConvRow },
+          { data: lastBrokerMsg },
+        ] = await Promise.all([
           supabase
             .from("conversations")
-            .select("handoff_at")
+            // Story 87-20 (AC14) — `handoff_reason` PRECISA estar na projeção.
+            // Sem ela, o guard logo abaixo lê `undefined` para sempre, a reativação
+            // nunca é pulada e a oscilação permanente que o AC14 existe para matar
+            // volta inteira — com o teste VERDE, se o fake devolver o campo
+            // independentemente da lista de colunas. É a mesma classe de defeito da
+            // consulta que alimenta os três sinais, na consulta que este próprio
+            // conserto introduziu. O carrasco está em `__tests__/route.test.ts`.
+            .select("handoff_at, handoff_reason")
             .eq("id", conversation!.id)
             .maybeSingle(),
           supabase
@@ -1081,7 +1098,60 @@ export async function POST(request: NextRequest) {
           lastBrokerMsg?.created_at ?? null
         )
 
-        if (shouldReactivateAi(anchor)) {
+        // Story 87-20 (AC14) — conversa contida pela trava de loop bot-a-bot NÃO
+        // reativa sozinha. Sem esta condição, reativar em 24h zera o contador da
+        // janela de 30 min do Sinal A: o outro bot volta a falar, a Nicole responde,
+        // repete 2×, bloqueia, e o ciclo recomeça — um alerta a cada 24h, para
+        // sempre. A conversa só volta por ação humana explícita (`resume-ai`).
+        //
+        // A condição entra AQUI, no chamador. `shouldReactivateAi` e
+        // `resolveTakeoverAnchor` (63-13/63-15) continuam puramente temporais e
+        // agnósticas ao motivo — nenhuma linha delas é tocada.
+        const contidaPorLoop = convRow?.handoff_reason === LOOP_BOT_HANDOFF_REASON
+
+        // CR-87-20-3 — o mesmo pecado da contenção, do lado do LEITOR.
+        //
+        // `conterLoop` deixou de chamar de sucesso o `UPDATE` que não conseguiu
+        // escrever. Aqui é a LEITURA cometendo o análogo: **não conseguir ler o
+        // motivo do handoff não é o mesmo que ter lido "não foi contida por
+        // loop"**. O PostgREST devolve `{ data: null, error }` — `convRow` fica
+        // `undefined` e `contidaPorLoop` vira `false` sozinho.
+        //
+        // E o estrago não para no AC14: `handoff_at` some junto, então
+        // `resolveTakeoverAnchor` devolve `null` e `shouldReactivateAi(null)` é
+        // `true` POR CONTRATO (63-13: "nunca houve corretor → reassume"). Um
+        // erro de leitura reativava a Nicole **incondicionalmente** — desfazendo
+        // a contenção do AC14 e a regra temporal de 63-13/63-15 na mesma linha,
+        // e devolvendo inteira a oscilação permanente que o AC14 existe para
+        // matar. Em silêncio.
+        //
+        // Reativar é a ação IRREVERSÍVEL; não reativar custa uma conversa parada
+        // até um humano olhar — e o evento abaixo é como ele fica sabendo.
+        const motivoDesconhecido = !!erroConvRow || !convRow
+
+        // Fail-closed que CALA troca um defeito por outro. O motivo do banco tem
+        // de APARECER, pela mesma razão que o grito da contenção que falhou teve
+        // de aparecer. `await` (e não o canal fire-and-forget) porque isto roda
+        // dentro do `after()` e a promise pendente morre com a lambda.
+        if (motivoDesconhecido) {
+          await logEventOnce({
+            level: "error",
+            category: "ai",
+            event_type: "NICOLE_REATIVACAO_ESTADO_DESCONHECIDO",
+            message:
+              "Estado de handoff ILEGIVEL — reativacao automatica de 24h NAO aplicada; a conversa segue pausada ate acao humana",
+            metadata: {
+              conversationId: conversation!.id,
+              erro: erroConvRow?.message ?? null,
+              linhaAusente: !convRow,
+              wamid: messageId,
+            },
+            source: "api/webhook/whatsapp",
+            org_id: orgId,
+          })
+        }
+
+        if (shouldReactivateAi(anchor) && !contidaPorLoop && !motivoDesconhecido) {
           // Reassume: limpa o handoff para não influenciar cálculos futuros.
           await supabase
             .from("conversations")
@@ -1177,7 +1247,11 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        const { processMessage, createAnthropicClient } = await import(
+        // Story 87-20 — `processMessageWithMetadata`, não o wrapper `processMessage`.
+        // O wrapper devolve só `.response` (uma string) e por isso não consegue
+        // carregar o sinal de bloqueio. Ele continua existindo e não muda: o Telegram
+        // (canal de staging) e dois arquivos de teste seguem usando.
+        const { processMessageWithMetadata, createAnthropicClient } = await import(
           "@trifold/ai"
         )
         // Story 73-1: injeta o push pro Google Calendar (mantém packages/ai desacoplado).
@@ -1195,7 +1269,7 @@ export async function POST(request: NextRequest) {
           text: asyncText,
         })
 
-        const response = await processMessage({
+        const { response, bloqueadoPorLoop } = await processMessageWithMetadata({
           supabase,
           anthropic,
           conversationId: conversation!.id,
@@ -1297,6 +1371,70 @@ export async function POST(request: NextRequest) {
             }
           },
         })
+
+        // ─── Story 87-20 · o turno foi contido por loop bot-a-bot ──────────────
+        //
+        // A contenção (`is_ai_active=false` + `handoff_reason`) já aconteceu dentro
+        // do `processMessageWithMetadata`, síncrona e aguardada. O que falta aqui é
+        // o RECIBO — e ele é a última escrita antes do response, no caminho em que
+        // o envio é pulado.
+        //
+        // Por isso `await logEventOnce` e não o `logEvent` do `onEvent` acima: o
+        // canal `emit()` → `onEvent` → `logEvent` é fire-and-forget, e numa lambda
+        // serverless a promise pendente morre com o processo. Isso já custou um
+        // evento em produção (o recibo `NICOLE_LASTRO_DIARIO` de 10/08). Um evento
+        // perdido aqui produz o pior estado possível: contido, silencioso e
+        // indistinguível de "funcionou e o admin não olhou o WhatsApp".
+        //
+        // O `return` pula o typing-delay, o envio e a mídia — o bloco abaixo não tem
+        // guarda de resposta vazia, e mandar `text.body: ""` faz a Graph API recusar.
+        // Mesmo padrão do `rajada_resposta_suprimida` logo acima.
+        if (bloqueadoPorLoop) {
+          // CR-87-20-2 — a contenção pode ter FALHADO, e as duas situações não podem
+          // sair com o mesmo texto. O recibo canônico continua sendo emitido nos dois
+          // casos (é ele que o cron `nicole-health` varre para alertar o admin com o
+          // link da conversa — AC10), mas ele agora DIZ qual dos dois foi.
+          const contida = bloqueadoPorLoop.contencao === "aplicada"
+
+          await logEventOnce({
+            level: "error",
+            category: "ai",
+            event_type: "NICOLE_LOOP_DETECTADO",
+            message: contida
+              ? `Loop bot-a-bot contido (${bloqueadoPorLoop.tipo}) — Nicole pausada nesta conversa`
+              : `Loop bot-a-bot detectado (${bloqueadoPorLoop.tipo}) — a CONTENCAO FALHOU: a Nicole segue ATIVA nesta conversa`,
+            metadata: {
+              ...bloqueadoPorLoop,
+              wamid: messageId,
+            },
+            source: "api/webhook/whatsapp",
+            org_id: orgId,
+          })
+
+          // E o grito. Evento PRÓPRIO, em nível de erro, com o motivo do banco: é o
+          // único estado desta story em que a máquina não resolveu o problema e um
+          // humano precisa ir pausar a conversa à mão. Sem `event_type` distinto ele
+          // ficaria indistinguível, numa consulta, de uma contenção que funcionou.
+          //
+          // Aguardado pelo mesmo motivo do recibo acima: é a última escrita antes do
+          // response e o canal fire-and-forget morre com a lambda.
+          if (!contida) {
+            await logEventOnce({
+              level: "error",
+              category: "ai",
+              event_type: "NICOLE_LOOP_CONTENCAO_FALHOU",
+              message: `Falha ao pausar a Nicole apos loop bot-a-bot (${bloqueadoPorLoop.tipo}) — pausar a mao`,
+              metadata: {
+                ...bloqueadoPorLoop,
+                wamid: messageId,
+              },
+              source: "api/webhook/whatsapp",
+              org_id: orgId,
+            })
+          }
+
+          return
+        }
 
         // Story 75-156 — atraso "humano" curto antes de enviar (teto 3s no
         // componente por caractere). Completa o efeito do "digitando…" iniciado

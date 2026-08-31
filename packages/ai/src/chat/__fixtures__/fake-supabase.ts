@@ -63,6 +63,19 @@ export function candidatoDeIsSlotFree(probe: FakeQueryProbe): Date | null {
 let idSeq = 0
 const nextId = () => `fake-${++idSeq}`
 
+/**
+ * Story 87-20 — lista de colunas de um `.select()`, ou `null` quando a forma não é
+ * uma projeção simples e o narrowing seria arriscado (`*`, embed `tabela(col)`,
+ * `alias:coluna`, operadores JSON `->>`).
+ */
+function parseProjecao(cols?: string): string[] | null {
+  if (!cols) return null
+  const partes = cols.split(",").map((c) => c.trim())
+  if (partes.length === 0) return null
+  if (partes.some((p) => !/^[a-z_][a-z0-9_]*$/i.test(p))) return null
+  return partes
+}
+
 /** `or("stage_id.is.null,stage_id.not.in.(a,b)")` — só as formas que o código usa. */
 function parseOr(expr: string): Pred {
   const parts = expr.split(/,(?![^()]*\))/)
@@ -112,11 +125,31 @@ class FakeQuery implements PromiseLike<FakeResult> {
   /** Story 87-18 — filtros aplicados, para o `failOn` distinguir uma consulta da outra. */
   private filters: Array<{ op: string; col: string; val: unknown }> = []
 
+  /**
+   * Story 87-20 — **as colunas do `.select()` são aplicadas de verdade.**
+   *
+   * O fake ignorava a lista e devolvia a linha inteira da fixture. Isso deixa passar,
+   * VERDE, a classe de defeito mais cara desta família de stories: um `select` que não
+   * projeta a coluna que o filtro logo abaixo consulta. `metadata?.is_transition` vira
+   * `undefined` para toda linha, a exclusão da fala do corretor vira no-op — e nenhum
+   * teste percebe, porque o fake entrega o campo de qualquer jeito. Foi assim que "o
+   * carrasco do `select` nasceu cego" na 900-23.
+   *
+   * `null` = sem narrowing (`select("*")`, agregados, ou embed `tabela(col)`): formas
+   * que este fake não modela, e narrowing errado seria pior que nenhum.
+   */
+  private colunas: string[] | null = null
+
+  /** O argumento literal do último `.select()` — para o teste afirmar a projeção. */
+  private selectRecebido: string | null = null
+
   constructor(
     private readonly store: Map<string, Row[]>,
     private readonly table: string,
     private readonly log: string[],
-    private readonly failOn?: FakeFailOn
+    private readonly failOn?: FakeFailOn,
+    /** Story 87-20 — projeções pedidas, para o teste afirmar o `.select()`. */
+    private readonly selects?: Array<{ table: string; cols: string | null }>
   ) {}
 
   private rows(): Row[] {
@@ -128,6 +161,9 @@ class FakeQuery implements PromiseLike<FakeResult> {
     if (this.mode === "select") this.mode = "select"
     if (_opts?.count) this.wantCount = true
     if (_opts?.head) this.headOnly = true
+    this.colunas = parseProjecao(_cols)
+    this.selectRecebido = _cols ?? null
+    this.selects?.push({ table: this.table, cols: this.selectRecebido })
     return this
   }
   eq(col: string, val: unknown) {
@@ -273,7 +309,19 @@ class FakeQuery implements PromiseLike<FakeResult> {
     return { ...this.shape(out), ...(this.wantCount ? { count: total } : {}) }
   }
 
-  private shape(rows: Row[]): FakeResult {
+  /** Story 87-20 — aplica a projeção do `.select()` (só em leitura; ver `colunas`). */
+  private projetar(rows: Row[]): Row[] {
+    if (this.mode !== "select" || this.colunas === null) return rows
+    const cols = this.colunas
+    return rows.map((r) => {
+      const out: Row = {}
+      for (const c of cols) if (c in r) out[c] = r[c]
+      return out
+    })
+  }
+
+  private shape(linhas: Row[]): FakeResult {
+    const rows = this.projetar(linhas)
     if (this.wantSingle) {
       // PostgREST devolve ERRO quando .single() não encontra linha — o código de
       // produção depende disso para cair nos defaults.
@@ -299,6 +347,13 @@ export interface FakeSupabase {
   table(name: string): Row[]
   /** Sequência de operações executadas ("insert:appointments", …). */
   calls: string[]
+  /**
+   * Story 87-20 — todo `.select()` executado, com a lista de colunas LITERAL. É a
+   * metade explícita do carrasco de projeção: a outra é o narrowing real em
+   * `projetar()`. Uma sozinha não basta — a asserção literal não prova que o código
+   * usa o que projetou, e o narrowing sozinho não diz QUAL consulta perdeu a coluna.
+   */
+  selects: Array<{ table: string; cols: string | null }>
 }
 
 export function createFakeSupabase(
@@ -309,14 +364,16 @@ export function createFakeSupabase(
   const store = new Map<string, Row[]>()
   for (const [t, rows] of Object.entries(seed)) store.set(t, rows.map((r) => ({ ...r })))
   const calls: string[] = []
+  const selects: Array<{ table: string; cols: string | null }> = []
 
   return {
-    from: (table: string) => new FakeQuery(store, table, calls, opts?.failOn),
+    from: (table: string) => new FakeQuery(store, table, calls, opts?.failOn, selects),
     rpc: async (name: string) => {
       calls.push(`rpc:${name}`)
       return { data: [], error: null }
     },
     table: (name: string) => store.get(name) ?? [],
     calls,
+    selects,
   }
 }

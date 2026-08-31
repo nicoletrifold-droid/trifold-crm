@@ -38,6 +38,18 @@ import { evaluateSlot, dayPartsToIso, isoToDayParts, checkSlotAvailability, reso
 import type { DayParts, DayPeriod } from "../flows/visit-slot"
 import { readAgendaState, writeAgendaState, stripLegacyAgendaKeys, buildAgendaState, isPendencia } from "../flows/agenda-state"
 import type { AgendaState } from "../flows/agenda-state"
+// Story 87-20 — a trava de loop bot-a-bot. As três funções são PURAS; quem carrega as
+// mensagens é `carregarMensagensRecentesDaNicole`, logo abaixo.
+import {
+  LOOP_BOT_HANDOFF_REASON,
+  LOOP_COUNT_WINDOW_MIN,
+  LOOP_REPEAT_WINDOW_MIN,
+  contarEnviosNaJanela,
+  detectarLoopDeConteudo,
+  detectarLoopDeEncerramento,
+  detectarLoopPorContagem,
+} from "../flows/loop-breaker"
+import type { MensagemRecente } from "../flows/loop-breaker"
 import { supportsSampling, textoDaResposta, ANTHROPIC_MODELS } from "../client/anthropic"
 import { loadMemoryContext } from "../memory/loader"
 import { processConversationTurn } from "../memory/writer"
@@ -488,6 +500,34 @@ export function resolvePropertyInterestWrite(input: {
   return null
 }
 
+/** Story 87-20 — qual dos três sinais conteve o turno. */
+export type TipoDeLoop = "conteudo_repetido" | "contagem_excessiva" | "encerramento"
+
+/**
+ * Story 87-20 (CR-87-20-2) — o `UPDATE` da contenção **pode falhar**, e o chamador
+ * precisa saber a diferença.
+ *
+ * O campo é OBRIGATÓRIO e discriminante de propósito. Enquanto a existência de
+ * `bloqueadoPorLoop` significava "contido", uma escrita que falhasse produzia o pior
+ * estado possível — e silencioso: o webhook gravava o recibo e o admin era avisado de
+ * que a Nicole tinha sido pausada, enquanto `is_ai_active` continuava `true` e
+ * `handoff_reason` vazio; o guard de reativação do AC14 não teria o que casar e a
+ * próxima mensagem do bot reiniciaria o loop. Reportar sucesso de uma escrita que não
+ * se verificou é exatamente o defeito que esta story existe para eliminar.
+ *
+ * Por que dentro de `bloqueadoPorLoop` e não num campo irmão: é `bloqueadoPorLoop` que
+ * faz o webhook PULAR o envio, e o envio tem de ser pulado nos dois casos — um turno
+ * em loop cuja contenção falhou é o último que deveria ganhar voz. Um campo separado
+ * abriria a possibilidade de um chamador tratar só um dos dois e mandar a fala.
+ *
+ * Por que campo obrigatório e não um booleano opcional: opcional tem default, e o
+ * default seria "deu certo" — a mesma mentira, agora com uma linha de tipo a mais.
+ */
+export type ResultadoDaContencao =
+  | { contencao: "aplicada" }
+  /** `erro` é a mensagem do PostgREST — é o que um humano lê para saber por onde ir. */
+  | { contencao: "falhou"; erro: string }
+
 export interface ProcessMessageResult {
   response: string
   handoff?: {
@@ -495,7 +535,67 @@ export interface ProcessMessageResult {
     reason?: string
     summary?: string
   }
+  /**
+   * Story 87-20 — o turno foi contido por loop bot-a-bot: a fala NÃO foi enviada e
+   * nenhum efeito colateral sobreviveu.
+   *
+   * Campo PRÓPRIO, e não reuso do `handoff` acima, de propósito. O `handoff` é
+   * populado de verdade (`:1919-1929`, a partir de `handoffResult.trigger`) para um
+   * propósito diferente — qualificação de lead pronta para o corretor. Hoje nenhum
+   * caller o lê; no dia em que alguém ligar essa leitura, um turno contido por loop
+   * seria interpretado como "lead qualificado". Um campo novo custa uma linha de tipo.
+   *
+   * `response: ""` sozinho seria uma sentinela in-band, indistinguível de uma geração
+   * que veio vazia — é este campo que o webhook lê para gravar `NICOLE_LOOP_DETECTADO`
+   * com `await` antes de responder.
+   */
+  bloqueadoPorLoop?: {
+    tipo: TipoDeLoop
+    ocorrencias: number
+    conversationId: string
+    leadId: string | null
+  } & ResultadoDaContencao
   qualificationScore: number
+}
+
+/**
+ * Story 87-20 — as mensagens que a Nicole já enviou nesta conversa dentro da janela.
+ *
+ * Consulta DEDICADA e por TEMPO, não o `loadConversationHistory`: aquele é por
+ * CONTAGEM (as 20 mais recentes) e está sob mudança ativa na Onda 1 deste epic —
+ * a trava precisa de "os últimos 30 minutos", que é outra pergunta.
+ *
+ * ⚠️ **`metadata` PRECISA estar na projeção.** Sem ela, `metadata?.is_transition === true`
+ * é `false` para toda linha, a exclusão da fala do corretor vira no-op silencioso e
+ * NENHUM teste da função pura consegue perceber — a chamada existe, o argumento foi
+ * neutralizado. É a mesma classe de defeito que já apareceu duas vezes nesta família
+ * de stories. O carrasco vive em `pipeline-loop-breaker.test.ts`.
+ */
+export async function carregarMensagensRecentesDaNicole(
+  supabase: SupabaseClient,
+  conversationId: string,
+  janelaMin: number,
+  now: Date
+): Promise<MensagemRecente[]> {
+  const desde = new Date(now.getTime() - janelaMin * 60_000).toISOString()
+  const { data, error } = await supabase
+    .from("messages")
+    .select("content, created_at, metadata")
+    .eq("conversation_id", conversationId)
+    .eq("role", "assistant")
+    .gte("created_at", desde)
+    .order("created_at", { ascending: true })
+
+  // Fail-OPEN só aqui: se a leitura falhar, a trava não arma — mas a conversa segue.
+  // Uma lista vazia nunca produz bloqueio (os três sinais precisam de ≥2 anteriores).
+  if (error || !data) return []
+
+  return (data as Array<Record<string, unknown>>).map((m) => ({
+    content: String(m.content ?? ""),
+    created_at: String(m.created_at ?? ""),
+    isTransition:
+      (m.metadata as Record<string, unknown> | null | undefined)?.is_transition === true,
+  }))
 }
 
 /**
@@ -620,6 +720,93 @@ export async function processMessageWithMetadata(
     .select("lead_id, org_id")
     .eq("id", conversationId)
     .single()
+
+  // ─── Story 87-20 · TRAVA DE LOOP BOT-A-BOT ────────────────────────────────
+  //
+  // O ponto é este e não outro. Entre o início desta função (:537) e o `return`
+  // antecipado dos Sinais A/C (perto do `detectSlotMismatch`) NÃO existe nenhuma
+  // escrita — as duas únicas (`saveMessages`/`updateConversationTimestamp`) estão no
+  // ramo de fora-de-horário, que tem `return` próprio antes de chegar aqui. Depois
+  // dali começam `createCalendarEvent`, `emit(APPOINTMENT_CREATED)` (que dá push ao
+  // corretor), quatro `activities.insert`, o avanço de estágio e o patch de `leads`.
+  // Bloquear "antes do saveMessages" (:1829) deixaria visita marcada no Google
+  // Calendar e corretor avisado por uma mensagem que o lead nunca recebeu.
+  //
+  // Por isso a contenção é um `return` ANTECIPADO e não uma flag consultada depois:
+  // o `return` cobre as ~15 escritas da janela por construção; "marca a flag e pula"
+  // cobriria as que alguém lembrou de listar.
+  const loopBreakerLigado = (process.env.NICOLE_LOOP_BREAKER_OFF ?? "") !== "1"
+  const agoraDoLoop = new Date()
+  const recentesDaNicole = loopBreakerLigado
+    ? await carregarMensagensRecentesDaNicole(
+        supabase,
+        conversationId,
+        // A MAIOR das três janelas: uma consulta serve os três sinais.
+        Math.max(LOOP_REPEAT_WINDOW_MIN, LOOP_COUNT_WINDOW_MIN),
+        agoraDoLoop
+      )
+    : []
+
+  /**
+   * Contenção síncrona e AGUARDADA, no mesmo padrão das outras escritas diretas desta
+   * função (`appointments`, `activities`, `lead_facts`) — não fire-and-forget.
+   *
+   * Os três campos são exatamente os que o handoff manual (`leads/[id]/handoff`) e o
+   * handoff por resposta do corretor (`send-message`) já gravam: sem migration.
+   *
+   * NÃO chama `emit()` de propósito. O canal `emit` → `onEvent` → `logEvent` do
+   * webhook é fire-and-forget, e no caminho bloqueado este evento é a ÚLTIMA escrita
+   * antes do response — exatamente o caso que o docstring do `logEvent` alerta para
+   * não usar (já custou um evento em produção). Quem grava é o webhook, com
+   * `await logEventOnce`, lendo `bloqueadoPorLoop`.
+   */
+  const conterLoop = async (
+    tipo: TipoDeLoop,
+    ocorrencias: number
+  ): Promise<ProcessMessageResult> => {
+    // CR-87-20-2 — o `error` do PostgREST é LIDO. Ele não rejeita a promise: devolve
+    // `{ data: null, error }`, e ignorá-lo fazia esta função reportar uma contenção
+    // que ela não verificou ter alcançado. Não é `try/catch`: engolir o erro e seguir
+    // reproduziria o mesmo defeito com mais linhas.
+    const { error: erroDaContencao } = await supabase
+      .from("conversations")
+      .update({
+        is_ai_active: false,
+        handoff_at: new Date().toISOString(),
+        handoff_reason: LOOP_BOT_HANDOFF_REASON,
+      })
+      .eq("id", conversationId)
+
+    // O turno segue suprimido nos DOIS casos — falha de contenção não é permissão
+    // para falar. O que muda é o que o chamador ouve: quem grita é o webhook, com
+    // `await logEventOnce` em nível de erro, porque um humano precisa ir pausar à mão.
+    return {
+      response: "",
+      bloqueadoPorLoop: {
+        tipo,
+        ocorrencias,
+        conversationId,
+        leadId: conversation?.lead_id ?? null,
+        ...(erroDaContencao
+          ? { contencao: "falhou" as const, erro: erroDaContencao.message }
+          : { contencao: "aplicada" as const }),
+      },
+      qualificationScore: 0,
+    }
+  }
+
+  // Sinal B (contagem) roda ANTES da chamada à Anthropic (AC15): ele não depende do
+  // texto candidato, e numa conversa que já vai ser contida a geração é só custo.
+  if (loopBreakerLigado && detectarLoopPorContagem({ recentes: recentesDaNicole, now: agoraDoLoop })) {
+    return await conterLoop(
+      "contagem_excessiva",
+      contarEnviosNaJanela({
+        recentes: recentesDaNicole,
+        now: agoraDoLoop,
+        janelaMin: LOOP_COUNT_WINDOW_MIN,
+      })
+    )
+  }
 
   // Story 87-8 (AC7) — é a `M3` do epic: sem este evento, *"0 ocorrências de
   // cauda errada"* seria uma promessa; com ele vira uma consulta.
@@ -1278,6 +1465,36 @@ export async function processMessageWithMetadata(
         raw_message: rawAssistantMessage.slice(0, 500),
       },
     })
+  }
+
+  // ─── Story 87-20 · Sinais A e C ───────────────────────────────────────────
+  //
+  // Aqui, e não depois: `assistantMessage` acabou de ser gerada e saneada, e NADA foi
+  // escrito ainda. O `return` antecipado é o requisito normativo do AC5 — ele cobre
+  // por construção as ~15 escritas que vêm depois (calendário, agenda, `activities`,
+  // avanço de estágio, push ao corretor, patch de `leads`, `saveMessages`,
+  // `updateConversationState`, `updateConversationTimestamp`).
+  //
+  // Fail-CLOSED, ao contrário do `detectSlotMismatch` logo abaixo (que só observa):
+  // esta trava existe justamente para interromper um envio.
+  if (loopBreakerLigado) {
+    const repeticao = detectarLoopDeConteudo({
+      candidato: assistantMessage,
+      recentes: recentesDaNicole,
+      now: agoraDoLoop,
+    })
+    if (repeticao.bloquear) {
+      return await conterLoop("conteudo_repetido", repeticao.ocorrenciasAnteriores)
+    }
+
+    const encerramento = detectarLoopDeEncerramento({
+      candidato: assistantMessage,
+      recentes: recentesDaNicole,
+      now: agoraDoLoop,
+    })
+    if (encerramento.bloquear) {
+      return await conterLoop("encerramento", encerramento.ocorrenciasAnteriores)
+    }
   }
 
   // Story 75-245 — guarda anti-alucinação de horário. FAIL-OPEN: só observa e
