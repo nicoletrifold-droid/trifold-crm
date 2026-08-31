@@ -262,6 +262,8 @@ paralelo é como se perde uma correção de segurança num merge. Se a assinatur
 | 2026-08-31 | 0.1 | Draft inicial — Frente 2 (Console) do pedido de 2026-08-31, Fase 1, entregas 1.1+1.6 combinadas. | @sm (River) |
 | 2026-08-31 | 0.2 | **Validada pelo @po (Pax) — GO, nota 7/10.** GO após correção do @po. Defeito corrigido: as ACs mandavam contar com `count: "exact", head: true`, inalcançável por `platformQuery()` (um só argumento em `.select()`), e agregados do PostgREST estão desligados (`PGRST123`). AC4 reescrita, AC9 nova (saturação declarada), Dev Notes de contagem substituída. Status Draft → Ready. | @po (Pax) |
 | 2026-08-31 | 0.3 | **Implementada.** Uma divergência medida contra a AC2: `/platform/trilha` **não existe** (medido: HTTP 404 no ambiente de teste, com sessão de platform admin), então o item "Trilha" nasce desabilitado como Cobrança e Uso, em vez de `<Link>`. Ver Dev Agent Record → "Divergência". Status Ready → Ready for Review. | @dev (Dex) |
+| 2026-08-31 | 0.4 | **Concerns do gate fechadas (QA-900-56-1/2/3/4).** As 4 consultas passam a LER o `error`: `ContagemDeclarada` ganha o terceiro estado `indisponivel`, `formatarContagem` devolve `—`, e o vazio de partida ("Nenhuma empresa ainda") só renderiza quando a consulta de `organizations` SUCEDEU. "N integrações conectadas" passa a herdar saturação de `org_integrations` **e** de `whatsapp_config`, e a contar por `rotuloDeStatusDoTile(...).tom === "ok"` — a tradução única de status, em vez de uma terceira. O predicado do período saiu do `page.tsx` para `ehNovaNoPeriodo()`, com carrasco de borda. 7 mutações novas, cada uma com `tsc --noEmit` rc=0 medido antes do vermelho. | @dev (Dex) |
+
 
 ## Dev Agent Record
 
@@ -363,5 +365,146 @@ zero linhas fora de `disconnected`, `whatsapp_config` de volta a `inactive`/`nul
 **Modificados**
 - `packages/web/src/app/platform/layout.tsx`
 
+### Fechamento das concerns do gate (rodada 2) — QA-900-56-1/2/3/4
+
+**QA-900-56-1 — o erro de consulta descartado.** As 4 leituras passaram a guardar a resposta
+inteira em vez de desestruturar só `data`. `leituraFalhou()` é fail-closed nos dois sinais: `error`
+não nulo **e** `data` nulo sem erro — "não consegui ler" e "li e não havia nada" são fatos
+diferentes, e só o segundo pode virar número. `ContagemDeclarada` ganhou o terceiro estado
+`indisponivel`, `formatarContagem` devolve `—`, e `indisponivel` **vence** `saturada`: sem leitura
+não há nem piso a declarar.
+
+A troca de assinatura de `contarComTeto` (booleano posicional → objeto `{ saturacaoHerdada,
+indisponivel }`) foi deliberada: com dois booleanos em sequência, trocar um pelo outro na chamada
+seria invisível na leitura e o `tsc` não teria como reprovar. E de fato o `type-check` reprovou o
+único call site antigo — o carrasco pegou a mudança antes de eu procurá-la.
+
+O vazio DE PARTIDA ("Nenhuma empresa ainda. Criar a primeira") virou o terceiro ramo: só renderiza
+quando a consulta de `organizations` SUCEDEU. E a seção "Precisa de você" passou a renderizar
+também quando alguma leitura falhou, mesmo com zero pendências — sumir com ela ali afirmaria "nada
+precisa de você", que é o mesmo zero com cara de medida por outro caminho.
+
+**QA-900-56-2 + QA-900-56-4, no mesmo lugar.** `conectadas` virou `ContagemDeclarada`, herdando
+`paginaSaturada(integracoes) || paginaSaturada(linhasWhatsApp)` e a indisponibilidade das duas
+leituras. O predicado passou a ser `rotuloDeStatusDoTile(t.status).tom === "ok"` — a tradução única
+que a `900-57` criou, em vez da terceira. **Declaro o limite:** esta linha específica não tem
+carrasco próprio, porque `page.tsx` é RSC e não há harness de render; o que tem carrasco é a função
+que ela agora chama (`providers.ts`) e o mecanismo de declaração (`console-visao-geral.ts`). O
+ganho é ter eliminado a duplicata, não ter provado o call site.
+
+**QA-900-56-3 — decidido: mover.** O conserto era exatamente mover a função, então não havia razão
+para declarar e seguir. `ehNovaNoPeriodo(org, corte)` foi para `console-visao-geral.ts` com 5 `it`
+cobrindo a borda exata, ±1 ms, o mesmo instante em outro fuso, carimbo impossível de parsear e a
+discriminação dos três períodos — que é justamente o que a tela não conseguiu discriminar.
+
+#### Mutações desta rodada — cada vermelho precedido de `tsc --noEmit` rc=0
+
+| # | mutação | tsc | resultado |
+|---|---|---|---|
+| m1 | `formatarContagem` sem o ramo `indisponivel` | rc=0 | 2 VERMELHOS |
+| m2 | `contarComTeto` filtra ANTES de checar `indisponivel` (o `valor` vaza) | rc=0 | 1 VERMELHO |
+| m3 | `leituraFalhou` só olha `error`, ignora `data` nulo | rc=0 | 1 VERMELHO |
+| m4 | `ehNovaNoPeriodo`: `>=` → `>` | rc=0 | 2 VERMELHOS |
+| m4b | `ehNovaNoPeriodo` compara STRING de data em vez de instante | rc=0 | 2 VERMELHOS |
+
+Harness fora da árvore: guarda os bytes, aborta se a mutação sair inerte, roda `tsc`, roda o alvo,
+restaura e confere `sha256`. Todas as restaurações conferiram.
+
+#### Correção de registro
+
+O relato da rodada 1 trocou dois rótulos, e o @qa está certo: **297 é o BASELINE**, não a árvore
+(a árvore daquela rodada tinha 299), e **3.934 é `passed`**, não o total (3.940 com os 6 xfail).
+Os números estavam certos; os rótulos, não.
+
+#### Réguas (rodada 2)
+
+| medição | valor |
+|---|---|
+| baseline da árvore real (sem os arquivos destas duas stories) | 297 arquivos · 3.934 `passed` · 6 xfail (3.940 total) |
+| árvore agora | **300 arquivos · 3.985 `passed` · 6 xfail (3.991 total)** · rc=0 |
+| delta | **+3 arquivos · +51 testes · xfail INALTERADO** |
+| `turbo lint --force` | rc=0 — 0 erros, 30 warnings, **nenhum** em arquivo desta leva |
+| `turbo type-check --force` | rc=0 — 8/8 |
+| `build` de `packages/web` | rc=0 — as 9 rotas de `/platform` registradas |
+
+O delta fecha por dois caminhos independentes: `3.985 − 3.934 = 51` e a soma dos três arquivos
+das stories (`console-paleta` 14 + `console-visao-geral` 32 + `linha-da-trilha` 5 = 51).
+
 ## QA Results
-_(Preenchido pelo @qa.)_
+
+### Gate: **CONCERNS** — @qa (Quinn), 2026-08-31
+**Arquivo:** `docs/qa/gates/900.56-navegacao-e-visao-geral-do-console.yml`
+**Base medida:** `b968387e` sobre `1393fa68`, na **árvore de trabalho real** (que carrega os 6
+arquivos não commitados da `900-55`, que não toquei).
+
+**Nenhum defeito vivo. Nenhuma regressão. Duas decisões contra a letra da AC, as duas certas.**
+
+#### Baseline e delta — resolvidos contra a árvore, não contra o CI
+| | arquivos | passed | xfail |
+|---|---|---|---|
+| árvore real (com a story) | **299** | **3966** | 6 |
+| os 2 arquivos da story sozinhos | 2 | 32 | — |
+| **baseline derivada** | **297** | **3934** | 6 |
+| **delta** | **+2** | **+32** | **inalterado** |
+
+Bate com o declarado. Dois rótulos estavam trocados no relato: os `297` são do **baseline**, não
+da árvore (a árvore tem 299), e `3.934` é a contagem de `passed`, não o total (3.940 com os 6
+xfail). Os números estão certos. A atribuição dos 32 ao trabalho da `900-55` fecha
+aritmeticamente (`3.902 + 32 = 3.934`) e é corroborada por **+11 blocos `it(` e 3 `it.each`
+novos** nos 3 arquivos de teste daquela frente.
+
+#### Mutações — todas com `tsc --noEmit` rc=0 medido ANTES do vermelho
+| # | mutação | tsc | resultado |
+|---|---|---|---|
+| q5 | `saturada` medida sobre o valor filtrado | rc=0 | 1 VERMELHO |
+| q6 | `diasDesdeOConvite` sempre pela org | rc=0 | 2 VERMELHOS |
+| q7 | `paginaSaturada`: `>=` → `>` | rc=0 | 2 VERMELHOS |
+| q10 | `normalizarPeriodo` vira passthrough | rc=0 | 1 VERMELHO |
+| q12 | `rotuloDoProvider` sem guarda | **rc=2** → remodelada com `!` → rc=0 | 1 VERMELHO |
+| q13 | `.from("leads")` cru em `app/platform/**` | rc=0 | 1 VERMELHO |
+
+A q12 na forma ingênua **não compila** (`noUncheckedIndexedAccess`): contar aquele vermelho sem
+olhar o `tsc` teria creditado ao teste um mérito que é do compilador.
+
+#### As duas decisões contra a letra
+- **"Trilha" desabilitada em vez de `<Link>` — CERTO.** `app/platform/trilha/page.tsx` não
+  existe e o `build` não registra a rota. A AC2 é internamente contraditória e o motivo escrito
+  nela ("em vez de linkar para uma rota que dá 404") é verificável; a letra, não.
+  *Nit:* o comentário do `layout.tsx` diz que a `900-59` "ainda não foi escrita" — ela existe na
+  árvore com **Status: Ready** (não commitada).
+- **"Integrações conectadas" por `montarTilesDoPainel()` — CERTO, e não hipotético.** Reproduzi a
+  aritmética (2 × 1) e fui além: **em produção, hoje**, `org_integrations` tem 6 linhas, **todas
+  `disconnected`**, e `whatsapp_config` tem **1 `active` com `phone_number_id`**. A contagem
+  literal diria "0 integrações conectadas" sobre uma empresa com o canal no ar. A QA-900-51-2 não
+  seria reintroduzida em tese — nasceria acesa na primeira renderização.
+
+#### Nenhum número inventado — conferido tela por tela
+Zero ocorrência de `R$` / `MRR` / receita / margem fora de comentário. Faixas 2 e 3 não
+renderizam. O único `0` literal renderizado é o `<code>0</code>` dentro da frase que explica por
+que não se exibe `0`. **7 dos 8 números da Visão geral declaram saturação** — o oitavo é a
+concern 2.
+
+#### Concerns (4, nenhuma bloqueante)
+| id | sev | o quê |
+|---|---|---|
+| QA-900-56-1 | média | As 4 consultas descartam `error`: uma falha de leitura vira "Empresas ativas: **0**" e o convite "Nenhuma empresa ainda. Criar a primeira". É a regra da AC9 por uma porta que a AC9 não enumera. Padrão pré-existente no repositório; primeira vez que vira número de manchete. |
+| QA-900-56-2 | média | `N integrações conectadas` é o único número sem declaração de saturação — e `org_integrations` é a **primeira** das 4 páginas a alcançar o teto (~200 empresas, contra 1.000 para `organizations`). A consulta não tem `order by`, então as empresas mais novas — as que a seção mostra — são as menos prováveis de sobreviver ao corte. |
+| QA-900-56-3 | baixa | O predicado do período decide um NÚMERO e mora no `page.tsx`, contra a regra que `console-visao-geral.ts` declara no próprio topo. Sem carrasco, e é o item que o @dev declara não ter discriminado na tela. |
+| QA-900-56-4 | baixa | `t.status === "connected" \|\| t.status === "active"` é uma **terceira** tradução de `status`, ao lado da que a `900-57` acabou de centralizar para eliminar exatamente isso. Uma linha: usar `rotuloDeStatusDoTile(...).tom === "ok"`. |
+
+#### Os 5 itens não provados na tela — meu julgamento
+Forma `≥ N`: **basta** (mutações q5 e q7 atacam por lados opostos). Classe "convite pendente":
+**basta** (4 testes, q6 mata em dois describes). Trilha com conteúdo: justificativa **correta** —
+`platform_audit_log` tem 0 linhas em produção **e** no teste, medido. Vazio de partida: é o item
+mais fraco, e não por si — é o mesmo ramo onde um erro de consulta aterrissa (QA-900-56-1).
+Discriminação de período: **não basta** → QA-900-56-3.
+
+#### Réguas
+`turbo lint --force` rc=0 (0 erros; 30 warnings, **nenhum** em arquivo desta story) ·
+`turbo type-check --force` rc=0, 8/8 · `build` de `packages/web` rc=0, 7 rotas de `/platform`
+registradas e **nenhuma** `/platform/trilha` · `platform-query.ts` **intocado**, conferido contra
+o commit e contra a árvore · teto de 1.000 **não morde nenhuma das 4 contagens hoje** (1, 5, 6 e
+1 linha em produção).
+
+**Merge liberado.** QA-900-56-1 e QA-900-56-2 antes do próximo PR que tocar esta tela.
+

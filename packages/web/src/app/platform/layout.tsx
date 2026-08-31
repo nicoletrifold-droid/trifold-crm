@@ -27,10 +27,12 @@ import { requirePlatformAdmin } from "@web/lib/tenancy/platform-guard"
  *     migrations.
  *   • `/platform/uso` → fase 2; depende do agregado `platform_org_usage_daily`, que não existe.
  *   • `/platform/trilha` → fase 1 do desenho (entrega 1.7), mas a rota NÃO existe nesta árvore:
- *     não há `app/platform/trilha/page.tsx`, e a story que a cria (`900-59`) ainda não foi
- *     escrita. A `900-57` diz isso com todas as letras ao mandar a aba de trilha da empresa
+ *     não há `app/platform/trilha/page.tsx`. A story que a cria é a `900-59`, que JÁ ESTÁ
+ *     ESCRITA (`docs/stories/900-59-trilha-de-plataforma.story.md`, Status `Ready`) e ainda não
+ *     implementada. A `900-57` diz isso com todas as letras ao mandar a aba de trilha da empresa
  *     apontar para si mesma "e **não** para `/platform/trilha` cross-org". Enquanto o arquivo
- *     não existir, um `<Link>` aqui seria exatamente o link morto que a AC2 existe para evitar.
+ *     não existir, um `<Link>` aqui seria exatamente o link morto que a AC2 existe para evitar —
+ *     quando a `900-59` entrar, este item vira `<Link href="/platform/trilha">`.
  */
 const ITENS_DA_NAVEGACAO: ReadonlyArray<{ rotulo: string; href: string | null }> = [
   { rotulo: "Visão geral", href: "/platform" },

@@ -33,15 +33,19 @@ import { deriveAdminInviteStatus } from "@web/lib/tenancy/admin-invite"
 import { now } from "@web/lib/time"
 import {
   montarTilesDoPainel,
+  rotuloDeStatusDoTile,
   type LinhaDeIntegracaoDoPainel,
   type LinhaWhatsAppConfig,
 } from "@web/lib/integrations/painel/providers"
 import {
+  CONTAGEM_INDISPONIVEL,
   PERIODOS_EM_DIAS,
   TETO_POSTGREST,
   contarComTeto,
+  ehNovaNoPeriodo,
   formatarContagem,
   inicioDoPeriodo,
+  leituraFalhou,
   normalizarPeriodo,
   paginaSaturada,
   pendenciasDeConvite,
@@ -80,11 +84,17 @@ export default async function VisaoGeralPage({
   // `created_at DESC` porque a seção "Entraram recentemente" (AC6) precisa das mais NOVAS. Com
   // ordem ascendente e a base crescendo, o corte de 1.000 linhas do PostgREST comeria justamente
   // as empresas que essa seção existe para mostrar.
-  const { data: orgsBrutas } = await platformQuery(
+  //
+  // O `error` das 4 consultas é LIDO, e não descartado (QA-900-56-1): o PostgREST devolve
+  // `{ data: null, error }` em falha, o `?? []` transformaria isso em página vazia, e a tela
+  // afirmaria "Empresas ativas: 0" — a mesma classe de mentira que a AC9 existe para impedir,
+  // por uma porta que a AC9 não enumera.
+  const respostaOrgs = await platformQuery(
     "organizations",
     "id, name, slug, is_active, created_at, admin_invite_email",
   ).order("created_at", { ascending: false })
-  const orgs = (orgsBrutas ?? []) as unknown as OrgDoConsole[]
+  const orgsFalhou = leituraFalhou(respostaOrgs)
+  const orgs = (respostaOrgs.data ?? []) as unknown as OrgDoConsole[]
 
   // Consulta DEDICADA e filtrada por `role`, pelo mesmo motivo de `orgs/page.tsx`: o número de
   // linhas `role='admin'` é limitado pelo número de orgs, não pelo total de usuários.
@@ -93,10 +103,11 @@ export default async function VisaoGeralPage({
   // o mesmo (REL-001): a org "Trifold" legada tem mais de uma linha `role='admin'`. Se a leitura
   // pegasse uma linha e o convite agisse sobre outra, o operador veria "convite pendente" e
   // receberia `400 NO_PENDING_INVITE` sem explicação possível na tela.
-  const { data: adminsBrutos } = await platformQuery("users", "org_id, id, auth_id, created_at")
+  const respostaAdmins = await platformQuery("users", "org_id, id, auth_id, created_at")
     .eq("role", "admin")
     .order("created_at", { ascending: true })
-  const linhasDeAdmin = (adminsBrutos ?? []) as unknown as LinhaDeAdmin[]
+  const adminsFalhou = leituraFalhou(respostaAdmins)
+  const linhasDeAdmin = (respostaAdmins.data ?? []) as unknown as LinhaDeAdmin[]
   const adminPorOrg = new Map<string, AdminDaOrg>()
   for (const a of linhasDeAdmin) {
     if (a.org_id && !adminPorOrg.has(a.org_id)) {
@@ -109,22 +120,24 @@ export default async function VisaoGeralPage({
   // pedida, porque esta tela não desenha "configurado / não configurado". Fica de fora também
   // para esta página NÃO entrar na lista de `nao-consumo.test.ts` (AC6 da 900-51) — quem entra
   // naquela lista deixa de acender a régua no dia em que passar a ler o cofre de verdade.
-  const { data: integracoesBrutas } = await platformQuery(
+  const respostaIntegracoes = await platformQuery(
     "org_integrations",
     "org_id, provider, status",
   )
-  const integracoes = (integracoesBrutas ?? []) as unknown as LinhaDeIntegracaoDoConsole[]
+  const integracoesFalhou = leituraFalhou(respostaIntegracoes)
+  const integracoes = (respostaIntegracoes.data ?? []) as unknown as LinhaDeIntegracaoDoConsole[]
 
   // QA-900-51-2, e é por isso que esta quarta consulta existe: para o WhatsApp, a linha de
   // `org_integrations` é ESTRUTURALMENTE inescrevível (CHECK `whatsapp_sem_identificador_proprio`
   // da migration 247) e fica `disconnected` para sempre. Contar "integrações conectadas" só por
   // ela diria "0 conectadas" sobre uma empresa cujo canal está no ar — que é literalmente o
   // defeito que a QA-900-51-2 encontrou em produção, numa tela nova.
-  const { data: waBrutas } = await platformQuery(
+  const respostaWhatsApp = await platformQuery(
     "whatsapp_config",
     "org_id, status, phone_number_id",
   )
-  const linhasWhatsApp = (waBrutas ?? []) as unknown as LinhaWhatsAppDoConsole[]
+  const whatsappFalhou = leituraFalhou(respostaWhatsApp)
+  const linhasWhatsApp = (respostaWhatsApp.data ?? []) as unknown as LinhaWhatsAppDoConsole[]
 
   // ── agrupamentos em memória (uma passada cada, sem N+1 de consulta) ───────────────────────
   const integracoesPorOrg = new Map<string, LinhaDeIntegracaoDoConsole[]>()
@@ -147,22 +160,38 @@ export default async function VisaoGeralPage({
   const nomePorOrg = new Map(orgs.map((o) => [o.id, o.name]))
 
   // ── FAIXA 1 — Operação (AC4) ─────────────────────────────────────────────────────────────
-  const empresasAtivas = contarComTeto(orgs, (o) => o.is_active)
-  const empresasInativas = contarComTeto(orgs, (o) => !o.is_active)
-  const novasNoPeriodo = contarComTeto(orgs, (o) => new Date(o.created_at) >= corteDoPeriodo)
-  const integracoesComErro = contarComTeto(integracoes, (l) => l.status === "error")
+  const declaracaoDeOrgs = { indisponivel: orgsFalhou }
+  const empresasAtivas = contarComTeto(orgs, (o) => o.is_active, declaracaoDeOrgs)
+  const empresasInativas = contarComTeto(orgs, (o) => !o.is_active, declaracaoDeOrgs)
+  const novasNoPeriodo = contarComTeto(
+    orgs,
+    (o) => ehNovaNoPeriodo(o, corteDoPeriodo),
+    declaracaoDeOrgs,
+  )
+  const integracoesComErro = contarComTeto(integracoes, (l) => l.status === "error", {
+    indisponivel: integracoesFalhou,
+  })
 
   const pendConvites = pendenciasDeConvite({ orgs, adminPorOrg, agora })
-  // Cruza DUAS páginas — basta uma ter chegado no teto para o número deixar de ser exato.
-  const convitesPendentes: ContagemDeclarada = {
-    valor: pendConvites.length,
-    saturada: paginaSaturada(orgs) || paginaSaturada(linhasDeAdmin),
-  }
+  // Cruza DUAS páginas — basta uma ter chegado no teto para o número deixar de ser exato, e
+  // basta uma ter FALHADO para não haver número.
+  const convitesPendentes: ContagemDeclarada = orgsFalhou || adminsFalhou
+    ? CONTAGEM_INDISPONIVEL
+    : {
+        valor: pendConvites.length,
+        saturada: paginaSaturada(orgs) || paginaSaturada(linhasDeAdmin),
+        indisponivel: false,
+      }
 
   // ── PRECISA DE VOCÊ (AC5) ────────────────────────────────────────────────────────────────
   const pendIntegracoes = pendenciasDeIntegracao({ integracoes, nomePorOrg })
   const pendencias = [...pendConvites, ...pendIntegracoes]
-  const listaIncompleta = convitesPendentes.saturada || integracoesComErro.saturada
+  const algumaLeituraFalhou = orgsFalhou || adminsFalhou || integracoesFalhou || whatsappFalhou
+  // "A lista pode estar incompleta" vale para as DUAS causas: página no teto e leitura que não
+  // voltou. E a seção precisa renderizar mesmo com zero pendências quando alguma leitura falhou
+  // — some-la ali afirmaria "nada precisa de você", que é o mesmo zero com cara de medida.
+  const listaIncompleta =
+    convitesPendentes.saturada || integracoesComErro.saturada || algumaLeituraFalhou
 
   // ── ENTRARAM RECENTEMENTE (AC6) ──────────────────────────────────────────────────────────
   const recentes = orgs.slice(0, 5).map((org) => {
@@ -176,7 +205,18 @@ export default async function VisaoGeralPage({
         adminInviteEmail: org.admin_invite_email,
         admin: adminPorOrg.get(org.id) ?? null,
       }),
-      conectadas: tiles.filter((t) => t.status === "connected" || t.status === "active").length,
+      // QA-900-56-4: a tradução `status → tom` é a MESMA de `providers.ts`, que a 900-57
+      // centralizou justamente para não haver duas telas do console discordando sobre o mesmo
+      // fato. Repetir `"connected" || "active"` aqui seria a terceira tradução.
+      //
+      // QA-900-56-2: era o único número da tela sem declaração, e vem da tabela que satura
+      // PRIMEIRO — `org_integrations` chega às 1.000 linhas por volta de 200 empresas, contra
+      // 1.000 empresas para `organizations`. Como a consulta não tem `order by`, as empresas
+      // mais novas (as que esta seção mostra) são as menos prováveis de sobreviver ao corte.
+      conectadas: contarComTeto(tiles, (t) => rotuloDeStatusDoTile(t.status).tom === "ok", {
+        saturacaoHerdada: paginaSaturada(integracoes) || paginaSaturada(linhasWhatsApp),
+        indisponivel: integracoesFalhou || whatsappFalhou,
+      }),
     }
   })
 
@@ -235,8 +275,10 @@ export default async function VisaoGeralPage({
         />
       </section>
 
-      {/* AC5 — sem pendência, a seção inteira não renderiza (nem o título). */}
-      {pendencias.length > 0 && (
+      {/* AC5 — sem pendência, a seção inteira não renderiza (nem o título). A exceção é a
+          leitura que falhou: aí "nenhuma pendência" não foi medido, e sumir com a seção
+          afirmaria que nada precisa de você. */}
+      {(pendencias.length > 0 || algumaLeituraFalhou) && (
         <section className="space-y-3">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
             Precisa de você
@@ -289,10 +331,18 @@ export default async function VisaoGeralPage({
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
           Entraram recentemente
         </h2>
-        {orgs.length === 0 ? (
+        {orgsFalhou ? (
+          // QA-900-56-1 — a leitura não voltou. "Nenhuma empresa ainda. Criar a primeira" aqui
+          // diria ao operador que o sistema está VAZIO, que é a afirmação mais forte da tela, e
+          // ela sairia de uma consulta que falhou. Três estados, não dois.
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-6 text-center text-sm text-amber-300">
+            Não foi possível ler a lista de empresas agora. Isto não quer dizer que não haja
+            nenhuma — recarregue a página.
+          </div>
+        ) : orgs.length === 0 ? (
           // Vazio DE PARTIDA (§5 do desenho): ainda não existe nada porque o produto é novo, e o
           // tratamento é convidar à primeira ação. Não é vazio filtrado — esta seção não tem
-          // filtro de período.
+          // filtro de período. Só chega aqui quando a consulta SUCEDEU e voltou zero linhas.
           <div className="rounded-xl border border-slate-800 px-4 py-8 text-center text-sm text-slate-400">
             Nenhuma empresa ainda.{" "}
             <Link href="/platform/orgs/new" className="font-semibold text-amber-400 hover:underline">
@@ -316,7 +366,10 @@ export default async function VisaoGeralPage({
                   {statusConvite === "none" && "sem admin"}
                 </span>
                 <span className="text-xs text-slate-400">
-                  {conectadas} {conectadas === 1 ? "integração conectada" : "integrações conectadas"}
+                  {formatarContagem(conectadas)}{" "}
+                  {conectadas.valor === 1 && !conectadas.saturada && !conectadas.indisponivel
+                    ? "integração conectada"
+                    : "integrações conectadas"}
                 </span>
               </li>
             ))}
@@ -359,8 +412,9 @@ function Card({
 function AvisoDeTeto() {
   return (
     <p className="rounded border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
-      Esta lista pode estar incompleta: uma das consultas voltou no teto de {TETO_POSTGREST}{" "}
-      linhas do PostgREST, então há pendências que o sistema não chegou a ver.
+      Esta lista pode estar incompleta: uma das consultas não voltou, ou voltou no teto de{" "}
+      {TETO_POSTGREST} linhas do PostgREST — em qualquer dos casos há pendências que o sistema não
+      chegou a ver.
     </p>
   )
 }

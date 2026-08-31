@@ -23,6 +23,14 @@
  * se ele é exato. Quando a página chegou no teto, o sistema não sabe o total — e `1000` seco
  * seria pior que `≥ 1000`, porque pareceria uma medida.
  *
+ * ## E o segundo jeito de o sistema não saber: a leitura que não voltou
+ *
+ * O PostgREST não lança em falha — devolve `{ data: null, error }`. Quem só desestrutura `data`
+ * transforma um timeout em `[]`, e `[]` vira `0` na tela. Um `0` nesta tela é uma AFIRMAÇÃO
+ * ("não há empresa ativa nenhuma"), e ela seria falsa pelo mesmo motivo que o `1000` seco seria:
+ * o sistema não mediu. Por isso {@link ContagemDeclarada} tem um TERCEIRO estado e
+ * {@link formatarContagem} devolve `—`. Ver {@link leituraFalhou}.
+ *
  * ⚠️ SATURAÇÃO É PROPRIEDADE DA PÁGINA, NÃO DA CONTAGEM. Se 1.000 orgs chegam e 3 estão
  * ativas, o `3` continua incerto — há 974 orgs que ninguém olhou. Por isso o predicado filtra o
  * VALOR e o tamanho da página decide a SATURAÇÃO, e nunca o contrário.
@@ -43,12 +51,40 @@ import { deriveAdminInviteStatus } from "@web/lib/tenancy/admin-invite"
  */
 export const TETO_POSTGREST = 1000
 
-/** Um número que sabe se é exato. Ver o comentário de topo. */
+/** Um número que sabe se é exato — e se existe. Ver o comentário de topo. */
 export interface ContagemDeclarada {
   /** Quantas linhas da página recebida casaram com o predicado. */
   valor: number
   /** `true` quando a página chegou NO teto: o total real pode ser maior e não foi medido. */
   saturada: boolean
+  /**
+   * `true` quando a LEITURA que alimentaria este número não voltou (QA-900-56-1).
+   *
+   * É o terceiro estado, e ele existe pelo mesmo motivo que `saturada`: `data` nulo vira `[]`
+   * pelo `?? []` da página, e uma falha de leitura viraria **"Empresas ativas: 0"** — um zero
+   * com cara de medida, na tela cuja regra é justamente não exibir número que o sistema não
+   * sabe. Vence `saturada`: se a consulta não voltou, não há nem piso a declarar.
+   */
+  indisponivel: boolean
+}
+
+/**
+ * A leitura de uma página do console falhou?
+ *
+ * Fail-closed nos DOIS sinais. O `error` explícito é o caso óbvio; `data` nulo sem `error` entra
+ * junto porque "não consegui ler" e "li e não havia nada" são fatos diferentes, e só o segundo
+ * pode virar número na tela. O PostgREST devolve `{ data: null, error }` em falha — não lança —
+ * então quem só desestrutura `data` não fica sabendo de nada.
+ */
+export function leituraFalhou(resposta: { data: unknown; error: unknown }): boolean {
+  return resposta.error != null || resposta.data == null
+}
+
+/** O que um card mostra quando a consulta que o alimentaria não voltou. */
+export const CONTAGEM_INDISPONIVEL: ContagemDeclarada = {
+  valor: 0,
+  saturada: false,
+  indisponivel: true,
 }
 
 /** A página recebida bateu no teto do PostgREST? */
@@ -57,25 +93,38 @@ export function paginaSaturada(pagina: readonly unknown[]): boolean {
 }
 
 /**
- * Conta as linhas que casam com `predicado`, declarando se o resultado é exato.
+ * Conta as linhas que casam com `predicado`, declarando se o resultado é exato — e se existe.
  *
  * `saturacaoHerdada` existe porque um card pode depender de DUAS páginas (ex.: "convites
  * pendentes" cruza `organizations` com as linhas de admin de `users`). Basta uma delas ter
- * chegado no teto para o número deixar de ser exato.
+ * chegado no teto para o número deixar de ser exato. `indisponivel` segue a mesma lógica de
+ * herança, um degrau acima: basta uma das leituras ter falhado para não haver número nenhum.
+ *
+ * A declaração vem em OBJETO e não em posicional de propósito: com dois booleanos seguidos,
+ * trocar um pelo outro na chamada é invisível na leitura e o `tsc` não teria como reprovar.
  */
 export function contarComTeto<T>(
   pagina: readonly T[],
   predicado: (linha: T) => boolean,
-  saturacaoHerdada = false,
+  declaracao: { saturacaoHerdada?: boolean; indisponivel?: boolean } = {},
 ): ContagemDeclarada {
+  if (declaracao.indisponivel) return CONTAGEM_INDISPONIVEL
   return {
     valor: pagina.filter(predicado).length,
-    saturada: saturacaoHerdada || paginaSaturada(pagina),
+    saturada: Boolean(declaracao.saturacaoHerdada) || paginaSaturada(pagina),
+    indisponivel: false,
   }
 }
 
-/** `"3"` quando o número é exato; `"≥ 3"` quando a página que o produziu veio no teto. */
+/**
+ * `"3"` quando o número é exato; `"≥ 3"` quando a página que o produziu veio no teto; `"—"`
+ * quando a consulta não voltou.
+ *
+ * A ordem dos testes é a ordem da ignorância: sem leitura não há nem piso, então `indisponivel`
+ * vence `saturada`.
+ */
 export function formatarContagem(contagem: ContagemDeclarada): string {
+  if (contagem.indisponivel) return "—"
   return contagem.saturada ? `≥ ${contagem.valor}` : String(contagem.valor)
 }
 
@@ -100,6 +149,25 @@ const UM_DIA_EM_MS = 24 * 60 * 60 * 1000
 /** O instante em que o período começa, para comparar com `organizations.created_at`. */
 export function inicioDoPeriodo(agora: Date, dias: number): Date {
   return new Date(agora.getTime() - dias * UM_DIA_EM_MS)
+}
+
+/**
+ * A empresa entrou na janela do período? (QA-900-56-3)
+ *
+ * Morava inline no `page.tsx`, contra a regra que o topo deste arquivo declara: decide o card
+ * "Novas no período" e não tinha carrasco nenhum — nem a borda, nem o parse. E é justamente o
+ * item que a tela não discrimina (as empresas do ambiente de teste nasceram há ≤ 2 dias, então
+ * 7, 30 e 90 devolvem as mesmas três).
+ *
+ * A borda é `>=`: nascer EXATAMENTE no instante do corte é estar dentro da janela — o rótulo diz
+ * "últimos N dias", e o instante N dias atrás é o primeiro da janela, não o último de fora.
+ *
+ * Carimbo impossível de parsear vira `NaN`, e `NaN >= x` é `false`: uma linha corrompida não
+ * infla o número. É o lado seguro — o card afirma "novas", e incluir o que não se sabe datar
+ * seria afirmar demais.
+ */
+export function ehNovaNoPeriodo(org: { created_at: string }, corte: Date): boolean {
+  return new Date(org.created_at).getTime() >= corte.getTime()
 }
 
 /** A linha de admin de uma org, como a Visão geral precisa dela. */
