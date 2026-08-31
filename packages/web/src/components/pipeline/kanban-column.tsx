@@ -35,12 +35,16 @@ interface KanbanColumnProps {
     creative?: CreativeData | null
     // Story 75-91: minutos aguardando atendimento
     waitingMinutes?: number | null
+    // Pipeline IMOB (2026-08-31): imobiliária parceira (só o board do IMOB traz)
+    imobiliaria_nome?: string | null
   }>
   totalCount?: number
   hasMore?: boolean
   loading?: boolean
   onLoadMore?: () => void
   onSelectLead?: (leadId: string) => void
+  /** Pipeline IMOB (2026-08-31): repassado ao LeadCard p/ a variante do IMOB. */
+  segmento?: string
 }
 
 export function KanbanColumn({
@@ -51,6 +55,7 @@ export function KanbanColumn({
   loading = false,
   onLoadMore,
   onSelectLead,
+  segmento,
 }: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: stage.id })
   const showTotal = typeof totalCount === "number" && totalCount > leads.length
@@ -94,6 +99,7 @@ export function KanbanColumn({
               propertyName={lead.properties?.name}
               brokerName={lead.users?.name}
               onSelect={onSelectLead}
+              segmento={segmento}
             />
           ))}
           {leads.length === 0 && (

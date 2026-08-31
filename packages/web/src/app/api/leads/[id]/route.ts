@@ -10,6 +10,8 @@ import { STAGE_IDS } from "@trifold/shared"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { syncFutureVisitsWithLeadOwner } from "@web/lib/appointments/sync-visit-owner"
 import { resolverNomesUtm } from "@web/lib/leads/meta-utm"
+import { fetchImobiliariaNomePorLead } from "@web/lib/imob/lead-imobiliaria"
+import { createOrgScopedAdminClient } from "@web/lib/supabase/org-scoped-admin"
 
 export async function GET(
   _req: NextRequest,
@@ -48,7 +50,22 @@ export async function GET(
     utm_content: (lead as { utm_content?: string | null }).utm_content ?? null,
   })
 
-  return NextResponse.json({ data: { ...lead, ...nomesUtm } })
+  // Pipeline IMOB (2026-08-31) — o drawer do lead IMOB mostra a imobiliária
+  // parceira ao lado do badge de origem ("Link Imob"). Só no mundo IMOB: no
+  // funil principal não existe parceira e a leitura extra seria desperdício.
+  // `imobiliarias` tem RLS sem policy (migration 131) → precisa de service-role,
+  // então vai pelo client ESCOPADO à org do usuário já autenticado (Story 900-14).
+  let imobiliariaNome: string | null = null
+  if ((lead as { segmento?: string | null }).segmento === "imob") {
+    const nomePorLead = await fetchImobiliariaNomePorLead(
+      createOrgScopedAdminClient(appUser.org_id),
+      appUser.org_id,
+      [id]
+    )
+    imobiliariaNome = nomePorLead.get(id) ?? null
+  }
+
+  return NextResponse.json({ data: { ...lead, ...nomesUtm, imobiliaria_nome: imobiliariaNome } })
 }
 
 export async function PATCH(
