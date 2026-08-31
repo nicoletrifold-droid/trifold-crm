@@ -582,6 +582,7 @@ verificado no código.
 | Data | Versão | Descrição | Autor |
 |------|--------|-----------|-------|
 | 2026-08-30 | 1.0 | Story criada a partir do incidente real (Nicole em loop com outro bot, contido manualmente). Números remedidos contra o banco (22/11, não 21/10). Desenho de dois sinais (repetição + contagem) calibrado com 203 conversas/14 dias e um controle negativo real. | @sm (River) |
+| 2026-08-30 | 1.12 | **Três itens de escopo fechado (@dev) — dois furos NA PRÓPRIA RÉGUA de higiene e uma contagem em que o gate se contradizia; nenhuma linha de código de produção, nenhum teste, nenhuma AC e nenhum veredito mudaram; gate segue `CONCERNS` não bloqueante.** Vêm da revisão COMPLETA do CodeRabbit no PR #535: 7 ressalvas, **nenhuma bloqueante**; 4 ficam declaradas, 3 fechadas. **Por que estes dois primeiros:** a régua é o instrumento com que **toda passada desta story desde a v1.5** declarou "0 valores distintos não triados", e vai ser reusada em outras stories — furo nela não é bug num teste, é a chance de que **todo verde que ela já deu** valha menos do que dissemos. É o **segundo defeito estrutural** achado nela em duas passadas: a v1.11 pegou que ela aprovava o **vazio**, esta pega que ela aprovava o **ilegível**. **(1) `\|\| true` mascarava erro de I/O:** `grep` devolve `0`=achou, `1`=não achou e **`≥2`=ERRO** (ilegível, permissão, I/O), e `\|\| true` engolia os três — varredura que **não conseguiu ler** saía **verde**, indistinguível de uma que leu e nada achou. É literalmente a classe que esta story persegue, dentro da ferramenta que a persegue. **`pipefail` NÃO resolve, e é mecânico:** em `grep A \| grep B` o `rc=2` do primeiro é encoberto pelo `rc=1` do último. Conserto: cada `grep` roda **sozinho**, com o `rc` lido por um invólucro que aborta em **`rc=5`** — e o invólucro é uma **função**, não subshell, porque o `\|\| true` mais óbvio morava dentro de `naotriados="$(… )"` e um `exit` ali mataria **só o subshell**: o conserto pareceria feito e não estaria. **(2) hex maiúsculo não casava:** R1/R2 buscavam `[0-9a-f]`, então a régua afirmava cobrir "token de 8 hex" e cobria **metade da classe**. Entrou `A-F` na busca — e a lista de triados ficou **ancorada em minúscula de propósito**: extrator largo + comparação **estrita** falha FECHADO (acusa a forma em caixa alta), normalizar a caixa reabriria na triagem o buraco que o `A-F` fechou na busca. **Controles positivos medidos, ANTIGA × NOVA, um por furo — e o código furado SAIU do registro** (forma exata em `dce61e72`, como na aposentadoria anterior): alvo com a forma em **CAIXA ALTA** de `aa584dfb` (reconstruível por `printf 'aa584dfb' \| tr 'a-f' 'A-F'`, **não instanciada** aqui para não pôr valor não triado na árvore) — antiga **`rc=0`** e `0 valores distintos NÃO TRIADOS` (**cega**), nova **acusa**; alvo **ilegível** (existe, passa a guarda 2, `chmod 000`) — antiga **`rc=0`** (**verde por falha**), nova **`rc=5`**. **Os quatro portões da v1.11 não regrediram:** `rc` **0** no alvo real, **2** lista vazia, **3** caminho inexistente, **4** arquivo de lista ausente. **Comparabilidade: medida, não amaciada.** A v1.11 a afirmava **por construção** ("os `grep` são byte a byte os mesmos"); mudar R1/R2 tirou esse direito, então rodei as duas réguas contra o alvo real e a saída é **idêntica byte a byte** (`diff` vazio) — 20 alvos, 12 valores distintos, **0 não triados**, R2 **0**, R3 **28**; R3 não tem hex e ficou **intacta**. **(3) O gate se contradizia:** a seção 9 (`delta_pos_gate`) dizia `concerns_novas: 1` e a `concerns_delta` da seção 10 lista **2** (QA-87-20-5 e QA-87-20-6, ambas `low`) — a própria seção 9 já citava a 6 em `residual_declarado`, e a seção 12 usa a convenção certa (`concerns_novas: 2` com os dois ids no comentário). **Correção MECÂNICA de contagem: nenhum veredito, severidade, id ou texto de concern mudou**; conferido por `yaml.safe_load` depois da edição e por `git diff --numstat` (**1 linha**). **Os 4 restantes ficam DECLARADOS, com a razão de cada um:** o `level` isento no fake de `nicole-health/route.test.ts:72` (dívida da 87-19, já declarada na v1.10); o `message` do recibo que diz "contido" em `nicole-health/route.ts:384` — **ponteiro remedido**, o enunciado dizia `:389` (declarado na v1.8 — **decisão do coordenador**: esse texto não chega a pessoa nenhuma, mora em `system_events`, que não tem tela; o que **chega**, o `{{1}}` do admin, **foi** corrigido na v1.8); o `Math.max` de `pipeline.ts:745`, que promete "a MAIOR das **três** janelas" e toma **duas** (a do Sinal C fica de fora) — medido: **30 / 10 / 30**, o `max` dá 30 nos dois casos, **sem divergência hoje**; e o `motivo` sem normalização de espaços em `admin-whatsapp.ts:114` (inalcançável pelos 2 chamadores enumerados). **Critério aplicado, e conferido ao contrário:** conserta-se o que **desfaz uma garantia**, declara-se o que **degrada um sinal** — nenhum dos quatro pode fazer a Nicole deixar de ser contida nem voltar a ficar ativa depois de contida (AC11/AC14). **Suíte **289 arq · 3.805 · 6 xfail** rc=0 (idêntica — nada de código foi tocado)**, `lint --force` rc=0 (0 erros, 30 warnings pré-existentes), `type-check --force` rc=0 — inalterados, que é o que esta passada existe para provar. Higiene reexecutada com a régua **nova**, **depois** de escrito este registro. Régua de células GFM com controle positivo e vivacidade no alvo. Sem push, sem PR, sem merge; produção **não tocada** e a conversa contida **não despausada**. | @dev (Dex) |
 | 2026-08-30 | 1.11 | **Dois itens de REGISTRO (@dev), escopo mínimo — nenhuma linha de código de produção, nenhum teste, nenhuma AC e nenhum veredito mudaram; gate segue `CONCERNS` não bloqueante e o conserto de `afa6964f` foi reproduzido e validado pelo @qa.** **(1) QA-87-20-8 — a régua de higiene aprovava o vazio, e o conserto anterior NÃO PEGOU:** a v1.10 afirma ter refeito a higiene com aborto em entrada vazia, mas isso existia só como **prosa numa célula de tabela** — a única régua com CÓDIGO da story seguia sendo a da seção 9, e **frase não roda**. Reproduzi o defeito: com lista de alvos vazia ela sai **`rc=0` sem saída** ("limpo"), e com a **File List inteira digitada errada** também — o `[ -f "$f" ]` descarta caminho inexistente **em silêncio**. Pesa mais que o rótulo `low`: é a régua que guardou **seis rodadas** de expurgo de dado de cliente. **`set -euo pipefail` sozinho NÃO resolve, medido:** com lista vazia continua `rc=0`; com a lista toda errada sai `rc=1` **por acidente** (`grep` sem casamento sob `pipefail`), o mesmo `rc` de uma varredura legitimamente limpa em R2/R3. A régua nova valida a lista **antes** de varrer — **`rc=2`** em lista vazia, **`rc=3`** nomeando cada caminho ausente, **`rc=0`** na File List correta — e os `grep` de R1/R2/R3 são **byte a byte os mesmos**, para os números das rodadas anteriores seguirem comparáveis. Registrada como **CÓDIGO** na seção 9 (o enunciado dizia "seção 8"; a ≈linha 949 está certa, a seção é a 9). **O que está na story é o que rodou:** script e lista **extraídos do bloco** e comparados por `cmp` contra os arquivos medidos — **idênticos**, e os três `rc` se repetem no extraído. **(2) QA-87-20-7 — a razão declarada estava ERRADA; a decisão, não:** eu escrevera que consertar a leitura irmã de `messages` *"congelaria toda reativação da plataforma"*; o erro é **por requisição e por conversa** e a mensagem seguinte tenta de novo — o mesmo custo que **aceitei** do lado da `conversations`. O @qa mediu o **defeito vivo com controle positivo**: derrubando **só** a leitura de `messages`, a Nicole reativa por cima de um corretor que respondeu há 1 hora **e não grita**. A razão falsa **saiu** (não foi amaciada) e entraram duas medidas: **raio menor** (atinge 63-13/63-15, **não** desfaz a contenção do AC14) e **dívida pré-existente** — `git log -S` aponta `fcd80264`, Story **63-13** (a v1.10 dizia 63-15), linha **idêntica** na base `aa584dfb`. **Raio medido em produção:** **310 de 452** pausadas têm mensagem de corretor posterior ao handoff; **0 expostas neste instante** (as **3** com corretor de <24h têm `handoff_at` de <24h, e a consulta que agora falha fechado segura). **(3) O andar a mais, com o fecho que faltava:** `conterLoop` grava `handoff_at`/`handoff_reason` e **nenhuma mensagem `role='broker'`** — então **toda conversa contida nasce exatamente na forma em que a âncora é nula**, e o fail-open reativaria **no minuto seguinte à contenção**. Produção: **452 pausadas, 449 frias, 3 com corretor ativo**. Advérbio corrigido: "incondicionalmente" vale com âncora **nula ou fria**; com corretor de <24h a leitura irmã ainda segura. **(4) `f2fc9c8f` — a lição, não só a correção:** **régua que não nomeia o algoritmo é infalsificável** — no digest errado "refuta", no certo "confirma", e o registro não diz qual rodou; alegação de hash só é falsificável com **algoritmo + fonte + revisão**. **Suíte 289 arq · 3.805 · 6 xfail** rc=0 (idêntica — nada de código foi tocado), `lint --force` rc=0 (0 erros, 30 warnings pré-existentes), `type-check --force` rc=0. Higiene nova reexecutada **depois** de escrito este registro: **`rc` 2/3/0**, **0 valores distintos não triados**, R2 **0**, R3 **28 linhas todas triadas**. Régua de células GFM com controle positivo e vivacidade no alvo. `git diff --stat`: **1 arquivo**, a story. Sem push, sem PR, sem merge; produção **só lida** (agregados) e a conversa contida **não despausada**. | @dev (Dex) |
 | 2026-08-30 | 1.10 | **Correção do achado da revisão COMPLETA do CodeRabbit no PR #535 (@dev), escopo mínimo — nenhuma AC, nenhum limiar e nenhum veredito mudaram; gate segue `CONCERNS` não bloqueante.** *Por que só agora:* as passadas incrementais vinham **pulando commits** e publicando `success` assim mesmo — verde que era *skip*; o @devops forçou uma revisão completa e o denominador maior achou isto. **O defeito (`route.ts:1109`):** se a leitura de `conversations` falhasse, `convRow` ficava `undefined`, `contidaPorLoop` virava `false` e a Nicole era **reativada numa conversa que a trava havia contido** — a oscilação permanente que o AC14 existe para matar, de volta inteira e em silêncio. **A medição acrescentou um andar:** `handoff_at` some junto, `resolveTakeoverAnchor(null, null)` devolve `null` e `shouldReactivateAi(null)` é `true` **por contrato** (63-13) — então o fail-open **reativava incondicionalmente**, atropelando também a regra temporal de 63-13/63-15; um handoff de 60 s reativava. **É o mesmo pecado da v1.7 do lado do LEITOR:** assim como `conterLoop` parou de chamar de sucesso o `UPDATE` que não escreveu, **não conseguir LER o motivo do handoff não é o mesmo que ter lido "não foi contida por loop"**; no estado *não sei* a ação **irreversível** (reativar) não acontece. **E não é fail-closed que cala:** grito próprio `NICOLE_REATIVACAO_ESTADO_DESCONHECIDO`, nível `error`, com o motivo do banco em `metadata.erro` e `await logEventOnce`. `shouldReactivateAi`/`resolveTakeoverAnchor` **intocadas** — o conserto é no CHAMADOR. **Carrasco ANTES, e o instrumento que faltava:** o fake do webhook só sabia produzir *achei* e *não achei*; a injeção de `{ data: null, error }` por **predicado (tabela + colunas literais)** foi acrescentada, porque sem ela nenhum teste podia sequer EXPRESSAR o defeito. Vermelho medido 🔴 **3 / 39**, `tsc --noEmit` **rc=0 antes** da contagem. **4 mutantes, 4 vermelhos**, todos com `tsc` rc=0: M-CR3a (a obrigatória — erro volta a ser *não contida*) 🔴 2, **M-CR3b controle negativo** (fail-closed para todo mundo) 🔴 1 matando o teste **pré-existente** de reativação, M-CR3c (grito sem guarda) 🔴 1 e M-CR3d (`await` → `void`) 🔴 1 — **kill sets de a e b disjuntos**, que é o que prova que o teste distingue *não sei* de *não é loop*. **Destinatário medido, não presumido:** `coletarLoops` filtra outro `event_type` e o branch de erro descarta a frase em `classificarErroIA` ⇒ os leitores deste grito são `system_events` e o log de erro do Vercel, **não** o alerta de WhatsApp — mesma situação já declarada de `NICOLE_LOOP_CONTENCAO_FALHOU`. **Os outros 5 achados da revisão: TODOS de 2ª classe, triados com medição e declarados, nenhum consertado** — a régua SQL que não exclui `t = ''` (divergência **conservadora por construção**: só pode aumentar a contagem, e o número publicado é 1); a migration 248×**247** no parecer do @po (já declarada em 2 lugares, documento de outro dono); o contrato sem mock do barrel (**já coberto**: renomear os símbolos faz `tsc` rc=1 em `route.ts:1254` e `:23` — os imports são tipados); o `level` isento no fake do cron (**buraco real e medido: remover `.eq("level","error")` sai 35/35 VERDE**, mas o filtro é da 87-19 e degrada precisão de alerta, não a contenção); e os 2 nitpicks (o teste de denominador sem vivacidade — cuja metade positiva **já** é provada 3× no mesmo arquivo — e a normalização de `motivo`, **inalcançável pelos 2 chamadores atuais**, enumerados). **Varredura da CLASSE do meu próprio conserto, antes do gate:** a leitura IRMÃ de `messages`, no **mesmo `Promise.all`**, segue com o `error` não lido — 4ª linha da tabela de irmãos, com o raio medido (atinge 63-13/63-15, **não** o AC14) e com o motivo de não ir junto — **cuja razão declarada estava ERRADA e foi trocada na v1.11 (QA-87-20-7)**. **Duas imprecisões de REGISTRO corrigidas — e a segunda estava errada no enunciado:** *(1)* a régua larga de hora de parede acusa **2** linhas novas, não 1 — a de R3 **e a própria linha meta que a descreve**; *(2)* `f2fc9c8f` **é** reproduzível do histórico — `git show 5ee0bf2b:…/route.ts \| shasum -a 1` devolve `f2fc9c8f…`, idem em `02e2de5e`, ambos em `origin/main..HEAD`. A varredura que deu zero usou **`sha256`**, e **`shasum` sem flag é SHA-1**. A triagem original era **vaga** (não nomeava o algoritmo), não falsa; registrar *"estado de trabalho não commitado"* teria posto uma afirmação **falsa** no registro. Corrigida nos 3 lugares, agora nomeando o algoritmo e os 2 commits. **Suíte 289 arq · 3.805 · 6 xfail** rc=0 (**+3**, exatamente os 3 testes novos; xfail inalterado), `lint --force` rc=0 (0 erros, 30 warnings pré-existentes), `type-check --force` rc=0, `pnpm --filter @trifold/web build` rc=0. **Higiene e régua de células GFM reexecutadas depois de escrito este registro.** Sem push, sem PR, sem merge, produção não tocada, a conversa contida **não despausada**. | @dev (Dex) |
 | 2026-08-30 | 1.9 | **Correção de RENDERIZAÇÃO (@dev), escopo mínimo — nenhum código, teste, fixture, AC, limiar ou veredito mudou; gate segue `CONCERNS` não bloqueante, liberado.** Achado pelo CodeRabbit e reproduzido pelo @devops: **3 linhas de tabela** tinham mais células que o cabeçalho porque o GFM divide a célula em todo `\|` não escapado **inclusive dentro de crase**, e **descarta o excedente** — as linhas 1.7 e 1.8 deste Change Log e a 3ª linha da tabela de irmãos renderizavam **truncadas, sem a última coluna**. Culpados: `if (error \|\| !data) return []` (2 linhas), `"aplicada" \| "falhou"` e `2 failed \| 21 passed (23)`. **Conserto = escape e nada além** (`\|` só dentro dos code spans das 3 linhas de tabela); as mesmas cadeias em **prosa** (1173, 1195) ficaram intocadas de propósito, porque fora de tabela `\|` renderiza a barra. **Equivalência provada por bytes, não por leitura:** desfazendo o escape, as 3 linhas voltam **idênticas ao `HEAD`**, o nº de linhas não muda e o delta é **+6 bytes**. **Régua com controle positivo exigido ANTES:** não há `markdownlint` no repo, então contei as células de **cada linha de cada tabela** com regra GFM — no `HEAD` acusa **exatamente as 3 conhecidas** (23 tabelas / 148 linhas, `rc=1`), depois **0** (`rc=0`); mais um canário sintético onde a linha **já escapada** passa e só a defeituosa é acusada. **E a régua pegou o autor dela:** ao escrever o registro eu introduzi **2** defeitos novos da mesma classe e ela os acusou — vermelho não encenado. **Irmãos varridos:** `po-validation-87-20.md` **0 excedentes** (7 tabelas / 25 linhas); o gate `.yml` faz `load` sem erro e suas 10 tabelas embutidas dão **0** — **só leitura, nada tocado** (é do @qa). **Achado 1 do CodeRabbit RECUSADO com razão registrada:** a agregação **fail-closed** de `nicole-health/route.ts:131` fica como está — *last-wins* inverteria a assimetria e passaria a **calar** quando a contenção falhou, que é o modo de falha que esta story existe para eliminar. **Imprecisão do gate declarada, não consertada:** `higiene.r3` atribui 8 das 29 linhas a `loop-breaker.test`, mas são de `packages/ai/src/chat/pipeline-loop-breaker.test.ts` — o `packages/ai/src/flows/loop-breaker.test.ts` tem **0**; o total 29 e a composição estão certos, é rótulo confundível. **Suíte 289 arq · 3.802 · 6 xfail** rc=0, `lint --force` rc=0, `type-check --force` rc=0 — inalterados, que é exatamente o que uma mudança em `.md` deve provar. **Higiene reexecutada: 0 valores distintos não triados.** Sem push, sem PR, sem merge, produção não tocada, a conversa contida **não despausada**. | @dev (Dex) |
@@ -953,9 +954,21 @@ medidos com ela; o que não valia era o **instrumento**: com lista de alvos vazi
 inteira digitada errada, ela imprimia nada e saía `rc=0` — "limpo". O código dela **saiu do
 registro** para ninguém copiar o furo; quem quiser conferir a forma exata acha em
 `git show afa6964f:docs/stories/87-20-loop-bot-a-bot-trava-de-repeticao-e-contagem.story.md`.
-A que está abaixo é a mesma varredura com um **portão** na frente: os `grep` de R1/R2/R3 são **byte
-a byte os mesmos**, então os números das rodadas anteriores seguem comparáveis. O defeito, os
-controles positivos e os três `rc` estão na **seção 14**.
+A que ficou no lugar dela guardou os quatro portões — mas tinha **dois furos na própria régua**.
+
+⚠️ **Terceira aposentadoria (v1.12): a régua saía VERDE quando NÃO CONSEGUIA LER, e enxergava
+metade da classe que dizia cobrir.** (a) Cada varredura terminava em `|| true`, e `|| true` não
+distingue *não achei* (`grep` rc=1) de **não consegui ler** (`grep` rc≥2): um alvo ilegível saía
+`rc=0` e sem acusação — a mesma classe de defeito que esta story persegue, dentro do instrumento
+que a persegue. (b) R1 e R2 casavam `[0-9a-f]`, então **hex em caixa alta passava batido** — a
+régua afirmava cobrir "token de 8 hex" e cobria metade. O código furado **saiu do registro**, como
+na aposentadoria anterior; a forma exata está em
+`git show dce61e72:docs/stories/87-20-loop-bot-a-bot-trava-de-repeticao-e-contagem.story.md`.
+A régua abaixo tem **um `rc` por modo de falha** — `2` lista vazia, `3` caminho ausente, `4`
+arquivo de lista ausente e **`5` erro de leitura** — e `A-F` na busca. **R3 está intacta** (não
+tem hex); R1 e R2 mudaram só pelo `A-F`, e a comparabilidade com as rodadas anteriores foi
+**medida, não presumida**: contra o alvo real a saída das duas réguas é **idêntica byte a byte**.
+O defeito, os controles positivos e os `rc` estão na **seção 15**.
 
 ```bash
 # ─── A LISTA — a File List inteira, um caminho por linha (caminhos não são segredo) ───
@@ -987,9 +1000,11 @@ cat > /tmp/87-20-higiene.sh <<'EOF'
 #!/usr/bin/env bash
 # Higiene 87-20 — régua de expurgo que FALHA FECHADO.
 # Uso: bash higiene.sh <arquivo-com-a-lista-de-alvos>
-#   rc=0  rodou sobre uma lista não-vazia cujos caminhos TODOS existem
-#   rc=2  lista de alvos vazia            (antes: saía 0 e imprimia "limpo")
-#   rc=3  algum caminho da lista não existe (antes: descartado em silêncio por [ -f ])
+#   rc=0  varreu uma lista não-vazia cujos caminhos TODOS existem e TODOS foram lidos
+#   rc=2  lista de alvos vazia               (antes: saía 0 e imprimia "limpo")
+#   rc=3  algum caminho da lista não existe  (antes: descartado em silêncio por [ -f ])
+#   rc=4  arquivo de lista inexistente
+#   rc=5  ERRO DE LEITURA durante a varredura (antes: engolido pelo `|| true`)
 set -uo pipefail
 
 listaf="${1:?ABORTO: informe o arquivo com a lista de alvos}"
@@ -1021,34 +1036,68 @@ for f in "${alvos[@]}"; do
 done
 [ "$faltando" -eq 0 ] || { echo "ABORTO(3): $faltando caminho(s) inexistente(s) de ${#alvos[@]}." >&2; exit 3; }
 
+# GUARDA 3 — o `rc` do PRÓPRIO grep. `grep` devolve 0=achou, 1=não achou e >=2=ERRO
+# (arquivo ilegível, permissão, I/O). O `|| true` que estava aqui engolia os três:
+# uma varredura que NÃO CONSEGUIU LER saía verde, indistinguível de uma que leu e
+# nada achou — o próprio modo de falha que esta story existe para eliminar, dentro
+# do instrumento que a persegue. `pipefail` NÃO substitui isto: em `grep A | grep B`
+# o rc 2 do primeiro é encoberto pelo rc 1 do último (pipefail devolve o rc do
+# ÚLTIMO comando não-zero). Por isso cada grep roda sozinho, com o rc lido.
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+varrer() {                      # varrer <arquivo-de-saída> <comando grep…>
+  local saida="$1"; shift
+  local rc=0
+  "$@" >"$saida" 2>"$tmp/err" || rc=$?
+  if [ "$rc" -ge 2 ]; then
+    echo "ABORTO(5): erro de LEITURA na varredura (grep rc=$rc) — verde aqui seria falso." >&2
+    printf '  comando: %s\n' "$*" >&2
+    sed -n '1,5p' "$tmp/err" >&2
+    exit 5
+  fi
+  return 0
+}
+
 echo "== alvos: ${#alvos[@]} arquivo(s), todos existentes =="
 
 # R1 — ENUMERA todo token de 8 hex e conta por valor distinto (não casa contra lista).
+# `A-F` incluído: a régua afirmava cobrir "token de 8 hex" e cobria metade da classe.
+hex8='\b[0-9a-fA-F]{8}\b'
 echo "-- R1: tokens de 8 hex, por valor distinto --"
-grep -InEo '\b[0-9a-f]{8}\b' "${alvos[@]}" | sed 's/.*://' | sort | uniq -c | sort -rn
+varrer "$tmp/r1" grep -InEo "$hex8" "${alvos[@]}"
+sed 's/.*://' "$tmp/r1" | sort | uniq -c | sort -rn
 
 # R1-triagem — a triagem é aplicada À SAÍDA da enumeração, nunca à busca.
 # Todos públicos e auditáveis: `git cat-file -t` devolve `commit` para os prefixos
 # de commit; `f2fc9c8f` é o prefixo SHA-1 (shasum SEM flag) de route.ts em 5ee0bf2b
 # e 02e2de5e; `00000000` é a família de UUID sintética desta story.
-triados='^(00000000|aa584dfb|51d21d1e|f2fc9c8f|5ee0bf2b|5cebdbd9|02e2de5e|ced550b1|fcd80264|afa6964f|574441ea|b24fa075)$'
-naotriados="$(grep -hEo '\b[0-9a-f]{8}\b' "${alvos[@]}" | sort -u | grep -Ev "$triados" || true)"
-if [ -n "$naotriados" ]; then
-  echo "-- R1: valores distintos NÃO TRIADOS --"; printf '%s\n' "$naotriados"
+# A lista é ANCORADA EM MINÚSCULA de propósito: a forma em CAIXA ALTA de um valor
+# triado não é triada, e sai acusada. Normalizar a caixa antes de comparar abriria,
+# do lado da triagem, exatamente o buraco que o `A-F` acabou de fechar na busca.
+triados='^(00000000|aa584dfb|51d21d1e|f2fc9c8f|5ee0bf2b|5cebdbd9|02e2de5e|ced550b1|fcd80264|afa6964f|574441ea|b24fa075|dce61e72)$'
+varrer "$tmp/r1v" grep -hEo "$hex8" "${alvos[@]}"
+sort -u "$tmp/r1v" > "$tmp/r1u"
+varrer "$tmp/r1nt" grep -Ev "$triados" "$tmp/r1u"
+if [ -s "$tmp/r1nt" ]; then
+  echo "-- R1: valores distintos NÃO TRIADOS --"; cat "$tmp/r1nt"
 else
   echo "-- R1: 0 valores distintos NÃO TRIADOS --"
 fi
 
 # R2 — UUID completo fora da família sintética. Esperado: 0 linhas.
 echo "-- R2: UUID fora da família sintética --"
-grep -InEo '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' "${alvos[@]}" \
-  | grep -v '00000000-' || true
+uuid='[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
+varrer "$tmp/r2" grep -InEo "$uuid" "${alvos[@]}"
+varrer "$tmp/r2f" grep -v '00000000-' "$tmp/r2"
+cat "$tmp/r2f"
 
-# R3 — data-hora absoluta com precisão de MINUTO.
+# R3 — data-hora absoluta com precisão de MINUTO. Expressão INALTERADA (não tem hex).
 echo "-- R3: data-hora com precisão de minuto --"
 r3='[0-9]{4}-[0-9]{2}-[0-9]{2}([T ][0-9]{2}:[0-9]{2}|.{0,12}[0-9]{2}:[0-9]{2})'
-grep -InE "$r3" "${alvos[@]}" || true
-printf 'R3 total: %s linha(s)\n' "$(grep -hIE "$r3" "${alvos[@]}" | wc -l | tr -d ' ')"
+varrer "$tmp/r3" grep -InE "$r3" "${alvos[@]}"
+cat "$tmp/r3"
+varrer "$tmp/r3h" grep -hIE "$r3" "${alvos[@]}"
+printf 'R3 total: %s linha(s)\n' "$(wc -l < "$tmp/r3h" | tr -d ' ')"
 
 exit 0
 EOF
@@ -1833,6 +1882,138 @@ revisão**: `git show 5ee0bf2b:…/route.ts` sob `shasum -a 1` devolve `f2fc9c8f
 Sem push, sem PR, sem merge. Produção **não** foi escrita — as duas consultas de raio foram
 `SELECT` de agregados. A conversa contida **não** foi despausada.
 
+### 15. Correção pós-revisão completa — os dois furos da PRÓPRIA régua de higiene, e a contagem em que o gate se contradizia
+
+**Escopo fechado em três itens, nenhum deles código de produção.** A revisão completa do CodeRabbit
+no PR #535 trouxe 7 ressalvas, **nenhuma bloqueante**. Quatro ficam **declaradas**, com a razão de
+cada uma no fim desta seção; três foram fechadas: dois furos **na régua de higiene** e uma contagem
+que o gate contradizia.
+
+**Por que os dois furos da régua pesam mais que o rótulo.** Ela é o instrumento com que **toda
+passada desta story desde a v1.5** declarou "0 valores distintos não triados" — conferível linha a
+linha no Change Log — e vai ser reusada em outras stories. Um furo nela não é um bug num teste: é a
+possibilidade de que **todo verde que ela já deu** valha menos do que dissemos. É o **segundo
+defeito estrutural** achado nela em duas passadas: a v1.11 pegou que ela aprovava o **vazio**, esta
+pega que ela aprovava o **ilegível**.
+
+#### Furo 1 — `|| true` mascarava erro de I/O: verde por FALHA, não por ausência
+
+`grep` devolve **0** = achou, **1** = não achou e **≥2** = ERRO (arquivo ilegível, permissão, I/O).
+As varreduras terminavam em `|| true`, que engole os três **indistintamente**. Uma varredura que
+*não conseguiu ler* saía `rc=0` e sem uma linha de acusação — o mesmo modo de falha que esta story
+inteira existe para eliminar, dentro da ferramenta que a persegue.
+
+**`pipefail` não substitui o conserto, e isto é mecânico, não opinião:** num pipe `grep A | grep B`
+o `rc=2` do primeiro é **encoberto** pelo `rc=1` do último, porque `pipefail` devolve o rc do
+**último** comando não-zero. Por isso cada `grep` passou a rodar **sozinho**, com a saída num
+arquivo e o `rc` lido.
+
+**E o invólucro é uma FUNÇÃO, não um subshell.** O `|| true` mais óbvio de consertar estava dentro
+de `naotriados="$(… || true)"`; trocar aquele `true` por um `exit` teria matado **só o subshell**, e
+o script seguiria adiante — o conserto **pareceria** feito e não estaria. A função `varrer` roda no
+shell principal, então o `exit 5` dela sai de verdade.
+
+#### Furo 2 — hex maiúsculo não casava: a régua cobria metade da classe que anunciava
+
+R1 e R2 buscavam `[0-9a-f]`. O risco prático é baixo (UUID do Postgres e SHA do git saem em
+minúscula), mas **a régua afirmava cobrir "token de 8 hex"** — e uma régua que cobre metade da
+classe que anuncia é pior que uma que anuncia menos, porque o verde dela é lido como cobertura
+inteira. Entrou `A-F` na busca de R1 e R2. **R3 não tem hex e ficou intacta.**
+
+**A triagem continua ancorada em MINÚSCULA, de propósito.** A tentação é normalizar a caixa antes
+de comparar com a lista de triados — e isso reabriria, na triagem, o buraco que o `A-F` acabou de
+fechar na busca: extrator largo + comparação **estrita** falha FECHADO (acusa); extrator largo +
+comparação **normalizada** falha ABERTA (libera). A forma em caixa alta de um valor triado sai
+**acusada**, e é isso que o controle positivo abaixo mede.
+
+#### Os controles positivos — régua ANTIGA × NOVA, um por furo
+
+| controle | régua ANTIGA (`dce61e72`) | régua NOVA |
+|---|---|---|
+| alvo com **hex em CAIXA ALTA** — a forma maiúscula de `aa584dfb`, reconstruível por `printf 'aa584dfb' \| tr 'a-f' 'A-F'` | **`rc=0`** e `-- R1: 0 valores distintos NÃO TRIADOS --` · **cega** | o valor entra na contagem **e** em `-- R1: valores distintos NÃO TRIADOS --` · **acusado** |
+| alvo **ilegível** — existe (passa a guarda 2) mas `chmod 000` | **`rc=0`** e varredura "limpa" · **verde por falha** | **`rc=5`** · `ABORTO(5): erro de LEITURA na varredura (grep rc=2)` |
+
+⚠️ **O valor do primeiro controle não está escrito aqui de propósito.** A régua varre a própria
+story: instanciar a forma maiúscula poria na árvore um valor **não triado** só para documentar que
+ele seria acusado — e o registro que documenta a limpeza voltaria a ser o lugar onde a sujeira
+mora, que é o mecanismo exato pelo qual o dado sobreviveu às duas primeiras rodadas de expurgo
+desta story. Ele é **reconstruível por comando**, que é o que o torna
+reproduzível **sem** instanciar; mesma disciplina do `T0` do expurgo da 3ª rodada.
+
+⚠️ **O `rc` mede a VALIDADE da medição, não o achado.** Valor não triado em R1 é **acusado na
+saída** e mantém `rc=0` — igual a R2 e R3, que também imprimem achados com `rc=0` (R3 tem 28 linhas
+legítimas). Foi decisão consciente **não** transformar achado em `rc`: mudaria o contrato dos
+portões e deixaria a régua inconsistente entre as três regras.
+
+#### Os quatro portões da v1.11 não regrediram — e a comparabilidade virou medição
+
+| execução | `rc` |
+|---|---|
+| **File List correta** (20 caminhos, alvo real) | **0** |
+| lista de alvos **vazia** | **2** |
+| lista com **caminho inexistente** | **3** |
+| **arquivo de lista** ausente | **4** |
+| alvo **ilegível** (portão novo desta passada) | **5** |
+
+A v1.11 podia afirmar comparabilidade **por construção** — "os `grep` de R1/R2/R3 são byte a byte
+os mesmos". Esta passada **mudou** as expressões de R1 e R2, então a afirmação deixou de valer de
+graça: foi **substituída por medição**, não amaciada. Rodando as duas réguas contra o alvo real, a
+saída é **idêntica byte a byte** (`diff` vazio): 20 alvos, **12 valores distintos**, **0 não
+triados**, R2 **0**, R3 **28**. Não há hex maiúsculo nos 20 alvos — e é por isso, e só por isso,
+que os números das rodadas anteriores seguem comparáveis.
+
+#### O gate se contradizia — correção mecânica de contagem
+
+A seção 9 do gate (`delta_pos_gate`) dizia `concerns_novas: 1  # QA-87-20-5`. A seção 10 do mesmo
+arquivo (`concerns_delta`) lista **duas**: `QA-87-20-5` e `QA-87-20-6`, ambas `low`. A própria
+seção 9 já apontava para a segunda (`residual_declarado: "ver QA-87-20-6 …"`), e a seção 12 usa a
+convenção certa (`concerns_novas: 2`, com os dois ids no comentário). Corrigido para
+`concerns_novas: 2  # QA-87-20-5, QA-87-20-6`.
+
+**É redação factual, não parecer.** Nenhum veredito, severidade, id ou texto de concern mudou: o
+`gate` segue `CONCERNS` e o `veredito` do delta segue "CONCERNS não bloqueante — CONTINUA".
+Conferido por `yaml.safe_load` **depois** da edição (carrega; `concerns_delta` = 2 ids, ambos
+`low`; `gate: CONCERNS`) e por `git diff --numstat`, que confere **1 linha adicionada e 1 removida**
+no arquivo — a mesma linha.
+
+#### Os quatro que ficam DECLARADOS — e o critério que os separa dos três consertados
+
+O critério é o do coordenador, e continua valendo: **conserta-se o que desfaz uma garantia da
+story; declara-se o que degrada um sinal.** Li os quatro procurando o oposto do que eu queria
+achar — "isto desfaz uma garantia?" — e nos quatro a resposta é não: nenhum pode fazer a Nicole
+**deixar de ser contida**, nem **voltar a ficar ativa** depois de contida, que são as garantias do
+AC11 e do AC14.
+
+| achado | o que é | por que fica |
+|---|---|---|
+| `nicole-health/route.test.ts:72` | o duplo aceita toda linha no filtro de `level`: remover `.eq("level","error")` do código sai **35/35 VERDE** | já declarado na v1.10. É dívida da **87-19**, não código desta story, e degrada precisão de alerta — não a contenção |
+| `nicole-health/route.ts:384` (o enunciado dizia `:389`; **remedi o ponteiro** — a linha é a do `message:`) | o `message` do recibo `NICOLE_LOOP_ALERTA` diz `Loop bot-a-bot contido — …` mesmo quando a contenção não foi confirmada | já declarado na v1.8. **Decisão do coordenador, registrada:** esse texto **não chega a pessoa nenhuma** — mora em `system_events`, que não tem tela. O texto que **chega** (o `{{1}}` do admin) **foi** corrigido na v1.8, com dois braços e agregação fail-closed |
+| `pipeline.ts:745` | o comentário promete "a MAIOR das **três** janelas", mas o `Math.max` toma **duas** — `LOOP_REPEAT_WINDOW_MIN` e `LOOP_COUNT_WINDOW_MIN`; a do Sinal C (`LOOP_CLOSING_WINDOW_MIN`) **não entra** | medido agora, não presumido: as três valem **30 / 10 / 30**, então o `max` de duas dá **30** e o de três daria **30** — **não há divergência hoje**. Subir só a do Sinal C truncaria a janela carregada e degradaria a **detecção**; a contenção e o AC14 não dependem dela |
+| `admin-whatsapp.ts:114` | `motivo` não normaliza espaços em branco | já declarado na v1.10 como **inalcançável pelos 2 chamadores atuais**, ambos enumerados |
+
+#### Réguas desta passada
+
+| prova | resultado |
+|---|---|
+| Suíte inteira | **289 arquivos · 3.805 passando · 6 expected-fail** (3.811) · `rc=0` — **idêntica** ao registro anterior; esta passada não toca teste nem código de produção** |
+| `lint --force` | **rc=0** (0 erros, **30** warnings pré-existentes — mesma contagem)** |
+| `type-check --force` | **rc=0**** |
+| Régua de higiene **nova** — controle positivo do furo 1 (alvo ilegível) | antiga **`rc=0`** · nova **`rc=5`** |
+| Régua de higiene **nova** — controle positivo do furo 2 (hex maiúsculo) | antiga **não acusa** (`0 valores distintos NÃO TRIADOS`) · nova **acusa** |
+| Régua de higiene **nova** — os 4 portões da v1.11 | `rc` **0 / 2 / 3 / 4** — nenhum regrediu |
+| Régua de higiene — comparabilidade R1/R2 após o `A-F` | saída antiga × nova contra o alvo real: `diff` **vazio** |
+| Régua de higiene — o que está na story **é** o que rodou | script e lista **extraídos do bloco da seção 9** e comparados por `cmp` contra os arquivos medidos: **idênticos**; os `rc` se repetem no extraído |
+| Higiene R1 (8 hex) | **0 valores distintos NÃO TRIADOS** · **13** valores distintos, todos públicos: **11 prefixos de commit** (`git cat-file -t` ⇒ `commit` nos 11), `f2fc9c8f` (SHA-1 de `route.ts` versionado) e `00000000` (família de UUID sintética). **`dce61e72` é o único valor novo desta passada**, e entra porque a seção 9 precisa **citar o commit** onde a forma furada da régua ficou legível; triado por `git cat-file -t`, não presumido. **Medido DEPOIS de escrito este registro**, como manda a disciplina desta story: eram 12 antes dele |
+| Higiene R2 (UUID fora da família sintética) | **0 linhas** |
+| Higiene R3 (data-hora com precisão de minuto) | **28 linhas**, todas triadas — composição **idêntica** ao registro anterior (13 da família sintética `2020-01-01` / `1970-01-01` e 15 pré-existentes em `origin/main`); **nenhuma linha nova**. **Zero data-hora de conversa** |
+| Régua de células GFM — **controle positivo** | canário com uma linha defeituosa (`\|` **não** escapado dentro de crase), uma limpa e uma **já escapada**: acusa **só a defeituosa** · `rc=1` |
+| Régua de células GFM — **vivacidade no ALVO** | desescapando **1** `\|` de uma célula que ESTA passada escreveu, a régua acusa `4 x 3 (EXCEDE)` na linha **1933** · `rc=1`; restaurado, `cmp` **idêntico**. ⚠️ Medi **1932**, escrevi, e a auto-crítica logo depois acrescentou **1** linha acima dela — remedi DEPOIS de escrever, que é a mesma disciplina que a higiene impõe |
+| Régua de células GFM — alvo | **0 linhas excedentes** · story sozinha **35 tabelas / 243 linhas**; somando o parecer do @po, **+7 / +25**, também **0** · `rc=0` |
+| Escopo | `git status --short -- docs packages supabase scripts` confere **2** arquivos rastreados sujos: a **story** e o **gate**. `git diff --numstat`: gate **1 / 1** (a linha da contagem), story **198 / 17**. Nenhum `.ts`, nenhuma fixture, nenhuma migration, nenhum `.sql` |
+
+Sem push, sem PR, sem merge. Produção **não** foi tocada — nem leitura, nem escrita. A conversa
+contida **não** foi despausada.
+
 ### Debug Log References
 
 - Régua reexecutável: `docs/qa/87-20-regua-sinais-loop.sql` (só contagens, read-only)
@@ -1860,7 +2041,7 @@ Sem push, sem PR, sem merge. Produção **não** foi escrita — as duas consult
 - `docs/stories/87-20-loop-bot-a-bot-trava-de-repeticao-e-contagem.story.md` — este registro
 - `packages/ai/src/flows/loop-breaker.ts` — expurgo: comentários de produção sem identificador nem data-hora de conversa
 - `packages/ai/src/chat/pipeline-loop-breaker.test.ts` — expurgo: datas rebaseadas, deltas preservados; **CR-87-20-1/2:** filtro do kill-switch por CONJUNTO de colunas (`colunasDe`/`consultasDaTrava`) + controle de vivacidade, e o `describe` da contenção que falha (4 testes)
-- `docs/qa/gates/87.20-loop-bot-a-bot-trava-de-repeticao-e-contagem.yml` — **só redação de identificador** (veredito, números e ACs intactos); **não tocado na 3ª rodada** (não carrega `md5` de conteúdo)
+- `docs/qa/gates/87.20-loop-bot-a-bot-trava-de-repeticao-e-contagem.yml` — **só redação de identificador** (veredito, números e ACs intactos); **não tocado na 3ª rodada** (não carrega `md5` de conteúdo); **v1.12:** `concerns_novas` da seção 9 de `1` → `2` (a `concerns_delta` da seção 10 lista 2) — **contagem mecânica**, nenhum veredito/severidade/id/texto de concern tocado
 - `docs/qa/po-validation-87-20.md` — **só redação de identificador** (parecer intacto); **3ª rodada:** 3 valores de `md5` → rótulos `H{n}` + cabeçalho da tabela
 - `packages/ai/src/flows/__fixtures__/loop-87-20.ts` — **3ª rodada:** os 34 `left(md5(content),8)` → rótulos de classe `H1`…`H28` (classes de igualdade preservadas); cabeçalho corrigido (a exceção do texto *verbatim*) e docstring do campo `hash` reescrita
 - `packages/ai/src/flows/loop-breaker.test.ts` — **3ª rodada:** só o nome do `it()` da linha 383 (não promete mais "igualdade de `md5`"); a asserção da linha 386 está **intacta**

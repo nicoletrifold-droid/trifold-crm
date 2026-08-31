@@ -411,7 +411,7 @@ delta_pos_gate:
   escopo: "574441ea (código) + b24fa075 (registro), sobre 5ee0bf2b. Nada empurrado."
   veredito: "CONCERNS não bloqueante — CONTINUA. O delta MELHORA a story: fecha um defeito vivo (não cosmético), fecha QA-87-20-1 também para o call site novo, e não introduz regressão."
   defeitos_vivos_novos: 0
-  concerns_novas: 1  # QA-87-20-5
+  concerns_novas: 2  # QA-87-20-5, QA-87-20-6
   concerns_fechadas: 1  # QA-87-20-1
 
   # ───────────────────────────────────────────────────────────────────────────
