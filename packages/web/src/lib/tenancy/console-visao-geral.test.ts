@@ -256,14 +256,19 @@ describe("Precisa de você — convites", () => {
   ])
 
   it("lista só as orgs com convite PENDENTE, com os dias calculados", () => {
-    const p = pendenciasDeConvite({ orgs, adminPorOrg, agora: AGORA })
+    const p = pendenciasDeConvite({ orgs, adminPorOrg, agora: AGORA, adminsIndisponiveis: false })
     expect(p).toEqual([
       { tipo: "convite", orgId: "1", orgNome: "Empresa 1", dias: 30 },
     ])
   })
 
   it("admin com `auth_id` NÃO é pendência — é a mesma derivação de `/platform/orgs`", () => {
-    const p = pendenciasDeConvite({ orgs: [orgs[1] as OrgDoConsole], adminPorOrg, agora: AGORA })
+    const p = pendenciasDeConvite({
+      orgs: [orgs[1] as OrgDoConsole],
+      adminPorOrg,
+      agora: AGORA,
+      adminsIndisponiveis: false,
+    })
     expect(p).toEqual([])
   })
 
@@ -274,13 +279,33 @@ describe("Precisa de você — convites", () => {
         ["9", { id: "u9", authId: null, criadoEm: "2026-08-27T12:00:00.000Z" }],
       ]),
       agora: AGORA,
+      adminsIndisponiveis: false,
     })
     expect(p).toEqual([{ tipo: "convite", orgId: "9", orgNome: "Empresa 9", dias: 4 }])
   })
 
   it("nenhuma pendência devolve lista VAZIA — é a condição que apaga a seção inteira", () => {
     expect(
-      pendenciasDeConvite({ orgs: [orgs[1] as OrgDoConsole, orgs[2] as OrgDoConsole], adminPorOrg, agora: AGORA }),
+      pendenciasDeConvite({
+        orgs: [orgs[1] as OrgDoConsole, orgs[2] as OrgDoConsole],
+        adminPorOrg,
+        agora: AGORA,
+        adminsIndisponiveis: false,
+      }),
+    ).toEqual([])
+  })
+
+  // CodeRabbit #547 — o consumidor cego. A entrada é EXATAMENTE a mesma do primeiro caso desta
+  // suíte, menos o mapa: quando a consulta de `users` não volta, `adminPorOrg` nasce vazio, e a
+  // org "1" (que tem `admin_invite_email`) seria classificada como pendente por FALTA DE DADO —
+  // com botão de reenvio e um "há 30 dias" contado a partir de `organizations.created_at`.
+  //
+  // O mapa vem CHEIO de propósito: se ele viesse vazio, a asserção passaria também num código
+  // que só olhasse o tamanho do mapa. Aqui a org "2" tem admin ativo no mapa, e mesmo assim a
+  // resposta certa é "não sei", não "nada pendente".
+  it("leitura de admins que não voltou não produz pendência NENHUMA — nem por falta de dado", () => {
+    expect(
+      pendenciasDeConvite({ orgs, adminPorOrg, agora: AGORA, adminsIndisponiveis: true }),
     ).toEqual([])
   })
 })

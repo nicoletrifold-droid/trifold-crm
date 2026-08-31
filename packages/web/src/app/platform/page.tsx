@@ -29,7 +29,10 @@
 
 import Link from "next/link"
 import { platformQuery } from "@web/lib/tenancy/platform-query"
-import { deriveAdminInviteStatus } from "@web/lib/tenancy/admin-invite"
+import {
+  ROTULOS_DE_ADMIN_NA_LISTA,
+  statusDeAdminDeclarado,
+} from "@web/lib/tenancy/console-leitura"
 import { now } from "@web/lib/time"
 import {
   montarTilesDoPainel,
@@ -172,7 +175,16 @@ export default async function VisaoGeralPage({
     indisponivel: integracoesFalhou,
   })
 
-  const pendConvites = pendenciasDeConvite({ orgs, adminPorOrg, agora })
+  // CodeRabbit #547 — o consumidor que o commit anterior deixou cego. Com `adminsFalhou`, o mapa
+  // `adminPorOrg` nasce VAZIO e toda org com `admin_invite_email` seria classificada como
+  // pendente, com um botão de reenvio saído de lista incompleta. O card logo acima já lia o
+  // sinal e virava `—`; a lista, não.
+  const pendConvites = pendenciasDeConvite({
+    orgs,
+    adminPorOrg,
+    agora,
+    adminsIndisponiveis: adminsFalhou,
+  })
   // Cruza DUAS páginas — basta uma ter chegado no teto para o número deixar de ser exato, e
   // basta uma ter FALHADO para não haver número.
   const convitesPendentes: ContagemDeclarada = orgsFalhou || adminsFalhou
@@ -201,7 +213,11 @@ export default async function VisaoGeralPage({
     )
     return {
       org,
-      statusConvite: deriveAdminInviteStatus({
+      // O MESMO sinal, e o mesmo defeito: sem a página de admins, `adminPorOrg` está vazio e esta
+      // coluna diria "sem admin" sobre toda empresa da lista — inclusive as que têm admin ativo.
+      // "sem admin" é afirmação de ausência, e ausência não medida não se afirma.
+      statusConvite: statusDeAdminDeclarado({
+        falhou: adminsFalhou,
         adminInviteEmail: org.admin_invite_email,
         admin: adminPorOrg.get(org.id) ?? null,
       }),
@@ -361,9 +377,7 @@ export default async function VisaoGeralPage({
                   criada {new Date(org.created_at).toLocaleDateString("pt-BR")}
                 </span>
                 <span className="text-xs text-slate-400">
-                  {statusConvite === "active" && "admin ativo"}
-                  {statusConvite === "pending" && "admin pendente"}
-                  {statusConvite === "none" && "sem admin"}
+                  {ROTULOS_DE_ADMIN_NA_LISTA[statusConvite]}
                 </span>
                 <span className="text-xs text-slate-400">
                   {formatarContagem(conectadas)}{" "}

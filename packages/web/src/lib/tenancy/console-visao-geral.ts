@@ -222,12 +222,29 @@ export type Pendencia =
  * Reusa {@link deriveAdminInviteStatus} — a MESMA derivação de `/platform/orgs`. Reimplementar
  * "está pendente?" aqui produziria duas telas do mesmo console discordando sobre o mesmo fato,
  * que é literalmente o defeito QA-900-51-2 em outra roupa.
+ *
+ * ## `adminsIndisponiveis` é OBRIGATÓRIO, e é o que o achado do CodeRabbit (PR #547) corrigiu
+ *
+ * `adminPorOrg` vem de uma consulta que pode não ter voltado. Quando ela falha o mapa nasce
+ * VAZIO, e "sem linha de admin" fica indistinguível de "não li a linha de admin": toda org com
+ * `admin_invite_email` era classificada como pendente, entrava na lista "Precisa de você" com um
+ * número de dias tirado de `organizations.created_at`, e ganhava um botão `ReenviarConvite` que
+ * responderia `400 NO_PENDING_INVITE` para quem já tem admin ativo.
+ *
+ * O card "Convites pendentes" JÁ lia esse sinal e virava `—`. A lista, logo abaixo, não lia — o
+ * mesmo commit que criou o sinal deixou consumidores cegos a ele. Aqui ele é campo obrigatório
+ * de propósito: omiti-lo é erro de compilação, não uma tela que mente.
+ *
+ * A lista vazia NÃO afirma "nada pendente": a página só some com a seção quando nenhuma leitura
+ * falhou, e nesse caso ela renderiza o aviso de lista incompleta (`AvisoDeTeto`).
  */
 export function pendenciasDeConvite(entrada: {
   orgs: readonly OrgDoConsole[]
   adminPorOrg: ReadonlyMap<string, AdminDaOrg>
   agora: Date
+  adminsIndisponiveis: boolean
 }): Pendencia[] {
+  if (entrada.adminsIndisponiveis) return []
   return entrada.orgs
     .filter(
       (org) =>
