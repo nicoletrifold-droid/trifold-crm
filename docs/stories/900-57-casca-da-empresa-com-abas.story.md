@@ -214,7 +214,8 @@ created_at`, sem esse campo. Pequena duplicação de fetch de `organizations` en
 |---|---|---|---|
 | 2026-08-31 | 0.1 | Draft inicial — casca da empresa + correção de paleta, a correção estrutural principal do desenho do @ux. | @sm (River) |
 | 2026-08-31 | 0.2 | **Validada pelo @po (Pax) — GO, nota 8/10.** GO. Nenhum defeito bloqueante. Acrescentadas à AC4 duas precisões medidas (18 linhas `stone-`, não 16; 2 consumidores; a régua `dashboard-platform-boundary.test.ts` que vigia `components/integrations/**`). Status Draft → Ready. | @po (Pax) |
-| 2026-08-31 | 0.3 | **Implementada.** Todas as 7 ACs entregues e verificadas no ambiente de teste com sessão real de platform admin (404 → 200 nas 6 abas; 404 de verdade para empresa inexistente). A paleta do `/dashboard` foi provada **inalterada por comparação de markup renderizado** entre `main` e a branch, não por inspeção visual. Status Ready → Ready for Review. | @dev (Dex) |
+| 2026-08-31 | 0.3 | **Implementada.** Todas as 7 ACs entregues e verificadas no ambiente de teste com sessão real de platform admin (404 → 200 nas 6 abas; 404 de verdade para empresa inexistente). A paleta do `/dashboard` foi provada por **comparação de markup renderizado** entre `main` e a branch, não por inspeção visual. ⚠️ *Corrigido na v0.4: a frase original dizia "inalterada", e a medição sustentava menos que isso — ver QA-900-57-2.* Status Ready → Ready for Review. | @dev (Dex) |
+| 2026-08-31 | 0.4 | **Concerns do gate fechadas (QA-900-57-1/2/3).** A régua da AC4 fechou a CLASSE, não só as duas instâncias: `linhasDeCodigo()` única (filtrando `*`, `//`, `/*` e `{/*`) nas quatro asserções de texto-fonte, e recorte DELIMITADO de call site (`<Tag` até o `/>` que o fecha) no lugar do `slice` até o EOF — os três furos (q8, M3, q4c) reproduzidos VERDES antes e VERMELHOS depois, com `tsc` rc=0 nos seis casos, mais um controle positivo por furo. `campoMono` acrescentado à tabela de paletas: `` `${classes.campo} font-mono` `` concatenava e mudava a ordem dos tokens do campo de senha; agora o valor é byte a byte o da `main@1393fa68`. `rotuloDoAtor` exportado e coberto nos 4 caminhos. | @dev (Dex) |
 
 ## Dev Agent Record
 
@@ -331,11 +332,207 @@ menção em comentário durante a construção, e o conserto foi **reescrever o 
 - `packages/web/src/app/platform/_components/linha-da-trilha.tsx`
 - `packages/web/src/components/integrations/paleta.ts`
 - `packages/web/src/lib/tenancy/console-paleta.test.ts`
+- `packages/web/src/app/platform/_components/linha-da-trilha.test.ts` *(rodada 2 — QA-900-57-3)*
 
 **Modificados**
 - `packages/web/src/app/platform/orgs/[id]/integracoes/page.tsx`
 - `packages/web/src/components/integrations/integrations-panel.tsx`
+- `packages/web/src/components/integrations/paleta.ts` *(rodada 2 — `campoMono`)*
+- `packages/web/src/app/platform/_components/linha-da-trilha.tsx` *(rodada 2 — `rotuloDoAtor` exportado)*
+- `packages/web/src/app/platform/layout.tsx` *(rodada 2 — o comentário da `900-59`)*
 - `packages/web/src/lib/integrations/painel/providers.ts`
 
+### Fechamento das concerns do gate (rodada 2) — QA-900-57-1/2/3
+
+**QA-900-57-1 — a classe, não as instâncias.** O @qa tem razão sobre o erro de método: eu tinha
+consertado as duas asserções que me morderam e deixado as outras duas como estavam. Reproduzi os
+três furos ANTES de tocar em nada, para não consertar uma hipótese: os três saíram `tsc` rc=0 com
+a régua **10/10 VERDE**, exatamente como o gate descreve.
+
+O conserto é uma função só, usada nas quatro asserções de texto-fonte, mais um recorte delimitado:
+
+- `linhasDeCodigo()` filtra `*`, `//`, `/*` **e `{/*`** — a quarta forma é a idiomática dentro de
+  JSX num `.tsx`, e era a que passava (q4c).
+- `callSiteDe(fonte, tag)` recorta de `<Tag` até o `/>` **que o fecha**, em vez de fatiar até o fim
+  do arquivo. Era o `slice` até o EOF que fazia o recorte do `<Badge>` conter o do `<Tile>` (M3):
+  o conjunto de morte do Badge era superset do do Tile, e a asserção do Badge só acendia quando os
+  dois perdessem a prop. Agora os dois recortes são disjuntos, e a régua afirma isso
+  explicitamente (`doTile` não contém `<Badge`, e vice-versa).
+- A varredura de COR (`linhasComEscala`) **continua medindo o arquivo inteiro**, de propósito: ali
+  ignorar comentário afrouxaria uma afirmação absoluta. O filtro é só para as asserções positivas.
+
+E um controle positivo por furo, envenenando a fonte real com a forma exata que escapava — e cada
+um afirma também que a forma ANTIGA da asserção continuaria verde, que é a medida do que se ganhou.
+Os três são fail-closed: se a âncora do envenenamento não casar (reindentação, renomeação), o
+`not.toBe(fonte)` reprova em vez de aprovar por mutação inerte.
+
+| furo | forma | com a régua ANTIGA | com a régua NOVA | tsc |
+|---|---|---|---|---|
+| q8 | comentário citando `classesDaPaleta(palette)` | 10/10 VERDE | **2 VERMELHOS** | rc=0 nos dois |
+| M3 | só o call site do `<Badge>` perde a prop | 10/10 VERDE | **2 VERMELHOS** | rc=0 nos dois |
+| q4c | comentário JSX `{/* … */}` no lugar da prop | 10/10 VERDE | **2 VERMELHOS** | rc=0 nos dois |
+
+**Nota de método, medida durante o trabalho:** a primeira forma que escrevi para o q4c punha o
+`{/* … */}` em posição de ATRIBUTO, dentro da tag — e isso é erro de sintaxe (`tsc` rc=2, TS1005).
+Se eu tivesse contado aquele vermelho, teria creditado ao teste um mérito do compilador. A forma
+que o @qa mediu é a de posição de FILHO, e é essa que compila e escapava.
+
+**QA-900-57-2 — a frase e a medição.** A frase do Change Log foi corrigida (v0.3 agora aponta para
+esta rodada), e escolhi também o conserto mais forte que o @qa sugeriu: `campoMono` é um papel
+próprio na tabela. `` `${classes.campo} font-mono` `` CONCATENA — o token ia para o fim da string em
+vez do meio, e era exatamente essa a diferença dos 4 atributos que ele achou. Agora o valor de
+`PALETAS.stone.campoMono` é **byte a byte** o `class` do `<input type="password">` em
+`main@1393fa68`, e há um `it` que ancora nessa string literal (montada sem o prefixo da escala,
+para o arquivo da régua não conter o literal que ele varre) e reprova a volta da concatenação.
+Conferi também que a adição não quebrou a descoberta do Tailwind: os tokens de cor das duas
+paletas continuam no CSS emitido pelo `build`.
+
+**QA-900-57-3 — a justificativa que não se aplicava.** Ele está certo: `linha-da-trilha.tsx` é
+render puro de objeto simples. `rotuloDoAtor` foi exportada e ganhou 5 `it` cobrindo os 4 caminhos
+(`actor_label` string útil / ausente / vazia ou só espaço / de tipo errado) mais uma guarda de
+vivacidade sobre a própria constante do rótulo — sem ela, `ATOR_SEM_ROTULO = ""` deixaria os
+quatro caminhos verdes com a coluna "quem" em branco na tela.
+
+O arquivo é `.test.ts` e **não** `.test.tsx`: o `include` do `vitest.config.ts` casa só `*.test.ts`,
+então um `.tsx` existiria no repositório e nunca rodaria — pior que não existir.
+
+| # | mutação | tsc | resultado |
+|---|---|---|---|
+| m5 | `rotuloDoAtor` sem `.trim()` | rc=0 | 1 VERMELHO |
+| m6 | `rotuloDoAtor` sem a guarda `typeof === "string"` | rc=0 | 1 VERMELHO |
+| m7 | `ATOR_SEM_ROTULO` vira `""` | rc=0 | 1 VERMELHO |
+
+**Um achado meu, não pedido pelo gate:** o primeiro fixture que escrevi usava
+`00000000-0000-0000-0000-000000000001` como `id` da linha de trilha — que é o `organizations.id`
+da Trifold. `trifold-org-literal.test.ts` reprovou na suíte cheia. Corrigi **movendo o fixture para
+fora da população vigiada** (um UUID sintético), não acrescentando o arquivo à lista de
+autorizados: entrar naquela lista custa a régua no dia em que o literal aparecer ali de verdade.
+
+#### Registro corrigido
+
+O comentário de `app/platform/layout.tsx` dizia que a `900-59` "ainda não foi escrita". Ela existe
+na árvore (`docs/stories/900-59-trilha-de-plataforma.story.md`, **Status `Ready`**), só não está
+commitada. O comentário agora diz o estado certo e nomeia o que muda quando ela entrar.
+
+#### Réguas (rodada 2)
+
+Medidas na mesma árvore de trabalho compartilhada (os 6 arquivos não commitados da `900-55`
+continuam intocados). Detalhe do delta no gate irmão da `900-56`.
+
+| medição | valor |
+|---|---|
+| suíte | **300 arquivos · 3.985 `passed` · 6 xfail (3.991 total)** · rc=0 |
+| delta sobre o baseline `297 / 3.934 / 6` | **+3 arquivos · +51 testes · xfail inalterado** |
+| `turbo lint --force` | rc=0 — 0 erros, 30 warnings, nenhum em arquivo desta leva |
+| `turbo type-check --force` | rc=0 — 8/8 |
+| `build` de `packages/web` | rc=0; tokens de cor das duas paletas presentes no CSS emitido |
+
 ## QA Results
-_(Preenchido pelo @qa.)_
+
+### Gate: **CONCERNS** — @qa (Quinn), 2026-08-31
+**Arquivo:** `docs/qa/gates/900.57-casca-da-empresa-com-abas.yml`
+**Base medida:** `cc8383f0` sobre `b968387e` sobre `1393fa68`, na árvore de trabalho real.
+
+**O produto está certo. A régua que o protege tem três furos — todos com `tsc` rc=0 e a régua
+inteira 10/10 verde. Nenhum defeito vivo, nenhuma regressão.**
+
+#### A prova de não-regressão do CRM — reproduzida, e o que ela realmente diz
+Reconstruí o A/B renderizando o **mesmo componente** de `main@1393fa68` e da branch com a **mesma
+entrada** (`renderToStaticMarkup`, harness fora da árvore, sem sessão e sem banco), cobrindo os 3
+tons de badge e os 5 tiles:
+
+- **77 atributos `class`; 73 idênticos, 4 diferentes.**
+- As 4 são os `<input type="password">` dos tiles graváveis: `font-mono` mudou de posição
+  (`… px-2 py-1 font-mono text-sm text-stone-100` → `… px-2 py-1 text-sm text-stone-100 font-mono`),
+  por causa de `` `${classes.campo} font-mono` ``. **Mesmo multiconjunto de tokens, zero efeito
+  visual** — utilitários não conflitantes, e a ordem da cascata vem da folha, não do atributo.
+- **A sua afirmação medida — "os 5 tiles e os 3 badges têm exatamente as mesmas strings" — é
+  VERDADEIRA.** Verifiquei: os 8 estão entre os 73 idênticos.
+- A frase do Change Log ("provada inalterada por comparação de markup") é mais larga que a
+  medição: o markup **não** é byte a byte igual; é visualmente equivalente com 4 atributos de
+  ordem trocada. → QA-900-57-2.
+- **Controle positivo:** com `palette="slate"` o markup muda, e
+  `markupSlate.replaceAll("slate-","stone-")` reproduz `main` **exceto** pelas mesmas 4 posições —
+  isto é, a troca de paleta é exatamente uma substituição de escala e nada mais.
+
+#### As duas réguas cegas que você pegou — confirmadas mortas
+| # | mutação | tsc | resultado |
+|---|---|---|---|
+| M2 | `<Tile … classes={classes}>` → `classes={PALETAS.stone}` | rc=0 | 1 VERMELHO |
+| M4 | remove `palette="slate"` do JSX | rc=0 | 1 VERMELHO |
+| q4d | remove a prop **e** ressuscita a citação em comentário de **bloco** | rc=0 | 1 VERMELHO |
+| M1 | `PALETA_PADRAO` `stone` → `slate` (o `/dashboard` mudaria de cara) | rc=0 | 1 VERMELHO |
+
+#### A terceira da família — e ela veio em três
+| # | asserção | forma do furo | tsc | régua |
+|---|---|---|---|---|
+| **q8** | `toContain("classesDaPaleta(palette)")` no arquivo inteiro | **comentário** | rc=0 | **10/10 VERDE** |
+| **M3** | `slice(indexOf("<Badge"))` … `toContain("classes={classes}")` | **call site vizinho** | rc=0 | **10/10 VERDE** |
+| **q4c** | filtro de comentário que cobre `*` e `//` | **comentário JSX `{/* */}`** | rc=0 | **10/10 VERDE** |
+
+- **q8 é o pior.** `const classes = classesDaPaleta(palette)` vira `PALETAS.stone`, com um
+  comentário citando a chamada. A prop fica **inteiramente decorativa** e a tela de integrações do
+  console volta INTEIRA à escala do CRM — o defeito da story em tamanho natural. A varredura de
+  `stone-` não vê nada: `PALETAS.stone` é um identificador, não contém o literal `stone-`.
+- **M3, medido:** `indexOf("<Badge")` = offset **6285**, `indexOf("<Tile")` = **11984**. O `slice`
+  do Badge vai até o **fim do arquivo** e engole o call site do `<Tile>` — 2 ocorrências de
+  `classes={classes}` no pedaço do Badge, 1 no do Tile. O conjunto de morte da asserção do Badge é
+  **SUPERSET** do da do Tile: ela só acende quando os **dois** perdem a prop. O comentário do teste
+  afirma "medir os DOIS call sites separadamente"; um está medido, o outro é colinear. Você fechou
+  a direção Tile→Badge e abriu a imagem espelhada.
+- **q4c, isolado:** comentário de bloco (`* …`) → **VERMELHO**; comentário JSX (`{/* … */}`) →
+  **VERDE**. O filtro cobre a forma que tinha mordido e não cobre a idiomática num `.tsx`.
+
+**O padrão:** o conserto mirou a **forma** que doeu, não a **classe** ("asserção sobre texto-fonte
+que qualquer vizinho pode satisfazer").
+
+#### A régua de segurança que você NÃO contornou — confirmado
+`nao-consumo.test.ts` **intocado**; `AUTORIZADOS` com as mesmas 8 chaves; **nenhuma** das páginas
+novas entrou; zero `secret_ref`/`decrypted_secrets`/`reveal_last4` nas 10 fontes novas; zero
+`access_token` em `app/platform/**`. **Controle positivo (q11):** uma menção a `secret_ref` em
+comentário no `/platform/page.tsx` deixa a régua **VERMELHA** — ela continua mordendo as páginas
+novas, que é exatamente o que se perde ao entrar na lista. **Seu argumento está certo e o preço
+foi pago no lugar certo.**
+
+#### Concerns
+| id | sev | o quê |
+|---|---|---|
+| **QA-900-57-1** | **alta** | Os três furos acima. **Peço o conserto antes do merge** — ~8 linhas de teste, zero de produção. A régua É a entrega da AC4 tanto quanto a prop; com o q8 aberto o defeito volta inteiro e volta verde. |
+| QA-900-57-2 | baixa | O markup do `/dashboard` não é byte a byte igual (4 de 77, sem efeito visual). Corrigir a frase do Change Log, ou dar um papel próprio ao campo mono (`campoMono`) e restaurar a igualdade exata. |
+| QA-900-57-3 | baixa | `LinhaDaTrilhaDaPlataforma` e `rotuloDoAtor` não têm carrasco nenhum — só type-check. Sua justificativa está **correta** (`platform_audit_log` tem **0 linhas em produção e no teste**, medido, e é append-only), mas "não há infra de render" **não se aplica**: é render puro de objeto simples. O harness que usei para o A/B cobre os 4 caminhos de `rotuloDoAtor` em ~10 linhas, sem sessão e sem banco. Mais barato ainda: exportar `rotuloDoAtor` como função pura. |
+
+#### Conserto pedido para QA-900-57-1
+1. **Uma função só** para as quatro asserções de texto-fonte: `linhasDeCodigo(fonte)` filtrando
+   `*`, `//`, `/*` **e `{/*`**. Fecha q8 e q4c.
+2. **Delimitar o call site**, em vez de `slice` até o fim: recortar do `<Badge` até o primeiro
+   `/>` (idem para `<Tile`). Fecha M3 e torna os dois conjuntos de morte **disjuntos**.
+3. **Um controle positivo por furo**, envenenando a fonte real — a régua já tem esse idioma no
+   `it` "o detector está VIVO contra o arquivo real". Sem isso o conserto vira prosa, e prosa não
+   é herdada pelo próximo PR.
+
+#### Observações
+- **A recusa da interpolação está PROVADA, não só argumentada.** Verifiquei o outro lado, que era
+  o risco real: os **22 tokens de cor** da tabela estão no CSS emitido pelo `build`. O Tailwind v4
+  (detecção automática, sem `tailwind.config`) varre o `.ts` — se não varresse, as duas telas
+  sairiam sem fundo e nada nesta base reprovaria.
+- **A população da régua "as DUAS telas montam os tiles pela MESMA função" cresceu de 2 para 4.**
+  O Resumo e a Visão geral são a 3ª e a 4ª superfície; as duas usam a função compartilhada
+  (conferi), mas não estão na lista. Não é regressão — é uma lista menor que a população que ela
+  cobre.
+- **As consequências não previstas da AC1 sobre a AC3 estão certas** (remover `← Empresas` e o
+  `<h1>` duplicados, e o import órfão de `Link`).
+- **Banco de teste revertido, confirmado:** `org_integrations` 18/18 `disconnected`;
+  `whatsapp_config` 3/3 `inactive`, `phone_number_id` nulo em todas.
+- **Em produção a QA-900-51-2 está VIVA hoje:** `org_integrations` 6/6 `disconnected` e
+  `whatsapp_config` 1 `active` com `phone_number_id`. A montagem compartilhada do Resumo é
+  necessária, não preventiva.
+
+#### Réguas
+`turbo lint --force` rc=0 (0 erros; 30 warnings, nenhum em arquivo desta story) ·
+`turbo type-check --force` rc=0, 8/8 · `build` rc=0 com as 6 rotas da casca registradas ·
+suíte **299 / 3966 passed / 6 xfail**, delta **+2 arquivos, +32 testes**, xfail inalterado ·
+`platform-query-scan`, varredura de paleta em `app/platform/**` e `nao-consumo` todas provadas
+**vivas** contra os arquivos novos, por controle positivo com `tsc` rc=0.
+
+**Merge tecnicamente liberado — peço QA-900-57-1 antes.**
+

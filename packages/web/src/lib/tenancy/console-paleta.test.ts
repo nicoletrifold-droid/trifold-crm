@@ -36,6 +36,7 @@ const SRC = path.resolve(AQUI, "../..") // packages/web/src
 
 const PAINEL = path.join(SRC, "components/integrations/integrations-panel.tsx")
 const RAIZ_DO_CONSOLE = path.join(SRC, "app/platform")
+const INTEGRACOES_DO_CONSOLE = path.join(SRC, "app/platform/orgs/[id]/integracoes/page.tsx")
 
 /**
  * As classes da escala do CRM, escritas de forma que a própria régua não se acuse: o prefixo é
@@ -71,6 +72,59 @@ function linhasComEscala(fonte: string, escala: string): string[] {
     .filter((l) => l.includes(escala))
 }
 
+/**
+ * As linhas de `fonte` que são CÓDIGO — usada por TODA asserção positiva sobre texto-fonte.
+ *
+ * Comentário não prova nada: ele é conteúdo do arquivo, e `toContain` sobre o arquivo inteiro
+ * não distingue "a chamada existe" de "alguém escreveu a chamada em prosa". As quatro formas
+ * filtradas são as quatro que existem num `.tsx` — corpo de bloco (` * `), linha (`//`),
+ * abertura de bloco (`/*`) e comentário JSX (`{/*`). A quarta é a idiomática dentro de JSX e
+ * foi a que escapou da primeira versão desta régua.
+ *
+ * Só as asserções POSITIVAS usam este filtro. A varredura de cor (`linhasComEscala`) mede o
+ * arquivo inteiro de propósito: lá, ignorar comentário afrouxaria uma afirmação absoluta.
+ */
+function linhasDeCodigo(fonte: string): string[] {
+  return fonte
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(
+      (l) =>
+        !l.startsWith("*") &&
+        !l.startsWith("//") &&
+        !l.startsWith("/*") &&
+        !l.startsWith("{/*"),
+    )
+}
+
+/** Só o código de `fonte`, como um texto só. */
+function codigoDe(fonte: string): string {
+  return linhasDeCodigo(fonte).join("\n")
+}
+
+/** As linhas de CÓDIGO que pedem a paleta do console. Comentário citando a prop não conta. */
+function linhasComPropDePaleta(fonte: string): string[] {
+  return linhasDeCodigo(fonte).filter((l) => l.includes('palette="slate"'))
+}
+
+/**
+ * O código do call site de `tag`, DELIMITADO: de `<Tag` até o `/>` que o fecha.
+ *
+ * A versão anterior fatiava `fonte.slice(fonte.indexOf("<Badge"))` — ou seja, ia até o FIM DO
+ * ARQUIVO e engolia o call site do `<Tile>`, que fica ~5,7 KB adiante. O conjunto de morte da
+ * asserção do Badge virava um SUPERSET do da asserção do Tile: ela só acendia quando os DOIS
+ * perdessem a prop. Delimitar é o que torna os dois conjuntos disjuntos.
+ *
+ * Fail-closed: tag ausente, ou call site sem fechamento, devolve vazio — e vazio reprova.
+ */
+function callSiteDe(fonte: string, tag: string): string {
+  const inicio = fonte.indexOf(tag)
+  if (inicio < 0) return ""
+  const fim = fonte.indexOf("/>", inicio)
+  if (fim < 0) return ""
+  return codigoDe(fonte.slice(inicio, fim))
+}
+
 describe("AC4 — a tabela de paletas", () => {
   it("o default é a escala do CRM: o `/dashboard` não muda de aparência", () => {
     // O `/dashboard` não passa a prop. Se o default virasse `slate`, a tela do CLIENTE mudaria
@@ -99,6 +153,23 @@ describe("AC4 — a tabela de paletas", () => {
     }
   })
 
+  it("QA-900-57-2 — o campo de senha é byte a byte o da `main`, e não uma concatenação", () => {
+    // A string abaixo é o `class` do `<input type="password">` em `main@1393fa68`, copiada byte
+    // a byte (só o prefixo da escala é montado, para este arquivo não conter o literal que ele
+    // varre). A âncora é a FONTE ANTERIOR, não `PALETAS`: derivar o esperado da tabela que se
+    // testa aprovaria qualquer valor que a tabela viesse a ter.
+    const NA_MAIN =
+      `mt-1 w-full rounded border border-${ESCALA_DO_CRM}700 bg-${ESCALA_DO_CRM}950 ` +
+      `px-2 py-1 font-mono text-sm text-${ESCALA_DO_CRM}100`
+    expect(PALETAS.stone.campoMono).toBe(NA_MAIN)
+
+    // `${classes.campo} font-mono` põe o token no FIM da string. Mesmo multiconjunto de tokens,
+    // ordem diferente — sem efeito visual, mas o `/dashboard` deixa de ser byte a byte igual à
+    // `main`, e é essa distinção que a frase do Change Log confundia.
+    expect(PALETAS.stone.campoMono).not.toBe(`${PALETAS.stone.campo} font-mono`)
+    expect(codigoDe(fs.readFileSync(PAINEL, "utf8"))).toContain("className={classes.campoMono}")
+  })
+
   it("as duas paletas diferem em TODOS os papéis — nenhum ficou copiado por engano", () => {
     for (const papel of Object.keys(PALETAS.stone) as Array<keyof ClassesDaPaleta>) {
       expect(PALETAS.slate[papel], `papel ${papel}`).not.toBe(PALETAS.stone[papel])
@@ -124,17 +195,21 @@ describe("AC4 — nenhuma cor sobreviveu solta no componente compartilhado", () 
 
   it("o componente consome a tabela — a prop não é decorativa", () => {
     const fonte = fs.readFileSync(PAINEL, "utf8")
-    expect(fonte).toContain("classesDaPaleta(palette)")
+    // Sobre o CÓDIGO, não sobre o arquivo: `toContain` no arquivo inteiro fica verde com a
+    // chamada trocada por `PALETAS.stone` e um comentário citando a chamada em prosa — e nesse
+    // estado a prop é inteiramente decorativa, o que devolve a tela do console à escala do CRM.
+    expect(codigoDe(fonte)).toContain("classesDaPaleta(palette)")
 
     // `Tile` e `Badge` são funções SEPARADAS dentro do arquivo e hardcodavam a escala por conta
     // própria. Threadar só o componente-pai deixaria os 5 tiles — o corpo da tela — na escala do
-    // CRM. A primeira versão desta asserção era um `toContain` único, e passava VERDE com o
-    // `classes` do `Tile` removido: o `Badge` sozinho já satisfazia a busca. Medir os DOIS call
-    // sites separadamente é o que mata essa mutação.
-    const chamadaDoTile = fonte.slice(fonte.indexOf("<Tile"))
-    expect(chamadaDoTile).toContain("classes={classes}")
-    const chamadaDoBadge = fonte.slice(fonte.indexOf("<Badge"))
-    expect(chamadaDoBadge).toContain("classes={classes}")
+    // CRM. Os dois call sites são medidos em recortes DELIMITADOS e disjuntos: fatiar até o fim
+    // do arquivo faz o recorte do Badge conter o do Tile, e aí um satisfaz o outro.
+    const doTile = callSiteDe(fonte, "<Tile")
+    const doBadge = callSiteDe(fonte, "<Badge")
+    expect(doTile).toContain("classes={classes}")
+    expect(doBadge).toContain("classes={classes}")
+    expect(doTile).not.toContain("<Badge")
+    expect(doBadge).not.toContain("<Tile")
   })
 })
 
@@ -159,14 +234,8 @@ describe("AC4 — o console inteiro fala uma língua visual só", () => {
     // apagar a prop deixava a régua verde porque um comentário de topo citava `palette="slate"`
     // em prosa. O comentário foi reescrito e a medição foi estreitada — as duas coisas, porque
     // qualquer uma delas sozinha volta a apodrecer no próximo PR.
-    const fonte = fs.readFileSync(
-      path.join(SRC, "app/platform/orgs/[id]/integracoes/page.tsx"),
-      "utf8",
-    )
-    const linhasDeJsx = fonte
-      .split("\n")
-      .filter((l) => !l.trim().startsWith("*") && !l.trim().startsWith("//"))
-    expect(linhasDeJsx.filter((l) => l.includes('palette="slate"'))).toHaveLength(1)
+    const fonte = fs.readFileSync(INTEGRACOES_DO_CONSOLE, "utf8")
+    expect(linhasComPropDePaleta(fonte)).toHaveLength(1)
   })
 
   it("a tela do CLIENTE continua sem pedir paleta — é assim que ela não muda", () => {
@@ -175,5 +244,87 @@ describe("AC4 — o console inteiro fala uma língua visual só", () => {
       "utf8",
     )
     expect(fonte).not.toContain("palette=")
+  })
+})
+
+/**
+ * AC4 · QA-900-57-1 — um controle positivo por furo.
+ *
+ * As três asserções de texto-fonte acima já estiveram VERDES com a prop de paleta neutralizada:
+ * um comentário citando a chamada, um recorte de call site que engolia o call site vizinho, e um
+ * comentário JSX. Os três foram medidos (`tsc --noEmit` rc=0, régua 10/10 verde) — não são
+ * hipóteses.
+ *
+ * Consertar sem exercitar o conserto deixa a correção como PROSA, e prosa não é herdada pelo
+ * próximo PR: quem reescrever a régua não tem como saber que aquele filtro e aquele recorte são
+ * o carrasco, e não decoração. Cada `it` abaixo envenena a FONTE REAL da forma exata que
+ * escapava e afirma que agora ela reprova — e, onde vale, afirma também que a forma ANTIGA da
+ * asserção continuaria verde, que é a medida do que se ganhou.
+ *
+ * Todos são fail-closed: se a âncora do envenenamento não casar (reindentação, renomeação), o
+ * `not.toBe(fonte)` reprova em vez de aprovar por mutação inerte.
+ */
+describe("AC4 — a régua morde as três formas que já a driblaram", () => {
+  it("furo q8: comentário citando `classesDaPaleta(palette)` não substitui a chamada", () => {
+    const fonte = fs.readFileSync(PAINEL, "utf8")
+    const envenenada = fonte.replace(
+      "const classes = classesDaPaleta(palette)",
+      "// a paleta vem de classesDaPaleta(palette)\n  const classes = PALETAS.stone",
+    )
+    expect(envenenada).not.toBe(fonte)
+
+    // O estado da mutação: a prop `palette` fica INTEIRAMENTE decorativa e a tela de integrações
+    // do console volta toda à escala do CRM — e a varredura de cor não vê nada, porque
+    // `PALETAS.stone` é um identificador e não contém o literal da escala.
+    expect(linhasComEscala(envenenada, ESCALA_DO_CRM)).toEqual([])
+
+    // A forma ANTIGA da asserção (arquivo inteiro) continuaria VERDE…
+    expect(envenenada).toContain("classesDaPaleta(palette)")
+    // …e a forma nova reprova.
+    expect(codigoDe(envenenada)).not.toContain("classesDaPaleta(palette)")
+  })
+
+  it("furo M3: o recorte do `<Badge>` não é satisfeito pelo call site do `<Tile>`", () => {
+    const fonte = fs.readFileSync(PAINEL, "utf8")
+    const inicio = fonte.indexOf("<Badge")
+    const fim = fonte.indexOf("/>", inicio)
+    expect(inicio).toBeGreaterThan(-1)
+    expect(fim).toBeGreaterThan(inicio)
+
+    // A causa do furo, medida e não descrita: o `<Tile>` vem DEPOIS do `<Badge>`, então fatiar
+    // do `<Badge` até o fim do arquivo inclui o call site do `<Tile>`.
+    expect(fonte.slice(inicio)).toContain("<Tile")
+
+    const envenenada =
+      fonte.slice(0, inicio) +
+      fonte.slice(inicio, fim).replace("classes={classes}", "classes={PALETAS.stone}") +
+      fonte.slice(fim)
+    expect(envenenada).not.toBe(fonte)
+
+    // A forma ANTIGA (slice até o EOF) continuaria VERDE, porque o `<Tile>` ainda tem a prop…
+    expect(envenenada.slice(envenenada.indexOf("<Badge"))).toContain("classes={classes}")
+    // …e os recortes delimitados são disjuntos: só o do Badge acende.
+    expect(callSiteDe(envenenada, "<Badge")).not.toContain("classes={classes}")
+    expect(callSiteDe(envenenada, "<Tile")).toContain("classes={classes}")
+  })
+
+  it("furo q4c: comentário JSX `{/* … */}` não substitui a prop na tela do console", () => {
+    const fonte = fs.readFileSync(INTEGRACOES_DO_CONSOLE, "utf8")
+    const envenenada = fonte
+      .replace('        palette="slate"\n', "")
+      .replace(
+        "      <IntegrationsPanel\n",
+        '      {/* palette="slate" */}\n      <IntegrationsPanel\n',
+      )
+    expect(envenenada).not.toBe(fonte)
+    expect(envenenada).not.toContain('palette="slate"\n      />')
+
+    // O filtro antigo cobria `*` e `//` e NÃO cobria `{/*`, que é a forma idiomática num `.tsx`.
+    const filtroAntigo = envenenada
+      .split("\n")
+      .filter((l) => !l.trim().startsWith("*") && !l.trim().startsWith("//"))
+      .filter((l) => l.includes('palette="slate"'))
+    expect(filtroAntigo).toHaveLength(1) // continuaria VERDE
+    expect(linhasComPropDePaleta(envenenada)).toHaveLength(0) // agora reprova
   })
 })

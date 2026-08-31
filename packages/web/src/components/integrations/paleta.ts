@@ -29,11 +29,18 @@
 export type PaletaDoPainel = "stone" | "slate"
 
 /**
- * Os 14 lugares do painel que carregavam cor.
+ * Os 15 lugares do painel que carregavam cor.
  *
  * A contagem de partida foi medida, não estimada: `grep -c 'stone-'` devolvia **18 linhas** em
  * `integrations-panel.tsx` (a Dev Note original da story dizia 16). Algumas linhas repetem o
- * mesmo papel visual — por isso 18 linhas viram 14 papéis nomeados.
+ * mesmo papel visual — por isso 18 linhas viram papéis nomeados.
+ *
+ * `campoMono` existe (QA-900-57-2) porque `` `${classes.campo} font-mono` `` CONCATENA: o token
+ * ia para o fim da string em vez do meio, e o `<input type="password">` do `/dashboard` mudava
+ * de `class` — mesmo multiconjunto de tokens, ordem diferente. Sem efeito visual, mas o
+ * `/dashboard` deixava de ser byte a byte idêntico à `main`, e "sem diferença" e "diferença sem
+ * efeito" são afirmações distintas. Com o papel próprio a tabela volta a ser a única dona das
+ * classes do campo e a igualdade exata é restaurada.
  */
 export interface ClassesDaPaleta {
   /** Cartão de um tile e da caixa de trilha. */
@@ -48,8 +55,10 @@ export interface ClassesDaPaleta {
   caixaInformativa: string
   /** Rótulo de um campo de formulário. */
   rotuloDeCampo: string
-  /** `input` de texto e de senha. */
+  /** `input` de texto. */
   campo: string
+  /** `input` de senha — o mesmo campo, monoespaçado. Ver a nota sobre concatenação acima. */
+  campoMono: string
   /** Botão secundário ("Revelar últimos 4"). */
   botaoSecundario: string
   /** Texto monoespaçado do resultado do "revelar". */
@@ -74,6 +83,8 @@ export const PALETAS: Readonly<Record<PaletaDoPainel, ClassesDaPaleta>> = {
     rotuloDeCampo: "text-xs font-medium text-stone-400",
     campo:
       "mt-1 w-full rounded border border-stone-700 bg-stone-950 px-2 py-1 text-sm text-stone-100",
+    campoMono:
+      "mt-1 w-full rounded border border-stone-700 bg-stone-950 px-2 py-1 font-mono text-sm text-stone-100",
     botaoSecundario: "rounded border border-stone-700 px-3 py-1 text-xs text-stone-300",
     mono: "font-mono text-xs text-stone-300",
     badgeNeutro: "bg-stone-500/15 text-stone-300",
@@ -90,6 +101,8 @@ export const PALETAS: Readonly<Record<PaletaDoPainel, ClassesDaPaleta>> = {
     rotuloDeCampo: "text-xs font-medium text-slate-400",
     campo:
       "mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1 text-sm text-slate-100",
+    campoMono:
+      "mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1 font-mono text-sm text-slate-100",
     botaoSecundario: "rounded border border-slate-700 px-3 py-1 text-xs text-slate-300",
     mono: "font-mono text-xs text-slate-300",
     badgeNeutro: "bg-slate-500/15 text-slate-300",

@@ -244,7 +244,7 @@ function Tile({
               value={segredo}
               placeholder={estado.temSegredo ? "•••••••• (deixe vazio para manter)" : ""}
               onChange={(e) => setSegredo(e.target.value)}
-              className={`${classes.campo} font-mono`}
+              className={classes.campoMono}
             />
           </label>
 

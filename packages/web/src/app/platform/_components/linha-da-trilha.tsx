@@ -20,6 +20,9 @@ export interface LinhaDeTrilhaDaPlataforma {
   metadata: Record<string, unknown> | null
 }
 
+/** O que a linha mostra quando `metadata.actor_label` não veio, ou não veio utilizável. */
+export const ATOR_SEM_ROTULO = "sem rótulo"
+
 /**
  * Quem agiu.
  *
@@ -27,10 +30,15 @@ export interface LinhaDeTrilhaDaPlataforma {
  * "sem rótulo" em vez de inventar um nome. `actor_type` (`platform` | `org`) fica sempre visível
  * porque é ele que distingue "a Trifold mexeu" de "o cliente mexeu" — a pergunta que a trilha
  * existe para responder.
+ *
+ * EXPORTADA de propósito (QA-900-57-3): `metadata` é `Record<string, unknown>` — quer dizer que
+ * o TypeScript não garante NADA sobre `actor_label`, e os quatro caminhos daqui (string útil,
+ * ausente, vazia/só espaço, tipo errado) são lógica de verdade que o `type-check` não exercita.
+ * É função pura sobre objeto simples: não precisa de render, nem de sessão, nem de banco.
  */
-function rotuloDoAtor(linha: LinhaDeTrilhaDaPlataforma): string {
+export function rotuloDoAtor(linha: LinhaDeTrilhaDaPlataforma): string {
   const rotulo = linha.metadata?.actor_label
-  return typeof rotulo === "string" && rotulo.trim() !== "" ? rotulo : "sem rótulo"
+  return typeof rotulo === "string" && rotulo.trim() !== "" ? rotulo : ATOR_SEM_ROTULO
 }
 
 export function LinhaDaTrilhaDaPlataforma({
