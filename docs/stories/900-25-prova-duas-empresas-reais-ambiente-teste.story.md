@@ -10,8 +10,9 @@
   org certa, provado por teste automatizado") passa a ter prova, não promessa.
 - **Story:** 900-25 — colisão de numeração com o epic §857 **resolvida pelo `@po`**, registrada no
   próprio epic (`epic-900-saas-multi-tenant.md`, notas em §857 e §952). Ver "Numeração" abaixo.
-- **Status:** Approved (**GO condicional** do `@po` em 2026-08-30, rodada 2 —
-  `docs/qa/po-validation-900-25.md`) — **BLOQUEADA PARCIALMENTE** (ver campos abaixo)
+- **Status:** Ready for Review (Tasks 1-12 implementadas; Tasks 1-2 mergeadas no PR `#529`,
+  Tasks 0 e 3-12 nesta branch) — desbloqueada em 2026-08-30: as 5 PRs (`#525`, `#526`, `#527`,
+  `#528`, `#529`) estão **MERGED** em `main`, reconferidas com `gh pr view` no dia.
 - **Condições do GO (v0.3, antes da Task 3 — custo de cronograma zero, Tasks 3-12 já esperam os
   4 PRs):** **N1** lista de FKs RESTRICT derivada de `pg_constraint` em runtime, não hardcoded (a
   lista da AC14 já está errada contra o catálogo vivo: são **4** RESTRICT, não 3 — falta
@@ -23,8 +24,9 @@
   (medido), e o fallback aponta para o canário; **N4** `TELEFONE_FIXTURE_900_25` passa por
   `normalizePhoneBR` (`recipients.ts:52-75`) e é descartado se não normalizar — o controle
   positivo da AC13 não passa como escrito. Menores 5-8 no mesmo passe.
-- **Blocked by (Tasks 3-12 apenas):** PR `#525`, `#526`, `#527`, `#528` — todas abertas em
-  2026-08-29, nenhuma mergeada. Reconfirmar no dia da implementação.
+- **Blocked by (Tasks 3-12 apenas):** ~~PR `#525`, `#526`, `#527`, `#528`~~ — **DESBLOQUEADO
+  em 2026-08-30**: as quatro (mais a `#529`, das Tasks 1-2) estão `MERGED` em `main`. Medido no
+  dia com `gh pr view 525 526 527 528 529 --json state`.
 - **Desbloqueado desde já:** Task 1 (AC1) e Task 2 (AC2) — Camada A, tocam arquivos que já existem
   em `main` hoje (`webhook-org.test.ts`, `meta-ads-intelligence/route.test.ts`, os dois fakes do
   `TEST-004`), sem dependência de nenhum dos quatro PRs.
@@ -269,7 +271,7 @@ usa `forEachActiveOrg` ou uma rota de cron real (AC12, AC13):
   [Source: `docs/backlog.md`, `[TEST-004]`; `docs/qa/po-validation-900-24.md`, rodada 2, item 6;
   `docs/qa/po-validation-900-25.md`, D8]
 
-- [ ] **AC3 — `tests/tenancy/cross-tenant.test.ts` + `vitest.tenancy.config.ts` isolado, com as
+- [x] **AC3 — `tests/tenancy/cross-tenant.test.ts` + `vitest.tenancy.config.ts` isolado, com as
   duas guardas obrigatórias.**
 
   **Por que config separada, não um `include` a mais em `vitest.config.ts` (decisão pedida pela
@@ -401,7 +403,7 @@ usa `forEachActiveOrg` ou uma rota de cron real (AC12, AC13):
   [Source: mission do dono do produto, 2026-08-29; `scripts/reset-tenancy-testdb.ts` (guarda
   original); `packages/shared/src/constants/supabase-refs.ts`; `docs/qa/po-validation-900-25.md`, D1]
 
-- [ ] **AC3b — Vivacidade obrigatória do `pnpm test:tenancy` — o 12º instrumento cego (AC nova,
+- [x] **AC3b — Vivacidade obrigatória do `pnpm test:tenancy` — o 12º instrumento cego (AC nova,
   D2 do parecer do `@po`).**
 
   **Medido pelo `@po`, executando a config exata da v0.1 desta story:** vitest **não lê nenhum
@@ -462,7 +464,7 @@ usa `forEachActiveOrg` ou uma rota de cron real (AC12, AC13):
   a Guarda 2 precisa distinguir skip legítimo de config quebrada — ver AC3);
   `feedback_filtro_de_teste_que_nao_casa_sai_verde.md`]
 
-- [ ] **AC4 — Assertion 1: `provision_org` idempotente, ids distintos.**
+- [x] **AC4 — Assertion 1: `provision_org` idempotente, ids distintos.**
 
   ```ts
   const orgAId1 = await rpc("provision_org", { p_name: "Org A — 900-25", p_slug: "org-a-900-25" })
@@ -487,7 +489,7 @@ usa `forEachActiveOrg` ou uma rota de cron real (AC12, AC13):
 
   [Source: mission do dono do produto; `supabase/migrations/246_org_integrations_e_unicidade_whatsapp.sql`, seção 3]
 
-- [ ] **AC5 — Assertion 2: seed — 1 `whatsapp_config` inactive + 6 `org_integrations`
+- [x] **AC5 — Assertion 2: seed — 1 `whatsapp_config` inactive + 6 `org_integrations`
   disconnected, por org.**
 
   ```ts
@@ -518,7 +520,7 @@ usa `forEachActiveOrg` ou uma rota de cron real (AC12, AC13):
 
   [Source: mission do dono do produto; migration `246`, seção 3, blocos 5 e 6]
 
-- [ ] **AC6 — Assertion 3: as UNIQUE falham — a mais importante da story.**
+- [x] **AC6 — Assertion 3: as UNIQUE falham — a mais importante da story.**
 
   **"Se este passo passar sem erro, o índice não existe e todo o resto é teatro"** — citação
   literal da missão, e a razão de esta AC ser a primeira testada depois do seed, antes de qualquer
@@ -590,7 +592,7 @@ usa `forEachActiveOrg` ou uma rota de cron real (AC12, AC13):
   `docs/qa/po-validation-900-25.md`, D3 (rodada 1) e Menor 7 (rodada 2, isolamento de
   `phone_ativo` sem depender de ordem de OID)]
 
-- [ ] **AC7 — Assertion 4: WhatsApp roteia por `phone_number_id`, nos dois sentidos.**
+- [x] **AC7 — Assertion 4: WhatsApp roteia por `phone_number_id`, nos dois sentidos.**
 
   Chama `POST` no handler real de `packages/web/src/app/api/webhook/whatsapp/route.ts`, com
   `WEBHOOK_ORG_ROUTING=identifier` setado no processo do teste e `SUPABASE_URL`/
@@ -616,7 +618,7 @@ usa `forEachActiveOrg` ou uma rota de cron real (AC12, AC13):
   [Source: mission do dono do produto, 2026-08-29; `packages/web/src/app/api/webhook/whatsapp/route.ts`
   (`export async function POST` em `:201` — corrigido, m1 do parecer; a resolução de org em `:433-483`)]
 
-- [ ] **AC8 — Assertion 5: a resposta não caiu no ramo antigo `if (!config) return "ok"` — a
+- [x] **AC8 — Assertion 5: a resposta não caiu no ramo antigo `if (!config) return "ok"` — a
   asserção que reprova o código de antes da onda.**
 
   Com as duas orgs ativas (AC6/AC7), afirmar que existe uma linha em `messages` com o `wamid`
@@ -633,7 +635,7 @@ usa `forEachActiveOrg` ou uma rota de cron real (AC12, AC13):
 
   [Source: mission do dono do produto, 2026-08-29; Context da `900-24`, "o bug agudo, medido"]
 
-- [ ] **AC9 — Assertion 6: Meta Ads roteia por `page_id`, com `webhook_logs.org_id` correto.**
+- [x] **AC9 — Assertion 6: Meta Ads roteia por `page_id`, com `webhook_logs.org_id` correto.**
 
   Mesmo padrão da AC7, para `packages/web/src/app/api/webhooks/meta-ads/route.ts`, com
   `entry[0].id` = `"PAGE-A"`/`"PAGE-B"` (configurados via `org_integrations` na AC6). Afirmar: o
@@ -643,7 +645,7 @@ usa `forEachActiveOrg` ou uma rota de cron real (AC12, AC13):
 
   [Source: mission do dono do produto, 2026-08-29; `packages/web/src/app/api/webhooks/meta-ads/route.ts`]
 
-- [ ] **AC10 — Assertion 7: `phone_number_id` desconhecido → 200 explícito, zero linha em
+- [x] **AC10 — Assertion 7: `phone_number_id` desconhecido → 200 explícito, zero linha em
   `messages`, log estruturado nos dois lugares — REESCRITA (D5 do parecer do `@po`).**
 
   **O que a v0.1 errava, medido pelo `@po` lendo `logOrgUnresolved`
@@ -704,7 +706,7 @@ usa `forEachActiveOrg` ou uma rota de cron real (AC12, AC13):
   desabilita webhook após falhas repetidas"); `packages/web/src/lib/tenancy/webhook-org.ts`;
   `docs/qa/po-validation-900-25.md`, D5 (rodada 1), Menor 5 (rodada 2)]
 
-- [ ] **AC11 — Assertion 8: `meta-capi-dispatch` — outbox por org, transporte CAPI stubado,
+- [x] **AC11 — Assertion 8: `meta-capi-dispatch` — outbox por org, transporte CAPI stubado,
   isolamento medido por `external_id` — REESCRITA (D6, D7 do parecer do `@po`).**
 
   **Correção D6 — o stub capturava o contrato errado.** Medido:
@@ -777,7 +779,7 @@ usa `forEachActiveOrg` ou uma rota de cron real (AC12, AC13):
 
   [Source: mission do dono do produto, 2026-08-29; `packages/web/src/app/api/cron/meta-capi-dispatch/route.ts`, `resolverDatasetId`/`processarOrg`; `docs/qa/po-validation-900-25.md`, D6 e D7]
 
-- [ ] **AC12 — Assertion 9: isolamento de erro entre orgs, com os dois `orgId` nomeados.**
+- [x] **AC12 — Assertion 9: isolamento de erro entre orgs, com os dois `orgId` nomeados.**
 
   **Correção D9 do parecer do `@po`: esta AC também precisa do redirecionamento de env (Dev
   Notes) — a v0.1 não a listava.** `forEachActiveOrg` chama `createAdminClient()`
@@ -811,7 +813,7 @@ usa `forEachActiveOrg` ou uma rota de cron real (AC12, AC13):
 
   [Source: mission do dono do produto, 2026-08-29; `packages/web/src/lib/tenancy/for-each-org.ts`]
 
-- [ ] **AC13 — Assertion 10: `daily-report` — um despacho por org, `DAILY_REPORT_RECIPIENTS`
+- [x] **AC13 — Assertion 10: `daily-report` — um despacho por org, `DAILY_REPORT_RECIPIENTS`
   escopado à org designada.**
 
   **A rota real** (`packages/web/src/app/api/cron/daily-report/route.ts`) — diferente da AC12,
@@ -896,7 +898,7 @@ usa `forEachActiveOrg` ou uma rota de cron real (AC12, AC13):
   Context desta story, lição 1 (corrigida na rodada 2);
   `docs/qa/po-validation-900-25.md`, D7 e m2 (rodada 1), N3 e N4 (rodada 2)]
 
-- [ ] **AC14 — Assertion 11: teardown com canário — apaga por id, nunca por predicado —
+- [x] **AC14 — Assertion 11: teardown com canário — apaga por id, nunca por predicado —
   REESCRITA (D4 da rodada 1, com N1/Menor 5 da rodada 2 — a lista de FKs passa a ser derivada em
   runtime, não hardcoded).**
 
@@ -1018,7 +1020,7 @@ usa `forEachActiveOrg` ou uma rota de cron real (AC12, AC13):
   [Source: mission do dono do produto, 2026-08-29 — citação literal; `scripts/reset-tenancy-testdb.ts`,
   cabeçalho; `docs/qa/po-validation-900-25.md`, D4 (rodada 1) e N1/Menor 5 (rodada 2)]
 
-- [ ] **AC15 — Não-regressão de produção.**
+- [x] **AC15 — Não-regressão de produção.**
 
   Esta story não altera nenhum arquivo de `packages/web/src/app/**` de aplicação, nenhuma
   migration, nenhum comportamento em runtime de produção — só adiciona testes e 1 config de
@@ -1042,13 +1044,13 @@ antes de qualquer assertion de webhook, porque as UNIQUE são pré-condição de
 telefones distintos" que as assertions 4-10 todas assumem. Task 8 (AC11) é um arquivo separado,
 independente do restante de 4-14 — ver D6.)*
 
-- [ ] **Task 0 — pré-condição de execução (só Tasks 3-12) — @qa**
-  - [ ] 0.1 Confirmar (`gh pr view 525 526 527 528`) que os quatro PRs estão mergeados em `main`.
+- [x] **Task 0 — pré-condição de execução (só Tasks 3-12) — @qa**
+  - [x] 0.1 Confirmar (`gh pr view 525 526 527 528`) que os quatro PRs estão mergeados em `main`.
     Se não, parar — não implementar Tasks 3-12 contra branch (Tasks 1-2 podem prosseguir).
-  - [ ] 0.2 `pnpm db:status` (da `900-3c`) contra `trifold-crm-dev` — confirmar migration `247`
+  - [x] 0.2 `pnpm db:status` (da `900-3c`) contra `trifold-crm-dev` — confirmar migration `247`
     aplicada. Colar saída no Dev Agent Record. **Ainda não medido pelo `@po`** (ele mediu `246`
     via `pg_index` na rodada 2, não `247` — este item continua de pé, não vira redundante).
-  - [ ] 0.3 Confirmar (leitura, `SELECT id FROM organizations WHERE slug = 'org-teste-epic-900'`)
+  - [x] 0.3 Confirmar (leitura, `SELECT id FROM organizations WHERE slug = 'org-teste-epic-900'`)
     que a org canário da AC14 existe. **Já pré-verificado pelo `@po` na rodada 2** (org ativa,
     `whatsapp_config` inactive sem token, `meta_capi_outbox` vazia) — reconfirmar no dia, não
     pular por confiar no parecer.
@@ -1068,85 +1070,85 @@ independente do restante de 4-14 — ver D6.)*
   - [x] 2.4 Fechar `[TEST-004]` em `docs/backlog.md` (mover para "Resolvidos" ou remover, com o
     commit desta story referenciado).
 
-- [ ] **Task 3 — `tests/tenancy/` + `vitest.tenancy.config.ts` + guardas (AC3, AC3b) — @qa**
-  - [ ] 3.1 Criar `vitest.tenancy.config.ts`, **com o alias `@trifold/shared` (D1)** e o
+- [x] **Task 3 — `tests/tenancy/` + `vitest.tenancy.config.ts` + guardas (AC3, AC3b) — @qa**
+  - [x] 3.1 Criar `vitest.tenancy.config.ts`, **com o alias `@trifold/shared` (D1)** e o
     carregamento de `.env.teste` no topo do arquivo (D2/AC3b.1).
-  - [ ] 3.2 Criar `tests/tenancy/support/` (ou local equivalente) com
+  - [x] 3.2 Criar `tests/tenancy/support/` (ou local equivalente) com
     `confirmarDestinoDeTeste()` e a checagem de credenciais.
-  - [ ] 3.3 `package.json` (raiz): script `test:tenancy`.
-  - [ ] 3.4 Verificar as duas guardas isoladamente (sem credencial → skip; ref inventado → falha
+  - [x] 3.3 `package.json` (raiz): script `test:tenancy`.
+  - [x] 3.4 Verificar as duas guardas isoladamente (sem credencial → skip; ref inventado → falha
     nomeada) antes de escrever qualquer assertion.
-  - [ ] 3.5 Teste de vivacidade do import (`ehRefDeProducao("dsopqkqjkmhytudaaolv") === true`) —
+  - [x] 3.5 Teste de vivacidade do import (`ehRefDeProducao("dsopqkqjkmhytudaaolv") === true`) —
     verde, sozinho, antes de qualquer asserção de banco (D1).
-  - [ ] 3.6 **AC3b:** colar no Dev Agent Record a contagem real de testes (não "verde" solto);
+  - [x] 3.6 **AC3b:** colar no Dev Agent Record a contagem real de testes (não "verde" solto);
     rodar o controle positivo (quebrar uma asserção, colar o vermelho, reverter).
 
-- [ ] **Task 4 — Fixtures A/B + provisionamento (AC4, AC5) — @qa**
-  - [ ] 4.1 `beforeAll`: canário (AC14, agora incluindo `meta_capi_outbox` — mas ver Task 8, que
+- [x] **Task 4 — Fixtures A/B + provisionamento (AC4, AC5) — @qa**
+  - [x] 4.1 `beforeAll`: canário (AC14, agora incluindo `meta_capi_outbox` — mas ver Task 8, que
     tem canário PRÓPRIO em arquivo separado) + `provision_org` × 2 + idempotência.
-  - [ ] 4.2 Seed verificado (AC5).
+  - [x] 4.2 Seed verificado (AC5).
 
-- [ ] **Task 5 — UNIQUE (AC6) — @qa**
-  - [ ] 5.1 Controle positivo (A/B com telefones distintos, sem erro).
-  - [ ] 5.2 `whatsapp_config_phone_ativo`, com `error.message` nomeando a constraint (D3).
-  - [ ] 5.2b `whatsapp_config_phone_ativo` **isolado de verdade** — org C própria (provisionada e
+- [x] **Task 5 — UNIQUE (AC6) — @qa**
+  - [x] 5.1 Controle positivo (A/B com telefones distintos, sem erro).
+  - [x] 5.2 `whatsapp_config_phone_ativo`, com `error.message` nomeando a constraint (D3).
+  - [x] 5.2b `whatsapp_config_phone_ativo` **isolado de verdade** — org C própria (provisionada e
     desmontada dentro do bloco, `"PA"` repetido, sem outra linha própria de C) — remove a
     dependência de ordem de OID que o caso 5.2 sozinho tinha (Menor 7).
-  - [ ] 5.3 `whatsapp_config_org_ativo` isolado (linha extra na org B com `"PB2"` — bônus de
+  - [x] 5.3 `whatsapp_config_org_ativo` isolado (linha extra na org B com `"PB2"` — bônus de
     simetria do parecer), com `error.message` nomeando a constraint (D3).
-  - [ ] 5.4 `org_integrations_meta_page_ativo`, com `error.message` nomeando a constraint (D3).
+  - [x] 5.4 `org_integrations_meta_page_ativo`, com `error.message` nomeando a constraint (D3).
 
-- [ ] **Task 6 — WhatsApp (AC7, AC8, AC10) — @qa**
-  - [ ] 6.1 Helper de payload + HMAC de teste (compartilhado entre AC7/AC8/AC10).
-  - [ ] 6.2 Redirecionamento de env para o handler real enxergar `trifold-crm-dev` — documentar
+- [x] **Task 6 — WhatsApp (AC7, AC8, AC10) — @qa**
+  - [x] 6.1 Helper de payload + HMAC de teste (compartilhado entre AC7/AC8/AC10).
+  - [x] 6.2 Redirecionamento de env para o handler real enxergar `trifold-crm-dev` — documentar
     exatamente quais vars e o `beforeEach`/`afterEach` que restaura.
-  - [ ] 6.3 AC10: `runId` único por execução (`beforeAll`), sem `.maybeSingle()`/`.single()` em
+  - [x] 6.3 AC10: `runId` único por execução (`beforeAll`), sem `.maybeSingle()`/`.single()` em
     nenhuma leitura de verificação, `{ data, error }` sempre desestruturados juntos (D5).
 
-- [ ] **Task 7 — Meta Ads (AC9) — @qa**
+- [x] **Task 7 — Meta Ads (AC9) — @qa**
 
-- [ ] **Task 8 — `meta-capi-dispatch` (AC11) — @qa — arquivo PRÓPRIO
+- [x] **Task 8 — `meta-capi-dispatch` (AC11) — @qa — arquivo PRÓPRIO
   `tests/tenancy/capi-dispatch.test.ts` (D6)**
-  - [ ] 8.0 Pré-condição que ABORTA se houver `meta_capi_outbox` `pending` de outra org (D7) —
+  - [x] 8.0 Pré-condição que ABORTA se houver `meta_capi_outbox` `pending` de outra org (D7) —
     roda antes de provisionar A/B deste arquivo.
-  - [ ] 8.1 Fixtures A/B **próprias** deste arquivo (slugs `-capi`), canário próprio.
-  - [ ] 8.2 Stub de `sendCapiEvents` via `vi.spyOn` (não `vi.mock`), capturando `(events, options)`
+  - [x] 8.1 Fixtures A/B **próprias** deste arquivo (slugs `-capi`), canário próprio.
+  - [x] 8.2 Stub de `sendCapiEvents` via `vi.spyOn` (não `vi.mock`), capturando `(events, options)`
     — contrato corrigido (D6).
-  - [ ] 8.3 Fixtures de lead + outbox.
-  - [ ] 8.4 Teardown próprio (mesmo padrão da AC14, replicado, não compartilhado).
+  - [x] 8.3 Fixtures de lead + outbox.
+  - [x] 8.4 Teardown próprio (mesmo padrão da AC14, replicado, não compartilhado).
 
-- [ ] **Task 9 — isolamento de erro (AC12) — @qa**
-  - [ ] 9.1 Redirecionamento de env **antes** de chamar `forEachActiveOrg` diretamente — faltava
+- [x] **Task 9 — isolamento de erro (AC12) — @qa**
+  - [x] 9.1 Redirecionamento de env **antes** de chamar `forEachActiveOrg` diretamente — faltava
     na v0.1 (D9).
 
-- [ ] **Task 10 — `daily-report` (AC13) — @qa**
-  - [ ] 10.1 Stub de `sendDailyReport` via `vi.spyOn` — nenhuma org (nem A/B, nem terceiros)
+- [x] **Task 10 — `daily-report` (AC13) — @qa**
+  - [x] 10.1 Stub de `sendDailyReport` via `vi.spyOn` — nenhuma org (nem A/B, nem terceiros)
     recebe `fetch` real à Graph API (D7).
-  - [ ] 10.2 `TELEFONE_FIXTURE_900_25` em formato BR válido que sobrevive a `normalizePhoneBR`
+  - [x] 10.2 `TELEFONE_FIXTURE_900_25` em formato BR válido que sobrevive a `normalizePhoneBR`
     (ex. `"11999990000"`) — nunca um valor "sem forma" (N4). Asserção compara contra a forma
     **normalizada**, nomeando na AC por que a normalização acontece no meio do caminho.
-  - [ ] 10.3 `DAILY_REPORT_ORG_ID = orgAId` — justificativa corrigida: `trifoldOrgId()` resolve
+  - [x] 10.3 `DAILY_REPORT_ORG_ID = orgAId` — justificativa corrigida: `trifoldOrgId()` resolve
     para o canário, não "não resolve nada" (N3).
 
-- [ ] **Task 11 — teardown com canário (AC14) — @qa**
-  - [ ] 11.0 Derivar a lista de tabelas RESTRICT via `pg_constraint` em runtime (query da AC14) —
+- [x] **Task 11 — teardown com canário (AC14) — @qa**
+  - [x] 11.0 Derivar a lista de tabelas RESTRICT via `pg_constraint` em runtime (query da AC14) —
     **nunca hardcodear** os nomes das tabelas no código do teardown (N1). Colar no Dev Agent
     Record a lista que a query devolveu no dia da execução, como registro histórico, não como
     fonte.
-  - [ ] 11.1 Limpar cada tabela da lista derivada por `org_id IN (orgAId, orgBId)`, checando
+  - [x] 11.1 Limpar cada tabela da lista derivada por `org_id IN (orgAId, orgBId)`, checando
     `error` de cada delete, **antes** de deletar `organizations` (D4); se `error` mesmo assim, é
     uma 5ª FK RESTRICT nova — falhar nomeando, registrar dívida em `docs/backlog.md`.
-  - [ ] 11.2 Consumir o array de ids `org_id: null` capturado pela AC10 (`system_events` +
+  - [x] 11.2 Consumir o array de ids `org_id: null` capturado pela AC10 (`system_events` +
     `webhook_logs`), deletando por id — fecha o handoff que a v0.2 prometia e não entregava
     (Menor 5).
-  - [ ] 11.3 `DELETE FROM organizations` — checar `error`.
-  - [ ] 11.4 Asserção de teardown bem-sucedido (`orgsRemanescentes.toHaveLength(0)`), independente
+  - [x] 11.3 `DELETE FROM organizations` — checar `error`.
+  - [x] 11.4 Asserção de teardown bem-sucedido (`orgsRemanescentes.toHaveLength(0)`), independente
     do canário (D4).
-  - [ ] 11.5 Documentar por escrito, na AC, que `webhook_logs.org_id` é `SET NULL` (não apagado —
+  - [x] 11.5 Documentar por escrito, na AC, que `webhook_logs.org_id` é `SET NULL` (não apagado —
     anulado) e que isso é resíduo aceitável, não corrupção (N1).
 
-- [ ] **Task 12 — não-regressão (AC15) — @qa**
-  - [ ] 12.1 `git diff --stat main...HEAD` — colar, confirmar padrão de arquivos.
+- [x] **Task 12 — não-regressão (AC15) — @qa**
+  - [x] 12.1 `git diff --stat main...HEAD` — colar, confirmar padrão de arquivos.
 
 ---
 
@@ -1241,6 +1243,8 @@ acrescentar nada à pergunta que esta story faz.
 
 | Data | Versão | Descrição | Autor |
 |---|---|---|---|
+| 2026-08-30 | 0.6 | **Resposta ao gate `@qa` (CONCERNS, merge liberado).** **QA-900-25-1 corrigido** — o 17º instrumento cego, e o único da onda vindo de **limite de transporte**: o canário contava com `select("id").length` e `max_rows=1000` o fazia **saturar**, ficando VERDE sob a mutação que ele existe para pegar (medido pelo `@qa`: `3 failed` sem teto → `2 failed` com teto). Contagem passa a ser **agregada** (`count: "exact", head: true`) nos dois lugares que comparam contagens (canário e as metades "a outra empresa ficou inalterada"), **sem** perder a repetição só-para-transporte — o gate avisou para não trocar um problema pelo outro. Carrasco contra a regressão: `count === null` lança nomeando; dois vermelhos medidos + 5 asserções permanentes. **Menor do gate corrigido e ele estava certo:** a lista do canário vinha da fallout de UMA mutação, não do write-set — **`activities` faltava** (alvo de INSERT do `process-lead`, e havia 8 linhas dentro do canário que ninguém via). Lista rederivada do write-set, com critério escrito, 8 tabelas; carrasco de `activities` medido. Registrado que **`conversations` não tem carrasco possível** sem perturbar o canário. **QA-900-25-2 e o risco do ledger registrados em `docs/backlog.md` com dona `@devops`** (`MNT-001-B`, P1; ledger, P2) — e medi que reaplicar `246`/`247` é seguro (DDL idempotente), o risco residual é genérico. Resíduo dos experimentos apagado do canário **por id** (12 `activities`, 4 `leads`, 9 `webhook_logs`); canário invariante em 3 execuções limpas. `pnpm test:tenancy` → **30 passed / 0 skipped**. | @dev (Dex) |
+| 2026-08-30 | 0.5 | **Tasks 0 e 3-12 implementadas pelo `@dev` (AC3-AC15 marcadas) — a Camada B existe e roda.** `pnpm test:tenancy` → **30 passed / 0 skipped**, em duas execuções seguidas (idempotência ponta a ponta). Controle positivo de vivacidade executado e colado (AC3b.3): mutação `orgBId`→`orgAId` na asserção central ⇒ `1 failed`, `AssertionError`, revertida byte-a-byte. **A AC9 ganhou o segundo sentido** por autocrítica, com a mutação "o resolver sempre devolve A" medida no código de produção (sentido A verde, sentido B vermelho) e revertida. As duas guardas medidas nos DOIS caminhos (sem `.env.teste` ⇒ skip, exit 0; `.env.teste` presente com var vazia ⇒ **throw**, exit 1). Lista de FKs bloqueantes **derivada de `pg_constraint` em runtime** — devolveu exatamente as 4 do parecer, incluindo `financial_notification_log`. **5 achados registrados nas Completion Notes**, sendo um de segurança: a guarda de destino escrita na AC3 **falhava aberta** para ref fora das duas allowlists, e o exemplo da própria AC mascarava o furo pelo hífen. Também: `messages` não tem `org_id` (AC8 insatisfazível como escrita — atendida pelo join com `conversations`), e `pnpm db:status` reporta `246`/`247` **PENDENTE** no ledger enquanto o catálogo diz que os objetos existem. | @dev (Dex) |
 | 2026-08-30 | 0.4 | **Tasks 1 e 2 implementadas pelo `@dev` (AC1 e AC2 marcadas).** AC2: os 2 fakes cegos do `TEST-004` migrados para `criarFakeSupabase`; contagem idêntica (33 + 15 = 48 antes e depois); grep de fechamento nas duas formas → 0 ocorrências (controle: 2 e 1 contra os blobs de `origin/main`); `[TEST-004]` movido para "Concluído" no `docs/backlog.md`. AC1: as 3 mutações do Passo 6 rodadas e medidas (4, 5 e 2 vermelhos, todos `AssertionError`), e a lacuna do 3º receptor fechada com `webhooks/meta-ads/route.test.ts` **novo** (3 testes), cujo carrasco foi provado com a mutação que a própria AC1 nomeia. **3 achados registrados nas Completion Notes**, sendo um bloqueante de base: o substrato das duas tasks **não existe em `origin/main`** — a Decisão 2 do parecer foi medida na árvore da `900-24`. Extensões justificadas no fixture (`erroPorEscrita`, `resultadoMaybeSingle`). | @dev (Dex) |
 | 2026-08-30 | 0.3 | **Correções N1-N4 + Menores 5-8 aplicadas pelo `@sm`, condição do GO condicional (rodada 2, `docs/qa/po-validation-900-25.md`).** **N1** AC14: a lista de FKs RESTRICT deixa de ser hardcoded — deriva de `pg_constraint` em runtime (`confdeltype NOT IN ('c','n')`), lista escrita vira comentário datado; tabela de fatos corrigida (4 RESTRICT incl. `financial_notification_log`, 87 CASCADE, `webhook_logs.org_id` é o único SET NULL); documentado que `webhook_logs` das AC7/AC9 fica com `org_id` anulado (resíduo aceitável, não corrupção) ao deletar as orgs. **N2** AC3 Guarda 2 reescrita: arquivo `.env.teste` ausente ⇒ `skip` (legítimo); arquivo presente mas vars não chegaram a `process.env` ⇒ `throw` nomeando a causa — fecha a janela em que a correção do D2 "escorregava" de volta ao defeito da v0.1. **N3** Context lição 1 e a justificativa da AC13 corrigidas: `trifoldOrgId()` RESOLVE em `trifold-crm-dev`, para a própria org canário — o override de `DAILY_REPORT_ORG_ID` continua certo, mas por uma razão mais séria (evitar contaminar o canário, não "org inexistente"). **N4** AC13: `TELEFONE_FIXTURE_900_25` trocado para um valor que sobrevive a `normalizePhoneBR` (`"11999990000"`), com a asserção comparando a forma normalizada — evita que a metade positiva da prova morra por descarte silencioso ou por um relaxamento futuro para `toBeDefined()`. **Menor 5**: handoff AC10→AC14 agora de fato consumido (array `idsComOrgIdNuloDaAC10`). **Menor 6**: loader de `.env.teste` ganha guarda defensiva para Node < 20.12/21.7, com nota sobre a divergência do requisito documentado em `CLAUDE.md`. **Menor 7**: AC6 ganha caso 5.2b (org C isolada) removendo a dependência de ordem de OID do caso 5.2. **Menor 8**: Complexity "G" reconfirmada por escrito. **Tasks 1 e 2 reatribuídas a `@dev`** (roteamento do `@po`, sem relação com N1-N4). | @sm (River) |
 | 2026-08-30 | 0.2.1 | **Revalidação do `@po` — 🟢 GO condicional (rodada 2), 9.0/10.** `docs/qa/po-validation-900-25.md`, Rodada 2. **D1-D9 fechados**, sete deles verificados **executando**: o alias resolve o subpath (`Tests 2 passed`); `.env.teste` chega aos workers (`credenciaisPresentes=true`); o Postgres nomeia a constraint na mensagem (`duplicate key value violates unique constraint "probe_phone_ativo"`, medido em `TEMP TABLE` com `ROLLBACK`), então a AC6 fica vermelha se o índice sumir; `vi.spyOn` no barrel `@trifold/shared` (dois níveis de `export *`) **intercepta o call site real** — `chamadas_capturadas=1` —, idem para `sendDailyReport`. **4 achados novos para a v0.3, antes da Task 3:** **N1** (13º instrumento cego) a lista de FKs RESTRICT da AC14 é hardcoded a partir de grep em migration e já está errada contra `pg_constraint`; **N2** a correção do 12º cego é de uma vez só — sem `.env.teste`, `pnpm test:tenancy` volta a `exit 0` com 2 asserções falsas puladas; **N3** a lição 1 do Context é falsa (`trifoldOrgId()` é o id do canário no dev); **N4** o telefone-fixture da AC13 é descartado por `normalizePhoneBR`. **Tasks 1 e 2 liberadas para o `@dev` hoje** — nenhum dos quatro achados as toca. | @po (Pax) |
@@ -1258,6 +1262,11 @@ acrescentar nada à pergunta que esta story faz.
 
 claude-opus-5 (1M) — `@dev` (Dex), modo YOLO, 2026-08-30. Escopo executado: **somente Tasks 1 e 2**.
 Tasks 0 e 3-12 não foram tocadas.
+
+**Rodada 2 (mesmo dia):** claude-opus-5 (1M) — `@dev` (Dex), modo YOLO, 2026-08-30. Escopo
+executado: **Tasks 0 e 3-12** (AC3-AC15). Branch `story/900-25-prova-duas-empresas-ambiente-teste`,
+criada a partir de `origin/main` (`aa584dfb`) — que agora contém `900-3c`, `900-21b`, `900-23`,
+`900-24` e as Tasks 1-2 desta story. Nenhum `git push`, nenhum PR.
 
 ### Debug Log References
 
@@ -1338,6 +1347,236 @@ satisfazível** neste repo — não há `tsconfig.scripts.json`, o `ci.yml` só 
 todos `TS2307` de `@web/*`). `git status --short -- scripts/` → vazio: zero arquivos de `scripts/`
 tocados nesta fatia. Produção não foi acessada; nenhum banco foi consultado.
 
+---
+
+## Rodada 2 — Tasks 0 e 3-12 (Camada B)
+
+**Task 0.1 — os PRs.** `gh pr view 525 526 527 528 529 --json state` → **MERGED** nas cinco.
+`origin/main` = `aa584dfb`. Branch criada dela; a árvore de trabalho estava em
+`story/900-24-…` e **atrás do remoto**, então nada foi commitado lá.
+
+**Task 0.2 — `pnpm db:status`, e o achado que ele produziu.**
+```
+[db-env] ambiente=teste ref=xnxvygyfyyyzwhiuoehz escreve=false
+Ambiente: teste · projeto xnxvygyfyyyzwhiuoehz
+aplicada 268 · PENDENTE 2 · ALTERADA-APÓS-APLICAR 0 · ÓRFÃ-no-banco 0
+PENDENTE (2):
+  246_org_integrations_e_unicidade_whatsapp.sql
+  247_org_integrations_check_whatsapp_grafias.sql
+```
+**O ledger e o catálogo discordam, e quem manda no teste é o catálogo.** Medido por
+`pg_index`/`pg_constraint`/`information_schema` em `trifold-crm-dev`, os objetos das duas
+migrations **existem**:
+
+| objeto que a AC exercita | catálogo de `trifold-crm-dev` |
+|---|---|
+| `whatsapp_config_phone_ativo` | presente — `UNIQUE (phone_number_id) WHERE status='active' AND phone_number_id IS NOT NULL` |
+| `whatsapp_config_org_ativo` | presente — `UNIQUE (org_id) WHERE status='active'` |
+| `org_integrations_meta_page_ativo` | presente — `UNIQUE ((config->>'page_id')) WHERE provider='meta_ads' AND config->>'page_id' IS NOT NULL` |
+| tabela `org_integrations` (6 providers, CHECK) | presente |
+| `whatsapp_sem_identificador_proprio` | presente **na grafia da `247`** (`phone[^[:alnum:]]{0,2}number[^[:alnum:]]{0,2}id`), não na da `246` |
+| `provision_org` seções 5 e 6 | presentes (`pg_get_functiondef`), 6 linhas de `org_integrations` |
+
+Causa: a última linha do ledger é `245_registro_de_migrations.sql` (`via=apply`, 2026-08-29
+19:01). As `246`/`247` foram aplicadas ao banco de teste **fora** do `db:apply` (durante os gates
+da `900-21b`/`900-24`), então o registro não as conhece. O espelho rastreado
+`docs/audits/migrations-aplicadas.json` foi **regenerado pelo `db:status` e revertido**
+(`git checkout --`), porque a AC15 não o lista e porque snapshotar `PENDENTE: 2` congelaria a
+divergência em vez de corrigi-la. **Item para o `@devops`** (Completion Note 5).
+
+**Task 0.3 — canário.** `SELECT id, slug, is_active FROM organizations` →
+**uma** linha: `org-teste-epic-900`, ativa. Confere com a rodada 2 do parecer.
+
+**Task 3.4 — as duas guardas, medidas nos dois caminhos.**
+
+| cenário | comando | resultado medido | exit |
+|---|---|---|---|
+| ref inventado **sem hífen** | `TENANCY_TEST_SUPABASE_URL=https://producaofalsa.supabase.co pnpm test:tenancy` | `tests/tenancy recusa rodar: … NÃO está na allowlist de refs de teste (ref extraído: producaofalsa)` | 1 |
+| ref **real** de produção | `…=https://dsopqkqjkmhytudaaolv.supabase.co` | `… (ref extraído: dsopqkqjkmhytudaaolv — e ele é um ref de PRODUÇÃO)` | 1 |
+| exemplo literal da AC (com hífen) | `…=https://producao-falsa.supabase.co` | `… (ref extraído: <não reconhecido>)` | 1 |
+| `.env.teste` **presente**, var não chega | `TENANCY_TEST_SUPABASE_URL= pnpm test:tenancy` | `Error: … .env.teste existe mas … não chegaram ao process.env — o loader do vitest.tenancy.config.ts quebrou ou a variável foi renomeada.` | **1** |
+| `.env.teste` **ausente** (movido e restaurado) | `pnpm test:tenancy` | `Test Files 1 passed \| 2 skipped (3)` · `Tests 3 passed \| 16 skipped (19)` | **0** |
+
+Os três primeiros **só passaram a valer depois da correção da Completion Note 1** — antes dela o
+primeiro caso saía num erro de rede da Management API, que é o que a AC proíbe.
+O `.env.teste` foi restaurado e conferido byte-a-byte contra a cópia de backup.
+
+**Task 3.5 — vivacidade do alias (D1).** `tests/tenancy/alias-vivo.test.ts`, sem `skipIf`, roda
+**3 passed** mesmo sem credencial: `ehRefDeProducao("dsopqkqjkmhytudaaolv") === true`, o controle
+negativo (`…("xnxvygyfyyyzwhiuoehz") === false`, `ehRefDeTeste(…) === true` — sem ele um stub
+`() => true` passaria) e a normalização de caixa do PR #524.
+
+**Task 3.6 / AC3b.2 — a contagem real, colada, não "verde solto".**
+```
+ Test Files  4 passed (4)
+      Tests  30 passed (30)
+```
+**30 passed | 0 skipped.** Execuções seguidas (Testing §4), sem reset entre elas: `30 passed` em
+todas. Distribuição: `alias-vivo` 3 · `retry-transporte` 10 · `cross-tenant` 15 · `capi-dispatch` 2.
+
+**Task 3.6 / AC3b.3 — controle positivo de vivacidade (o vermelho, colado, depois revertido).**
+Mutação: na asserção central da AC7/AC8, `expect(conversas[0]!.org_id).toBe(orgBId)` → `orgAId`.
+```
+ FAIL  tests/tenancy/cross-tenant.test.ts > … > `PB` → org B recebe; org A fica INALTERADA; e a mensagem É GRAVADA (a asserção central)
+AssertionError: expected 'ca532a8c-…' to be '61a7070f-…' // Object.is equality
+ ❯ tests/tenancy/cross-tenant.test.ts:568:36
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  1 failed | 18 passed (19)
+```
+`AssertionError` — **não** `ReferenceError`/`SyntaxError`/erro de setup: o vermelho é da asserção,
+com erro de compilação excluído. Revertida por cópia byte-a-byte (`diff -q` → idêntico,
+`grep -c MUTACAO-VIVACIDADE-900-25` → 0).
+
+**Autocrítica que virou trabalho — a AC9 nasceu com UM sentido só, e a mutação prova por quê.**
+Na revisão do próprio deliverable notei que eu tinha escrito a AC9 com `PAGE-A` apenas, embora a
+AC nomeie os DOIS `page_id` e diga "mesmo padrão da AC7" — e a AC7 é onde a story escreve, com
+todas as letras, que *"um resolver que sempre devolve B passaria no primeiro teste sozinho"*. A
+AC9 virou `describe.each` com os dois sentidos. Para não aceitar a simetria como promessa, apliquei
+ao código de produção a mutação que a própria lição descreve — `resolveOrgByMetaPage` ignora o
+`pageId` do payload e filtra pelo literal da org A (`webhook-org.ts`):
+
+| sentido | sob a mutação "sempre devolve a org A" |
+|---|---|
+| `PAGE-A → org A` | ✓ **VERDE** — e continuaria verde, sozinho, para sempre |
+| `PAGE-B → org B` | ✗ **VERMELHO** — `AssertionError: expected '51faced5-…' to be '260643b6-…'` |
+
+Uma primeira tentativa de mutação (remover o filtro e pegar `.limit(1)` por `created_at`) deixou os
+**dois** sentidos vermelhos — ela resolvia para o **canário**, não para a org A, e por isso não
+discriminava a colinearidade que eu queria medir. A mutação que vale é a segunda. `webhook-org.ts`
+revertido por cópia byte-a-byte (`diff -q` idêntico, `grep -c MUTACAO-900-25` → 0,
+`git status --short -- packages/` → vazio).
+
+**Task 11.0 — a lista de FKs bloqueantes, DERIVADA em runtime.** Impressa pela própria suíte:
+```
+[900-25] FKs bloqueantes derivadas de pg_constraint (4): agent_media_assets.org_id,
+financial_notification_log.org_id, system_events.org_id, visit_feedback.org_id
+```
+Bate com o N1 do parecer (**4**, incluindo `financial_notification_log`). Contagem por
+`confdeltype` no dia: `a`(NO ACTION)=**4** · `c`(CASCADE)=**87** · `n`(SET NULL)=**1**, e o único
+SET NULL é `webhook_logs.org_id` — os três números do N1, reconfirmados. **Nada disso está
+hardcoded**: a query também deriva o NOME DA COLUNA (supor `org_id` seria a mesma classe de erro
+num grau menor) e aborta nomeando se aparecer FK composta ou fora do schema `public`.
+
+**O canário era CEGO para a classe de defeito que esta story existe para pegar — e quem contou
+foi um experimento meu.** A primeira versão de `TABELAS_DO_CANARIO` tinha 4 tabelas
+(`organizations`, `whatsapp_config`, `org_integrations`, `meta_capi_outbox`) e eu excluí `leads`
+por escrito, com o argumento *"a suíte nunca cria lead no canário, então a contagem seria sempre
+constante — asserção sem poder discriminante"*. Ao rodar a mutação `.order("created_at").limit(1)`
+em `resolveOrgByMetaPage`, ela resolveu para **o canário** (a org mais antiga do banco). Medido no
+banco depois daquela execução:
+
+```
+leads:        2 linhas, org_id = 00000000-…-000000000001  (o canário)
+webhook_logs: 2 linhas, org_id = 00000000-…-000000000001
+```
+
+…e o canário reportou **`depois === antes`, verde**. Ou seja, a asserção "não perturbei nada além
+das minhas fixtures" estava cega justamente para **um lead caindo na empresa errada**, que é o
+defeito-mãe da onda. `leads`, `conversations` e `webhook_logs` entraram na lista. Reprova medida
+com a MESMA mutação:
+
+```
+ × AC14 · assertion 11 — teardown por id: apaga o que disse que apagaria, e NADA além
+AssertionError: expected { organizations: 1, …(6) } to deeply equal { organizations: 1, …(6) }
+```
+
+`system_events` continua fora, e esse motivo permanece medido: `forEachActiveOrg` grava
+`CRON_ORG_PROCESSADA` para **toda** org ativa, canário incluído, em toda execução correta —
+vermelho legítimo recorrente é o que ensina a ignorar o instrumento.
+Todo o resíduo que os meus experimentos deixaram no canário foi apagado **por id** (2+2 leads,
+5 `webhook_logs`), e uma execução limpa depois disso deixa `leads: []` e `webhook_logs: []`.
+
+**A suíte era instável, e a instabilidade era de TRANSPORTE — medida, não suposta.** Em 6
+execuções consecutivas, **2** morreram com `TypeError: fetch failed` numa leitura de verificação
+qualquer (nunca a mesma). Corrigido com `comRetryDeTransporte`, que repete **só** o caso em que
+ninguém respondeu. O discriminante é **conjuntivo**: repete apenas se o erro **não tem `code`** E
+a mensagem casa um padrão de transporte. Um `{ error }` do PostgREST tem `code` (`23505`,
+`PGRST116`, `23503`) — é o banco RESPONDENDO, e repeti-lo transformaria "o Postgres recusou" em
+"tenta até dar certo", que é a classe de silêncio que esta onda existe para eliminar.
+
+**Oito execuções seguidas depois do conserto saíram `25 passed` com ZERO repetições disparadas** —
+a rede colaborou e o caminho de retry não foi exercitado por nenhuma delas. Mecanismo que só roda
+quando dá azar, e que só é observado quando dá azar, é indistinguível de mecanismo quebrado: daí
+`tests/tenancy/retry-transporte.test.ts` (5 asserções, sem rede, sem credencial), com dois
+vermelhos medidos:
+
+| mutação em `comRetryDeTransporte` | vermelho |
+|---|---|
+| remover `if (erro.code) return false` | `× mensagem de transporte MAS com \`code\`: não repete` — `expected 3 to be 1` |
+| `TENTATIVAS_DE_TRANSPORTE = 1` | `× falha de TRANSPORTE seguida de sucesso` **e** `× falha de TRANSPORTE persistente` |
+
+A primeira mutação derruba **um** dos dois testes de "não repete" — o caso híbrido (mensagem de
+transporte **com** `code`). O outro sobrevive porque a mensagem de `23505` não casa o regex. Os
+dois não são redundantes: é o híbrido que vigia o `code`.
+
+**Resíduo no banco depois de tudo — medido, não presumido.**
+```
+orgs restantes:      [{"slug":"org-teste-epic-900","is_active":true}]        ← só o canário
+whatsapp_config:     [{"status":"inactive","phone_number_id":null}]          ← só a do canário
+meta_capi_outbox:    []
+leads / conversas / messages (TOTAIS do banco): 0 / 0 / 0
+webhook_logs casando '900-25' ou 'PHONE-DESCONHECIDO': 0
+system_events com org_id apontando para org inexistente: 0
+system_events casando '900-25': 8 → todas `CRON_RESUMO`, `org_id: null`, uma por execução
+```
+**Correção do gate (`@qa`), remedida por mim contra o banco: são 4 linhas por execução, não 2.**
+Contagem exata antes e depois de UMA execução:
+
+| `event_type` | `source` | `org_id` | antes | depois |
+|---|---|---|---|---|
+| `CRON_ORG_PROCESSADA` | `api/cron/daily-report` | **canário** | 62 | 63 |
+| `CRON_ORG_PROCESSADA` | `tests/tenancy/isolamento-900-25` | **canário** | 62 | 63 |
+| `CRON_RESUMO` | `api/cron/daily-report` | `null` | 62 | 63 |
+| `CRON_RESUMO` | `tests/tenancy/isolamento-900-25` | `null` | 62 | 63 |
+
+Duas são atribuídas ao canário e duas nascem com `org_id: null` (o resumo é evento de
+**plataforma** — `for-each-org.ts` omite o `org_id` de propósito). **Um reparo na nota do gate:**
+as `CRON_ORG_PROCESSADA` têm `metadata` vazia, mas **têm `source`** — são identificáveis, ao
+contrário do que a nota dizia. Isso não muda o desenho: `forEachActiveOrg` não devolve os ids, e
+caçá-las por `source`/janela seria o `DELETE` por predicado que esta story existe para tornar
+impossível. A exclusão de `system_events` da lista do canário **fica mantida**, e agora com o
+número certo. Resíduo documentado em `tests/tenancy/support/fixtures.ts`, mesma classe do
+`webhook_logs` SET NULL (Task 11.5).
+
+**Task 12.1 / AC15 — não-regressão, medida das DUAS formas.** `origin/main...HEAD` (merge-base) e
+`origin/main..HEAD` (tip a tip) devolvem o **mesmo** conjunto — a branch está direto sobre a `main`,
+sem divergência, então o controle não é redundante: ele é o que prova que o `...` não está medindo
+uma base antiga (`feedback_regua_que_mistura_duas_revisoes`).
+```
+ docs/stories/900-25-…story.md      | 407 ++++++++--
+ package.json                       |   1 +
+ tests/tenancy/alias-vivo.test.ts   |  50 ++
+ tests/tenancy/capi-dispatch.test.ts| 275 +++++++
+ tests/tenancy/cross-tenant.test.ts | 860 +++++++++++++++++++++
+ tests/tenancy/support/ambiente.ts  | 191 +++++
+ tests/tenancy/support/fixtures.ts  | 223 ++++++
+ vitest.tenancy.config.ts           |  84 ++
+ 8 files changed, 2027 insertions(+), 64 deletions(-)
+```
+Filtrando pelos padrões que a AC15 declara, **zero** arquivos fora deles. `git status --short --
+packages/ scripts/ supabase/` → **vazio**: nenhuma mutação de produção sobrou na árvore.
+
+**Validações.**
+- `pnpm test` (Camada A, gate de PR): **287 files / 3693 passed + 6 expected fail**. Baseline
+  medido **movendo `tests/tenancy/` e `vitest.tenancy.config.ts` para fora e rodando de novo**:
+  **287 / 3693 + 6** — idênticos. Prova executada, não inferida, de que esta fatia **não entra**
+  no `include` do `vitest.config.ts` (a decisão de desenho da AC3).
+- `pnpm lint --force` → **0 errors, 30 warnings**, nenhum em arquivo desta fatia.
+- `pnpm type-check --force` → **8/8 tasks OK**.
+- ⚠️ **Nem `lint` nem `type-check` cobrem `tests/` na raiz** — provado:
+  `npx tsc -p packages/web/tsconfig.json --listFiles | grep -c tests/tenancy` → **0**. É a mesma
+  lacuna que o `[MNT-001]` do backlog já registra para `scripts/`, agora com um segundo ocupante.
+  Type-check ad-hoc dos 5 arquivos novos, com os aliases da config isolada: **0 erros**.
+  **A régua nasceu morta e o controle de vivacidade é quem contou:** na primeira montagem ela
+  saía `EXIT=0` com um `const x: number = "string"` plantado — `tsc` abortava antes em
+  `TS2688: Cannot find type definition file for 'node'` (o `typeRoots` resolve relativo ao
+  arquivo de config, e o config estava fora do repo). Com `typeRoots` explícito, o erro plantado
+  **acende** (`fixtures.ts(210,7): error TS2322`) e a árvore limpa sai `EXIT=0` — as duas
+  medições, não só a segunda.
+- Produção: **nenhum acesso**. Todas as consultas foram a `xnxvygyfyyyzwhiuoehz` (o banner
+  `[db-env] ambiente=teste` aparece em cada uma). Nenhum valor de credencial foi ecoado.
+
 ### Completion Notes
 
 **1. 🔴 Achado bloqueante de base: a Decisão 2 do parecer foi medida na árvore errada.** O parecer
@@ -1397,6 +1636,205 @@ o receptor não tinha teste nenhum. (c) Naquele receptor a resolução de org ro
 resolução estar fora do caminho da resposta — é essa separação que o teste novo tranca, e é ela
 que a mutação da AC1 quebra.
 
+---
+
+## Rodada 2 — Tasks 0 e 3-12
+
+**1. 🔴 A guarda de destino escrita na AC3 falhava ABERTA — e quem provou foi a verificação da
+própria AC3.** O snippet da AC recusa `!ref || ehRefDeProducao(ref)`. Executando o cenário que a
+mesma AC prescreve ("ref inventado **fora das duas allowlists**"), medi:
+
+```
+TENANCY_TEST_SUPABASE_URL=https://producaofalsa.supabase.co pnpm test:tenancy
+→ Error: tests/tenancy: consulta ao catálogo de producaofalsa falhou —
+  {"message":"Invalid project ref: producaofalsa"}
+```
+
+A guarda **não disparou**: `producaofalsa` não está em `REFS_PERMITIDOS_PRODUCAO`, logo
+`ehRefDeProducao` devolve `false` e o ref passa; a suíte só morre depois, num **erro de rede
+genérico**, que é literalmente o que a AC proíbe ("a guarda precisa disparar antes de qualquer
+`fetch`"). **O exemplo escrito na AC mascarava o furo:** `https://producao-falsa.supabase.co` tem
+**hífen**, e o regex de `extrairRefDeUrlSupabase` é `[a-zA-Z0-9]+` — ele devolve `null`, o ramo
+`!ref` dispara, e o teste "passa" pelo motivo errado. Um ref alfanumérico expõe o buraco.
+
+Correção: `!ref || !ehRefDeTeste(ref)` — **allowlist**, não negação de denylist. Não é invenção
+minha: é o que `packages/shared/src/constants/supabase-refs.ts` já documenta no próprio cabeçalho
+(*"um ref que não está em nenhuma das duas listas é recusado, não presumido inofensivo"*), e é a
+mesma classe de furo que o PR #524 fechou. É a segunda vez nesta onda que uma guarda de destino
+nasce falhando aberta.
+
+**2. 🔴 A AC8 é insatisfazível como escrita: `messages` NÃO tem coluna `org_id`.** Medido no
+`information_schema` de `trifold-crm-dev`: `id, conversation_id, role, content, media_url,
+media_type, metadata, created_at` — e o `INSERT` da rota (`whatsapp/route.ts`, caminho síncrono)
+não passa `org_id`. A AC escreve `expect(msg!.org_id).toBe(orgBId)`, que resultaria em
+`undefined !== orgBId`. **A PERGUNTA da AC continua respondível, e é respondida:** o escopo de
+organização da mensagem é `messages.conversation_id → conversations.org_id`, e o teste afirma o
+join inteiro (mensagem existe pelo `wamid` exato → conversa dela → `org_id` = B → lead da conversa
+→ `org_id` = B). Não relaxei para "a mensagem existe": isso mataria metade da prova. Registrado
+para o `@sm` corrigir o texto da AC8.
+
+**3. 🟠 O ledger de migrations e o catálogo discordam no banco de teste.** `pnpm db:status`
+(Task 0.2) reporta `246` e `247` como **PENDENTE**; o catálogo diz que **todos** os objetos das
+duas existem (tabela detalhada no Debug Log — inclusive o CHECK na grafia da `247`, que é o
+discriminante entre as duas versões da constraint). A última linha do ledger é
+`245_registro_de_migrations.sql`: as duas foram aplicadas **fora** do `db:apply`, durante os gates
+das fatias anteriores. **Consequência para esta story: nenhuma** — a Camada B exercita o catálogo,
+não o ledger, e as 19 asserções passam. **Consequência para a Onda 3: o `db:status` do
+`trifold-crm-dev` não é confiável como pré-condição enquanto isso não for regularizado** — que é
+justamente o papel que a Task 0.2 lhe atribuía. Item para o `@devops`: registrar as duas no ledger
+(sem reaplicar o DDL) ou documentar por que o banco de teste fica fora do registro.
+
+**4. 🟡 O `console.warn` do skip legítimo não aparece na saída.** No cenário "`.env.teste`
+ausente", o `console.warn` do módulo de suporte **não** é impresso pelo reporter default — mesma
+coisa que o `@po` já tinha observado no D2. Isto **não** compromete a distinção que o N2 exige,
+porque quem separa os dois casos é o `throw` (exit 1) contra o `skip` (exit 0), não a mensagem.
+Mas vale escrito: quem depender do aviso visual não vai vê-lo. O sinal confiável é o par
+`Tests 3 passed | 16 skipped` + `exit 0` — e note que **não é `0 passed`**: o
+`alias-vivo.test.ts` roda sem credencial de propósito, exatamente para que "sem credencial" e
+"`include` quebrado" não sejam o mesmo número na tela.
+
+**5. 🟡 Divergências factuais menores, para o `@sm`/`@po`.**
+(a) A AC11 escreve o retorno do stub como `{ success: true, events_received: … }`; o tipo real
+(`CapiSendResult`) é **`eventsReceived`** — e a rota compara `result.eventsReceived ===
+events.length` para decidir `sent`, então a grafia da AC deixaria toda linha em `failed`.
+(b) A pré-condição da AC11 usa `.not("org_id","in",…)` com `orgAId`/`orgBId`, mas a Task 8.0 manda
+rodá-la **antes** de provisionar as orgs — os ids não existem ainda. Implementei o predicado mais
+estrito e mais simples que o momento permite: naquele ponto **qualquer** linha `pending` é de
+terceiro.
+(c) `meta-capi-dispatch/route.ts` lê `CRON_SECRET` no **escopo de módulo**, não no handler: import
+estático da rota faria a AC11 falhar com 500 por artefato de ordem. Resolvido com `await import()`
+depois do `aplicarEnv`.
+(d) O canário da AC14 fica com **4** tabelas (as que a AC nomeia). `system_events` ficaria vermelho
+por motivo legítimo — `forEachActiveOrg` grava `CRON_ORG_PROCESSADA` para **toda** org ativa,
+inclusive o canário, nas AC12/AC13 —, e vermelho legítimo recorrente é o que ensina a ignorar o
+instrumento.
+
+**7. 🔴 Achei um instrumento cego DENTRO do meu próprio deliverable — o canário.** Eu tinha
+excluído `leads` da contagem do canário com uma justificativa escrita ("a suíte nunca cria lead no
+canário, logo a contagem é constante e a asserção não discrimina"). A justificativa era uma
+alegação, e a mutação que rodei por outro motivo a falsificou: com o resolver quebrado, **2 leads
+e 2 `webhook_logs` foram gravados dentro do canário** e o canário ficou **verde**. A asserção
+"não perturbei nada além das minhas fixtures" era cega exatamente para *um lead caindo na empresa
+errada* — o defeito-mãe da onda. `leads`, `conversations` e `webhook_logs` entraram; a reprova foi
+medida com a mesma mutação (Debug Log). **A lição que sobra:** exclusão justificada numa lista de
+vigilância é uma alegação como qualquer outra, e o jeito de testá-la é perguntar *"que defeito
+REAL escreveria nesta tabela?"*, não *"a suíte correta escreve nesta tabela?"*.
+
+**8. 🟠 A suíte era instável por transporte, e a mitigação precisou de carrasco própria.** 2 em 6
+execuções morriam com `TypeError: fetch failed`. `comRetryDeTransporte` repete **só** o caso em
+que ninguém respondeu, com discriminante conjuntivo (**sem `code`** E mensagem de transporte) —
+porque repetir um `{ error }` do PostgREST seria transformar "o Postgres recusou" em "tenta até
+dar certo". Depois do conserto, **8 execuções seguidas verdes com ZERO repetições disparadas**:
+o caminho novo não foi exercitado por nenhuma delas. Daí `retry-transporte.test.ts`, que roda
+sempre (sem rede, sem credencial) e tem os dois vermelhos colados no Debug Log. Anotado como
+observação para o `@qa`: **a Camada B fala com rede, e rede falha** — se o gate vir um
+`fetch failed` isolado, a leitura certa é transporte, não regressão; se vir repetição **com**
+`code`, aí sim é regressão do discriminante.
+
+**6. Onde a suíte descarta o `after()`, e por que isso não apaga argumento nenhum.** No receptor de
+WhatsApp o `after()` é o pipeline da Nicole (Anthropic + Graph API + push ao corretor); a suíte o
+**descarta**, porque a asserção central (AC8) mora no caminho **síncrono**, antes do 200 — rodá-lo
+dispararia IA e envio real contra um banco compartilhado, a mesma classe de efeito colateral que o
+D7 mandou escopar. No receptor de Meta Ads o `after()` **é** o objeto sob teste (a resolução de org
+mora dentro dele, via `processMetaLead`), e ali ele é **executado**. A distinção é explícita no
+cabeçalho do arquivo, não implícita. Na AC9, `triggerAutomations` e `distributeLeadToNextBroker`
+são stubados por `vi.spyOn` pela mesma razão (transporte externo, não o objeto sob teste), e
+`field_data` vai inline no payload para `fetchLeadData` não tocar a Graph API — zero chamada
+externa em toda a suíte.
+
+---
+
+## Rodada 3 — resposta ao gate `@qa` (CONCERNS, merge liberado)
+
+### QA-900-25-1 — o 17º cego: a prova não observava o próprio teto de leitura. **CORRIGIDO.**
+
+O `@qa` mediu o que eu não: o canário contava com `select("id")` + `.length`, e `max_rows` deste
+projeto é **1000**. Simulando a saturação e aplicando a MESMA mutação que o canário existe para
+pegar:
+
+```
+sem teto simulado : 3 failed | 22 passed  → AC14 VERMELHA
+com teto simulado : 2 failed | 23 passed  → AC14 VERDE
+```
+
+Os dezesseis cegos anteriores da onda vieram de **lógica**; este veio de **limite de transporte**,
+que nenhuma leitura do código revela. E a ironia é minha: o comentário que eu tinha escrito
+**recusava** `{ count: "exact", head: true }` "porque o helper de retry só sabe olhar
+`{ data, error }`" — escolhendo, sem querer, exatamente a forma que satura.
+
+**A correção não escolheu entre as duas coisas** (o gate avisou para não trocar um problema pelo
+outro): `contarComRetryDeTransporte` é contagem **agregada** *com* a mesma disciplina de repetição
+só-para-transporte. Aplicada nos **dois** lugares que comparavam contagens — o canário
+(`contarLinhasDoCanario`) e as metades "a OUTRA empresa ficou inalterada" das AC7/AC8/AC9
+(`contarDaOrg`), que tinham o mesmo defeito: duas contagens saturadas são **iguais entre si**
+mesmo com vazamento no meio.
+
+**Carrasco contra a regressão, e ele é o ponto:** `count: "exact", head: true` devolve
+`count: number`; qualquer volta para `select()` de linhas devolve `count: null`, e o helper
+**lança nomeando**. Dois vermelhos medidos:
+
+| mutação | vermelho |
+|---|---|
+| canário volta a `select("id")` | a suíte **não roda**: `contagem do canário em organizations: a consulta não devolveu \`count\` — … satura no max_rows (1000) … (QA-900-25-1)`; `13 passed \| 17 skipped` |
+| remover o `if (count === null)` do helper | `× \`count: null\` (alguém voltou a contar linhas) LANÇA nomeando a saturação` |
+
+Mais 5 asserções permanentes em `retry-transporte.test.ts` (contagem agregada, `count: 0` válido,
+`count: null` lança, transporte repete, erro de banco não repete).
+
+### Menor do gate — a lista do canário vinha da fallout de UMA mutação. **CORRIGIDA, e ela estava mesmo incompleta.**
+
+O gate está certo e o custo apareceu na hora: **`activities` é alvo de INSERT do próprio receptor
+sob teste** (`process-lead.ts:422`, `lead_created`, **sempre**) e estava fora — e havia **8 linhas
+de `activities` dentro do canário**, deixadas pelos meus experimentos, que nenhuma contagem viu.
+
+A lista passou a ser derivada do **write-set**, com critério escrito: *entra toda tabela com
+`org_id` na qual um caminho **síncrono exercitado por esta suíte** faz INSERT/UPSERT*. São **99**
+as tabelas com `org_id` no schema (medido) — vigiar as 99 é caro e ruidoso; vigiar "as que deram
+problema" é vigiar o passado. Ficou em **8**: `organizations`, `whatsapp_config`,
+`org_integrations`, `meta_capi_outbox`, `leads`, `conversations`, **`activities`**, `webhook_logs`.
+
+Carrasco medido para `activities`, com a mutação do lado do Meta Ads (o `process-lead` escreve
+`leads` **e** `activities`):
+```
+AssertionError: expected { organizations: 1, …(7) } to deeply equal { organizations: 1, …(7) }
+-   "activities": 2      -   "webhook_logs": 2
++   "activities": 4      +   "webhook_logs": 4
+```
+
+**O que NÃO consegui dar carrasco, e por quê — `conversations`.** Tentei pelo lado do WhatsApp
+(`resolveOrgByWhatsAppPhone` ignorando o telefone): a mutação **não alcança o canário**, porque o
+`whatsapp_config` do canário é `inactive` e o resolver filtra `status='active'`. Para roteá-la ao
+canário eu teria que **ativar o `whatsapp_config` do canário** — perturbar exatamente a org que a
+suíte promete não perturbar. `conversations` fica na lista por **derivação do write-set**, não por
+vermelho demonstrado, e isto está escrito aqui em vez de subentendido. (A mutação do WhatsApp não
+foi perdida: ela deixa `2 failed` nas AC7/AC8 e AC10, que é onde ela tinha de morder.)
+
+### QA-900-25-2 — nada vigia o produto desta story. **REGISTRADO COM DONA, não consertado aqui.**
+
+`docs/backlog.md` → **`MNT-001-B`**, P1, **dona `@devops`**, Onda 3. Terceiro ocupante da lacuna do
+`MNT-001`, e o mais caro: com um erro de tipo grosseiro plantado em `tests/tenancy/`,
+`type-check` 8/8 verde, `lint` 0 erros, `pnpm test` 287/3693 verde — **um PR que apague a suíte
+inteira passa por todos os gates**. Sugestões na ordem de custo, incluindo a mais barata que
+resolve o pior caso: uma catraca de **existência** dos arquivos da suíte.
+
+### `db:status` — risco do `@qa` acolhido, e dimensionado
+
+Registrado em `docs/backlog.md` (`[DB] O ledger … atrás do catálogo`), P2, dona `@devops`. O risco
+que ele nomeou e eu não: com o ledger em PENDENTE, um `pnpm db:apply` futuro **reaplicaria**
+`246`/`247`. **Medi a consequência:** `246` é idempotente por construção (`IF NOT EXISTS`,
+`OR REPLACE`, `DROP POLICY IF EXISTS`, `ON CONFLICT DO NOTHING`, `WHERE NOT EXISTS`) e `247` é
+`DROP CONSTRAINT IF EXISTS` + `ADD` — **reaplicar estas duas é seguro**, e o `db:apply`
+regularizaria o ledger sozinho. O risco residual é **genérico**: um ledger que mente arma o
+`db:apply` para a próxima migration que não for idempotente.
+
+### Estado do banco compartilhado depois de tudo
+
+Todo o resíduo dos meus experimentos foi apagado **por id**, com os ids lidos e impressos antes de
+cada `DELETE` (nunca por predicado): 12 `activities`, 4 `leads`, 9 `webhook_logs`. Canário depois:
+`leads 0 · conversations 0 · activities 0 · webhook_logs 0` — e **invariante ao longo de 3
+execuções limpas seguidas**. Fora do canário: só a org canário existe; `leads`/`conversations`/
+`messages` totais do banco = **0/0/0**; `meta_capi_outbox` vazia.
+
 ### File List
 
 **Modificados**
@@ -1418,8 +1856,153 @@ que a mutação da AC1 quebra.
 **Intocados de propósito** — nenhum arquivo de produção (`.ts` fora de `*.test.ts`/`__fixtures__/`)
 foi modificado. As mutações das Tasks 1.1/1.2 foram aplicadas e revertidas byte-a-byte.
 
+### File List — Rodada 2 (Tasks 0 e 3-12)
+
+**Criados**
+- `vitest.tenancy.config.ts` — AC3/AC3b: config isolada da Camada B. Loader executável de
+  `.env.teste` (`node:util.parseEnv`, com guarda de Node < 20.12), alias `@trifold/shared` (D1),
+  `fileParallelism: false`, `include` restrito a `tests/tenancy/**`. Os aliases de
+  `@supabase/supabase-js` e `next` foram acrescentados por medição (nenhum dos dois existe em
+  `node_modules/` da raiz — o pnpm os instala em `packages/web/node_modules`), e apontar para o
+  mesmo caminho que `packages/web` resolve é o que faz o `vi.mock("next/server")` do teste
+  alcançar o `after()` da rota.
+- `tests/tenancy/support/ambiente.ts` — AC3: as duas guardas (destino **fail-closed** por
+  allowlist, ver Completion Note 1; e o par `skip`/`throw` do N2), o client de service-role, o
+  transporte de catálogo (`runSqlJson` da Management API, REUSADO de `scripts/lib/`) e o
+  redirecionamento de env das Dev Notes.
+- `tests/tenancy/support/fixtures.ts` — provisionamento, canário e teardown por id. A lista de
+  tabelas com FK bloqueante é **derivada de `pg_constraint` em runtime** (N1) — tabela **e**
+  coluna, com aborto nomeado para FK composta ou fora do schema `public`. Documenta o resíduo
+  aceitável (`webhook_logs` SET NULL, `CRON_RESUMO` com `org_id: null`).
+- `tests/tenancy/alias-vivo.test.ts` — Task 3.5 (D1): 3 asserções, **sem `skipIf`**, provando que
+  o subpath de `@trifold/shared` resolve e que a função importada DISCRIMINA (controle negativo).
+- `tests/tenancy/retry-transporte.test.ts` — carrasco do `comRetryDeTransporte` **e** do
+  `contarComRetryDeTransporte`: 10 asserções, sem rede e sem credencial, provando que o primeiro
+  repete transporte e **nunca** resposta do banco, e que o segundo **lança** se alguém voltar a
+  contar linhas (QA-900-25-1).
+- `tests/tenancy/cross-tenant.test.ts` — AC4-AC10, AC12, AC13, AC14. 15 testes (a AC9 é um
+  `describe.each` de dois sentidos — ver Debug Log).
+- `tests/tenancy/capi-dispatch.test.ts` — AC11, arquivo próprio (D6), com pré-condição de aborto
+  (D7), fixtures/canário/teardown próprios. 2 testes.
+
+**Modificados**
+- `package.json` (raiz) — script `test:tenancy`. **Não** entra em `pretest`/`test` nem no
+  `ci.yml` (Scope OUT).
+- `docs/stories/900-25-prova-duas-empresas-reais-ambiente-teste.story.md` — checkboxes de
+  AC3-AC15 e Tasks 0/3-12, Status, Change Log, Dev Agent Record, File List.
+- `docs/backlog.md` — **fora dos padrões que a AC15 declara, e é deliberado**: o gate `@qa` pediu
+  que `QA-900-25-2` fosse registrado *com dona*, e o achado do ledger idem. A AC15 foi escrita
+  antes destes dois existirem; um item de backlog é documentação, não comportamento de produção,
+  e a alternativa (deixar o achado só no Dev Agent Record de uma story fechada) é como dívida
+  some. Duas entradas novas: `MNT-001-B` (P1, `@devops`) e o ledger do `trifold-crm-dev` (P2,
+  `@devops`).
+
+**Tocados e REVERTIDOS de propósito**
+- `docs/audits/migrations-aplicadas.json` — regenerado pelo `pnpm db:status` da Task 0.2 (escrita
+  documentada daquele comando) e revertido com `git checkout --`: a AC15 não o lista, e congelar
+  `PENDENTE: 2` no espelho seria snapshotar a divergência em vez de corrigi-la (Completion Note 3).
+
+**Intocados de propósito** — **nenhum** arquivo de `packages/**`, `scripts/**` ou
+`supabase/migrations/**`. Zero migration nesta story. A mutação de vivacidade (AC3b.3) foi aplicada
+e revertida byte-a-byte, em arquivo de teste desta própria fatia.
+
 ---
 
 ## QA Results
 
-*(preenchido pelo @qa durante o gate)*
+**Gate:** `docs/qa/gates/900.25-prova-duas-empresas-reais-ambiente-teste.yml`
+**Veredicto: CONCERNS** — merge liberado, nenhuma concern bloqueia.
+**Revisor:** Quinn (Test Architect) · 2026-08-30 · base `f08aa434` · ambiente medido:
+`trifold-crm-dev` (`xnxvygyfyyyzwhiuoehz`). **Produção: nenhum acesso.**
+
+### O que eu reproduzi (não reli — executei)
+
+| alegação do `@dev` | medido por mim |
+|---|---|
+| `pnpm test:tenancy` 25 passed / 0 skipped | **25 passed (25)**, 4 execuções |
+| asserção central viva (`orgBId`→`orgAId`) | `AssertionError` em `cross-tenant.test.ts:569`, **1 failed / 24 passed** — mutação cirúrgica, não arrasto |
+| canário reprova lead na empresa errada | mutação de `resolveOrgByMetaPage` → **3 failed**, AC14 vermelha com `leads 0→2`, `webhook_logs 0→2` |
+| FKs derivadas em runtime | catálogo: `a`=**4** · `c`=**87** · `n`=**1**; `financial_notification_log` dentro; `webhook_logs.org_id` o único SET NULL |
+| guarda de destino fail-closed | `producaofalsa` (alfanumérico, fora das allowlists) → mensagem da guarda **antes de qualquer `fetch`**, exit 1 |
+| guarda de credencial, dois caminhos | var vazia c/ arquivo → **throw, exit 1**; arquivo ausente → `8 passed \| 17 skipped`, **exit 0** |
+| `messages` sem `org_id` | confirmado no `information_schema`; o join é load-bearing (é ele que a mutação de vivacidade morde) |
+| AC15 | `merge-base == origin/main`; 9 arquivos, **zero** em `packages/`/`scripts/`/`supabase/` |
+| Camada A + gates | `pnpm test` **287/3693 + 6 expected fail**; lint **0 erros**; type-check **8/8** |
+
+**O que acrescentei à autocrítica do `@dev` sobre o canário:** medi a **disjunção**. Sob a mutação,
+o delta vive **inteiramente** nas 3 tabelas que ele acrescentou — `organizations`,
+`whatsapp_config`, `org_integrations` e `meta_capi_outbox` saem **idênticas**. Com a lista velha o
+canário teria ficado verde com 2 leads na empresa errada dentro dele. A cegueira está provada,
+não alegada.
+
+### O décimo sétimo instrumento cego — medido
+
+**A prova não observa o próprio teto de leitura.** O canário conta com
+`select("id")` + `linhas.length`, e o PostgREST deste projeto tem `max_rows` = **1000** (lido da
+config). Simulei o teto com a linha de base saturada e apliquei a mesma mutação de roteamento:
+
+```
+sem teto simulado : 3 failed | 22 passed  → AC9(×2) + AC14 VERMELHA
+com teto simulado : 2 failed | 23 passed  → AC9(×2) + AC14 VERDE
+```
+
+Latente hoje (as tabelas vigiadas têm 0–6 linhas) — **nenhuma asserção desta story está
+comprometida**. Mas é durabilidade do instrumento, e o conserto é uma linha
+(`{ count: "exact", head: true }`, recusada no código por compatibilidade com `comRetryDeTransporte`).
+
+### As 2 concerns (nenhuma bloqueia)
+
+1. **QA-900-25-1 · MÉDIA · `@dev`** — o contador do canário satura no teto do PostgREST e perde
+   poder discriminante em silêncio (acima).
+2. **QA-900-25-2 · MÉDIA · `@devops`/Onda 3** — **nada no repositório vigia o produto desta story.**
+   Plantei um erro de tipo grosseiro em `tests/tenancy/`: `type-check` **8/8 verde**, `lint`
+   **0 erros**, `pnpm test` **287/3693 verde**. Um PR que quebre, esvazie ou **apague**
+   `tests/tenancy/` passa por todos os gates. O `@dev` disclosou a metade do `type-check`; a
+   consequência inteira é maior. Mínimo barato enquanto a Onda 3 não decide lock/TTL: incluir
+   `tests/**` no `type-check`/`lint` da raiz (não precisa de rede nem credencial).
+
+### As 3 renúncias — todas ACEITAS
+
+`tests/` sem gate (a renúncia é honesta; a concern 2 é o tamanho real dela) · retry não
+exercitado em campo (a substituição offline é a correta, e o discriminante conjuntivo tem carrasco
+nas **duas** pernas) · mutação de `provision_org` (a alternativa era DDL experimental em banco
+compartilhado, a classe que o D7 desta mesma story mandou escopar; e AC4/AC5 já acendem se as
+seções 1 ou 6 sumirem).
+
+### `db:status` divergente — nenhuma AC fica sem lastro
+
+Confirmei o fato (ledger para na `245`) **e** o contrário no catálogo — inclusive o CHECK
+`whatsapp_sem_identificador_proprio` na grafia da **247**, que é o discriminante entre as duas
+versões. `grep` de `db:status|ledger|migrations-aplicadas` no bloco inteiro de ACs (linhas
+216-1036) → **0 ocorrências**: a dependência existe só na Task 0.2, e o fato que ela queria
+confirmar foi confirmado por instrumento mais forte. Item do `@devops`, com um risco a mais que a
+story não nomeia: **com o ledger em PENDENTE, um `pnpm db:apply` futuro tentaria reaplicar
+`246`/`247` no banco de teste.**
+
+### Resíduo — aceito, com a contagem corrigida
+
+`webhook_logs` SET NULL: na prática o resíduo é **zero** (a suíte guarda os ids que ela cria e
+apaga por id — medi `webhook_logs` = 0 no fim). `CRON_RESUMO` com `org_id: null`: aceito pela razão
+certa — a alternativa (caçar por `source`/janela) é o `DELETE` por predicado que a story existe
+para tornar impossível. **Correção de contagem:** o resíduo real são **4 linhas por execução**
+(189→193 medido), não 2 — as outras duas são `CRON_ORG_PROCESSADA` atribuídas ao **canário**, com
+metadata vazia e sem marcador de `source`. A exclusão de `system_events` do canário **fica
+mantida** (a justificativa é de mecanismo, não de conveniência), mas a frase "não perturbei nada
+além das minhas fixtures" tem essa exceção, e ela merece o tamanho certo no texto.
+
+### Menores
+
+- A lista do canário é derivada de **uma mutação observada**, não do write-set do código sob teste.
+  99 tabelas do banco carregam `org_id`; o canário vigia 7. `activities` é alvo de escrita do
+  próprio receptor de WhatsApp sob teste e está fora (latente — o payload-fixture não dispara
+  aquele ramo). `conversations` entrou **sem carrasco próprio**.
+- Evidência colada envelheceu: o `--stat` da AC15 mostra 8 arquivos/2027 (HEAD é **9/2291**), e o
+  docblock de `retry-transporte.test.ts` ainda diz "`20 passed`" (a suíte é **25**).
+
+### Higiene do gate
+
+4 mutações aplicadas, **todas revertidas** byte-a-byte (`diff -q` OK, `git status` das áreas de
+código **vazio**, `grep` dos marcadores → 0). `.env.teste` movido e restaurado (`shasum -c` OK,
+permissão 600). Banco de teste no estado final **idêntico** à linha de base que tirei antes de
+começar — todo resíduo das minhas mutações (3 leads + 3 `webhook_logs` no canário) apagado **por
+id**. `gate:tenancy` não executado. Nenhum commit, nenhum push.

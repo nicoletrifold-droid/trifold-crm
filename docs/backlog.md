@@ -461,6 +461,86 @@ um segredo de produção commitado foi o bom senso de um agente, não uma regra.
 
 ---
 
+### [CI] 🔴 `MNT-001-B` — **nada vigia `tests/tenancy/`**, e o que fica desprotegido é a prova de que o multi-tenant funciona
+
+**Adicionado em:** 2026-08-30 · **Origem:** gate `@qa` da Story `900-25` (`QA-900-25-2`), medido executando.
+**Prioridade:** **P1** · **Dona: `@devops`** (execução na Onda 3, junto com a decisão de lock/TTL do banco de teste).
+
+É o **terceiro ocupante** da lacuna que o `MNT-001` já descreve para `scripts/` — e o mais caro
+dos três, porque o conteúdo desprotegido é a **evidência** de que criar uma segunda empresa
+resulta numa empresa que funciona.
+
+`tests/tenancy/**` e `vitest.tenancy.config.ts` moram na **raiz**, fora de qualquer pacote do
+workspace. Consequência medida pelo `@qa`, com um **erro de tipo grosseiro plantado** naqueles
+arquivos:
+
+| gate | resultado com o erro plantado |
+|---|---|
+| `pnpm type-check --force` | **8/8 verde** |
+| `pnpm lint --force` | **0 erros** |
+| `pnpm test` | **287 files / 3693 passed** — verde |
+
+**Um PR que apague a suíte de tenancy inteira passa por todos os gates do repositório.** O
+`@dev` da `900-25` mediu a metade do `type-check`
+(`npx tsc -p packages/web/tsconfig.json --listFiles | grep -c tests/tenancy` → **0**); o `@qa`
+mediu a consequência inteira.
+
+**Não é conserto de oportunidade** pelo mesmo motivo do `MNT-001`: precisa de um `tsconfig`
+próprio com `paths`/`types`/`typeRoots` do workspace (o `@dev` montou um ad-hoc e ele **nasceu
+morto** — abortava em `TS2688` e saía `EXIT=0`; só o erro plantado revelou), e de decidir se o
+`ci.yml` passa a ter um job que ao menos **conta** os arquivos da suíte, já que ele não pode
+rodá-la (banco compartilhado, sem lock — ver o Scope OUT da `900-25`).
+
+**Sugestão mínima, na ordem de custo:**
+1. `tests/tsconfig.json` + `type-check:tenancy` no `package.json` da raiz, encadeado no job `static`.
+2. Um passo de CI que falhe se `tests/tenancy/*.test.ts` deixar de existir ou perder arquivos —
+   catraca de existência, barata, e é o que impede o apagamento silencioso.
+3. `eslint` da raiz alcançando `tests/`.
+
+**Comando que reproduz:** plantar `const x: number = "s"` em `tests/tenancy/support/fixtures.ts`
+e rodar `pnpm type-check --force && pnpm lint --force && pnpm test` — os três verdes.
+
+---
+
+### [DB] 🟠 O ledger de migrations do `trifold-crm-dev` está **atrás do catálogo** — `246`/`247` como PENDENTE
+
+**Adicionado em:** 2026-08-30 · **Origem:** Task 0.2 da Story `900-25`, achado do `@dev`, confirmado pelo `@qa`.
+**Prioridade:** **P2** · **Dona: `@devops`.**
+
+`pnpm db:status` contra `trifold-crm-dev` reporta:
+
+```
+aplicada 268 · PENDENTE 2 · ALTERADA-APÓS-APLICAR 0 · ÓRFÃ-no-banco 0
+PENDENTE (2):
+  246_org_integrations_e_unicidade_whatsapp.sql
+  247_org_integrations_check_whatsapp_grafias.sql
+```
+
+**O catálogo diz o contrário**, e foi medido: os três índices únicos parciais existem em
+`pg_index`; `org_integrations` existe com os 6 providers no `CHECK`; a constraint
+`whatsapp_sem_identificador_proprio` está na **grafia da `247`**
+(`phone[^[:alnum:]]{0,2}number[^[:alnum:]]{0,2}id`), não na da `246`; e `provision_org` tem as
+seções 5 e 6. A última linha do ledger é `245_registro_de_migrations.sql`: as duas foram
+aplicadas **fora** do `db:apply`, durante os gates das fatias anteriores da Onda 2.
+
+**Consequência para a `900-25`: nenhuma.** A Camada B exercita o catálogo, não o ledger, e um
+grep no bloco de ACs devolve **0 ocorrências** de `db:status`/ledger — nenhuma AC fica sem lastro.
+
+**O risco que o `@qa` nomeou, e a medição que o dimensiona:** com o ledger em PENDENTE, um
+`pnpm db:apply` futuro **reaplicaria** as duas no banco de teste. Medido: `246` é idempotente
+por construção (`CREATE ... IF NOT EXISTS`, `CREATE OR REPLACE`, `DROP POLICY IF EXISTS`,
+`ON CONFLICT DO NOTHING`, `WHERE NOT EXISTS`) e `247` é `DROP CONSTRAINT IF EXISTS` + `ADD`,
+então **reaplicar estas duas é seguro** — o `db:apply` regularizaria o ledger sozinho. O risco
+residual é **genérico e permanente**: um ledger que mente transforma o `db:apply` numa arma
+carregada para a próxima migration que **não** for idempotente. Enquanto isso não for
+regularizado, `pnpm db:status` do banco de teste **não serve como pré-condição de nada**.
+
+**Ação sugerida:** rodar `pnpm db:apply` contra o `trifold-crm-dev` (ou registrar as duas no
+ledger sem reexecutar o DDL) e, no mesmo passe, decidir por escrito se o banco de teste fica
+sob o ledger ou fora dele — hoje ele está num terceiro estado, que é o pior dos dois.
+
+---
+
 ### [CI] 🟠 `MNT-001` — `pnpm type-check` não cobre `scripts/`, e **duas fatias seguidas** aumentaram o ponto cego
 
 **Adicionado em:** 2026-08-29 · **Origem:** gate `@qa` da Story `900-3b` (`MNT-001`)

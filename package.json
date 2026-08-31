@@ -19,6 +19,7 @@
     "db:apply": "tsx scripts/db-apply.ts",
     "supabase:check": "tsx scripts/supabase-check.ts",
     "test": "vitest run",
+    "test:tenancy": "vitest run -c vitest.tenancy.config.ts",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
