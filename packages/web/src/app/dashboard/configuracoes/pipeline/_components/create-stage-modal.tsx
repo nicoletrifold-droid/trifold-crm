@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { mensagemDeErroDeEtapa } from "./mensagem-de-erro"
 
 const STAGE_TYPES = [
   { value: "novo", label: "Novo" },
@@ -54,7 +55,7 @@ export function CreateStageModal() {
     setLoading(false)
     if (!res.ok) {
       const data = await res.json().catch(() => ({}))
-      setError((data as { error?: string }).error ?? "Erro ao criar etapa.")
+      setError(mensagemDeErroDeEtapa(res.status, data as { error?: string }, "Erro ao criar etapa."))
       return
     }
     setOpen(false)
