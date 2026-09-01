@@ -491,7 +491,17 @@ describe("AC5 — a linha inteira leva à empresa, e os controles continuam alca
     // próprio componente, e é lá que a asserção seguinte mede.
     expect(codigo).toContain('<div className="relative z-10">')
     expect(codigo).toContain("<ReenviarConvite orgId={org.id} />")
-    expect(codigo).toContain("<OrgRowMenu orgId={org.id} slug={org.slug} />")
+    // Story 900-60 — o call site ganhou `nome` e `isActive`. A asserção mede os QUATRO props
+    // dentro do recorte do próprio elemento, e não a linha inteira: exigir a formatação exata
+    // faria a régua reprovar o Prettier em vez de reprovar a ausência de um prop.
+    const chamadaDoMenu = trechoDelimitado(codigo, "<OrgRowMenu", "/>")
+    expect(chamadaDoMenu).not.toBe("")
+    expect(chamadaDoMenu).toContain("orgId={org.id}")
+    expect(chamadaDoMenu).toContain("slug={org.slug}")
+    expect(chamadaDoMenu).toContain("nome={org.name}")
+    // Sem `isActive`, o 4º item do menu diria sempre a mesma palavra — e metade das vezes seria
+    // a errada ("Pausar" sobre uma empresa já pausada).
+    expect(chamadaDoMenu).toContain("isActive={org.is_active}")
 
     const menu = codigoDe(
       fs.readFileSync(path.join(SRC, "app/platform/orgs/_components/org-row-menu.tsx"), "utf8"),
@@ -500,8 +510,8 @@ describe("AC5 — a linha inteira leva à empresa, e os controles continuam alca
   })
 })
 
-describe("AC6 — o menu tem os TRÊS itens, e não o quarto (que é da `900-60`)", () => {
-  it("Ver empresa · Integrações · Copiar identificador", () => {
+describe("AC6 — o menu tem os três itens da `900-58` e o quarto, que chegou na `900-60`", () => {
+  it("Ver empresa · Integrações · Copiar identificador · Pausar/Retomar empresa", () => {
     const fonte = fs.readFileSync(
       path.join(SRC, "app/platform/orgs/_components/org-row-menu.tsx"),
       "utf8",
@@ -517,9 +527,23 @@ describe("AC6 — o menu tem os TRÊS itens, e não o quarto (que é da `900-60`
     // transferência.
     expect(codigo).toContain("Não foi possível copiar")
 
-    // Ativar/Desativar é escopo da `900-60`. Medido no arquivo INTEIRO, comentário incluído:
-    // é uma proibição, e ignorar comentário afrouxaria uma afirmação absoluta.
-    expect(fonte).not.toContain("is_active")
+    // Story 900-60 — o 4º item. A v0.1 desta régua afirmava "e NÃO o quarto", com
+    // `expect(fonte).not.toContain("is_active")`: era uma fronteira de escopo, não uma
+    // propriedade do produto, e ela caducou quando a `900-60` entrou. O que substitui não é
+    // "nada aqui": é o elo com a fonte única do rótulo.
+    expect(codigo).toContain("textoDaConfirmacao(isActive).rotuloDoMenu")
+    expect(codigo).toContain("setDialogo(true)")
+    // Abrir o diálogo tem que FECHAR o menu: a caixa é `fixed`, não acompanha rolagem, e ficaria
+    // pendurada sobre a sobreposição do diálogo.
+    expect(codigo).toContain("setAberto(false)")
+
+    // A proibição que SOBREVIVE, e agora ela é sobre o produto e não sobre o cronograma:
+    // `organizations.is_active` não bloqueia login de ninguém (o gate de sessão lê
+    // `users.is_active`, outra tabela), então "Desativar" prometeria o que o sistema não faz.
+    // Medido no arquivo INTEIRO, comentário incluído — mas o cabeçalho deste componente explica
+    // por que o rótulo NÃO é "Desativar", então a palavra aparece lá de propósito; a régua
+    // absoluta mede o CÓDIGO. A varredura de `app/platform/**` inteiro vive em
+    // `console-pausa-empresa.test.ts`.
     expect(codigo).not.toContain("Desativar")
   })
 
@@ -711,13 +735,22 @@ describe("controles positivos", () => {
       path.join(SRC, "app/platform/orgs/_components/org-row-menu.tsx"),
       "utf8",
     )
-    // Uma ocorrência só: `replace` sem `g` acerta a PRIMEIRA, e com duas a mutação deixaria a
-    // outra viva — o controle aprovaria uma fonte ainda defeituosa.
-    expect(ocorrenciasNoCodigo(fonte, "botao.current?.focus()")).toBe(1)
+    // ⚠️ Story 900-60 — o arquivo passou a ter DUAS devoluções de foco ao `⋯`: a do `Esc` do
+    // menu e a do fechamento do diálogo. `replace` sem `g` acerta a primeira, e a v0.1 desta
+    // régua garantia a unicidade contando no arquivo inteiro (`toBe(1)`) — o que virou falso
+    // sem que nada tivesse quebrado. A unicidade continua sendo o que importa; o que muda é o
+    // ESCOPO onde ela é medida: dentro do `aoTeclar`, que é o trecho que a mutação ataca.
+    const aoTeclarLimpo = trechoDelimitado(fonte, "function aoTeclar(", "\n    }")
+    expect(aoTeclarLimpo).not.toBe("")
+    expect(ocorrenciasNoCodigo(aoTeclarLimpo, "botao.current?.focus()")).toBe(1)
+
     const envenenada = fonte.replace("      botao.current?.focus()\n", "")
     expect(envenenada).not.toBe(fonte)
     const aoTeclar = trechoDelimitado(envenenada, "function aoTeclar(", "\n    }")
     expect(aoTeclar).not.toBe("")
+    // E o veneno acertou o ALVO CERTO: a outra devolução de foco (a do diálogo) sobrevive. Sem
+    // esta linha, um `replace` que apagasse a errada deixaria o teste verde medindo outra coisa.
+    expect(ocorrenciasNoCodigo(envenenada, "botao.current?.focus()")).toBe(1)
     // O FECHAMENTO sobrevive — a régua mede o PAR (fecha E devolve o foco), não só "fecha".
     expect(aoTeclar).toContain("setAberto(false)")
     expect(aoTeclar).not.toContain("botao.current?.focus()")

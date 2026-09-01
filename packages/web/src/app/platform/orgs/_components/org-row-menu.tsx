@@ -8,12 +8,19 @@
  * CSS (AC5) — nenhum dos dois precisa de cliente. Aqui precisa, e por um motivo só:
  * `navigator.clipboard` não existe no servidor.
  *
- * ## Três itens, e o quarto tem dono
+ * ## Quatro itens — o quarto chegou na `900-60`
  *
- * "Ativar/Desativar" NÃO entra aqui — é mutação de plataforma com confirmação e trilha, escopo
- * da `900-60`. O menu nasce com três itens e ganha o quarto lá, sem reescrita: por isso os itens
- * são um `<ul>` de elementos independentes e não um componente que assume "dois links e um
- * botão".
+ * O menu nasceu com três (`900-58`) e ganhou o quarto aqui, sem reescrita: os itens são um
+ * `<ul>` de elementos independentes, e não um componente que assume "dois links e um botão".
+ *
+ * O quarto item é **"Pausar empresa" / "Retomar empresa"** conforme o estado atual — nunca
+ * "Desativar". O rótulo é AC8 da `900-60` e não é preferência de redação: `organizations.
+ * is_active` NÃO bloqueia login (o gate de sessão lê `users.is_active`, outra tabela), então
+ * "Desativar empresa" prometeria, para qualquer leitor razoável, algo que o sistema não faz.
+ * O texto completo do efeito mora em `lib/tenancy/console-pausa-empresa.ts`, com teste.
+ *
+ * O diálogo NÃO é renderizado dentro do `<ul>`: ele é irmão, e sobrevive ao menu fechar. Ver o
+ * cabeçalho de `pausar-empresa-dialog.tsx` para por que ele vai por portal ao `<body>`.
  *
  * ## `z-10` e `relative` não são estética
  *
@@ -46,14 +53,16 @@
 
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
+import { textoDaConfirmacao } from "@web/lib/tenancy/console-pausa-empresa"
+import { PausarEmpresaDialog } from "./pausar-empresa-dialog"
 
 /** Quanto tempo o rótulo fica em "Copiado!" antes de voltar ao normal. */
 const MS_DE_FEEDBACK = 2000
 
 type EstadoDaCopia = "parado" | "copiado" | "falhou"
 
-/** Altura aproximada da caixa (3 itens), usada só para decidir se ela abre para cima. */
-const ALTURA_ESTIMADA = 116
+/** Altura aproximada da caixa (4 itens), usada só para decidir se ela abre para cima. */
+const ALTURA_ESTIMADA = 152
 
 interface Posicao {
   /** Distância da direita da janela — o menu alinha pela borda direita do botão. */
@@ -63,8 +72,20 @@ interface Posicao {
   bottom?: number
 }
 
-export function OrgRowMenu({ orgId, slug }: { orgId: string; slug: string }) {
+export function OrgRowMenu({
+  orgId,
+  slug,
+  nome,
+  isActive,
+}: {
+  orgId: string
+  slug: string
+  nome: string
+  /** Estado ATUAL da empresa — decide se o 4º item diz "Pausar" ou "Retomar" (AC6/AC8). */
+  isActive: boolean
+}) {
   const [aberto, setAberto] = useState(false)
+  const [dialogo, setDialogo] = useState(false)
   const [posicao, setPosicao] = useState<Posicao | null>(null)
   const [copia, setCopia] = useState<EstadoDaCopia>("parado")
   const caixa = useRef<HTMLDivElement>(null)
@@ -212,7 +233,40 @@ export function OrgRowMenu({ orgId, slug }: { orgId: string; slug: string }) {
               {rotuloDaCopia}
             </button>
           </li>
+          {/* AC6 — o 4º item. O rótulo vem de `textoDaConfirmacao`, a MESMA fonte que titula o
+              diálogo: se as duas divergissem, o operador leria uma promessa no menu e outra na
+              confirmação. Abrir o diálogo FECHA o menu — a caixa `fixed` não acompanha rolagem
+              e ficaria pendurada sobre a sobreposição. */}
+          <li role="none">
+            <button
+              role="menuitem"
+              type="button"
+              onClick={() => {
+                setAberto(false)
+                setDialogo(true)
+              }}
+              className="block w-full px-3 py-2 text-left text-amber-300 hover:bg-slate-800"
+            >
+              {textoDaConfirmacao(isActive).rotuloDoMenu}
+            </button>
+          </li>
         </ul>
+      )}
+
+      {/* Montado só quando abre: o estado interno (motivo, erro) nasce limpo a cada vez, sem
+          `useEffect` de reset. Ver o cabeçalho de `pausar-empresa-dialog.tsx`. */}
+      {dialogo && (
+        <PausarEmpresaDialog
+          orgId={orgId}
+          nome={nome}
+          isActive={isActive}
+          aoFechar={() => {
+            setDialogo(false)
+            // Devolve o foco ao `⋯`, pelo mesmo motivo do `Esc` do menu: fechar sem devolver o
+            // foco joga quem navega por teclado de volta ao topo da página.
+            botao.current?.focus()
+          }}
+        />
       )}
     </div>
   )
