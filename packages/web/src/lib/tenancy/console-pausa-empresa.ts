@@ -12,6 +12,10 @@
  *    `console-pausa-empresa.test.ts`) — nunca derivada destas constantes.
  * 2. **`vitest.config.ts` inclui `packages/web/src/**\/*.test.ts`, não `.tsx`.** Texto que mora
  *    no componente é texto que a suíte deste repositório não alcança.
+ * 3. **O mesmo vale para DECISÃO, não só para texto** — e foi um achado do gate (QA-900-60-1).
+ *    A máquina de estados do envio tinha ficado dentro do `.tsx`: acrescentar `aoFechar()` ao
+ *    ramo de erro (fechar em cima da falha, perdendo o motivo digitado) deixava `tsc` rc=0 e a
+ *    suíte INTEIRA verde. `decidirDesfecho()` mora aqui por isso — ver o bloco dela abaixo.
  *
  * ## O que o rótulo pode e não pode prometer (AC8)
  *
@@ -144,4 +148,57 @@ export function partirNaEnfase(frase: FraseDaConfirmacao): {
 /** AC1 — o `reason` é obrigatório e não-vazio após `trim()`. Sem mínimo de caracteres inventado. */
 export function motivoEhValido(motivo: string): boolean {
   return motivo.trim().length > 0
+}
+
+/**
+ * O corpo que a rota devolve quando o `PATCH` falha.
+ *
+ * Os dois campos são opcionais de propósito: um 5xx de infraestrutura (proxy, gateway, timeout do
+ * runtime) pode não trazer corpo nenhum, e `res.json()` do diálogo já degrada para `{}`.
+ */
+export interface CorpoDeErroDaRota {
+  error?: string
+  message?: string
+}
+
+/** O que o diálogo faz depois da resposta. Os dois campos, juntos, são o desfecho inteiro. */
+export interface DesfechoDoEnvio {
+  /**
+   * Fechar o diálogo é AFIRMAR ao operador que gravou. Só o `200` autoriza — e `200` aqui
+   * significa que o `UPDATE` e a linha de trilha aconteceram na mesma transação.
+   */
+  fecha: boolean
+  /** A mensagem que o operador lê. `null` **só** no sucesso; nunca a string vazia. */
+  erro: string | null
+}
+
+/**
+ * AC7 — decide o desfecho do envio a partir da resposta da rota.
+ *
+ * ## Por que isto é uma função, e não três linhas dentro do componente
+ *
+ * Porque era três linhas dentro do componente e **nada as segurava**: o gate mediu que
+ * acrescentar `aoFechar()` ao ramo de erro deixava a suíte inteira verde (QA-900-60-1). Um
+ * diálogo que fecha em cima de uma falha perde o motivo já digitado e convida o operador a pausar
+ * duas vezes num 5xx que, na verdade, gravou. Aqui a decisão tem carrasco de dois lados: falha
+ * **não** fecha, sucesso **fecha**.
+ *
+ * ## A mensagem em branco é um desfecho, não um detalhe
+ *
+ * `corpo.message ?? corpo.error` — a forma anterior — aceitava `""`, porque a string vazia não é
+ * nullish. O resultado seria o diálogo aberto **sem uma palavra** sobre o que houve: o operador
+ * vê o botão voltar de "Salvando…" e nada mais. Por isso a escolha é pelo primeiro campo
+ * NÃO-BRANCO, e o `HTTP {status}` é o último recurso — feio, mas nunca mudo.
+ */
+export function decidirDesfecho(
+  ok: boolean,
+  status: number,
+  corpo: CorpoDeErroDaRota,
+): DesfechoDoEnvio {
+  if (ok) return { fecha: true, erro: null }
+  // A ordem é `message` antes de `error`: `message` é a frase para humano, `error` é o código.
+  const doServidor = [corpo.message, corpo.error].find(
+    (m): m is string => typeof m === "string" && m.trim() !== "",
+  )
+  return { fecha: false, erro: doServidor ?? `Falhou (HTTP ${status}).` }
 }

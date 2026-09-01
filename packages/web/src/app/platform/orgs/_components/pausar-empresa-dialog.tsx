@@ -28,15 +28,25 @@
  * vezes. E o inverso também vale: nada aqui pinta "salvo" por otimismo. A tela só atualiza
  * depois de um `200`, porque só o `200` significa que o `UPDATE` e a linha de trilha aconteceram
  * na mesma transação.
+ *
+ * ⚠️ **Quem DECIDE isso não mora aqui** — mora em `decidirDesfecho()`
+ * (`lib/tenancy/console-pausa-empresa.ts`), e a razão é que este arquivo é `.tsx`: o
+ * `vitest.config.ts` casa `*.test.ts` e nada mais, então uma decisão escrita aqui dentro é uma
+ * decisão sem carrasco — foi exatamente o que o gate mediu (QA-900-60-1). O que sobrou neste
+ * componente é a OBEDIÊNCIA à decisão, e essa parte é medida por régua de forma sobre o trecho do
+ * `confirmar()` em `console-pausa-empresa.test.ts`: `aoFechar()` aparece uma única vez ali dentro,
+ * e imediatamente depois do `router.refresh()`.
  */
 
 import { useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { useRouter } from "next/navigation"
 import {
+  decidirDesfecho,
   motivoEhValido,
   partirNaEnfase,
   textoDaConfirmacao,
+  type CorpoDeErroDaRota,
 } from "@web/lib/tenancy/console-pausa-empresa"
 
 interface Props {
@@ -92,11 +102,14 @@ export function PausarEmpresaDialog({ orgId, nome, isActive, aoFechar }: Props) 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isActive: texto.isActiveDesejado, reason: motivo }),
       })
-      const corpo = (await res.json().catch(() => ({}))) as { error?: string; message?: string }
-      if (!res.ok) {
-        // A mensagem do servidor chega ao operador. Sem ela, "motivo obrigatório" e "banco fora
-        // do ar" viram o mesmo "não deu certo", e ele tenta de novo a coisa errada.
-        setErro(corpo.message ?? corpo.error ?? `Falhou (HTTP ${res.status}).`)
+      const corpo = (await res.json().catch(() => ({}))) as CorpoDeErroDaRota
+      // A decisão inteira do desfecho vem de fora — inclusive a mensagem que chega ao operador.
+      // Sem ela, "motivo obrigatório" e "banco fora do ar" viram o mesmo "não deu certo", e ele
+      // tenta de novo a coisa errada.
+      const desfecho = decidirDesfecho(res.ok, res.status, corpo)
+      setErro(desfecho.erro)
+      if (!desfecho.fecha) {
+        // AC7 — o diálogo FICA ABERTO, com o motivo digitado intacto. Nada de `aoFechar()` aqui.
         setEnviando(false)
         return
       }

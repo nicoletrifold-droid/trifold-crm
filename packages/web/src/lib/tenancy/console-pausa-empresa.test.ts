@@ -17,8 +17,18 @@
  *
  * ⚠️ **E é régua de FORMA, com o limite declarado**: ela reprova qualquer desvio da expressão
  * esperada, mas "sempre pausa" e "nunca pausa" produziriam o MESMO conjunto de morte, porque as
- * duas formas erradas são igualmente ≠ da certa. O que fecha o elo de verdade é a prova na tela,
- * e ela é manual — está registrada no Dev Agent Record da story.
+ * duas formas erradas são igualmente ≠ da certa. Pior: ela é cega a QUALQUER mutante que preserve
+ * o texto. O que fecha o elo de verdade é a prova na tela, e ela é manual — está registrada no
+ * Dev Agent Record da story.
+ *
+ * ## O desfecho do envio (AC7) — o que o gate cobrou, e onde ele mora agora
+ *
+ * O gate mediu que acrescentar `aoFechar()` ao ramo de erro do diálogo deixava a suíte INTEIRA
+ * verde (QA-900-60-1): a decisão estava num `.tsx`, e o `include` do vitest casa `*.test.ts`.
+ * Ela saiu para `decidirDesfecho()`, que é comportamento e tem carrasco de dois lados aqui —
+ * falha **não** fecha, sucesso **fecha**. O que sobrou no componente é a obediência, e essa parte
+ * é forma: o trecho do `confirmar()` tem `aoFechar()` **uma única vez**, e logo depois do
+ * `router.refresh()`. As duas asserções juntas matam tanto "fecha na falha" quanto "nunca fecha".
  */
 
 import { describe, it, expect } from "vitest"
@@ -26,13 +36,14 @@ import fs from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import {
+  decidirDesfecho,
   motivoEhValido,
   partirNaEnfase,
   rotuloDoEstado,
   sentidoDaAcao,
   textoDaConfirmacao,
 } from "./console-pausa-empresa"
-import { arquivosDeProducao, codigoDe } from "./fonte-scan"
+import { arquivosDeProducao, codigoDe, ocorrenciasNoCodigo, trechoDelimitado } from "./fonte-scan"
 
 const AQUI = path.dirname(fileURLToPath(import.meta.url))
 const SRC = path.resolve(AQUI, "../..") // packages/web/src
@@ -236,5 +247,102 @@ describe("o elo com a tela — varredura de texto-fonte (régua de FORMA)", () =
   it("controle positivo: o detector de `Desativar` DETECTA", () => {
     // Sem isto, a asserção acima ficaria verde se `codigoDe` passasse a devolver string vazia.
     expect(codigoDe('const r = "Desativar empresa"')).toContain("Desativar")
+  })
+})
+
+describe("AC7 — `decidirDesfecho`: só o sucesso fecha o diálogo", () => {
+  it("**controle positivo** — `200` fecha, e sem erro nenhum", () => {
+    // Sem este caso, tudo abaixo seria satisfeito por um `decidirDesfecho` que NUNCA fecha — que
+    // é o outro defeito, e o mais irritante de todos: o operador salva e a tela não sai da frente.
+    expect(decidirDesfecho(true, 200, {})).toEqual({ fecha: true, erro: null })
+    expect(decidirDesfecho(true, 200, { message: "ignorada" })).toEqual({ fecha: true, erro: null })
+  })
+
+  it("falha NÃO fecha — e a mensagem do servidor é a que o operador lê", () => {
+    expect(decidirDesfecho(false, 400, { error: "MOTIVO_OBRIGATORIO", message: "motivo obrigatório" })).toEqual({
+      fecha: false,
+      erro: "motivo obrigatório",
+    })
+  })
+
+  it("sem `message`, o código do `error` serve — é melhor que silêncio", () => {
+    expect(decidirDesfecho(false, 403, { error: "FORBIDDEN" })).toEqual({
+      fecha: false,
+      erro: "FORBIDDEN",
+    })
+  })
+
+  it("corpo vazio (5xx de gateway, sem JSON) cai no `HTTP {status}`, e o status é o REAL", () => {
+    expect(decidirDesfecho(false, 502, {})).toEqual({ fecha: false, erro: "Falhou (HTTP 502)." })
+    // Dois status diferentes, duas frases diferentes: `502` não pode virar um `500` de enfeite.
+    expect(decidirDesfecho(false, 500, {}).erro).toBe("Falhou (HTTP 500).")
+  })
+
+  it("campo em BRANCO não é mensagem: `\"\"` não pode deixar o diálogo mudo", () => {
+    // `corpo.message ?? corpo.error` — a forma anterior — aceitava `""`, porque string vazia não
+    // é nullish. O diálogo ficaria aberto sem uma palavra sobre o que houve.
+    expect(decidirDesfecho(false, 500, { message: "", error: "ESCRITA_FALHOU" }).erro).toBe("ESCRITA_FALHOU")
+    expect(decidirDesfecho(false, 500, { message: "   ", error: "" }).erro).toBe("Falhou (HTTP 500).")
+  })
+
+  it("invariante: quando NÃO fecha, sempre há uma frase — nunca `null` nem `\"\"`", () => {
+    const corpos = [
+      {},
+      { message: "" },
+      { error: "" },
+      { message: "  ", error: "  " },
+      { error: "X" },
+      { message: "Y" },
+    ]
+    for (const corpo of corpos) {
+      const d = decidirDesfecho(false, 503, corpo)
+      expect(d.fecha).toBe(false)
+      expect(typeof d.erro).toBe("string")
+      expect((d.erro ?? "").trim()).not.toBe("")
+    }
+  })
+})
+
+describe("AC7 — o diálogo OBEDECE à decisão (régua de forma sobre o `confirmar()`)", () => {
+  // Recorte do `confirmar()` inteiro: da assinatura até o `return createPortal(` que abre o JSX.
+  // `trechoDelimitado` é fail-closed — abertura ou fechamento ausente devolve `""` — e o `it`
+  // abaixo afirma isso explicitamente, porque `""` satisfaz qualquer `not.toContain`.
+  const confirmar = () =>
+    trechoDelimitado(
+      fs.readFileSync(DIALOGO, "utf8"),
+      "async function confirmar()",
+      "return createPortal(",
+    )
+
+  it("vivacidade: o trecho do `confirmar()` foi realmente recortado", () => {
+    const trecho = confirmar()
+    expect(trecho).not.toBe("")
+    expect(trecho).toContain("await fetch(")
+  })
+
+  it("a decisão é CONSUMIDA — os dois campos, não só a chamada", () => {
+    // Chamar `decidirDesfecho` e ignorar o retorno mediria a função, não o desfecho.
+    const trecho = confirmar()
+    expect(trecho).toContain("decidirDesfecho(res.ok, res.status, corpo)")
+    expect(trecho).toContain("setErro(desfecho.erro)")
+    expect(trecho).toContain("if (!desfecho.fecha)")
+  })
+
+  it("`aoFechar()` acontece UMA vez em `confirmar()`, e logo depois do `router.refresh()`", () => {
+    const trecho = confirmar()
+    // Uma: acrescentar `aoFechar()` ao ramo de erro vira 2 e reprova aqui (QA-900-60-1).
+    expect(ocorrenciasNoCodigo(trecho, "aoFechar()")).toBe(1)
+    // Depois do refresh: sem esta linha, mover o único `aoFechar()` do sucesso PARA o ramo de
+    // erro manteria a contagem em 1 — o defeito passaria de novo.
+    expect(trecho).toContain("router.refresh()\naoFechar()")
+  })
+
+  it("o ramo de falha preserva o diálogo: tem `return`, e NÃO tem `aoFechar`", () => {
+    const ramo = trechoDelimitado(confirmar(), "if (!desfecho.fecha)", "}")
+    // `""` passaria no `not.toContain` de graça — por isso as positivas vêm primeiro.
+    expect(ramo).not.toBe("")
+    expect(ramo).toContain("setEnviando(false)")
+    expect(ramo).toContain("return")
+    expect(ramo).not.toContain("aoFechar")
   })
 })
