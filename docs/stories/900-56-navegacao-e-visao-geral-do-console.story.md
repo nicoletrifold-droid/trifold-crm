@@ -264,6 +264,7 @@ paralelo é como se perde uma correção de segurança num merge. Se a assinatur
 | 2026-08-31 | 0.3 | **Implementada.** Uma divergência medida contra a AC2: `/platform/trilha` **não existe** (medido: HTTP 404 no ambiente de teste, com sessão de platform admin), então o item "Trilha" nasce desabilitado como Cobrança e Uso, em vez de `<Link>`. Ver Dev Agent Record → "Divergência". Status Ready → Ready for Review. | @dev (Dex) |
 | 2026-08-31 | 0.4 | **Concerns do gate fechadas (QA-900-56-1/2/3/4).** As 4 consultas passam a LER o `error`: `ContagemDeclarada` ganha o terceiro estado `indisponivel`, `formatarContagem` devolve `—`, e o vazio de partida ("Nenhuma empresa ainda") só renderiza quando a consulta de `organizations` SUCEDEU. "N integrações conectadas" passa a herdar saturação de `org_integrations` **e** de `whatsapp_config`, e a contar por `rotuloDeStatusDoTile(...).tom === "ok"` — a tradução única de status, em vez de uma terceira. O predicado do período saiu do `page.tsx` para `ehNovaNoPeriodo()`, com carrasco de borda. 7 mutações novas, cada uma com `tsc --noEmit` rc=0 medido antes do vermelho. | @dev (Dex) |
 | 2026-08-31 | 0.5 | **Rodada 3 — os 4 achados do CodeRabbit (PR #547) fechados, e medidos.** O achado desta story era o **consumidor cego**: a rodada 2 criou o sinal `adminsFalhou` e deixou `pendenciasDeConvite` e a coluna de admin de "Entraram recentemente" sem lê-lo — com a consulta de `users` caída, toda org com `admin_invite_email` virava pendência por falta de dado. `adminsIndisponiveis` passa a ser campo obrigatório. ⚠️ **Os quatro consertos entraram em produção ANTES de existir régua, e a mutação mostrou que três eram decorativos** (verdes com o conserto neutralizado); `console-fail-closed.test.ts` (48 testes) é o que os transforma em entrega. Ver Dev Agent Record → "Rodada 3", inclusive os dois defeitos da própria régua e a correção do delta de testes. | @dev (Dex) |
+| 2026-08-31 | 0.6 | **Rodada 4 — 2ª passada do CodeRabbit no PR #547 (4 achados `Minor`).** Os DOIS primeiros eram defeitos na própria régua construída na rodada 3: `expect(todos).toContain(estadoDaEmpresaDeclarado(…))` aceitava todo o contradomínio (mutante que devolve `"inativa"` sobre leitura caída ficava VERDE — medido), e `expect("").not.toContain(…)` comparava dois literais. Trocadas por asserções que medem. `diasDesdeOConvite` devolvia `NaN` com carimbo ilegível ("pendente há NaN dias") e passa a devolver `null`, com a tela dizendo que não mediu. Datas do console ganharam fuso fixo (`FUSO_DO_CONSOLE`), com régua ABSOLUTA sobre `app/platform/**`. Ver Dev Agent Record → "Rodada 4". | @dev (Dex) |
 
 
 ## Dev Agent Record
@@ -369,6 +370,37 @@ zero linhas fora de `disconnected`, `whatsapp_config` de volta a `inactive`/`nul
 - `packages/web/src/app/platform/page.tsx` *(rodada 3 — os dois consumidores cegos ao `adminsFalhou`)*
 - `packages/web/src/lib/tenancy/console-visao-geral.ts` *(rodada 3 — `adminsIndisponiveis` obrigatório)*
 - `packages/web/src/lib/tenancy/console-visao-geral.test.ts` *(rodada 3 — o `it` do consumidor cego)*
+- `packages/web/src/lib/tenancy/console-fail-closed.test.ts` *(rodada 4 — as duas asserções vacuosas + as réguas de fuso e de `dias`)*
+- `packages/web/src/lib/tenancy/console-visao-geral.ts` *(rodada 4 — `diasDesdeOConvite` devolve `number | null`)*
+- `packages/web/src/lib/tenancy/console-visao-geral.test.ts` *(rodada 4 — o carimbo ilegível)*
+- `packages/web/src/app/platform/page.tsx` *(rodada 4 — fuso fixo e o ramo do `dias === null`)*
+- `packages/web/src/app/platform/orgs/page.tsx` *(rodada 4 — o 5º call site de data, achado pela varredura de `app/platform/**`)*
+
+### Rodada 4 — a 2ª passada do CodeRabbit (PR #547), e o defeito estava no instrumento
+
+**Achado 1 — `console-fail-closed.test.ts:235`, asserção que aceita todo o contradomínio.**
+`expect(todos).toContain(estadoDaEmpresaDeclarado({ falhou: true, org: null }))`, com `todos` sendo
+os TRÊS estados do tipo. Não pode falhar: o `tsc` já proíbe um quarto valor, então ela media o
+compilador. **Medido, não deduzido:** com `estadoDaEmpresaDeclarado` mutado para devolver
+`"inativa"` no cruzamento `falhou && !org` (`tsc --noEmit` rc=0), a asserção original fica VERDE e
+a nova fica VERMELHA — e `"○ inativa"` sobre uma leitura que não voltou é literalmente a afirmação
+que o `describe` inteiro existe para impedir. Virou três `it`: o caso específico
+(`toBe("desconhecido")`), o par dos dois estados reais, e a alcançabilidade dos três — este último
+no mesmo formato já usado para `estadoDaLeitura`, com âncora literal.
+
+**Achado 2 — `:608`, dois literais.** `expect("").not.toContain("{AVISO…}")` é decidida em tempo de
+leitura. ⚠️ Amarrá-la ao valor (`expect(recorte).not.toContain(…)`) **também não resolve**: com
+`recorte === ""` ela é *entailed* pelo `toBe("")` da linha de cima, e nenhuma mutação a derruba sem
+derrubar aquela primeiro — verificado aplicando o fail-open em `trechoDelimitado`, que acendeu a
+linha anterior, não esta. O que MEDE o veneno é a contagem: `ocorrenciasNoCodigo(fonte, AVISO)`
+ancorado em `1` na fonte correta, e `N - 1` na envenenada.
+
+**Achado 4 — `console-visao-geral.ts:211`, `NaN` na tela.** `new Date("30/08/2026").getTime()` é
+`NaN`, e `Math.max(0, Math.floor(NaN))` continua `NaN`: "convite do admin pendente há NaN dias".
+Agora `number | null`, e a tela escreve "(não foi possível medir há quanto tempo)". ⚠️ **O tipo
+não é o carrasco:** `number | null` num filho de JSX compila (React renderiza `null` como vazio), e
+a tela escreveria "pendente há  dias" sem o `tsc` ver nada — quem guarda é a régua de texto-fonte
+sobre o call site, com controle positivo.
 
 ### Fechamento das concerns do gate (rodada 2) — QA-900-56-1/2/3/4
 
@@ -519,6 +551,7 @@ arquivos não commitados da `900-55`, que não toquei).
 **Nenhum defeito vivo. Nenhuma regressão. Duas decisões contra a letra da AC, as duas certas.**
 
 #### Baseline e delta — resolvidos contra a árvore, não contra o CI
+
 | | arquivos | passed | xfail |
 |---|---|---|---|
 | árvore real (com a story) | **299** | **3966** | 6 |
@@ -533,6 +566,7 @@ aritmeticamente (`3.902 + 32 = 3.934`) e é corroborada por **+11 blocos `it(` e
 novos** nos 3 arquivos de teste daquela frente.
 
 #### Mutações — todas com `tsc --noEmit` rc=0 medido ANTES do vermelho
+
 | # | mutação | tsc | resultado |
 |---|---|---|---|
 | q5 | `saturada` medida sobre o valor filtrado | rc=0 | 1 VERMELHO |
@@ -564,6 +598,7 @@ que não se exibe `0`. **7 dos 8 números da Visão geral declaram saturação**
 concern 2.
 
 #### Concerns (4, nenhuma bloqueante)
+
 | id | sev | o quê |
 |---|---|---|
 | QA-900-56-1 | média | As 4 consultas descartam `error`: uma falha de leitura vira "Empresas ativas: **0**" e o convite "Nenhuma empresa ainda. Criar a primeira". É a regra da AC9 por uma porta que a AC9 não enumera. Padrão pré-existente no repositório; primeira vez que vira número de manchete. |

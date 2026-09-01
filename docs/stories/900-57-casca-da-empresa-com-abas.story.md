@@ -217,6 +217,7 @@ created_at`, sem esse campo. Pequena duplicação de fetch de `organizations` en
 | 2026-08-31 | 0.3 | **Implementada.** Todas as 7 ACs entregues e verificadas no ambiente de teste com sessão real de platform admin (404 → 200 nas 6 abas; 404 de verdade para empresa inexistente). A paleta do `/dashboard` foi provada por **comparação de markup renderizado** entre `main` e a branch, não por inspeção visual. ⚠️ *Corrigido na v0.4: a frase original dizia "inalterada", e a medição sustentava menos que isso — ver QA-900-57-2.* Status Ready → Ready for Review. | @dev (Dex) |
 | 2026-08-31 | 0.4 | **Concerns do gate fechadas (QA-900-57-1/2/3).** A régua da AC4 fechou a CLASSE, não só as duas instâncias: `linhasDeCodigo()` única (filtrando `*`, `//`, `/*` e `{/*`) nas quatro asserções de texto-fonte, e recorte DELIMITADO de call site (`<Tag` até o `/>` que o fecha) no lugar do `slice` até o EOF — os três furos (q8, M3, q4c) reproduzidos VERDES antes e VERMELHOS depois, com `tsc` rc=0 nos seis casos, mais um controle positivo por furo. `campoMono` acrescentado à tabela de paletas: `` `${classes.campo} font-mono` `` concatenava e mudava a ordem dos tokens do campo de senha; agora o valor é byte a byte o da `main@1393fa68`. `rotuloDoAtor` exportado e coberto nos 4 caminhos. | @dev (Dex) |
 | 2026-08-31 | 0.5 | **Rodada 3 — os 4 achados do CodeRabbit (PR #547) fechados, e medidos.** As três telas da casca afirmavam "empresa não existe", "○ inativa", "Nenhum administrador convidado", "○ Não conectado" e "Nenhuma ação registrada" a partir de consultas que descartavam o `error`; a Trilha acendia "há mais registros" sem evidência de uma linha a mais. Novos `console-leitura.ts` (vocabulário dos três estados, `falhou` obrigatório) e `fonte-scan.ts` (os primitivos de varredura saíram de `console-paleta.test.ts`). ⚠️ **Os consertos entraram em produção ANTES de existir régua, e a mutação mostrou que três eram decorativos.** Ver Dev Agent Record → "Rodada 3", inclusive os três comentários que citavam uma régua inexistente e os dois defeitos da própria régua. | @dev (Dex) |
+| 2026-08-31 | 0.6 | **Rodada 4 — 2ª passada do CodeRabbit no PR #547.** O achado desta story era o **terceiro furo da mesma classe** em `fonte-scan.ts`: `linhasDeCodigo` filtrava por PREFIXO, então descartava a linha de ABERTURA de um comentário de bloco e devolvia as de CONTINUAÇÃO como código — depois de já ter sido furada por comentário `//` e por comentário JSX `{/* */}`. Virou varredura com ESTADO. O corpus real tem seis comentários JSX de duas linhas, então não era hipótese. Um `it` desta suíte ficou VERMELHO com o conserto — o que AFIRMAVA o furo — e foi reescrito como controle positivo, com controle negativo irmão. Datas do console ganharam `FUSO_DO_CONSOLE`. MD058 da própria story corrigido. Ver Dev Agent Record → "Rodada 4". | @dev (Dex) |
 
 ## Dev Agent Record
 
@@ -320,6 +321,52 @@ menção em comentário durante a construção, e o conserto foi **reescrever o 
   de teste têm admin ativo, e forjar a pendência exigiria anular o `auth_id` de uma conta de login
   viva.
 
+### Rodada 4 — o terceiro furo do mesmo detector (CodeRabbit, PR #547)
+
+**`fonte-scan.ts:41` — a CONTINUAÇÃO do comentário de bloco.** O filtro olhava o início da linha
+trimada, então de um comentário de duas linhas ele descartava só a primeira: da segunda em diante
+o comentário voltava a ser "código". É a **mesma classe** que já furou esta régua duas vezes
+(comentário `//` e comentário JSX `{/* */}`) — e a rodada 3 tinha até um `it` chamado "o furo que o
+filtro de linha não pega", que AFIRMAVA o buraco em vez de fechá-lo.
+
+`linhasDeCodigo` virou varredura com ESTADO: o `dentroDeBloco` atravessa a quebra de linha, a chave
+de `{` mais barra-asterisco sai junto com o comentário JSX, e o código que sobra antes da abertura
+ou depois do fechamento é preservado. `//` precedido de `:` **não** abre comentário (URL), porque
+descartar demais produz falso vermelho. A direção do erro é deliberada: **sobra, não falta** —
+descartar demais deixa uma asserção positiva vermelha e visível; descartar de menos é o furo.
+
+**O achado que o conserto produziu, e não é regressão.** O `it` "âncora na CONTINUAÇÃO de um
+comentário JSX" afirmava `expect(linhasDeCodigo(envenenada).some(…)).toBe(true)` — ou seja, exigia
+que a régua continuasse cega. Com o conserto ele ficou VERMELHO. Foi reescrito como o **controle
+positivo**: o predicado ANTIGO (filtro por prefixo, escrito à mão dentro do `it`) fica verde sobre
+a fonte envenenada e a régua de hoje fica vermelha — o par é a medida do que se ganhou, e ele
+impede o conserto de ser desfeito em silêncio.
+
+**Controle negativo, no mesmo commit.** Três telas REAIS do corpus continuam tendo suas âncoras
+reconhecidas como código, com vivacidade (`codigoDe(fonte).length > 500` e mais de 20 linhas de
+código não-vazias — uma varredura que perdesse o estado ligado engoliria o arquivo a partir do
+primeiro bloco, e o `some` sozinho é cego a isso). Mais quatro casos de piso: código na mesma linha
+de um comentário de bloco, comentário JSX inline, URL com `//`, e código depois do fechamento.
+
+**Mutação nos dois sentidos** (`tsc --noEmit` rc=0 antes de contar qualquer vermelho):
+
+| mutação | efeito |
+|---|---|
+| M1 — `linhasDeCodigo` volta ao filtro por prefixo | 2 VERMELHOS (o controle positivo e o piso) |
+| M2 — `linhasDeCodigo` devolve `[]` (descarta demais) | 34 VERMELHOS (o controle negativo entre eles) |
+
+**`arquivosDeProducao` saiu de `console-paleta.test.ts` para `fonte-scan.ts`** quando um segundo
+arquivo de régua passou a varrer a mesma árvore — mesma justificativa da extração da rodada 3, e
+desta vez o segundo consumidor existe no mesmo commit.
+
+**Fuso das datas (achado 3).** `toLocaleDateString("pt-BR")` sem `timeZone` resolve pelo fuso do
+PROCESSO: UTC na Vercel, UTC-3 no laptop. Uma empresa criada às 21h aparecia com um dia a mais em
+produção. `FUSO_DO_CONSOLE` em `console-leitura.ts`, e a régua é **absoluta sobre o diretório**
+(`app/platform/**`), não uma lista de arquivos lembrados — foi ela que achou o **quinto** call site,
+em `orgs/page.tsx`, que a leitura do diff não teria mostrado porque é da `900-22b`. `integrations-
+panel.tsx` ficou de fora e é decisão declarada: as duas datas dele são pré-existentes e a mesma
+linha renderiza no `/dashboard`, fora do escopo destas duas stories.
+
 ### File List
 
 **Criados**
@@ -342,6 +389,12 @@ menção em comentário durante a construção, e o conserto foi **reescrever o 
 - `packages/web/src/app/platform/orgs/[id]/page.tsx` *(rodada 3 — as CINCO consultas)*
 - `packages/web/src/app/platform/orgs/[id]/trilha/page.tsx` *(rodada 3 — `LIMITE + 1` e o `haMais` com evidência)*
 - `packages/web/src/lib/tenancy/console-paleta.test.ts` *(rodada 3 — helpers extraídos para `fonte-scan.ts`)*
+- `packages/web/src/lib/tenancy/fonte-scan.ts` *(rodada 4 — varredura com estado + `arquivosDeProducao`)*
+- `packages/web/src/lib/tenancy/console-paleta.test.ts` *(rodada 4 — o walker foi para `fonte-scan.ts`)*
+- `packages/web/src/lib/tenancy/console-leitura.ts` *(rodada 4 — `FUSO_DO_CONSOLE`)*
+- `packages/web/src/app/platform/orgs/[id]/page.tsx` *(rodada 4 — fuso fixo)*
+- `packages/web/src/app/platform/orgs/[id]/layout.tsx` *(rodada 4 — fuso fixo)*
+- `packages/web/src/app/platform/_components/linha-da-trilha.tsx` *(rodada 4 — fuso fixo)*
 - `packages/web/src/app/platform/orgs/[id]/integracoes/page.tsx`
 - `packages/web/src/components/integrations/integrations-panel.tsx`
 - `packages/web/src/components/integrations/paleta.ts` *(rodada 2 — `campoMono`)*
@@ -541,6 +594,7 @@ tons de badge e os 5 tiles:
   isto é, a troca de paleta é exatamente uma substituição de escala e nada mais.
 
 #### As duas réguas cegas que você pegou — confirmadas mortas
+
 | # | mutação | tsc | resultado |
 |---|---|---|---|
 | M2 | `<Tile … classes={classes}>` → `classes={PALETAS.stone}` | rc=0 | 1 VERMELHO |
@@ -549,6 +603,7 @@ tons de badge e os 5 tiles:
 | M1 | `PALETA_PADRAO` `stone` → `slate` (o `/dashboard` mudaria de cara) | rc=0 | 1 VERMELHO |
 
 #### A terceira da família — e ela veio em três
+
 | # | asserção | forma do furo | tsc | régua |
 |---|---|---|---|---|
 | **q8** | `toContain("classesDaPaleta(palette)")` no arquivo inteiro | **comentário** | rc=0 | **10/10 VERDE** |
@@ -580,6 +635,7 @@ novas, que é exatamente o que se perde ao entrar na lista. **Seu argumento est�
 foi pago no lugar certo.**
 
 #### Concerns
+
 | id | sev | o quê |
 |---|---|---|
 | **QA-900-57-1** | **alta** | Os três furos acima. **Peço o conserto antes do merge** — ~8 linhas de teste, zero de produção. A régua É a entrega da AC4 tanto quanto a prop; com o q8 aberto o defeito volta inteiro e volta verde. |
