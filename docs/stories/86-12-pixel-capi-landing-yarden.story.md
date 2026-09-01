@@ -478,23 +478,38 @@ privacidade" **+** `<input type="checkbox">` (sem `required`) "Estou de acordo e
 receber comunicações e ser contatado". **Essa paridade deixa de ser requisito do
 Yarden.**
 
-Estado real implementado (verificado pelo @po em `landing-pages/yarden/index.html`,
-não por relato — corrige de passagem o resumo do Change Log 0.9, que descreveu os
-três como "Políticas de privacidade"):
+Estado real implementado (verificado pelo @po lendo
+`landing-pages/yarden/index.html`, não por relato — **reconferido em 2026-09-01
+após a padronização de texto do Change Log 0.11**, que tornou obsoleta a versão
+anterior desta tabela):
 
-| `<form>` | Linha | Checkbox (único, `required`) |
+| `<form>` | Linha do `label.check` | Checkbox (único, `required`) |
 |---|---|---|
 | `leadForm` (hero desktop) | 519-522 | "Políticas de privacidade" |
 | `leadFormMobile` (hero mobile) | 551-554 | "Políticas de privacidade" |
-| `leadFormSaber` ("Quer saber mais?") | 625-628 | "Concordo em fornecer meus dados para receber conteúdos e ofertas por e-mail ou outros meios." |
+| `leadFormSaber` ("Quer saber mais?") | 625-628 | "Políticas de privacidade" |
 
-Nenhum dos três tem `id`/`name` e **nenhum viaja no payload** — `api/lead.js`
-envia só `nome`/`whatsapp`/`email`/`empresa` (honeypot). Ou seja: **o aceite é
-barrado no browser e não fica registrado no CRM.** O enforcement funciona apesar
-do `novalidate` nos três `<form>` porque o handler chama
-`form.checkValidity()` + `form.reportValidity()` (`index.html:718`) — conferido,
-porque `novalidate` sozinho anularia o `required`. Nada disso muda lead, CRM ou
-CAPI: é consentimento/negócio, não técnico.
+Os três blocos são hoje **byte-a-byte idênticos** (`<input type="checkbox"
+required />` + `<span>Políticas de privacidade</span>`), variando só a
+indentação. **Histórico, para não ser lido como defeito numa comparação futura
+com o mockup:** até 2026-09-01 o `leadFormSaber` trazia o texto de marketing do
+mockup — "Concordo em fornecer meus dados para receber conteúdos e ofertas por
+e-mail ou outros meios." — e o stakeholder (lucas@trifold.eng.br) decidiu
+padronizá-lo com os outros dois (Change Log 0.11). É uma **divergência
+deliberada e autorizada em relação ao mockup** naquele ponto específico: o
+mockup segue com o texto de marketing, a página não.
+
+Nenhum dos três tem `id`/`name` e **nenhum viaja no payload** — o browser monta
+`{ nome, whatsapp, email, empresa }` (`index.html:719-723`, `empresa` é o
+honeypot) e `api/lead.js` repassa ao CRM
+`{ nome, whatsapp, email, page: "yarden", tracking }` (`api/lead.js:188-192`).
+Ou seja: **o aceite é barrado no browser e não fica registrado em lugar
+nenhum.** O enforcement funciona apesar do `novalidate` nos três `<form>` porque
+o handler chama `form.checkValidity()` + `form.reportValidity()`
+(`index.html:718`) — conferido, porque `novalidate` sozinho anularia o
+`required`. Nada disso muda lead, CRM ou CAPI: é consentimento/negócio, não
+técnico. A não-persistência está registrada como débito técnico formal e
+**aceito** pelo stakeholder — ver "Débitos técnicos conhecidos", item DT-1.
 
 **2. Ajustes factuais de redação (não são mudança de escopo).** A parte "Dentro
 de escopo" acima descrevia uma página **placeholder** e tratava a integração do
@@ -505,20 +520,28 @@ os três formulários têm `email` **`required`** (`index.html:517`, `549`, `623
 seguindo o asterisco do próprio mockup (`placeholder="* E-mail"`). O @po não
 reabre isso — o mockup é a fonte.
 
-**Observações abertas (NÃO bloqueiam T12/T13, NÃO reabrem a decisão travada) —
-para o stakeholder decidir num follow-up:**
+**Observações — estado em 2026-09-01 (NÃO bloqueiam T12/T13, NÃO reabrem a
+decisão travada):**
 
-- **O `leadFormSaber` não tem aceite de política de privacidade.** Seu checkbox
-  único é consentimento de contato/marketing. Leads captados por esse formulário
-  nunca aceitam a política — assimetria em relação aos dois formulários do hero.
-- **Consentimento de marketing como `required`** pode conflitar com a exigência
-  de consentimento livre da LGPD (art. 8º) quando é condição para enviar o
-  formulário. É juízo jurídico, fora da alçada de @po/@dev.
-- **Nenhum consentimento é persistido** (sem `name`, fora do payload) — não há
-  como provar depois quem aceitou o quê.
-- **`86.12-QA-002` segue OPEN:** não há URL de política de privacidade, então
-  nem o checkbox nem o `<span class="politica">` do rodapé são link. É conteúdo
-  pendente do stakeholder, não fix de dev.
+- ✅ **FECHADA — o `leadFormSaber` não tinha aceite de política de privacidade.**
+  Era a assimetria em que leads daquele formulário nunca aceitavam a política.
+  Resolvida pela padronização de texto de 2026-09-01 (Change Log 0.11): os três
+  formulários pedem hoje o mesmo aceite de política.
+- ✅ **NÃO SE APLICA MAIS — consentimento de marketing como `required`** versus a
+  exigência de consentimento **livre** da LGPD (art. 8º). Não há mais
+  consentimento de marketing na página; o único checkbox de cada formulário é
+  aceite de política, cuja obrigatoriedade como condição de envio é de outra
+  natureza. Registrado como histórico, não como pendência.
+- 🟡 **ABERTA — nenhum consentimento é persistido** (sem `id`/`name`, fora do
+  payload): não há como provar depois quem aceitou o quê. **Decisão do
+  stakeholder (lucas@trifold.eng.br) em 2026-09-01: NÃO resolver agora** —
+  promovida a débito técnico formal, ver "Débitos técnicos conhecidos", DT-1.
+  Não é pendência de T13.
+- 🟡 **ABERTA — `86.12-QA-002` segue OPEN:** não há URL de política de
+  privacidade, então nem o checkbox nem o `<span class="politica">` do rodapé
+  são link. É conteúdo pendente do stakeholder, não fix de dev. (A padronização
+  da 0.11 não agravou nem resolveu isso de propósito: os três `<span>` seguem
+  sem `<a href>`, consistentes entre si.)
 
 ### AC13 — Validação de ponta a ponta antes de considerar pronta
 
@@ -611,10 +634,86 @@ Antes do AC9/AC13 poderem ser validados em produção, @devops precisa:
    implementada e reusada da 86-11 (`tracked: false`).
 5. **Consentimento (LGPD)** — mesma ressalva já registrada nas stories
    anteriores (Pixel dispara `PageView` antes de qualquer aceite explícito).
+   Somou-se a isto o fato de o aceite de política **não ser persistido** em
+   lugar nenhum: aceito pelo stakeholder e registrado formalmente em
+   "Débitos técnicos conhecidos", DT-1.
 6. **Conteúdo definitivo pode introduzir uma segunda etapa real** (ex.:
    agendamento) — ver ressalva no `CompleteRegistration` da tabela de
    eventos. Se isso acontecer, é um follow-up de ajuste de gatilho, não uma
    falha desta story.
+
+## Débitos técnicos conhecidos (aceitos pelo stakeholder — NÃO bloqueiam esta story)
+
+Itens verificados no código, conscientemente **não resolvidos** nesta story por
+decisão explícita do stakeholder. Registrados aqui para não sumirem no Change
+Log: quem for planejar o próximo trabalho nesta landing (ou na irmã, Vind
+Residence) deve ler esta seção antes de tratar qualquer um deles como bug novo.
+
+### DT-1 — O aceite de política de privacidade não é persistido em lugar nenhum (só validado no browser)
+
+**Decisão do stakeholder (lucas@trifold.eng.br) em 2026-09-01: NÃO resolver
+agora.** Não é pendência de T12/T13, não bloqueia o deploy nem o `Done`, e não
+é defeito a corrigir dentro do escopo desta story.
+
+**Estado verificado (lido no código, não presumido):**
+
+- Os três checkboxes de aceite (`leadForm`, `leadFormMobile`, `leadFormSaber` —
+  `index.html:520`, `552`, `626`) são `<input type="checkbox" required />`
+  **sem `id` e sem `name`**. Sem `name`, o campo é inalcançável pelo handler
+  (`form.empresa.value` funciona porque o honeypot **tem** `name`; o checkbox
+  não tem nada equivalente).
+- O browser monta `data = { nome, whatsapp, email, empresa }`
+  (`index.html:719-723`) — nenhum campo de consentimento.
+- O proxy repassa ao CRM `{ nome, whatsapp, email, page: "yarden", tracking }`
+  (`api/lead.js:188-192`) — idem.
+- Portanto o aceite **existe apenas como bloqueio de UI**: `required` +
+  `form.checkValidity()`/`reportValidity()` (`index.html:718`). Nada é gravado
+  em `leads`, em `leads.metadata`, em `webhook_logs` nem em activity.
+
+**Consequência prática:** não há prova de consentimento recuperável. Se alguém
+perguntar depois "este lead aceitou a política? quando? com que redação?", a
+resposta hoje é "não há registro" — o que se pede é reconstruído por inferência
+(estava na página, o formulário não envia sem o check), não por evidência.
+
+**Por que foi aceito assim:** é exatamente o mesmo padrão que já roda em
+produção no Vind Residence (Story 86-11, `landing-pages/vind-residence/` —
+também não persiste consentimento), e igualar o Yarden a um padrão já aceito não
+introduz risco novo em relação ao que a Trifold já opera. Uma solução aplicada
+só ao Yarden deixaria as duas landings divergentes, o que é pior que o débito.
+
+**Soluções plausíveis para o futuro (trabalho futuro, NÃO desta story — não
+implementar sem story própria):**
+
+1. Dar `id`/`name` aos três checkboxes (ex.: `name="aceite_politica"`) e incluir
+   o valor no `data` do browser.
+2. Repassar no payload do proxy e gravar no CRM em
+   `leads.metadata.consent` — ex.:
+   `{ aceite_politica: true, texto: "Políticas de privacidade", form: "leadFormSaber", em: "<ISO-8601>" }`.
+   Persistir o **texto e a versão** do que foi aceito é o que dá valor
+   probatório; só um booleano `true` prova pouco.
+3. Fazer o mesmo no Vind Residence, para as duas landings não divergirem, e
+   avaliar se `leads.metadata.consent` deve ser um contrato compartilhado (o
+   campo passaria a valer para qualquer landing futura, como `landing` já vale
+   hoje via `resolveLandingConfig`).
+
+**Itens relacionados que continuam abertos e são de outra natureza:**
+`86.12-QA-002` (não existe URL de política de privacidade, então nenhum dos três
+`<span>` — nem o do rodapé — é link) é **conteúdo pendente do stakeholder**, não
+código. Resolver DT-1 sem uma URL de política ainda deixaria o aceite apontando
+para um texto que não existe publicamente.
+
+### DT-2 — Herdados da 86-11, fora de escopo aqui (registrados na 86-11, repetidos por visibilidade)
+
+- `86.11-QA-003` — `POST /api/webhooks/landing-page/track` sem rate limit; com
+  o Yarden a superfície dobra (duas landings chamando a mesma rota
+  desprotegida). Propriedade da rota compartilhada, não do clone.
+- `86.11-QA-006` — `tracking: { client_ip, client_ua }` é anexado mesmo quando o
+  browser não mandou bloco de tracking.
+- **Proxies do Vind Residence sem timeout** no `fetch` ao CRM — o Yarden ganhou
+  `CRM_TIMEOUT_MS = 8000` (Change Log 0.7), o Vind Residence não tem nenhum.
+- **Normalização de aspas em `landing-pages/*/api/*`** — os dois proxies são
+  100% aspas duplas e o `.coderabbit.yaml` pede simples para `**/*.js`;
+  nenhum linter cobre esses arquivos (Change Log 0.7).
 
 ## Convenção de deploy (mesma da 86-11)
 
@@ -743,6 +842,7 @@ Antes do AC9/AC13 poderem ser validados em produção, @devops precisa:
 | 2026-09-01 | 0.9 | **Placeholder do `index.html` substituído pelo conteúdo e design DEFINITIVOS**, a partir do mockup "Yarden LP v1.png" fornecido pelo stakeholder. É a integração que o próprio AC12 previa como follow-up ("quando o conteúdo definitivo for fornecido") — o gatilho foi o stakeholder entregar o mockup, e **nada de copy, cor ou imagem foi inventado** (Artigo IV). Sessão anterior de @dev escreveu o arquivo e os assets mas **estourou o limite de contexto antes de validar/documentar**; esta rodada fecha a ponta solta, não reescreve o design. **O que a página tem agora:** hero com `<picture>` responsivo, seção de diferenciais, interior/lounge, mapa da Gleba Itororó, seção "Quer saber mais?" e rodapé — HTML conferido **balanceado por parse** (pilha de tags vazia, 0 erros, comentários/`<script>`/`<style>` descontados), `lang="pt-BR"`, **0** `<img>` sem `alt` e **0** `id` duplicado (`uniq -d` vazio) apesar das 3 marcações de formulário. **Estrutura de TRÊS formulários, UMA lógica** (`ligarFormulario()` chamada uma vez por par form/mensagem): `leadForm`+`formMsg` (hero desktop, sobreposto à foto), `leadFormMobile`+`formMsgMobile` (hero mobile, em fluxo — só uma das duas fica visível por media query, porque o layout do mockup difere, não a lógica) e `leadFormSaber`+`formMsgSaber` ("Quer saber mais?"). **Isolamento conferido campo a campo, não presumido:** honeypot próprio em cada `<form>` (`name="empresa"` nos três, `id` distintos `empresa`/`empresaMobile`/`empresaSaber` — id repetido faria `getElementById` devolver sempre o primeiro), trava de duplo envio própria (`var enviando` vive no **closure** de `ligarFormulario`, não no escopo do script — preencher o 2º formulário com o 1º em voo não é barrado), par de `event_id` próprio por submissão (`novoId('e')` × 2 dentro do handler), `role="status"`+`aria-live="polite"` nas 3 mensagens e um `button[type=submit]` próprio por formulário (`form.querySelector`, não seletor global). `InitiateCheckout` continua **uma vez por carregamento de página** e não por formulário, agora escutando o 1º `focus` dos 6 campos (`nome`/`whats` × 3) — mede engajamento do visitante, não do componente. **Dataset `1337310707164669` idêntico nos dois pontos do `<head>`** (`window.TRIFOLD_PIXEL_ID` na linha 30 e `facebook.com/tr?id=` do `<noscript>` na 474) e nenhum outro número de 15-16 dígitos no arquivo — travado por teste. **AC10 re-conferido no arquivo novo:** a única ocorrência de `console.` no `index.html` inteiro está **dentro de um comentário** que explica por que o `console.log('[lead capturado]', data)` do Vind Residence não foi clonado; nenhum `fbc`/`fbp` vaza para o console. **`<meta name="robots" content="noindex, nofollow">` removido** (existia na linha 12 do HEAD anterior, conferido por `git show`): existia só para o placeholder não ser indexado, e o conteúdo agora é definitivo — segurá-lo manteria a landing fora do Google (tráfego pago não é afetado, mas o orgânico sim). Fecha o achado `86.12-QA-001`. **12 assets novos em `landing-pages/yarden/assets/`**, todos recortes do próprio mockup: `hero-piscina-rooftop.{jpg,webp}`, `hero-piscina-rooftop-mobile.{jpg,webp}`, `interior-lounge-gourmet.{jpg,webp}`, `mapa-gleba-itororo.{jpg,webp}`, `familia-quer-saber-mais.{jpg,webp}`, `logo-yarden-creme.svg` e `logo-trifold-branco.svg` — `git check-ignore` não pega nenhum (o `.gitignore` local só cobre `.vercel`/`.claude`), então os 12 vão versionados. **2 correções de escrita em relação ao texto do mockup** (ortografia/pontuação, não copy nova): o rodapé lê "Todos os direitos reservados" e a linha da seção de localização lê "Quem escolhe investir, escolhe estar no...". **Teste obsoleto da era do placeholder corrigido, não removido:** `expect(HTML).not.toMatch(/(?:src\|href)="assets\//)` proibia **qualquer** referência a `assets/` — asserção correta quando a página não tinha imagem alguma (qualquer `assets/` seria clone acidental do Vind Residence virando 404), e falsa agora que há 12 assets legítimos. Em vez de apagar a proteção, ela foi **reapontada para os dois modos de falha reais**, com o diretório lido do disco (`readdirSync`): (a) toda referência `assets/` do HTML tem que existir em `assets/`, e (b) todo arquivo de `assets/` tem que ser referenciado pelo HTML (**asset órfão = sobra de clone publicada sem aparecer na página**) e nenhum nome/referência pode casar `/vind[-]?residence/` — que é o sintoma direto do bug original. O extrator passou a ler **`srcset` além de `src`/`href`**: as imagens do hero e das seções são `<picture>`, e é exatamente no `<source srcset>` que um caminho quebrado passa batido, porque o `<img>` de fallback continua carregando. Acrescentado **piso `toBeGreaterThanOrEqual(12)`** para o teste não passar por vacuidade: um merge que restaure o placeholder (zero imagens) tem que **falhar**, não passar em silêncio — sem o piso, (a) e (b) passariam os dois com o HTML sem asset nenhum. **Provado por mutação, não por relato — 3 mutações, 3 mataram teste:** `srcset="assets/hero-piscina-rooftop.webp"` → `...-v2.webp` (2 falhas: referência inexistente + órfão; e este caminho só existe em `srcset`, ou seja, mata também a regex antiga), `cp logo-yarden-creme.svg assets/hero-vind-residence.svg` (1 falha, pega o nome do outro empreendimento) e `(src\|srcset)="assets/` → `"placeholder/` simulando a volta do placeholder (2 falhas, incluindo `expected 0 to be greater than or equal to 12`); `index.html` restaurado e conferido por `sha256` idêntico, `assets/` de volta a 12 arquivos. **README atualizado** porque tinha virado documentação falsa: dizia "Status do conteúdo: **placeholder**" e a seção "Integrar o conteúdo definitivo" mandava executar passos já executados (inclusive "remova o `noindex`"). Virou "Alterar o conteúdo depois", com a tabela dos 3 formulários, o motivo do isolamento por formulário, a regra bidirecional de `assets/` e o "não reintroduza `noindex`". **Duas divergências registradas em vez de decididas por mim (as duas para @po, nenhuma bloqueia commit):** (1) **AC12 pede "os mesmos dois checkboxes da 86-11"; o mockup definitivo traz UM só.** O Vind Residence em produção tem o aceite `required` de políticas **mais** um opt-in **não-`required`** de "receber comunicações e ser contatado"; a versão definitiva do Yarden traz só o aceite `required` ("Políticas de privacidade"), nos três formulários. Não inventei o segundo: acrescentar UI que não está no mockup é justamente o que o Artigo IV e o AC12 proíbem, e o aceite/opt-in **não viaja no payload** (o `data` só leva `nome`/`whatsapp`/`email`/`empresa`), então a ausência não muda nada no CRM, no lead ou no CAPI — é decisão de consentimento/negócio, não técnica, e deve ser confirmada antes do T13. (2) **O texto do AC12 ainda descreve a página como "placeholder estrutural"** e trata a integração como "follow-up não numerado"; o código já passou desse ponto, mas seção de AC é alçada do @po (`story-lifecycle.md`) — não editei. **`86.12-QA-002` (checkbox de política sem link) segue aberto e agora tem 2 ocorrências:** o `<span>` do checkbox e o `<span class="politica">` do rodapé, nenhum com `href`. Na 86-11 o link existe mas aponta para `#`, então não havia URL de política para reusar — é conteúdo pendente do stakeholder, não fix de dev. **Validações:** `npx vitest run` **255 arquivos / 3155 passed + 6 expected fail, 0 failed** (o único vermelho do início da sessão era o teste obsoleto; +1 caso vs. 0.7 porque a asserção virou dois testes — os 50 casos do yarden nos 2 arquivos passam, e o `api-proxy.test.ts` não foi tocado nem afetado); `turbo run type-check --force` 8/8 com **0 cached**, mais `tsc` direto nos 2 `.test.ts` do yarden com o `tsconfig.json` da raiz (`strict`) — exit 0, já que `turbo` não tem task de type-check no projeto `yarden-landing`; `turbo run lint --force` 0 errors / 34 warnings, exatamente as mesmas pré-existentes, e `grep` por `yarden`/`landing-pages` na saída volta **vazio**. Nota de ambiente reconfirmada: `type-check` estoura o heap do V8 nesta máquina com o default do Node — roda limpo com `NODE_OPTIONS=--max-old-space-size=8192`; é ambiente, não erro de tipo. **Commit local apenas — sem `git push`, sem PR, sem deploy e sem criar o projeto Vercel `yarden` (alçada do @devops, T12/T13 seguem `[ ]`).** Status mantido em `InReview`. | @dev (Dex) |
 | 2026-09-01 | 0.10 | **Divergência (1) do @dev sobre o AC12 FORMALIZADA como decisão travada do stakeholder: a landing do Yarden tem UM checkbox por formulário, não dois.** O AC12 foi redigido em 2026-08-26, antes de o mockup existir, e pedia "os mesmos dois checkboxes da 86-11" (aceite `required` de política **+** opt-in não-`required` de marketing). O mockup "Yarden LP v1.png" traz **1 checkbox `required` por formulário** e o stakeholder (lucas@trifold.eng.br) **confirmou em 2026-09-01: manter 1 só, como no mockup** — a redação antiga do AC12 está **revogada** e a paridade com a 86-11 **deixa de ser requisito**. O @dev agiu **corretamente** ao não inventar o segundo (Artigo IV, No Invention): a ausência é comportamento aceito, **não defeito**, e não é pendência de T13. Adicionada ao AC12 a seção "⚖️ Emenda do @po — 2026-09-01" com a decisão travada, o contraste verificado com a 86-11 (`landing-pages/vind-residence/index.html`, bloco `label.check` — dois checkboxes, o 2º sem `required`) e a tabela do estado real. **Estado real conferido pelo @po lendo `landing-pages/yarden/index.html`, não por relato — e isso CORRIGE o resumo da 0.9, que descreveu os três checkboxes como "Políticas de privacidade":** `leadForm` (519-522) e `leadFormMobile` (551-554) dizem "Políticas de privacidade", mas o do `leadFormSaber` (625-628) diz **"Concordo em fornecer meus dados para receber conteúdos e ofertas por e-mail ou outros meios."** — ou seja, o 3º formulário tem consentimento de **marketing**, não aceite de política. Conferido também que o `required` **de fato** vale apesar do `novalidate` nos três `<form>`, porque o handler chama `form.checkValidity()`+`reportValidity()` (`index.html:718`) — `novalidate` sozinho anularia o `required` e o aceite seria decorativo. **Divergência (2) do @dev também fechada:** o AC12 descrevia a página como "placeholder estrutural" e a integração do conteúdo como "follow-up não numerado"; reconciliado com o entregue na 0.9, e de passagem o "e-mail **opcional**" da redação original (os três formulários têm `email` `required`, `index.html:517`/`549`/`623`, seguindo o `placeholder="* E-mail"` do mockup). Ambas as divergências marcadas como **RESOLVIDAS** no Dev Agent Record para o @devops não travar T13 esperando decisão de consentimento. **4 observações registradas como abertas, nenhuma bloqueante, nenhuma reabrindo a decisão travada, todas para follow-up do stakeholder:** (a) o `leadFormSaber` **não tem aceite de política de privacidade** — leads daquele formulário nunca aceitam a política, assimetria vs. os dois do hero; (b) consentimento de marketing como `required` pode conflitar com a exigência de consentimento **livre** da LGPD (art. 8º) quando é condição de envio — juízo jurídico, fora da alçada de @po/@dev; (c) **nenhum consentimento é persistido** — os três checkboxes não têm `id`/`name` e não viajam no payload (`api/lead.js` manda só `nome`/`whatsapp`/`email`/`empresa`), então não há prova de quem aceitou o quê; (d) `86.12-QA-002` segue OPEN (sem URL de política, nem o checkbox nem o `<span class="politica">` do rodapé são link). **Nenhuma mudança de código, de teste ou de comportamento — só arquivo de story.** `landing-pages/yarden/README.md` **conferido e NÃO alterado**: não afirma nada sobre quantidade ou texto de checkbox (a seção "Alterar o conteúdo depois" fala de `id` de campo, `assets/`, Pixel e `noindex`), logo não estava desalinhado com a decisão. **Status mantido em `InReview`** — T12/T13 (projeto Vercel `yarden`, `LANDING_PAGE_WEBHOOK_SECRET`, deploy, AC13) seguem `[ ]` com @devops. Commit local, **sem `git push`**. | @po (Pax) |
 | 2026-09-01 | 0.11 | **Texto do checkbox do 3º formulário (`leadFormSaber`, "Quer saber mais?") padronizado para o aceite de política de privacidade, por decisão do stakeholder (lucas@trifold.eng.br) de 2026-09-01.** Fecha a observação (a) da 0.10 — a assimetria em que os leads do `leadFormSaber` nunca aceitavam a política. Uma linha de HTML: `index.html:627` deixou de ser "Concordo em fornecer meus dados para receber conteúdos e ofertas por e-mail ou outros meios." (consentimento de **marketing**, fiel ao mockup "Yarden LP v1.png") e passou a ser **`<span>Políticas de privacidade</span>`**, idêntico ao dos outros dois. **Divergência deliberada e autorizada em relação ao mockup**, ao contrário da decisão da 0.10, que era de fidelidade a ele: o mockup segue com o texto de marketing nesse ponto e a página não — registrado aqui para uma futura comparação com o mockup não ler isso como defeito. **O texto foi copiado literalmente dos outros dois formulários, não parafraseado** — conferido depois da troca por `grep -A2 'class="check"'`: os três blocos `label.check` são agora byte-a-byte iguais (`<input type="checkbox" required />` + `<span>Políticas de privacidade</span>`), variando só a indentação, que segue o nível de aninhamento local. `required` **mantido** nos três, como pedido. Consequência colateral de escopo: a objeção (b) da 0.10 (consentimento de marketing `required` versus a exigência de consentimento **livre** do art. 8º da LGPD) **deixa de se aplicar** — não há mais consentimento de marketing na página; a observação (c) (**nenhum** consentimento é persistido: os três checkboxes seguem sem `id`/`name` e não viajam no payload de `api/lead.js`) **continua aberta e inalterada**, e agora vale para um aceite de política, não de marketing. **`86.12-QA-002` nem resolvido nem agravado, de propósito:** os outros dois checkboxes não têm link (`<span>` puro, sem `<a href>`), então replicar o texto sem link mantém os três consistentes — conferido no HTML antes de decidir, não presumido; a falta de URL de política segue conteúdo pendente do stakeholder. **Nenhum teste precisou de atualização — e isso foi verificado, não assumido:** `grep` por `Concordo`/`rivacidade`/`check`/`checkbox` nos dois arquivos de teste do yarden (`tracking-browser.test.ts`, `api-proxy.test.ts`) volta **vazio**; nenhum caso jamais asseverou o texto do checkbox, nem o antigo nem o novo. `grep "Concordo em fornecer"` no repo inteiro sobrou apenas em prosa de story/memória (registro histórico, correto manter) e **zero** em código. **Sem mudança de comportamento:** o texto é conteúdo de `<span>`, o `required` não mudou e o payload não carrega o campo — nada em `api/lead.js`, `api/track.js`, no Pixel ou no CAPI é afetado. **Validações:** `npx vitest run landing-pages/yarden` **2 arquivos / 50 passed**; `npx vitest run` **255 arquivos / 3155 passed + 6 expected fail, 0 failed** (idêntico à 0.9 — zero regressão, zero teste novo); `npm run type-check` 8/8 e `npm run lint` **0 errors / 34 warnings**, as mesmas pré-existentes de `packages/web`, nenhuma em `landing-pages/`. **Dívida de documentação deixada explícita porque não é minha alçada:** a tabela "estado real" do AC12 (linha ~489) e o corpo da "⚖️ Emenda do @po — 2026-09-01" ainda citam o texto de marketing para o `leadFormSaber` e ficaram **desatualizados** com esta troca; seção de AC é do @po (`story-lifecycle.md`), então **não editei** — fica sinalizado aqui em vez de silenciosamente falso. `README.md` do yarden conferido e **não alterado**: não afirma nada sobre texto de checkbox. **Status NÃO alterado (`InReview`)** e nenhum checkbox de task tocado. Commit local com pathspec explícito (a árvore tem trabalho em curso de outros agentes, não tocado), **sem `git push`** — alçada do @devops. | @dev (Dex) |
+| 2026-09-01 | 0.12 | **Resíduo de documentação do AC12 corrigido + não-persistência de consentimento promovida a débito técnico formal.** Duas ações, nenhuma de código. **(1) O AC12 estava factualmente errado desde a 0.11** — a dívida de documentação que o @dev sinalizou por não ser alçada dele (seção de AC é do @po, `story-lifecycle.md`). Reconferido **lendo `landing-pages/yarden/index.html`, não o relato do @dev**: os três blocos `label.check` (`519-522`, `551-554`, `625-628`) têm hoje o mesmo `<span>Políticas de privacidade</span>`, com o `<input type="checkbox" required />` nas linhas `520`/`552`/`626`. A tabela "estado real" da "⚖️ Emenda do @po — 2026-09-01" ainda dizia que o `leadFormSaber` trazia "Concordo em fornecer meus dados para receber conteúdos e ofertas por e-mail ou outros meios." — corrigida, com o texto antigo **preservado como histórico explícito** logo abaixo, porque o mockup "Yarden LP v1.png" segue com a redação de marketing naquele ponto e uma comparação futura página↔mockup leria a diferença como defeito se a story não registrasse que a divergência foi autorizada (0.11). As "Observações abertas" do mesmo bloco também estavam desatualizadas e passaram a ter status por item: **(a) FECHADA** (o `leadFormSaber` sem aceite de política — a assimetria deixou de existir com a padronização da 0.11); **(b) NÃO SE APLICA MAIS** (consentimento de marketing `required` vs. art. 8º da LGPD — não há mais consentimento de marketing na página); **(c) e (d) seguem ABERTAS**. Corrigido de passagem um detalhe factual que a 0.10 herdou: o payload não é "só `nome`/`whatsapp`/`email`/`empresa`" nas duas pontas — o **browser** monta `{nome, whatsapp, email, empresa}` (`index.html:719-723`, `empresa` = honeypot) e o **proxy** repassa ao CRM `{nome, whatsapp, email, page: "yarden", tracking}` (`api/lead.js:188-192`, o honeypot é descartado em `lead.js:164-165` e nunca sai). Nenhuma das duas carrega consentimento — a conclusão não muda, a descrição fica correta. **(2) Nova seção `## Débitos técnicos conhecidos`** (antes de "Convenção de deploy"), criada porque a story não tinha uma e enterrar isto só no Change Log é como se perde débito. **DT-1 — o aceite de política não é persistido em lugar nenhum:** os três checkboxes não têm `id`/`name` (sem `name` o campo é inalcançável pelo handler — o honeypot é acessível justamente porque **tem** `name`), não viajam em nenhum dos dois payloads, e o aceite existe apenas como bloqueio de UI (`required` + `checkValidity()`/`reportValidity()`, `index.html:718`); nada é gravado em `leads`, `leads.metadata`, `webhook_logs` ou activity, logo **não há prova de consentimento recuperável**. **Decisão explícita do stakeholder (lucas@trifold.eng.br) em 2026-09-01: NÃO resolver agora** — débito para o futuro, **não** pendência de T12/T13, **não** bloqueio do `Done`, **não** defeito desta story. Razão registrada: é o mesmo padrão que já roda em produção no Vind Residence (86-11, que também não persiste), e resolver só no Yarden deixaria as duas landings divergentes — pior que o débito. Soluções plausíveis registradas como trabalho futuro (exigem story própria, não implementar avulso): dar `id`/`name` aos checkboxes → incluir no `data` do browser → repassar no proxy → gravar em `leads.metadata.consent` guardando **texto e versão** do que foi aceito, não só um booleano, e fazer o mesmo no Vind Residence para as duas não divergirem. Anotada a dependência de `86.12-QA-002`: sem URL de política publicada, um aceite persistido ainda apontaria para um texto que não existe publicamente. **DT-2** agrupa por visibilidade os débitos herdados que já estavam espalhados pela story (`86.11-QA-003` rate limit da rota `/track`, agora com superfície dobrada por duas landings; `86.11-QA-006`; proxies do Vind Residence sem timeout — o Yarden tem `CRM_TIMEOUT_MS = 8000` desde a 0.7; normalização de aspas em `landing-pages/*/api/*`). **Nenhuma mudança de código, de teste, de HTML ou de comportamento — só o arquivo da story.** Nenhum checkbox de task tocado; T12/T13 seguem `[ ]` com @devops. **Status NÃO alterado (`InReview`).** Commit local com pathspec explícito (a árvore tem trabalho em voo de outros agentes, não tocado), **sem `git push`** — alçada do @devops. | @po (Pax) |
 
 ## Dev Agent Record
 
