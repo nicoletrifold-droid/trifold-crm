@@ -36,6 +36,7 @@
  * VALOR e o tamanho da página decide a SATURAÇÃO, e nunca o contrário.
  */
 
+import { detalheDaPendencia } from "@web/lib/integrations/painel/diagnostico"
 import {
   DEFINICOES_DE_PROVIDER,
   ehProviderDoPainel,
@@ -227,7 +228,20 @@ export function diasDesdeOConvite(entrada: {
 /** Uma linha da seção "Precisa de você". */
 export type Pendencia =
   | { tipo: "convite"; orgId: string; orgNome: string; dias: number | null }
-  | { tipo: "integracao"; orgId: string; orgNome: string; provider: string }
+  | {
+      tipo: "integracao"
+      orgId: string
+      orgNome: string
+      provider: string
+      /**
+       * Story 900-61 · AC7 — o rabicho ` desde 01/09/2026 (motivo)` já montado, ou `""`.
+       *
+       * Vem pronto e não em duas peças soltas porque a alternativa é a página montar a frase com
+       * dois ternários dentro do `<span>` — e o `vitest.config.ts` não coleta `.tsx`, então esses
+       * ternários não teriam carrasco nenhum.
+       */
+      detalhe: string
+    }
 
 /**
  * As orgs cujo convite de admin está pendente, com há quantos dias.
@@ -283,13 +297,19 @@ export interface LinhaDeIntegracaoDoConsole {
   org_id: string | null
   provider: string
   status: string
+  /** Story 900-61 — as duas colunas da migration `253`. `undefined` se a projeção não as pediu. */
+  last_error?: string | null
+  last_check_at?: string | null
 }
 
 /**
  * As integrações em erro, uma linha por (empresa, provider).
  *
- * Sem "desde quando" e sem "por quê", de propósito: `org_integrations` não tem `last_check_at`
- * nem `last_error` (migration 246). Escrever "em erro desde 29/08" exigiria inventar a data.
+ * Story 900-61 — o "desde quando" e o "por quê" passaram a EXISTIR: a migration `253` criou
+ * `last_error`/`last_check_at` e as duas RPCs que promovem status agora as gravam. Até então esta
+ * função dizia só "{Provider} em erro", porque a data teria de ser inventada. Continua valendo o
+ * mesmo princípio, agora do outro lado: linha antiga (as duas colunas `NULL`, que é o estado de
+ * TODAS as linhas anteriores à `253`) volta a exibir a frase curta — `detalhe` vem `""`.
  *
  * Linhas de orgs que não vieram na página de `organizations` são DESCARTADAS: sem o nome, a
  * pendência não teria como ser lida nem clicada.
@@ -308,6 +328,10 @@ export function pendenciasDeIntegracao(entrada: {
       orgId: linha.org_id,
       orgNome: nome,
       provider: linha.provider,
+      detalhe: detalheDaPendencia({
+        lastError: linha.last_error,
+        lastCheckAt: linha.last_check_at,
+      }),
     })
   }
   return achadas

@@ -239,7 +239,7 @@ describe("AC3 — `tem pendência` sai das MESMAS funções da `Precisa de você
   it("a mesma empresa com as duas pendências entra UMA vez", () => {
     const dupla = orgsComPendencia([
       { tipo: "convite", orgId: "org-x", orgNome: "X", dias: 3 },
-      { tipo: "integracao", orgId: "org-x", orgNome: "X", provider: "sienge" },
+      { tipo: "integracao", orgId: "org-x", orgNome: "X", provider: "sienge", detalhe: "" },
     ])
     expect([...dupla]).toEqual(["org-x"])
   })
@@ -324,7 +324,7 @@ describe("AC4 — a coluna Integrações, e as duas fontes que ela cruza", () =>
   ) {
     return integracoesDaOrg({
       tiles: montarTilesDoPainel(
-        linhas.map((l) => ({ ...l, config: null, secret_ref: null, updated_at: null })),
+        linhas.map((l) => ({ ...l, config: null, secret_ref: null, updated_at: null, last_error: null, last_check_at: null })),
         wa,
       ),
       linhas,
@@ -386,7 +386,7 @@ describe("AC10 — saturação e leitura caída na coluna Integrações", () => 
   function coluna(declaracao: { saturacaoHerdada: boolean; indisponivel: boolean }) {
     return integracoesDaOrg({
       tiles: montarTilesDoPainel(
-        LINHAS.map((l) => ({ ...l, config: null, secret_ref: null, updated_at: null })),
+        LINHAS.map((l) => ({ ...l, config: null, secret_ref: null, updated_at: null, last_error: null, last_check_at: null })),
         null,
       ),
       linhas: LINHAS,

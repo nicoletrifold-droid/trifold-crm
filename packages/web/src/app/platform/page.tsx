@@ -125,9 +125,12 @@ export default async function VisaoGeralPage({
   // pedida, porque esta tela não desenha "configurado / não configurado". Fica de fora também
   // para esta página NÃO entrar na lista de `nao-consumo.test.ts` (AC6 da 900-51) — quem entra
   // naquela lista deixa de acender a régua no dia em que passar a ler o cofre de verdade.
+  // Story 900-61 — `last_error, last_check_at` SOMAM à projeção: é o que transforma
+  // "{Empresa} — {Provider} em erro" em "…em erro desde 01/09/2026 (motivo)". Metadado técnico da
+  // integração, não conteúdo de lead — e nenhuma coluna anterior saiu daqui.
   const respostaIntegracoes = await platformQuery(
     "org_integrations",
-    "org_id, provider, status",
+    "org_id, provider, status, last_error, last_check_at",
   )
   const integracoesFalhou = leituraFalhou(respostaIntegracoes)
   const integracoes = (respostaIntegracoes.data ?? []) as unknown as LinhaDeIntegracaoDoConsole[]
@@ -329,7 +332,7 @@ export default async function VisaoGeralPage({
                       <span className="font-medium">{p.orgNome}</span>
                       <span className="text-slate-400">
                         {" "}
-                        — {rotuloDoProvider(p.provider)} em erro
+                        — {rotuloDoProvider(p.provider)} em erro{p.detalhe}
                       </span>
                     </span>
                     <Link

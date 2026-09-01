@@ -57,9 +57,13 @@ export default async function IntegracoesDaOrgPage({
     return <p className="text-sm text-slate-400">Empresa não encontrada.</p>
   }
 
+  // Story 900-61 — `last_error, last_check_at` SOMAM à projeção (a lista é disputada por várias
+  // stories desta onda; substituí-la apagaria a coluna de outra). São metadado técnico da própria
+  // integração — código de erro e carimbo de tentativa —, não dado de lead/conversa/mensagem, e
+  // por isso não dependem do SEC-001.
   const { data: integracoes } = await platformQuery(
     "org_integrations",
-    "provider, status, config, secret_ref, updated_at",
+    "provider, status, config, secret_ref, updated_at, last_error, last_check_at",
     orgId,
   )
 

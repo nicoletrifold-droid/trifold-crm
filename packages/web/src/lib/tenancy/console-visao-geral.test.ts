@@ -352,8 +352,58 @@ describe("Precisa de você — integrações em erro", () => {
       nomePorOrg,
     })
     expect(p).toEqual([
-      { tipo: "integracao", orgId: "1", orgNome: "Empresa 1", provider: "meta_ads" },
+      { tipo: "integracao", orgId: "1", orgNome: "Empresa 1", provider: "meta_ads", detalhe: "" },
     ])
+  })
+
+  // ── Story 900-61 · AC7 ────────────────────────────────────────────────────────────────────
+  it("linha ANTIGA (as duas colunas `NULL`) volta a exibir a frase curta — `detalhe` é `\"\"`", () => {
+    // É o estado de TODA linha anterior à migration `253`, e o de qualquer integração que nunca
+    // falhou. A alternativa seria uma data inventada, que é o que a AC1 existe para impedir.
+    const p = pendenciasDeIntegracao({
+      integracoes: [
+        { org_id: "1", provider: "meta_ads", status: "error", last_error: null, last_check_at: null },
+      ],
+      nomePorOrg,
+    })
+    expect(p[0]).toMatchObject({ detalhe: "" })
+  })
+
+  it("com as duas colunas, a pendência carrega `desde` e o motivo TRADUZIDO", () => {
+    const p = pendenciasDeIntegracao({
+      integracoes: [
+        {
+          org_id: "1",
+          provider: "meta_ads",
+          status: "error",
+          last_error: "token_invalid",
+          last_check_at: "2026-09-02T02:00:00.000Z",
+        },
+      ],
+      nomePorOrg,
+    })
+    // 02:00 UTC de 02/09 é 23:00 de 01/09 em São Paulo — o fuso é FIXO, não o do processo.
+    expect(p[0]).toMatchObject({
+      detalhe:
+        " desde 01/09/2026 (A credencial foi recusada. Confira se foi copiada sem espaços extras.)",
+    })
+  })
+
+  it("código FORA do contrato de seis não vira `undefined` na tela da Visão geral", () => {
+    // `p_codigo` é `text` sem `CHECK` (medido na migration 248): o banco aceita qualquer coisa.
+    const p = pendenciasDeIntegracao({
+      integracoes: [
+        {
+          org_id: "1",
+          provider: "meta_ads",
+          status: "error",
+          last_error: "codigo_que_nao_existe",
+          last_check_at: null,
+        },
+      ],
+      nomePorOrg,
+    })
+    expect(p[0]).toMatchObject({ detalhe: " (motivo não reconhecido: codigo_que_nao_existe)" })
   })
 
   it("uma linha por (empresa, provider) — duas integrações quebradas na mesma empresa são duas linhas", () => {
