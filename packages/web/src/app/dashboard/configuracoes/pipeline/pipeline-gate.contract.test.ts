@@ -74,6 +74,10 @@ describe("gate da tela de Pipeline × gate da API", () => {
       expect(src).not.toMatch(/user\.role ===/)
       expect(src).not.toMatch(/role ===\s*"admin"/)
       expect(src).not.toMatch(/roles\.includes\(/)
+      // @qa R1: o bypass B6 passou com `const PODE = [...]; ... || PODE.includes(user.role)`.
+      // Qualquer lista de perfis consultada por .includes é decisão por NOME de perfil,
+      // não importa como a variável se chame.
+      expect(src).not.toMatch(/\.includes\(\s*(user\.)?role\s*\)/)
     }
   })
 
@@ -82,6 +86,10 @@ describe("gate da tela de Pipeline × gate da API", () => {
     expect(src).toMatch(/\{canEdit && \(/)
     // QA-75-371-4: o `if (res.ok)` mudo engolia o 409 da etapa padrão.
     expect(src).toContain("mensagemDeErroDeEtapa")
+    // @qa R2: a mutação M-A2 removeu o `{erro && (<p>…</p>)}` mantendo import e setErro,
+    // e os 11 testes continuaram verdes — a régua media a chamada, não o que aparece.
+    expect(src).toMatch(/\{erro && \(/)
+    expect(src).toMatch(/\{erro\}/)
     expect(src).not.toMatch(/const res = await fetch\(`\/api\/stages\/\$\{stage\.id\}`, \{ method: "DELETE" \}\)\s*\n\s*if \(res\.ok\)/)
   })
 })

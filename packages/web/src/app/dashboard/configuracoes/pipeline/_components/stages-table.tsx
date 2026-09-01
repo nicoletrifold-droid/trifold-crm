@@ -21,6 +21,7 @@ import {
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { EditStageModal } from "./edit-stage-modal"
+import { aplicarAtualizacaoDeEtapa } from "./aplicar-atualizacao-de-etapa"
 import { mensagemDeErroDeEtapa } from "./mensagem-de-erro"
 import type { Stage } from "./types"
 import { ScrollableX } from "@web/components/ui/scrollable-x"
@@ -243,7 +244,8 @@ export function StagesTable({
   }
 
   function handleStageUpdate(updated: Stage) {
-    setStages((prev) => prev.map((s) => (s.id === updated.id ? { ...s, ...updated } : s)))
+    // @qa R3 — a decisão (quem cede o posto de padrão) vive em função pura testada.
+    setStages((prev) => aplicarAtualizacaoDeEtapa(prev, updated))
   }
 
   function handleStageDelete(id: string) {

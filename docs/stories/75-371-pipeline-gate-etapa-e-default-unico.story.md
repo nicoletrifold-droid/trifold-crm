@@ -275,8 +275,39 @@ Estado de prod após o ROLLBACK: 17 etapas, 1 padrão, "Aguardando atendimento" 
 - `packages/web/src/app/dashboard/configuracoes/pipeline/_components/stages-table.tsx` (erro na tela)
 
 ### Pendências para @devops
-- Migration **250 não aplicada** em banco nenhum — só provada e revertida. Runbook:
-  `TRIFOLD_ENV=producao TRIFOLD_ALLOW_PROD=1 pnpm db:apply`.
-- **Smoke test pós-deploy (QA-7):** logado como admin real (não service role), marcar outra etapa
-  como padrão e conferir que o posto transferiu — o trigger nunca rodou sob RLS de `authenticated`.
+- ~~Migration 250 não aplicada~~ → **APLICADA EM PRODUÇÃO em 01/09/2026 14:02:44Z**, junto com a
+  **249** (que estava pendente desde 31/08 e conserta as 8 policies de `storage.objects` que
+  negavam tudo a todos — o chamado da Samara). Decisão do Marcos; `db:apply` não tem filtro por
+  arquivo, então era as duas ou nenhuma. Ledger registrado via `apply`, `db:status` limpo, 273
+  aplicadas. Conferido no banco: índice ✓ trigger ✓ guarda do QA-2 viva no corpo da função ✓
+  `prosecdef = 0` ✓ 1 padrão ✓ 0 padrões em etapa inativa ✓ 0 orgs sem padrão ✓ e
+  **0 de 8 policies de obra ainda quebradas**.
+- ⚠️ **Registro honesto de processo:** a migration foi aplicada com o gate ainda em CONCERNS —
+  violação da REGRA ZERO ("deploy sem quality gate @qa"). Foi decisão explícita do Marcos, com o
+  risco declarado antes. O re-gate posterior deu **PASS** e confirmou por sha256 e pelo corpo da
+  função viva que o que está em prod é a versão corrigida.
+- **Smoke test que continua em aberto (@qa R5):** logado como admin real (não service role),
+  marcar OUTRA etapa como padrão **com o checkbox marcado** e conferir que o posto transferiu. O
+  ramo de transferência do trigger nunca rodou sob RLS de `authenticated` — as duas etapas criadas
+  em prod hoje nasceram `is_default = false`.
+- **Resíduo de produção (@qa R6), decisão do dono:** ficaram ativas e visíveis no Kanban as etapas
+  **"Follow-up"** (pos 18) e **"Joabe"** (pos 19), criadas hoje depois de a capability ser ligada
+  para o perfil Gerente-Comercial. "Follow-up" era o objetivo declarado do Joabe; "Joabe" tem cara
+  de teste. Excluir é pela tela — e agora, se a API recusar, a tela mostra o motivo.
 - Sem `.env.teste` nesta máquina: o ambiente de teste não foi exercitado.
+
+---
+
+## Rodada 3 — resíduos do re-gate PASS (@dev, 01/09/2026)
+
+O @qa fechou em **PASS** e deixou 3 resíduos acionáveis; os 3 foram corrigidos, cada um com
+mutação que mata.
+
+| Resíduo | Correção | Mutação |
+|---|---|---|
+| **R3** `low` — depois de transferir o padrão, a tabela mostrava DUAS linhas "Padrão: Sim" (sintoma NOVO desta story: antes as duas eram verdade) | Decisão extraída para `aplicar-atualizacao-de-etapa.ts` (função pura, 4 testes) — o `.tsx` só chama | remover a transferência → **2 failed** |
+| **R1** `low` — o contract test não pegava alargamento por lista de perfis em variável (bypass B6 do @qa) | asserção `.includes(role)` em qualquer forma | reintroduzir o B6 → **2 failed** |
+| **R2** `low` — a régua do QA-4 media a CHAMADA da tradução, não a RENDERIZAÇÃO | asserção do `{erro && (…)}` renderizado | remover o render mantendo `setErro` → **1 failed** |
+
+Regressão da rodada 3: **301 arquivos, 3.945 passed + 6 expected fail**, tsc exit 0, lint 0 errors
+(30 warnings, mesmo número).
