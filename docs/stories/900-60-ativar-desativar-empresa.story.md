@@ -279,6 +279,7 @@ Não repetir aqui; a seção "⚠️ Achado que corrige a premissa" é normativa
 | 2026-08-31 | 0.2 | **Validada pelo @po (Pax) — GO, nota 6/10.** GO após correção do @po — era NO-GO como estava. O achado do @sm estava certo mas INCOMPLETO: faltava o terceiro consumidor de `organizations.is_active`, `resolveSoleOrg()` (`webhook-org.ts:244-248`), vivo em `telegram/webhook` e `webhooks/landing-page`, que lê a coluna como CONTAGEM de orgs ativas — logo pausar uma empresa altera o roteamento de leads de OUTRA. Tabela do achado completada; AC3 ganhou a terceira frase obrigatória; AC8 (rótulo do botão: Pausar/Retomar), AC9 (dependência do corte `WEBHOOK_ORG_ROUTING`) e AC10 (`orgs_ativas_depois` na trilha) novas. Status Draft → Ready. | @po (Pax) |
 | 2026-09-01 | 1.0 | **Implementada — Status Ready → Ready for Review.** Migration `251` (RPC `organization_set_active_as_platform`, mesmo padrão da `248`: `SECURITY DEFINER`, REVOKE + GRANT a `service_role`, reusa `platform_audit()`), rota `PATCH /api/platform/orgs/[id]`, diálogo por portal com as três frases verbatim, 4º item no menu `⋯`, badge Ativa/Pausada. O `UPDATE` foi para a RPC — e não ficou na rota — porque `orgs_ativas_depois` (AC10) só é verdade na MESMA transação, agregado é `PGRST123` neste Supabase, e `app/api/platform/**` proíbe `.from(<literal>)`. **Carona fora do escopo desta story:** `app/page.tsx`, a 2ª porta de entrada, que a `900-56` deixou roteando só por `role`. 21 mutantes medidos com `tsc` rc=0; provado na tela com as 3 contas do banco de teste, nos dois sentidos e no caminho de falha. | @dev (Dex) |
 | 2026-09-01 | 1.1 | **Conserto pontual — colisão de numeração.** A migration foi de `250` para **`251`**: `origin/main` já tem `250_kanban_stages_default_unico.sql` (Story 75-371), mergeada depois que esta pilha nasceu. Sem colisão de CONTEÚDO (tabelas e funções disjuntas). Causa registrada: medir o próximo livre só contra a `main` não vê o que está em voo — o livre passa a ser medido em TODAS as refs após `git fetch --prune`. Referências ajustadas na story, na rota, no teste da rota e no comentário de `admin-client-allowlist.test.ts`. Mais a reconferência da bateria de mutantes de `app/page.tsx` (restauro por `cp`, sha256 dos dois lados, conjuntos de morte 2 e 7, baseline reproduzido). Suíte idêntica: 308 arquivos, 4187 passed + 6 expected fail. | @dev (Dex) |
+| 2026-09-01 | 1.2 | **As duas ressalvas do gate fechadas (QA-900-60-1 e QA-900-60-2), escopo fechado.** (1) A decisão do desfecho do envio saiu do `.tsx` para `decidirDesfecho(ok, status, corpo)` em `console-pausa-empresa.ts`, e o diálogo passou a OBEDECER a ela. Carrasco nas duas metades: comportamento (6 `it`, com controle positivo de que `200` fecha) e forma sobre o trecho do `confirmar()` (a decisão é consumida nos dois campos; `aoFechar()` uma única vez, logo depois do `router.refresh()`). **O mutante literal do gate agora é VERMELHO**, e mais 7 com ele — incluindo o que MOVE o `aoFechar()` para o ramo de erro sem mudar a contagem. Achado ao extrair: `corpo.message ?? corpo.error` aceitava a string vazia, o que deixaria o diálogo aberto sem mensagem nenhuma. (2) `PGRST202`/`42883` (RPC ainda não publicada — deploy fora de ordem) passam a devolver 503 com mensagem que nomeia a migration `251`, com controle negativo. (3) Registro: `app/page.tsx` e `app/page.test.ts` voltaram para a File List da `900-56`, dona do commit `ccc10c68`. | @dev (Dex) |
 
 ## Dev Agent Record
 
@@ -613,6 +614,95 @@ baseline (mesmo sha256, `git diff -- packages/web/src/app/page.tsx` vazio) e rep
    estado inteiro do banco de teste, que hoje inclui `246`/`247`/`249` como PENDENTE por causa de
    outras frentes — o diff não seria desta story.
 
+### Rodada 2 — as duas ressalvas do gate (QA-900-60-1 e QA-900-60-2)
+
+Escopo fechado: nenhuma tela nova, nenhuma AC nova. As duas ressalvas eram **médias e não
+bloqueantes**; o merge já estava liberado.
+
+#### QA-900-60-1 — a AC7 não tinha carrasco. Agora tem, e o mutante do gate morre.
+
+O achado é literal e eu reproduzi: acrescentar `aoFechar()` ao ramo `if (!res.ok)` do
+`confirmar()` — o diálogo fecha **em cima da falha**, perdendo o motivo digitado — deixava `tsc`
+rc=0 e a suíte **inteira** verde. A causa é estrutural: `vitest.config.ts` casa
+`packages/web/src/**/*.test.ts` e **não `.tsx`**, e não há jsdom. O texto já tinha saído do JSX por
+isso (Decisão 3); a **máquina de estados do envio** não.
+
+**O que mudou:** a decisão saiu para `decidirDesfecho(ok, status, corpo) → { fecha, erro }`, em
+`lib/tenancy/console-pausa-empresa.ts`. O componente parou de decidir e passou a **obedecer**:
+
+```
+const desfecho = decidirDesfecho(res.ok, res.status, corpo)
+setErro(desfecho.erro)
+if (!desfecho.fecha) { setEnviando(false); return }
+router.refresh()
+aoFechar()
+```
+
+⚠️ **Uma função pura sozinha não fecha o buraco.** Se o componente puder ignorar o retorno, o
+carrasco mede a função e não o desfecho — e o mutante do gate voltaria a passar. Por isso a régua
+tem as duas metades: **comportamento** (6 `it` sobre `decidirDesfecho`, com o controle positivo de
+que `200` FECHA) e **forma sobre o trecho do `confirmar()`**, recortado com `trechoDelimitado`
+(fail-closed, e há um `it` de vivacidade afirmando que o recorte não veio vazio): a decisão é
+consumida nos DOIS campos (`decidirDesfecho(res.ok, res.status, corpo)`, `setErro(desfecho.erro)`,
+`if (!desfecho.fecha)`), `aoFechar()` aparece **uma única vez** ali dentro, e **logo depois** do
+`router.refresh()`.
+
+A adjacência não é enfeite: **mover** o único `aoFechar()` do sucesso para o ramo de erro mantém a
+contagem em 1, e sem ela o defeito passaria de novo. É o mutante M3 abaixo.
+
+**Mutantes — snapshot por `cp`, sha256 dos dois lados, `tsc --noEmit` rc=0 medido ANTES de cada
+vermelho, restauro conferido por hash** (nunca `git checkout --`, que foi o erro da rodada 1):
+
+| # | mutante | `tsc` | `console-pausa-empresa.test.ts` (32) |
+|---|---|---|---|
+| — | baseline | rc=0 | **32 passed** |
+| M1 | `aoFechar()` no ramo de erro — **o mutante literal do gate** | rc=0 | **2 failed** |
+| M2 | o sucesso deixa de fechar (controle positivo) | rc=0 | **1 failed** |
+| M3 | MOVE o `aoFechar()` do sucesso para o ramo de erro (contagem continua 1) | rc=0 | **2 failed** |
+| M4 | `decidirDesfecho` sempre fecha | rc=0 | **5 failed** |
+| M5 | `decidirDesfecho` nunca fecha | rc=0 | **1 failed** |
+| M6 | volta ao `??`, que aceita `message: ""` | rc=0 | **2 failed** |
+| M7 | o componente ignora a decisão e volta a ramificar em `res.ok` | rc=0 | **2 failed** |
+| M8 | o status vira constante na frase de último recurso | rc=0 | **1 failed** |
+
+M4 e M5 são os dois sentidos, e os conjuntos são **disjuntos e de tamanhos diferentes** (5 e 1):
+"sempre fecha" e "nunca fecha" não são o mesmo estado com duas roupas. M7 é o mutante que o pedido
+avisou: chamar a função e não obedecer a ela.
+
+**M6 é um defeito que eu achei ao extrair, não uma mutação hipotética.** A forma anterior era
+`corpo.message ?? corpo.error ?? …`, e `""` **não é nullish**: um corpo com `message: ""` deixaria
+o diálogo aberto **sem uma palavra** sobre o que houve — o botão volta de "Salvando…" e nada mais.
+`decidirDesfecho` escolhe o primeiro campo **não-branco**, e o invariante está afirmado: quando
+`fecha === false`, `erro` é sempre uma string não-vazia.
+
+#### QA-900-60-2 — deploy fora de ordem parava num 500 genérico
+
+Se o código subir antes da `251`, a RPC não existe e a resposta era `?? 500` com a mensagem crua do
+PostgREST sobre *schema cache* — verdadeira e inútil para quem está olhando a tela. `PGRST202` (o
+PostgREST não acha a função) e `42883` (`undefined_function` do Postgres) passam a devolver **503**
+com uma mensagem que **nomeia a migration**. Três testes na rota, incluindo **controle negativo**:
+um `P0023` qualquer continua devolvendo a mensagem do banco e **não** menciona a `251` — sem ele,
+`naoPublicada = true` para todo mundo passaria, e toda falha de escrita viraria "a migration não
+subiu", escondendo a causa real.
+
+| # | mutante | `tsc` | `route.test.ts` (25) |
+|---|---|---|---|
+| — | baseline | rc=0 | **25 passed** |
+| R1 | tira `PGRST202` do conjunto | rc=0 | **1 failed** |
+| R2 | `naoPublicada = true` para todo erro | rc=0 | **5 failed** |
+| R3 | o status volta ao mapa genérico | rc=0 | **2 failed** |
+
+⚠️ **Isto é uma rede, não a solução.** A ordem continua sendo **`251` primeiro, deploy depois**,
+confirmada por `pg_proc` no banco de produção (leitura de metadado) antes de liberar a tela. O que
+mudou é o que o operador vê se a ordem for quebrada.
+
+#### QA-900-56-D1 — o registro da porta de entrada voltou para a story dona
+
+`app/page.tsx` e `app/page.test.ts` saíram da File List **desta** story e entraram na da rodada 5
+da `900-56`, que é a etiqueta do commit que os trouxe (`ccc10c68 [Story 900-56]`). Lá também foi
+fechado o item 1 de "O que continua aberto", que ainda afirmava o furo como aberto, e reescrito o
+item 3 com o limite real da régua de forma (QA-900-56-D2). É registro; a suíte não muda.
+
 ### File List
 
 **Criados**
@@ -622,10 +712,8 @@ baseline (mesmo sha256, `git diff -- packages/web/src/app/page.tsx` vazio) e rep
 - `packages/web/src/lib/tenancy/console-pausa-empresa.ts`
 - `packages/web/src/lib/tenancy/console-pausa-empresa.test.ts`
 - `packages/web/src/app/platform/orgs/_components/pausar-empresa-dialog.tsx`
-- `packages/web/src/app/page.test.ts`
 
 **Modificados**
-- `packages/web/src/app/page.tsx` (porta de entrada — fora do escopo da `900-60`, pendência da `900-56`)
 - `packages/web/src/app/platform/orgs/_components/org-row-menu.tsx`
 - `packages/web/src/app/platform/orgs/page.tsx`
 - `packages/web/src/lib/tenancy/console-lista-empresas.test.ts`
@@ -634,13 +722,127 @@ baseline (mesmo sha256, `git diff -- packages/web/src/app/page.tsx` vazio) e rep
 - `docs/backlog.md` (só o item da AC9.2)
 - `docs/stories/900-60-ativar-desativar-empresa.story.md`
 
+**Rodada 2 — as duas ressalvas do gate (modificados)**
+- `packages/web/src/lib/tenancy/console-pausa-empresa.ts` *(QA-900-60-1 — `decidirDesfecho()`)*
+- `packages/web/src/lib/tenancy/console-pausa-empresa.test.ts` *(QA-900-60-1 — 10 testes novos: 6 do desfecho + 4 da obediência do diálogo; 22 → 32)*
+- `packages/web/src/app/platform/orgs/_components/pausar-empresa-dialog.tsx` *(QA-900-60-1 — passa a OBEDECER à decisão, em vez de tomá-la)*
+- `packages/web/src/app/api/platform/orgs/[id]/route.ts` *(QA-900-60-2 — `PGRST202`/`42883` → 503 com mensagem que nomeia a migration)*
+- `packages/web/src/app/api/platform/orgs/[id]/route.test.ts` *(QA-900-60-2 — 3 testes, com controle negativo)*
+- `docs/stories/900-56-navegacao-e-visao-geral-do-console.story.md` *(QA-900-56-D1/D2 — o registro da porta de entrada volta para a story dona)*
+
+**NÃO são desta story** — `packages/web/src/app/page.tsx` e `packages/web/src/app/page.test.ts`
+chegaram no commit `ccc10c68`, que é `[Story 900-56]`. Eles constavam aqui como "carona fora do
+escopo" enquanto o commit dizia outra coisa; QA-900-56-D1. **O registro deles é a File List da
+rodada 5 da `900-56`**, para onde foram movidos. A menção fica como contexto: a bateria de mutantes
+daquele arquivo foi refeita aqui (seção "Reconferência…" acima), porque foi aqui que o erro de
+restauro apareceu.
+
 ### Change Log (Dev)
 
 | Date | Version | Description | Author |
 |---|---|---|---|
 | 2026-09-01 | 1.0 | Implementada. Migration `251` (RPC `organization_set_active_as_platform`, padrão da `248`), rota `PATCH`, diálogo por portal, 4º item do menu, badge Ativa/Pausada. Mais a 2ª porta de entrada (`app/page.tsx`), pendência da `900-56`. 3 arquivos de teste novos, +53 testes; 21 mutantes medidos com `tsc` rc=0. Provado na tela com as 3 contas do banco de teste, incluindo os dois sentidos e o caminho de falha. | @dev (Dex) |
 | 2026-09-01 | 1.1 | **Conserto pontual — colisão de numeração.** A migration foi de `250` para **`251`**: `origin/main` já tem `250_kanban_stages_default_unico.sql` (Story 75-371), mergeada depois que esta pilha nasceu. Sem colisão de CONTEÚDO (tabelas e funções disjuntas). Causa registrada: medir o próximo livre só contra a `main` não vê o que está em voo — o livre passa a ser medido em TODAS as refs após `git fetch --prune`. Referências ajustadas na story, na rota, no teste da rota e no comentário de `admin-client-allowlist.test.ts`. Mais a reconferência da bateria de mutantes de `app/page.tsx` (restauro por `cp`, sha256 dos dois lados, conjuntos de morte 2 e 7, baseline reproduzido). Suíte idêntica: 308 arquivos, 4187 passed + 6 expected fail. | @dev (Dex) |
+| 2026-09-01 | 1.2 | **As duas ressalvas do gate fechadas (QA-900-60-1 e QA-900-60-2), escopo fechado.** (1) A decisão do desfecho do envio saiu do `.tsx` para `decidirDesfecho(ok, status, corpo)` em `console-pausa-empresa.ts`, e o diálogo passou a OBEDECER a ela. Carrasco nas duas metades: comportamento (6 `it`, com controle positivo de que `200` fecha) e forma sobre o trecho do `confirmar()` (a decisão é consumida nos dois campos; `aoFechar()` uma única vez, logo depois do `router.refresh()`). **O mutante literal do gate agora é VERMELHO**, e mais 7 com ele — incluindo o que MOVE o `aoFechar()` para o ramo de erro sem mudar a contagem. Achado ao extrair: `corpo.message ?? corpo.error` aceitava a string vazia, o que deixaria o diálogo aberto sem mensagem nenhuma. (2) `PGRST202`/`42883` (RPC ainda não publicada — deploy fora de ordem) passam a devolver 503 com mensagem que nomeia a migration `251`, com controle negativo. (3) Registro: `app/page.tsx` e `app/page.test.ts` voltaram para a File List da `900-56`, dona do commit `ccc10c68`. | @dev (Dex) |
 
 
 ## QA Results
-_(Preenchido pelo @qa.)_
+
+### Gate: **CONCERNS** — @qa (Quinn), 2026-09-01
+
+Gate completo: `docs/qa/gates/900.60-ativar-desativar-empresa.yml`. Base: `750b08ec`, ponta da
+pilha `#547 → #549 → 900-56 → esta`. Nada empurrado, nada tocado em produção.
+
+**A entrega está certa em tudo que consegui medir, e as decisões contra a letra da AC estão certas
+por razões que eu reproduzi — não aceitei.** O que segura o gate é uma **ausência**, não um
+defeito: a AC7 não tem carrasco.
+
+#### Réguas — qual baseline usei
+A **árvore de trabalho local**, não o run do CI da `main` (a árvore carrega +9 testes de outra
+frente, não commitados, que não são desta entrega). `vitest run`: **308 arquivos / 4187 passed |
+6 expected fail (4193) / rc=0** — idêntico ao declarado, reproduzido numa execução limpa.
+`tsc --noEmit` rc=0 na árvore e antes de **cada** vermelho. `pnpm lint --force` rc=0 (0 erros,
+30 warnings alheios) · `pnpm type-check --force` rc=0 · `pnpm build` rc=0, 5/5, com
+`ƒ /api/platform/orgs/[id]` registrada.
+
+#### O que reproduzi ao vivo (banco de TESTE, login pelo formulário, zero sessão forjada)
+- **Porta de entrada, os dois sentidos:** plataforma → `/platform` (login **e** raiz com sessão
+  viva); empresa A → `/dashboard` nos dois. Empresa A abrindo `/platform/orgs` → `/dashboard`.
+- **Alcançabilidade por `elementFromPoint`** (nunca `isVisible()`): centro do 4º item →
+  `BUTTON[menuitem] "Pausar empresa"`. Itens:
+  `["Ver empresa","Integrações","Copiar identificador","Pausar empresa"]`.
+- **Diálogo:** título `Pausar empresa`, `Empresa B — Teste`, as **três frases verbatim e na
+  ordem**; botão `disabled` com vazio **e** com só espaços, habilitado com motivo.
+- **AC7 — reproduzida.** Rota interceptada no navegador devolvendo **500** (o servidor não foi
+  tocado — conferi depois: 3/3 orgs ativas, zero linhas de trilha com meu motivo): diálogo
+  **continuou aberto**, a mensagem do servidor apareceu dentro dele, o motivo digitado ficou
+  **idêntico byte a byte**, e a lista **não mudou**.
+- **Controle positivo do AC7** — sem ele, "ficou aberto" seria indistinguível de "o botão não faz
+  nada": `PATCH → 200` fecha o diálogo, `Ativa → Pausada` e depois `Pausada → Ativa`, com
+  `orgsAtivasDepois` 2 e 3. **500 mantém aberto, 200 fecha.**
+- **Trilha lida no banco:** 2 linhas, `actor_type='platform_admin'`, ações corretas, `metadata`
+  com `reason`, `is_active_anterior` e `orgs_ativas_depois`. Estado restaurado: 3/3 ativas.
+  ⚠️ As 2 linhas do controle positivo **permanecem** — `platform_audit_log` é append-only por
+  desenho (migration 248).
+- **Autorização e validação pela rota viva:** empresa A faz `PATCH` → **403**; motivo só espaços →
+  400; org inexistente → 404; `isActive: "false"` → 400; `orgId` no corpo **não** vence o
+  parâmetro de rota → 404, nada alterado.
+
+#### Mutações que eu mesmo apliquei (snapshot por `cp`, sha256 dos dois lados)
+`app/page.tsx` — some o ramo: **2** (só metade 1) · **`if (true)`: 5** (só metade 2) · inverte:
+**7** (a união exata). **Interseção vazia, tamanhos diferentes.** Restaurado byte a byte
+(`bf7d4969…`, `git diff` vazio), 9 verdes reproduzidos.
+Rótulo: volta para "Desativar" → 3 · suaviza a frase (iii) → 3 · **só a caixa das letras**
+(`OUTRA` → `outra`) → 3. **O texto não pode ser amaciado nem na grafia.**
+
+#### A decisão da AC2 (o `UPDATE` na RPC): **CERTA**, e as três razões foram medidas
+1. `orgs_ativas_depois` só é verdade na mesma transação — visível no SQL da `251`.
+2. **`?select=count()` → HTTP 400 `PGRST123`** medido contra o `trifold-crm-dev`; e
+   `platformQuery(table, columns, orgId?)` chama `.select(columns)` **sem objeto de opções** —
+   `count`/`head` não têm por onde entrar — além de recusar `(`.
+3. **Medido por mutação:** pôr `.from("organizations").update(...)` na rota deixa
+   `platform-query-scan.test.ts` **VERMELHO**. A letra da AC2 não era implementável.
+`createAdminClient()` está na rota (é ele que chama a `.rpc()`) e registrado na allowlist —
+recontei a união das 5 seções do JSON: **243**, com a rota nova em `plataforma`.
+
+#### Migration: livre reconferido por mim
+`git fetch --prune` + varredura de `supabase/migrations` em **todas as 181 refs**
+(`refs/heads` + `refs/remotes`), 279 arquivos distintos: o único `251_*` é o desta pilha, e
+`250_pausar_*` sumiu de toda ref. **Sem colisão de conteúdo** — a `250` da `main` só mexe em
+`kanban_stages`. **Aplicada no banco de teste: SIM**, confirmado antes de testar a rota
+(`pg_proc` com a assinatura exata e `prosecdef=true`; `has_function_privilege`: anon `false`,
+authenticated `false`, service_role `true`). **Produção: não aplicada** — é do @devops.
+
+#### Os dois autoachados: o conserto pegou
+- **Bateria de `app/page.tsx` refeita:** refiz eu mesmo com `cp`; o sha do baseline bate com o
+  declarado, e obtive **três** conjuntos (2, 5 e 7) em vez de dois — o de `if (true)` é o que
+  fecha o par disjunto. O sintoma da bateria corrompida (mutantes diferentes, mesmo número de
+  mortos) **não reaparece**.
+- **Réguas movidas: nenhuma ficou mais fraca.** `TOTAL_ESPERADO` 242→243 é a mesma asserção com o
+  número recontado (união real = 243); os nomes de `it` que ainda diziam "240" já estavam
+  obsoletos. O call site do `<OrgRowMenu>` ficou **mais forte** (recorte fail-closed + 4 props).
+  A régua "e NÃO o quarto item" caducou legitimamente (era cronograma) e foi substituída por 3
+  asserções positivas mais a proibição de `Desativar`, que **já era** sobre `codigo` no commit
+  anterior — não houve troca de escopo escondida. O controle positivo do `Esc`: provei os dois
+  lados — apagar o foco real do `aoTeclar` dá **2 vermelhos**, e inserir um terceiro
+  `botao.current?.focus()` antes dele (para o veneno errar o alvo) dá **1 vermelho**. **O veneno
+  acerta o alvo certo.**
+
+#### Concerns
+
+| ID | sev | o quê |
+|---|---|---|
+| QA-900-60-1 | média | **A AC7 não tem carrasco nenhum, e eu medi.** Acrescentei `aoFechar()` ao ramo `if (!res.ok)` do diálogo — fecha em cima da falha e perde o motivo digitado — e a suíte **inteira** ficou verde (308 / 4187 / 6, `tsc` rc=0). Causa: `vitest.config.ts` inclui `*.test.ts` e **não `.tsx`**, e não há jsdom. O texto saiu do JSX por isso (Decisão 3), mas a **máquina de estados do envio** ficou dentro do componente. Conserto: extrair `decidirDesfecho(res.ok, corpo) → {fecha, erro}` para `.ts` com carrasco (preferível), ou régua de forma sobre a fonte do diálogo (`aoFechar()` uma vez, só depois de `router.refresh()`; o ramo do erro contém `setErro(`+`return` e **não** contém `aoFechar()`). **Critério de aceite: o mutante acima tem de ficar VERMELHO.** |
+| QA-900-60-2 | baixa | **Ordem do deploy.** A `251` não está em produção. Código antes da migration ⇒ `PATCH` responde 500 genérico (não há entrada para função inexistente em `STATUS_POR_CODIGO_SQL`) numa tela que parece pronta. Runbook do @devops: **`251` primeiro**, confirmando por `pg_proc` (leitura de metadado) antes de liberar a tela. |
+
+#### Observações
+Concorrência real continua não medida (o `FOR UPDATE` é o mecanismo certo; a afirmação é sobre o
+SQL) · o efeito de `resolveSoleOrg` no roteamento continua **latente** (`decidirModoRoteamento()`
+devolve `"both"`; a env não existe em arquivo nenhum), e o item de backlog da AC9.2 existe e
+aponta para `FRASE_DO_ROTEAMENTO` · `docs/audits/migrations-aplicadas.json` não regenerado —
+concordo, o diff não seria desta story.
+
+**AC1–AC10 atendidas.** AC2 com divergência justificada e medida; AC7 atendida **sem carrasco**.
+
+**Merge liberado.** QA-900-60-2 é pré-requisito do deploy; QA-900-60-1 antes do próximo PR que
+tocar este diálogo.
