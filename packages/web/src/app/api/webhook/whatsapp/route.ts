@@ -405,21 +405,28 @@ export async function POST(request: NextRequest) {
   // Fica FORA do `mediaMetadata` de propósito: nada aqui tem `media_id` nem download,
   // então as colunas `media_*` continuam NULL.
   const extraMetadata: Record<string, unknown> = {}
-  // ⚠️ DUAS FLAGS, DE PROPÓSITO — NÃO UNIFICAR.
+  // ⚠️ DUAS FLAGS, DE PROPÓSITO — NÃO UNIFICAR. A tabela abaixo é a decisão do dono do
+  // produto, e cada linha tem teste próprio (nenhum dos cinco casos é omissão):
   //
-  // Elas parecem duplicadas porque hoje só divergem no tipo desconhecido, mas a divergência
-  // É a decisão do dono do produto:
+  //   tipo                 | Nicole | push ao corretor
+  //   ---------------------|--------|------------------
+  //   contacts, location   |  SIM   |  SIM   → a IA tem o que fazer com o dado
+  //   video, sticker       |  NÃO   |  SIM   → gate `@qa` H-1
+  //   desconhecido (order…)|  NÃO   |  SIM   → só o corretor pode ir ver no WhatsApp
+  //   reaction             |  NÃO   |  NÃO   → ❤️ não é pedido nem merece push
+  //   system               |  NÃO   |  NÃO   → não é o lead falando
   //
-  //   • `reaction`            → sem IA  E  sem push. Um ❤️ não é pedido: a Nicole responder a
-  //                             ele é pior que o silêncio, e o push vira ruído no celular do
-  //                             corretor.
-  //   • tipo desconhecido     → sem IA  MAS  COM push. É exatamente o caso em que o corretor
-  //     (system/order/…)       precisa ser avisado para ir olhar no WhatsApp: o CRM sabe que
-  //                             chegou algo e sabe que NÃO consegue mostrar o conteúdo. Calar
-  //                             o push aqui recriaria o defeito de 01/09 numa camada acima —
-  //                             a bolha existiria e ninguém olharia.
+  // Por que `video`/`sticker` não acionam a IA (H-1): o `text` deles DESCREVE UMA LIMITAÇÃO
+  // DO CRM ("o CRM ainda não exibe vídeos"). Como o pipeline recebe esse texto como se fosse
+  // fala do lead, a Nicole respondia ao lead sobre o nosso sistema — linguagem interna de
+  // produto vazando para o cliente. E uma figurinha 😂 é a mesma classe de um ❤️.
   //
-  // Unificar as duas em um booleano só desfaz silenciosamente a segunda linha.
+  // Por que `system` não gera push, apesar de "tipo desconhecido → push": `system`
+  // (`user_changed_number`) é evento de PLATAFORMA, não mensagem. Não há nada no WhatsApp
+  // para o corretor ir ver — o push seria falso alarme. A regra do push é "o lead mandou
+  // algo que o CRM não sabe exibir", e aqui o lead não mandou nada.
+  //
+  // Unificar as duas flags num booleano só desfaz silenciosamente as linhas do meio.
   let acionaNicole = true
   let notificaCorretor = true
 
@@ -542,24 +549,55 @@ export async function POST(request: NextRequest) {
     text = partes.join(" ")
 
     extraMetadata.location = { latitude: lat, longitude: lng, name: nome || null, address: endereco || null }
-  } else if (msg.type === "video") {
-    // Sem download: exibir vídeo no CRM é outro trabalho. O que esta correção garante é
-    // que o corretor SAIBA que o lead mandou um vídeo em vez de ver a conversa muda.
-    text = "[Vídeo recebido — o CRM ainda não exibe vídeos]"
-  } else if (msg.type === "sticker") {
-    text = "[Figurinha recebida]"
+  } else if (msg.type === "video" || msg.type === "sticker") {
+    // Sem download: exibir vídeo/figurinha no CRM é outro trabalho. O que esta correção
+    // garante é que o corretor SAIBA que chegou algo, em vez de ver a conversa muda.
+    text =
+      msg.type === "video"
+        ? "[Vídeo recebido — o CRM ainda não exibe vídeos]"
+        : "[Figurinha recebida]"
+    // L-3: sem este marcador, "quantos vídeos recebemos?" vira string-matching no `content`,
+    // e o metadata destas bolhas fica indistinguível do de texto puro.
+    extraMetadata.tipo_nao_suportado = msg.type
+    // H-1: o texto acima descreve uma limitação NOSSA. Mandá-lo ao pipeline fazia a Nicole
+    // responder ao lead sobre o CRM. O corretor, esse sim, precisa ser avisado.
+    acionaNicole = false
   } else if (msg.type === "reaction") {
     const reacao = (msg.reaction ?? {}) as { emoji?: unknown; message_id?: unknown }
     const emoji = limpar(reacao.emoji)
-    text = emoji ? `[O lead reagiu com ${emoji}]` : "[O lead reagiu a uma mensagem]"
     // `message_id` é o wamid da mensagem reagida — sem ele a reação fica órfã.
-    extraMetadata.reaction = { emoji: emoji || null, message_id: limpar(reacao.message_id) || null }
+    const alvo = limpar(reacao.message_id) || null
+    // L-2: `emoji: ""` COM `message_id` é como a Meta comunica que o usuário DESFEZ a reação.
+    // Tratá-lo junto do caso sem emoji gravava "[O lead reagiu a uma mensagem]" — mentira, e
+    // o par reagir/desfazer virava duas bolhas afirmando a mesma coisa.
+    const removida = emoji === "" && alvo !== null
+    text = removida
+      ? "[O lead removeu a reação]"
+      : emoji
+        ? `[O lead reagiu com ${emoji}]`
+        : "[O lead reagiu a uma mensagem]"
+    extraMetadata.reaction = { emoji: emoji || null, message_id: alvo, removida }
     // Uma reação não é pedido. A Nicole responder a um ❤️ é pior que o silêncio — e um push
     // por ❤️ é ruído puro no celular do corretor. Único tipo em que AS DUAS caem.
     acionaNicole = false
     notificaCorretor = false
+  } else if (msg.type === "system") {
+    // L-4: aviso da PLATAFORMA (ex.: `user_changed_number`), não mensagem do lead. A bolha
+    // existe porque o aviso é útil no histórico, mas não há nada para a IA responder nem nada
+    // no WhatsApp para o corretor ir ver — push aqui é falso alarme.
+    const sistema = (msg.system ?? {}) as { body?: unknown; type?: unknown; new_wa_id?: unknown }
+    const corpo = limpar(sistema.body)
+    text = corpo ? `[Aviso do WhatsApp] ${corpo}` : "[Aviso do WhatsApp: evento de sistema]"
+    extraMetadata.tipo_nao_suportado = "system"
+    extraMetadata.system = {
+      body: corpo || null,
+      type: limpar(sistema.type) || null,
+      new_wa_id: limpar(sistema.new_wa_id) || null,
+    }
+    acionaNicole = false
+    notificaCorretor = false
   } else {
-    // `system`, `order`, `unsupported` e qualquer tipo que a Meta venha a inventar.
+    // `order`, `unsupported`, `interactive` e qualquer tipo que a Meta venha a inventar.
     // Antes disto o `else` devolvia 200 e DESCARTAVA a mensagem: nada em `messages`,
     // nada em log, ninguém sabia. Agora a bolha existe e nomeia o tipo.
     text = `[O lead enviou algo que o CRM ainda não exibe: ${limpar(msg.type) || "tipo desconhecido"}]`
@@ -638,51 +676,6 @@ export async function POST(request: NextRequest) {
   }
 
   const orgId = config.org_id
-
-  // ---- Arquiva o payload CRU dos tipos não suportados --------------------
-  //
-  // Em 01/09/2026 o telefone que veio num cartão de contato ficou IRRECUPERÁVEL porque
-  // este webhook — ao contrário do de meta_ads — nunca gravou payload em `webhook_logs`.
-  // A bolha (INSERT síncrono, mais abaixo) é a recuperação primária; isto aqui é a
-  // segunda cópia, com o objeto `msg` inteiro, para o que a bolha não souber traduzir.
-  //
-  // `processed: true` de propósito: a mensagem FOI processada (virou bolha). A coluna
-  // marca falha de processamento, e usar `false` aqui faria toda mensagem de figurinha
-  // parecer pendente numa fila que ninguém drena.
-  //
-  // AGUARDADO de propósito, e NÃO em `after()`. O `webhooks/landing-page/route.ts` documenta
-  // que na Vercel o callback de `after()` era descartado de forma INTERMITENTE e sem exceção —
-  // foi assim que leads sumiram lá. Arquivar a prova no caminho que já provou perder prova
-  // esvaziaria a garantia justamente no caso raro. O custo é um INSERT num handler que já faz
-  // vários awaits antes do 200.
-  //
-  // O `try/catch` é o que mantém isto inofensivo: falha ao arquivar é ENGOLIDA (console.error).
-  // Não derruba o webhook, não muda o status HTTP e não impede o INSERT da mensagem, que vem
-  // depois. Perder o arquivo é ruim; perder a bolha por causa do arquivo seria pior.
-  if (tipoNaoSuportado) {
-    try {
-      const { error: erroArquivo } = await getSupabaseAdmin()
-        .from("webhook_logs")
-        .insert({
-          org_id: orgId,
-          source: "whatsapp",
-          event_type: `tipo_nao_suportado:${msg.type}`,
-          payload: msg,
-          signature_valid: true,
-          processed: true,
-        })
-      // PostgREST devolve erro no objeto, não por exceção: sem esta leitura, uma violação de
-      // CHECK/RLS passaria despercebida e o `catch` nunca seria acionado.
-      if (erroArquivo) {
-        console.error(
-          "[webhook] falha ao arquivar payload não suportado (ignorado):",
-          erroArquivo.message
-        )
-      }
-    } catch (err) {
-      console.error("[webhook] falha ao arquivar payload não suportado (ignorado):", err)
-    }
-  }
 
   // ---- Find-or-upsert lead (sync) ---------------------------------------
   // AC3 + AC4 + AC5b: use `phone_normalized` as the dedup key. `.maybeSingle`
@@ -941,6 +934,55 @@ export async function POST(request: NextRequest) {
         source: "api/webhook/whatsapp",
       })
       return NextResponse.json({ status: "ok" })
+    }
+
+    // ---- Arquiva o payload CRU dos tipos não suportados ------------------
+    //
+    // Em 01/09/2026 o telefone que veio num cartão de contato ficou IRRECUPERÁVEL porque este
+    // webhook — ao contrário do de meta_ads — nunca gravou payload em `webhook_logs`. A bolha
+    // (o INSERT logo acima) é a recuperação primária; isto aqui é a segunda cópia, com o objeto
+    // `msg` inteiro, para o que a bolha não souber traduzir.
+    //
+    // ⚠️ A ORDEM É A PROTEÇÃO, e é ela que não pode ser mexida — mais ainda que o `await`.
+    //
+    // Este INSERT é AGUARDADO e não vai para `after()`: o `webhooks/landing-page/route.ts`
+    // documenta que na Vercel o callback de `after()` era descartado de forma INTERMITENTE e
+    // sem exceção — foi assim que leads sumiram lá. Arquivar a prova no caminho que já provou
+    // perder prova esvaziaria a garantia justamente no caso raro.
+    //
+    // Mas aguardar tem um preço, e é por isso que o bloco vive AQUI, DEPOIS do INSERT em
+    // `messages` (gate `@qa` M-1). Enquanto ele rodava antes, um Supabase LENTO — não fora do
+    // ar — pendurava este INSERT até a lambda morrer no `maxDuration = 60`: nem `try/catch` nem
+    // `if (error)` cobrem hang, `lib/supabase/admin.ts` não tem `AbortSignal`, e o resultado era
+    // a bolha nunca ser escrita. O mecanismo criado para prevenir 01/09 recriaria 01/09.
+    // Nesta ordem, um hang custa o ARQUIVO, nunca a bolha — que é a prioridade declarada.
+    //
+    // Vem também depois do early-return de 23505: reentrega da Meta não duplica o arquivo.
+    //
+    // As duas formas de falha são engolidas (`console.error`): o PostgREST devolve
+    // `{data:null, error}` em violação de CHECK/RLS SEM lançar, enquanto rede/cliente LANÇA.
+    // Um `try/catch` sozinho cobre só a segunda.
+    if (tipoNaoSuportado) {
+      try {
+        const { error: erroArquivo } = await getSupabaseAdmin()
+          .from("webhook_logs")
+          .insert({
+            org_id: orgId,
+            source: "whatsapp",
+            event_type: `tipo_nao_suportado:${msg.type}`,
+            payload: msg,
+            signature_valid: true,
+            processed: true,
+          })
+        if (erroArquivo) {
+          console.error(
+            "[webhook] falha ao arquivar payload não suportado (ignorado):",
+            erroArquivo.message
+          )
+        }
+      } catch (err) {
+        console.error("[webhook] falha ao arquivar payload não suportado (ignorado):", err)
+      }
     }
 
     // Story 63-12 — push ao corretor quando o lead responde. `after()` dedicado
