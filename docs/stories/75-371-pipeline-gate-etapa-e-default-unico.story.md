@@ -368,3 +368,21 @@ régua**. Um mock que fabrica o módulo inteiro é verde por construção.
 
 Regressão da rodada 4: 25 testes nos 4 arquivos da story, suíte completa e tsc/lint conferidos
 abaixo.
+
+---
+
+## Rodada 5 — CodeRabbit no smoke test (01/09/2026)
+
+Os 4 apontamentos da rodada 4 vieram marcados como `✅ Addressed`, e o CodeRabbit achou **3 novos,
+todos no `scripts/75-371-smoke-trigger-default-rls.ts`** — nenhum em código de produção. Os três
+são a mesma família: **o instrumento de verificação podia reportar sucesso sem ter verificado nada.**
+É o defeito que o @qa matou na rodada 1 desta story, reaparecido na régua.
+
+| # | Defeito | Correção | Demonstração |
+|---|---|---|---|
+| 1 | **Falso verde:** se o `UPDATE` atingisse ZERO linhas, as 3 asserções continuavam verdadeiras (a padrão antiga segue lá, sozinha e ativa) e o script saía 0 sem nunca disparar o trigger. E o alvo fixo era `follow-up` — **a etapa que o R6 manda excluir**: resolvido o R6, o smoke test passaria a mentir | O alvo é **descoberto** (`primeira ativa não-padrão`), o `UPDATE` conta linhas afetadas via `RETURNING`, e passou a exigir que o posto tenha **mudado de dono** e que o novo dono **seja o alvo** | `SLUG_ALVO=etapa-que-nao-existe` → **REPROVOU, exit 1** |
+| 2 | `SLUG_ALVO` interpolado no SQL. Seria nitpick (vem de env, não de usuário), **exceto** que o script vende o `BEGIN … ROLLBACK` como a garantia que dispensa `TRIFOLD_ALLOW_PROD` — e `'; COMMIT; --` desfaz exatamente essa garantia, num script feito para rodar em produção | Validação contra `^[a-z0-9]+(-[a-z0-9]+)*$` antes de qualquer ida ao banco | `SLUG_ALVO="x'; COMMIT; --"` → **recusado, exit 1**, sem tocar o banco |
+| 3 | Zero usuários → o `for` não roda, `tudoOk` fica `true`, **exit 0**. Visível para humano, invisível para o CI, que lê exit code | Lança se a lista vier vazia | — |
+
+Rodada normal depois das correções: alvo escolhido sozinho = **"1º Contato"**, `UPDATE` atinge 1
+linha, posto transferido, 1 padrão, 0 em etapa inativa, **admin e gerente-comercial OK, exit 0**.
