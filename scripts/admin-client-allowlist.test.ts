@@ -70,8 +70,15 @@ const allowlist = JSON.parse(readFileSync(CAMINHO_JSON, "utf-8"))
  * `GRANT EXECUTE … TO service_role`; a autorização acontece na rota (`getPlatformAdmin()`), não
  * no SQL. O `UPDATE` mora na RPC, e não na rota, porque `orgs_ativas_depois` (AC10) só é verdade
  * lido na MESMA transação do `UPDATE`.
+ *
+ * Re-medido pela Story 900-62 (**243 → 244**): +1 em `plataforma`,
+ * `app/api/platform/orgs/[id]/dados/route.ts` — o `PATCH` que edita nome/slug/contato/fiscal.
+ * Arquivo DISTINTO do da 900-60 de propósito (as duas stories entram em qualquer ordem, sem
+ * conflito de merge). Chama a RPC `org_details_update_as_platform` (migration 252). O `UPDATE`
+ * mora na RPC porque a trava otimista por `updated_at`, a detecção de no-op (AC4) e a linha de
+ * trilha precisam da MESMA transação — lida em duas viagens, a trava não trava.
  */
-const TOTAL_ESPERADO = 243
+const TOTAL_ESPERADO = 244
 
 const REGRA = "aios/no-unscoped-admin-client"
 
