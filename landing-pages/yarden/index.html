@@ -4,12 +4,12 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Yarden — Trifold</title>
-  <!-- Story 86-12 (AC12): copy, imagens e seções de marketing são dependência
-       externa (fornecidas pelo usuário) e NÃO foram inventadas aqui. Esta página
-       é o placeholder estrutural — formulário de captação funcional + toda a
-       infraestrutura de tracking Pixel/CAPI já ligada e testável. -->
+  <!-- Story 86-12 (AC12): copy, imagens e seções de marketing chegaram do usuário
+       em 2026-08-28 (mockup "Yarden LP v1.png") e substituíram o placeholder
+       estrutural. NADA de copy foi inventado aqui: cada texto é transcrição
+       literal do mockup, com as 2 correções ortográficas registradas no Change
+       Log da story. Os assets de `assets/` são recortes do próprio mockup. -->
   <meta name="description" content="Cadastre-se para receber informações sobre o empreendimento Yarden, da Trifold." />
-  <meta name="robots" content="noindex, nofollow" />
 
   <!-- =====================================================================
        Meta Pixel — Story 86-12 (AC1)
@@ -183,7 +183,7 @@
       quandoFbpPronto(function(){ enviarAoServidor(nome, id); });
     }
 
-    /* API usada pelo script do fim da página (formulário e InitiateCheckout). */
+    /* API usada pelo script do fim da página (formulários e InitiateCheckout). */
     window.TrifoldTracking = {
       novoId: novoId,
       visitorId: visitorId,
@@ -203,63 +203,265 @@
   })();
   </script>
 
+  <!-- Fonte: MESMO carregamento da landing do Vind Residence (Montserrat via
+       Google Fonts, `display=optional` + preload) — padrão já validado no
+       projeto irmão. O mockup usa uma geométrica comercial não presente no IDV
+       do empreendimento; Montserrat é a aproximação de marca já em uso. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=optional" onload="this.onload=null;this.rel='stylesheet'" />
+  <noscript><link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=optional" rel="stylesheet" /></noscript>
+
   <style>
     /* =====================================================================
-       TEMA — placeholder mínimo. Quando o conteúdo definitivo do Yarden
-       chegar (AC12), troque estas variáveis e acrescente as seções de
-       marketing; NÃO recrie o Pixel/CAPI e preserve os `id` dos campos do
-       formulário (`nome`, `whats`, `email`, `empresa`) usados pelo tracking.
+       TEMA — todas as cores foram amostradas por pixel do mockup
+       "Yarden LP v1.png" (2928x5450), não escolhidas por aproximação.
        ===================================================================== */
     :root{
-      --tinta:#1b2a21;
-      --fundo:#f6f7f5;
-      --card:#ffffff;
-      --acento:#2f6b4f;
-      --borda:#d9ded9;
+      --creme:#facb9d;          /* wordmark "yarden" (hero e rodapé) */
+      --marrom:#8d7861;         /* card do hero, títulos, botão da seção 4 */
+      --marrom-escuro:#6b5b4a;  /* título "QUER SABER MAIS?" */
+      --tan:#ebdac8;            /* fundo da seção "Quer saber mais?" */
+      --navy:#152649;           /* fundo do rodapé */
+      --dourado:#fdd996;        /* botão "Cadastre-se agora!" */
+      --dourado-tinta:#313042;  /* texto do botão do hero */
+      --cinza-texto:#91999d;    /* parágrafos das seções 2 e 3 */
+      --branco:#ffffff;
+      --preto:#191919;
       --erro:#b23b3b;
+
+      --fonte:'Montserrat', -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+      /* "EM BREVE" é serifado no mockup. A face exata não está no IDV do
+         empreendimento e são 8 glifos decorativos — não vale uma segunda
+         requisição de webfont, então usa a serifada do sistema. */
+      --fonte-serif:Georgia, 'Times New Roman', serif;
+
+      --max:1464px;             /* largura do mockup a 1x (2928 / 2) */
     }
-    *{box-sizing:border-box}
+
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{scroll-behavior:smooth}
     body{
-      margin:0;
-      font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
-      color:var(--tinta);
-      background:var(--fundo);
+      font-family:var(--fonte);
+      color:var(--cinza-texto);
+      background:var(--branco);
       line-height:1.5;
+      -webkit-font-smoothing:antialiased;
+      overflow-x:hidden;
     }
-    .wrap{max-width:960px;margin:0 auto;padding:32px 20px 64px}
-    header{padding:24px 20px;border-bottom:1px solid var(--borda);background:var(--card)}
-    header .wrap{padding:0;display:flex;align-items:center;justify-content:space-between}
-    .marca{font-weight:800;letter-spacing:.14em;text-transform:uppercase}
-    h1{font-size:clamp(1.8rem,5vw,2.6rem);margin:8px 0 4px}
-    .sub{margin:0 0 28px;opacity:.75}
-    .grid{display:grid;grid-template-columns:1fr;gap:28px}
-    @media (min-width:840px){ .grid{grid-template-columns:1fr 400px;align-items:start} }
-    .pendente{
-      border:1px dashed var(--borda);border-radius:12px;padding:20px;background:var(--card);
+    img{max-width:100%}
+    a{color:inherit}
+
+    /* ================= HERO =================
+       A foto é servida em tamanho natural (`width:100%;height:auto`), sem
+       recorte: assim 1% da caixa equivale exatamente a 1% da imagem, e as
+       posições em % abaixo caem sobre os pixels certos do mockup.
+       O card marrom do formulário está DESENHADO na foto (inpaintar um
+       retângulo cheio de 676x873 px produz listras — testado). O card HTML é
+       posicionado exatamente sobre ele, na mesma cor: as bordas coincidem, e
+       se o conteúdo crescer o card só se alonga para baixo, o que continua
+       lendo como um card único. */
+    .hero{position:relative;background:#a9c6cf}
+    .hero-media{position:relative;line-height:0}
+    .hero-img{
+      display:block;width:100%;height:auto;
+      aspect-ratio:1540/1762;                 /* recorte mobile */
+      object-fit:cover;
     }
-    .pendente h2{margin:0 0 8px;font-size:1.05rem}
-    .pendente p{margin:0;opacity:.75;font-size:.94rem}
-    .form-card{
-      background:var(--card);border:1px solid var(--borda);border-radius:12px;padding:24px;
+    .hero-overlay{position:absolute;inset:0}
+
+    /* marca "EM BREVE | yarden" — x 402..1241, y 710..930 no mockup */
+    .hero-brand{
+      position:absolute;left:13.7%;top:38.6%;width:28.7%;
+      display:flex;align-items:stretch;gap:4.2%;
     }
-    .form-card h2{margin:0 0 4px;font-size:1.2rem}
-    .field{margin-bottom:14px}
-    label{display:block;font-size:.86rem;font-weight:600;margin-bottom:4px}
-    input[type=text],input[type=tel],input[type=email]{
-      width:100%;padding:11px 12px;border:1px solid var(--borda);border-radius:8px;
-      font:inherit;color:inherit;background:#fff;
+    .hero-brand-rule{flex:0 0 2px;background:var(--creme)}
+    .hero-brand-txt{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:6%}
+    .hero-eyebrow{
+      font-family:var(--fonte-serif);color:var(--branco);
+      font-size:clamp(11px,1.57vw,30px);letter-spacing:.18em;line-height:1.1;
     }
-    input:focus{outline:2px solid var(--acento);outline-offset:1px}
-    .check{display:flex;gap:8px;align-items:flex-start;font-weight:400;font-size:.84rem;margin-bottom:12px}
-    .check input{margin-top:3px}
-    .btn{
-      width:100%;padding:13px 16px;border:0;border-radius:8px;cursor:pointer;
-      background:var(--acento);color:#fff;font:inherit;font-weight:700;letter-spacing:.03em;
+    .hero-wordmark{display:block;width:100%;height:auto}
+
+    /* card do formulário — x 1684..2360, y 371..1244 no mockup */
+    .hero-form{
+      position:absolute;
+      right:19.4126%;                          /* (2928-2360)/2928 */
+      width:max(23.0874%, 268px);              /* 676/2928, com piso legível */
+      top:20.5883%;                            /* 371/1802 */
+      min-height:48.4462%;                     /* 873/1802 */
+      background:var(--marrom);border-radius:5px;
+      padding:1.63em 1.2em 1.47em;
+      font-size:clamp(12.5px,1.025vw,17px);    /* 15px a 1464px de viewport */
+      color:var(--branco);
     }
-    .form-msg{display:none;margin-top:12px;font-size:.9rem}
-    .form-msg.ok{display:block;color:var(--acento)}
-    .form-msg.err{display:block;color:var(--erro)}
-    footer{padding:24px 20px;border-top:1px solid var(--borda);font-size:.84rem;opacity:.7}
+    .hero-form h2{
+      font-size:1.6em;font-weight:400;line-height:1.17;text-align:center;
+      margin-bottom:.95em;text-transform:uppercase;
+    }
+    .hero-form .campo{margin-bottom:1.6em}
+    .hero-form input[type=text],
+    .hero-form input[type=tel],
+    .hero-form input[type=email]{
+      width:100%;height:2.4em;padding:0 .8em;border:0;border-radius:.34em;
+      background:var(--branco);color:var(--preto);
+      font:inherit;font-size:1em;
+    }
+    .hero-form ::placeholder{color:#8c8c8c;opacity:1}
+    .hero-form .check{margin:0 0 1.5em;color:var(--preto)}
+    .hero-form .btn-cta{
+      display:block;width:100%;height:3.6em;border:0;border-radius:.34em;
+      background:var(--dourado);color:var(--dourado-tinta);
+      font:inherit;font-size:1.33em;font-weight:700;cursor:pointer;
+      transition:filter .18s;
+    }
+    .hero-form .btn-cta:hover{filter:brightness(.95)}
+    .hero-form .aviso{
+      margin-top:1em;font-size:.73em;line-height:1.5;text-align:center;
+      color:var(--branco);
+    }
+
+    /* checkbox: mesma marcação nos dois formulários */
+    .check{display:flex;gap:.7em;align-items:flex-start;font-size:.95em;line-height:1.35;cursor:pointer}
+    .check input{flex:0 0 auto;width:1.1em;height:1.1em;margin-top:.15em;accent-color:var(--marrom)}
+
+    .form-msg{display:none;margin-top:.9em;font-size:.9em;line-height:1.4}
+    .form-msg.ok,.form-msg.err{display:block}
+    .hero-form .form-msg.ok{color:var(--branco);font-weight:600}
+    .hero-form .form-msg.err{color:#ffd9d9;font-weight:600}
+    .saber .form-msg.ok{color:var(--marrom-escuro);font-weight:600}
+    .saber .form-msg.err{color:var(--erro);font-weight:600}
+
+    /* ================= SEÇÕES DE CONTEÚDO ================= */
+    .split{
+      max-width:var(--max);margin:0 auto;
+      display:grid;align-items:center;
+    }
+    /* seção 2 — texto à esquerda, imagem sangrando à direita */
+    .split--natureza{
+      grid-template-columns:394fr 776fr;
+      gap:3.55%;
+      padding:5.95% 2.66% 0 13.8%;
+    }
+    /* seção 3 — imagem sangrando à esquerda, texto à direita */
+    .split--invista{
+      grid-template-columns:635fr 421fr;
+      gap:11.54%;
+      padding:7.1% 13.87% 8% 2.39%;
+    }
+    .split img{display:block;width:100%;height:auto}
+
+    .titulo-secao{
+      color:var(--marrom);font-weight:400;text-transform:uppercase;
+      font-size:clamp(21px,2.254vw,33px);line-height:1.33;letter-spacing:0;
+      margin-bottom:1.6em;
+    }
+    .texto-secao{font-size:clamp(14px,1.03vw,16px);line-height:1.5}
+    .split--invista .titulo-secao,
+    .split--invista .texto-secao{text-align:right}
+
+    /* ================= SEÇÃO 4 — QUER SABER MAIS? ================= */
+    .saber{background:var(--tan)}
+    .saber-grid{
+      max-width:var(--max);margin:0 auto;
+      display:grid;grid-template-columns:438fr 585fr;
+      gap:10.86%;padding-left:17.14%;padding-right:2.05%;
+      align-items:center;
+    }
+    .saber-copy{padding:4.44% 0}
+    .saber h2{
+      color:var(--marrom-escuro);font-weight:400;text-transform:uppercase;
+      font-size:clamp(21px,2.254vw,33px);line-height:1.15;
+    }
+    .saber .sub{color:var(--marrom);font-size:clamp(13px,1.03vw,16px);margin-bottom:2.4em}
+    .saber .campo{margin-bottom:1.55em}
+    .saber input[type=text],
+    .saber input[type=tel],
+    .saber input[type=email]{
+      width:100%;height:44px;padding:0 1em;border-radius:3px;
+      border:1px solid var(--marrom);background:transparent;color:var(--marrom-escuro);
+      font:inherit;font-size:clamp(13px,1.03vw,16px);
+    }
+    .saber ::placeholder{color:var(--marrom);opacity:.75}
+    .saber .check{color:var(--marrom);font-size:clamp(12px,.89vw,14px);margin-bottom:1.8em}
+    .saber .check input{accent-color:var(--marrom)}
+    .saber .btn-cta{
+      display:block;width:100%;height:54px;border:0;border-radius:3px;
+      background:var(--marrom);color:var(--branco);
+      font:inherit;font-size:clamp(14px,1.16vw,18px);font-weight:700;cursor:pointer;
+      transition:filter .18s;
+    }
+    .saber .btn-cta:hover{filter:brightness(1.08)}
+    /* a foto encosta na base da faixa, como no mockup */
+    .saber-img{align-self:end}
+    .saber-img img{display:block;width:100%;height:auto}
+
+    /* ================= RODAPÉ ================= */
+    footer{background:var(--navy);color:#eeeeee;padding:22px 24px}
+    .rodape{
+      max-width:var(--max);margin:0 auto;
+      display:flex;align-items:center;justify-content:center;flex-wrap:wrap;
+      gap:clamp(24px,8.9%,130px);
+    }
+    .rodape .logo-trifold{height:18px;width:auto;display:block}
+    .rodape .logo-yarden{height:24px;width:auto;display:block}
+    .rodape .direitos{font-size:clamp(11px,.89vw,13px);line-height:1.4;text-align:center;max-width:24ch}
+    /* Não há URL de política de privacidade fornecida (defeito `86.12-QA-002`:
+       melhor sem link que com `href="#"` morto). O sublinhado do mockup fica,
+       o link não — vira <a> no commit em que a URL chegar. */
+    .rodape .politica{text-decoration:underline}
+
+    /* ================= WHATSAPP FLUTUANTE ================= */
+    /* Mesmo componente da landing do Vind Residence (classe, SVG, cor, posição).
+       O mockup desenha o botão em #00c800; #25d366 é a cor oficial do WhatsApp
+       e a já usada no projeto irmão — mantida por consistência de marca. */
+    .wa-float{position:fixed;right:22px;bottom:22px;z-index:60;width:58px;height:58px;border-radius:50%;background:#25d366;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(0,0,0,.25);transition:transform .18s}
+    .wa-float:hover{transform:scale(1.08)}
+    .wa-float svg{width:30px;height:30px;fill:#fff}
+
+    /* ================= DESKTOP ================= */
+    @media (min-width:980px){
+      .hero-img{aspect-ratio:2928/1802}
+      .hero-form--estatico{display:none}
+    }
+
+    /* ================= MOBILE / TABLET =================
+       Abaixo de 980px o card sai de cima da foto: o recorte mobile do hero é
+       feito à esquerda do card desenhado (x < 1684), então não há caixa marrom
+       sobrando na imagem. */
+    @media (max-width:979.98px){
+      .hero-form--sobreposto{display:none}
+      .hero-brand{left:7%;top:auto;bottom:6%;width:56%}
+      .hero-eyebrow{font-size:clamp(11px,3.1vw,17px)}
+      .hero-form--estatico{
+        position:static;right:auto;top:auto;width:auto;min-height:0;
+        margin:0;border-radius:0;
+        padding:28px 20px 24px;font-size:15px;
+      }
+      .split--natureza,
+      .split--invista{
+        grid-template-columns:1fr;gap:32px;
+        padding:52px 20px;
+      }
+      .split--invista .titulo-secao,
+      .split--invista .texto-secao{text-align:left}
+      .titulo-secao{margin-bottom:1em}
+      .saber-grid{
+        grid-template-columns:1fr;gap:0;
+        padding-left:0;padding-right:0;
+      }
+      .saber-copy{padding:52px 20px 40px}
+      .saber-img{max-width:520px;margin:0 auto;width:100%}
+      .rodape{gap:22px}
+      .wa-float{right:16px;bottom:16px;width:52px;height:52px}
+      .wa-float svg{width:27px;height:27px}
+    }
+    @media (max-width:560px){
+      .split--natureza,
+      .split--invista{padding:40px 18px}
+      .saber-copy{padding:40px 18px 32px}
+      .rodape .direitos{max-width:none;flex:1 0 100%;order:3}
+    }
   </style>
 </head>
 <body>
@@ -271,75 +473,200 @@
   <noscript><img height="1" width="1" style="display:none" alt=""
     src="https://www.facebook.com/tr?id=1337310707164669&ev=PageView&noscript=1" /></noscript>
 
-  <header>
-    <div class="wrap">
-      <span class="marca">Yarden</span>
-      <span class="marca" style="opacity:.5;letter-spacing:.08em">Trifold</span>
-    </div>
-  </header>
+  <main>
+    <!-- ===================== 1. HERO ===================== -->
+    <section class="hero" id="cadastro">
+      <div class="hero-media">
+        <picture>
+          <source media="(min-width:980px)" type="image/webp" srcset="assets/hero-piscina-rooftop.webp" />
+          <source media="(min-width:980px)" srcset="assets/hero-piscina-rooftop.jpg" />
+          <source type="image/webp" srcset="assets/hero-piscina-rooftop-mobile.webp" />
+          <img class="hero-img" src="assets/hero-piscina-rooftop-mobile.jpg"
+               alt="Piscina do rooftop do Yarden, com palmeiras, espreguiçadeiras e vista da cidade"
+               fetchpriority="high" decoding="async" />
+        </picture>
 
-  <main class="wrap">
-    <h1>Yarden</h1>
-    <p class="sub">Cadastre-se para receber informações sobre o empreendimento.</p>
-
-    <div class="grid">
-      <!-- conteúdo definitivo pendente — copy, imagens e seções de marketing
-           são fornecidos pelo usuário (Story 86-12 AC12, Artigo IV: No
-           Invention). Nada aqui deve ser inventado pelo agente. -->
-      <section class="pendente" aria-label="Conteúdo em preparação">
-        <h2>Conteúdo em preparação</h2>
-        <p>
-          As seções de apresentação do empreendimento (hero, galeria, lazer,
-          localização) serão publicadas em breve. O formulário ao lado já está
-          ativo e conectado ao CRM.
-        </p>
-      </section>
-
-      <div class="form-card" id="cadastro">
-        <h2>Cadastre-se</h2>
-        <p class="sub" style="margin-bottom:18px">Receba valores, condições e agende sua visita.</p>
-        <form id="leadForm" novalidate>
-          <!-- honeypot anti-spam: invisível para humanos, bots costumam preencher -->
-          <input type="text" name="empresa" id="empresa" autocomplete="off" tabindex="-1" aria-hidden="true" style="position:absolute;left:-9999px;top:-9999px" />
-          <div class="field">
-            <label for="nome">Nome *</label>
-            <input type="text" id="nome" name="nome" required />
+        <div class="hero-overlay">
+          <div class="hero-brand">
+            <span class="hero-brand-rule" aria-hidden="true"></span>
+            <div class="hero-brand-txt">
+              <span class="hero-eyebrow">EM BREVE</span>
+              <img class="hero-wordmark" src="assets/logo-yarden-creme.svg"
+                   alt="Yarden" width="298" height="62" />
+            </div>
           </div>
-          <div class="field">
-            <label for="whats">WhatsApp *</label>
-            <input type="tel" id="whats" name="whatsapp" required placeholder="(44) 90000-0000" />
+
+          <!-- Formulário 1 (hero). Os `id` sem sufixo são os do contrato de
+               tracking da story: `leadForm`, `nome`, `whats`, `email`,
+               `empresa`, `formMsg`. -->
+          <div class="hero-form hero-form--sobreposto">
+            <h2>Antecipe-se ao lançamento</h2>
+            <form id="leadForm" novalidate>
+              <!-- honeypot anti-spam: invisível para humanos, bots costumam preencher -->
+              <input type="text" name="empresa" id="empresa" autocomplete="off" tabindex="-1" aria-hidden="true" style="position:absolute;left:-9999px;top:-9999px" />
+              <div class="campo">
+                <label class="sr-only" for="nome" hidden>Nome</label>
+                <input type="text" id="nome" name="nome" required placeholder="* Nome" aria-label="Nome" autocomplete="name" />
+              </div>
+              <div class="campo">
+                <label class="sr-only" for="whats" hidden>DDD e celular</label>
+                <input type="tel" id="whats" name="whatsapp" required placeholder="* DDD+Celular" aria-label="DDD e celular" autocomplete="tel" />
+              </div>
+              <div class="campo">
+                <label class="sr-only" for="email" hidden>E-mail</label>
+                <input type="email" id="email" name="email" required placeholder="* E-mail" aria-label="E-mail" autocomplete="email" />
+              </div>
+              <label class="check">
+                <input type="checkbox" required />
+                <span>Políticas de privacidade</span>
+              </label>
+              <button type="submit" class="btn-cta">Cadastre-se agora!</button>
+              <!-- role/aria-live: o resultado do envio só muda via textContent, sem
+                   recarregar a página nem mover o foco. Sem live region o leitor de
+                   tela não anuncia nada e o usuário fica sem saber se deu certo. -->
+              <div class="form-msg" id="formMsg" role="status" aria-live="polite"></div>
+              <p class="aviso">Prometemos não utilizar suas informações de contato para enviar qualquer tipo de SPAM.</p>
+            </form>
           </div>
-          <div class="field">
-            <label for="email">E-mail</label>
-            <input type="email" id="email" name="email" />
+        </div>
+      </div>
+
+      <!-- Abaixo de 980px o card do hero vira bloco em fluxo, fora da foto.
+           É o MESMO formulário do hero (mesmos campos, mesmo endpoint); só um
+           dos dois está visível por vez, por media query — nunca os dois, para
+           não duplicar `id` ativos na página. -->
+      <div class="hero-form hero-form--estatico">
+        <h2>Antecipe-se ao lançamento</h2>
+        <form id="leadFormMobile" novalidate>
+          <input type="text" name="empresa" id="empresaMobile" autocomplete="off" tabindex="-1" aria-hidden="true" style="position:absolute;left:-9999px;top:-9999px" />
+          <div class="campo">
+            <input type="text" id="nomeMobile" name="nome" required placeholder="* Nome" aria-label="Nome" autocomplete="name" />
+          </div>
+          <div class="campo">
+            <input type="tel" id="whatsMobile" name="whatsapp" required placeholder="* DDD+Celular" aria-label="DDD e celular" autocomplete="tel" />
+          </div>
+          <div class="campo">
+            <input type="email" id="emailMobile" name="email" required placeholder="* E-mail" aria-label="E-mail" autocomplete="email" />
           </div>
           <label class="check">
             <input type="checkbox" required />
-            <span>Li e concordo com as Políticas de privacidade.</span>
+            <span>Políticas de privacidade</span>
           </label>
-          <label class="check">
-            <input type="checkbox" />
-            <span>Estou de acordo em receber comunicações e ser contatado para possível atendimento.</span>
-          </label>
-          <button type="submit" class="btn">CADASTRE-SE AGORA!</button>
-          <!-- role/aria-live: o resultado do envio só muda via textContent, sem
-               recarregar a página nem mover o foco. Sem live region o leitor de
-               tela não anuncia nada e o usuário fica sem saber se deu certo. -->
-          <div class="form-msg" id="formMsg" role="status" aria-live="polite"></div>
+          <button type="submit" class="btn-cta">Cadastre-se agora!</button>
+          <div class="form-msg" id="formMsgMobile" role="status" aria-live="polite"></div>
+          <p class="aviso">Prometemos não utilizar suas informações de contato para enviar qualquer tipo de SPAM.</p>
         </form>
       </div>
-    </div>
+    </section>
+
+    <!-- ============ 2. ONDE A NATUREZA ENCONTRA A SOFISTICAÇÃO ============ -->
+    <section class="split split--natureza">
+      <div>
+        <h2 class="titulo-secao">Onde a natureza encontra a sofisticação.</h2>
+        <p class="texto-secao">
+          O Yarden é um convite à pausa, ao equilíbrio e à vida com mais
+          significado. Um empreendimento que traduz o encontro entre o bem-estar
+          e a estética refinada, onde cada espaço foi idealizado para conectar
+          pessoas ao que realmente importa. Aqui, conforto, privacidade e
+          contemplação caminham juntos, proporcionando uma experiência que
+          inspira leveza, presença e sofisticação no dia a dia.
+        </p>
+      </div>
+      <picture>
+        <source type="image/webp" srcset="assets/interior-lounge-gourmet.webp" />
+        <img src="assets/interior-lounge-gourmet.jpg"
+             alt="Lounge com cozinha gourmet integrada em área comum do Yarden"
+             width="1000" height="557" loading="lazy" decoding="async" />
+      </picture>
+    </section>
+
+    <!-- ============ 3. INVISTA NO NOVO CENTRO URBANO DE MARINGÁ ============ -->
+    <section class="split split--invista">
+      <picture>
+        <source type="image/webp" srcset="assets/mapa-gleba-itororo.webp" />
+        <img src="assets/mapa-gleba-itororo.jpg"
+             alt="Vista aérea de Maringá com a localização do Yarden na Gleba Itororó e pontos de referência: Catedral, Parque do Ingá, Av. JK, Bosque II e Av. Itororó"
+             width="900" height="637" loading="lazy" decoding="async" />
+      </picture>
+      <div>
+        <h2 class="titulo-secao">Invista no novo centro urbano de Maringá.</h2>
+        <p class="texto-secao">
+          Mais do que uma localização valorizada, a Gleba Itororó se tornou
+          símbolo de um novo jeito de viver em Maringá. Um bairro planejado,
+          moderno e muito promissor. Quem escolhe investir, escolhe estar no
+          centro do que vem para transformar o jeito de se morar, com
+          sofisticação, conveniência e valorização garantida.
+        </p>
+      </div>
+    </section>
+
+    <!-- ===================== 4. QUER SABER MAIS? ===================== -->
+    <section class="saber" id="saber-mais">
+      <div class="saber-grid">
+        <div class="saber-copy">
+          <h2>Quer saber mais?</h2>
+          <p class="sub">Deixe seu contato e receba informações exclusivas</p>
+          <form id="leadFormSaber" novalidate>
+            <input type="text" name="empresa" id="empresaSaber" autocomplete="off" tabindex="-1" aria-hidden="true" style="position:absolute;left:-9999px;top:-9999px" />
+            <div class="campo">
+              <!-- O mockup não põe asterisco em "Nome", mas põe nos outros dois.
+                   `required` mantido: é o campo que nomeia o lead no CRM, e a
+                   ausência do asterisco lê como inconsistência visual do design,
+                   não como decisão de tornar o campo opcional (registrado no
+                   Dev Agent Record). -->
+              <input type="text" id="nomeSaber" name="nome" required placeholder="Nome" aria-label="Nome" autocomplete="name" />
+            </div>
+            <div class="campo">
+              <input type="tel" id="whatsSaber" name="whatsapp" required placeholder="* DDD+Celular" aria-label="DDD e celular" autocomplete="tel" />
+            </div>
+            <div class="campo">
+              <input type="email" id="emailSaber" name="email" required placeholder="* E-mail" aria-label="E-mail" autocomplete="email" />
+            </div>
+            <label class="check">
+              <input type="checkbox" required />
+              <span>Concordo em fornecer meus dados para receber conteúdos e ofertas por e-mail ou outros meios.</span>
+            </label>
+            <button type="submit" class="btn-cta">Enviar agora mesmo</button>
+            <div class="form-msg" id="formMsgSaber" role="status" aria-live="polite"></div>
+          </form>
+        </div>
+        <div class="saber-img">
+          <picture>
+            <source type="image/webp" srcset="assets/familia-quer-saber-mais.webp" />
+            <img src="assets/familia-quer-saber-mais.jpg"
+                 alt="Família abraçada — pai, mãe e filha"
+                 width="820" height="771" loading="lazy" decoding="async" />
+          </picture>
+        </div>
+      </div>
+    </section>
   </main>
 
-  <footer class="wrap" style="padding-top:24px">
-    Trifold — Yarden. Conteúdo institucional em preparação.
+  <!-- ===================== RODAPÉ ===================== -->
+  <footer>
+    <div class="rodape">
+      <img class="logo-trifold" src="assets/logo-trifold-branco.svg" alt="Trifold" width="225" height="24" />
+      <img class="logo-yarden" src="assets/logo-yarden-creme.svg" alt="Yarden" width="298" height="62" />
+      <p class="direitos">
+        Todos os direitos reservados &copy;<span class="politica">Política de Privacidade.</span>
+      </p>
+    </div>
   </footer>
+
+  <!-- WhatsApp flutuante — troque o número em CONFIG.whatsapp -->
+  <a class="wa-float" id="waFloat" href="#" target="_blank" rel="noopener" aria-label="Fale no WhatsApp">
+    <svg viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163a11.867 11.867 0 01-1.587-5.945C.16 5.335 5.495 0 12.05 0a11.817 11.817 0 018.413 3.488 11.824 11.824 0 013.48 8.414c-.003 6.557-5.338 11.892-11.893 11.892a11.9 11.9 0 01-5.688-1.448L.057 24zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884a9.86 9.86 0 001.599 5.319l-.999 3.648 3.9-1.766zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.767.967-.94 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg>
+  </a>
 
   <script>
     /* =====================================================================
        CONFIG — ajustes rápidos ao integrar o conteúdo definitivo
        ===================================================================== */
     var CONFIG = {
+      // Mesma central de atendimento do Vind Residence (confirmado com o
+      // stakeholder): um número só para os dois empreendimentos.
+      whatsapp: "5544991089698",               // DDI+DDD+número (só dígitos)
+      whatsappMsg: "Olá, vim do site do Yarden e queria mais informações.",
       // URL absoluta: funciona mesmo servida via proxy sob trifold.eng.br/yarden/
       // (a allowlist de CORS do proxy inclui trifold.eng.br). Atualizar se o
       // projeto/domínio do proxy mudar — e junto com o TRACK_ENDPOINT do script
@@ -347,118 +674,158 @@
       leadEndpoint: "https://yarden.vercel.app/api/lead"
     };
 
-    var form = document.getElementById('leadForm');
-    var msg = document.getElementById('formMsg');
-    var botaoEnviar = form.querySelector('button[type="submit"]');
+    document.getElementById('waFloat').href =
+      "https://wa.me/" + CONFIG.whatsapp + "?text=" + encodeURIComponent(CONFIG.whatsappMsg);
 
-    // Guarda de duplo envio. Sem ela, um duplo-clique (ou Enter repetido) cria
-    // DOIS leads no CRM e dispara um segundo par `Lead`/`CompleteRegistration`
-    // com event_id novos — que o Meta não deduplica, porque ids distintos são
-    // eventos distintos por definição. Inflaria conversão e sujaria o dataset.
-    var enviando = false;
+    /* =====================================================================
+       Formulários de captação — TRÊS marcações, UMA lógica
 
-    // Story 86-12 (AC4) — InitiateCheckout no PRIMEIRO foco em nome ou WhatsApp.
-    // A landing não tem passos sequenciais como o formulário de qualificação; o
-    // primeiro foco num campo é o sinal real de "engajou com o formulário", e é
-    // um momento que hoje ninguém mede. Uma vez por carregamento de página.
+       O design definitivo tem dois formulários visíveis (hero e "Quer saber
+       mais?"), e o do hero tem duas marcações: sobreposta à foto no desktop e
+       em fluxo no mobile (só uma fica visível por media query). Todos mandam o
+       MESMO lead para o MESMO endpoint.
+
+       `ligarFormulario` é chamada uma vez por formulário. O que ela dá a cada
+       um, e por que precisa ser por formulário e não global:
+
+       - honeypot próprio (`empresa` de cada `<form>`): um único campo
+         compartilhado misturaria o veredito de bot entre formulários;
+       - trava de duplo envio própria (`enviando`, no closure): a trava é da
+         requisição em voo daquele formulário. Compartilhada, preencher o
+         segundo formulário enquanto o primeiro está em voo seria barrado;
+       - par de `event_id` próprio por submissão: são duas conversões distintas
+         se o visitante enviar os dois, e ids repetidos fariam o Meta descartar
+         a segunda como duplicata.
+
+       O corpo do submit NÃO é duplicado — é este.
+       ===================================================================== */
+    function ligarFormulario(form, msg){
+      if (!form || !msg) return;
+      var botaoEnviar = form.querySelector('button[type="submit"]');
+
+      // Guarda de duplo envio. Sem ela, um duplo-clique (ou Enter repetido) cria
+      // DOIS leads no CRM e dispara um segundo par `Lead`/`CompleteRegistration`
+      // com event_id novos — que o Meta não deduplica, porque ids distintos são
+      // eventos distintos por definição. Inflaria conversão e sujaria o dataset.
+      var enviando = false;
+
+      form.addEventListener('submit', function(e){
+        e.preventDefault();
+        // Reentrância: barra antes de qualquer efeito colateral. Fica ANTES do
+        // checkValidity porque um form inválido não liga a flag — logo, não há
+        // estado a destravar nesse caminho.
+        if (enviando) return;
+        if(!form.checkValidity()){ form.reportValidity(); return; }
+        var data = {
+          nome: form.nome.value.trim(),
+          whatsapp: form.whatsapp.value.trim(),
+          email: form.email.value.trim(),
+          empresa: form.empresa.value.trim() // honeypot — deve chegar vazio
+        };
+
+        // Story 86-12 (AC4) — dois event_id DISTINTOS, gerados aqui, no mesmo
+        // instante: um para `Lead`, outro para `CompleteRegistration`. Os dois
+        // eventos saem juntos porque esta landing não tem um segundo marco
+        // temporal (página única, POST atômico) — ressalva documentada na story.
+        // Ids distintos deixam os Test Events auditáveis sem ambiguidade.
+        var T = window.TrifoldTracking;
+        var eventIdLead = T ? T.novoId('e') : '';
+        var eventIdCadastro = T ? T.novoId('e') : '';
+        if (T) {
+          var atrib = T.atribuicao();
+          data.tracking = {
+            event_id: eventIdLead,
+            complete_registration_event_id: eventIdCadastro,
+            visitor_id: T.visitorId(),
+            page_url: T.pageUrl
+          };
+          if (atrib.fbc) data.tracking.fbc = atrib.fbc;
+          if (atrib.fbp) data.tracking.fbp = atrib.fbp;
+          if (atrib.fbclid) data.tracking.fbclid = atrib.fbclid;
+          // client_ip/client_ua e `landing` NÃO vão daqui: o browser não sabe o
+          // próprio IP e não deve ditar nenhum dos três. O proxy `api/lead.js` os
+          // preenche — os dois primeiros a partir dos headers que só ele enxerga,
+          // o `landing` a partir de uma constante do próprio arquivo (AC5/AC8).
+        }
+
+        // Trava a partir daqui: a request está de fato a caminho. `liberar()` roda
+        // nos DOIS desfechos (ok e fail) — se ficasse só no sucesso, um erro de
+        // rede deixaria o formulário morto, sem nenhuma forma de reenviar.
+        enviando = true;
+        if (botaoEnviar) botaoEnviar.disabled = true;
+        function liberar(){
+          enviando = false;
+          if (botaoEnviar) botaoEnviar.disabled = false;
+        }
+
+        function ok(){
+          msg.className = 'form-msg ok';
+          msg.textContent = 'Cadastro enviado! Em breve entraremos em contato.';
+          form.reset();
+          liberar();
+        }
+        function fail(){
+          msg.className = 'form-msg err';
+          msg.textContent = 'Não foi possível enviar agora. Tente novamente em instantes.';
+          liberar();
+        }
+
+        fetch(CONFIG.leadEndpoint, {
+          method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)
+        }).then(function(r){
+          if(!r.ok){ fail(); return; }
+          // `tracked: false` = honeypot (bot). O proxy responde 200 de propósito,
+          // para não sinalizar ao bot; mas sem lead no CRM não há contraparte
+          // server-side, e disparar no Pixel poluiria o dataset com um evento
+          // sem deduplicação. Corpo ilegível/antigo → assume tracked (o caminho
+          // normal), que é o comportamento correto para um envio real.
+          return r.json().catch(function(){ return {}; }).then(function(corpo){
+            if (T && (!corpo || corpo.tracked !== false)) {
+              T.pixelTrack('Lead', eventIdLead);
+              T.pixelTrack('CompleteRegistration', eventIdCadastro);
+            }
+            ok();
+          });
+        }).catch(fail);
+        // Sem branch de "endpoint não configurado": o `console.log('[lead
+        // capturado]', data)` do Vind Residence (defeito 86.11-QA-005, OPEN)
+        // imprimiria `fbc`/`fbp` no console do browser. Clonar aqui seria uma
+        // regressão INTRODUZIDA por esta story, não herdada (AC10).
+      });
+    }
+
+    // Os três pares (form, mensagem) da página. Ordem: hero desktop, hero
+    // mobile, "Quer saber mais?".
+    var FORMULARIOS = [
+      ['leadForm',        'formMsg'],
+      ['leadFormMobile',  'formMsgMobile'],
+      ['leadFormSaber',   'formMsgSaber']
+    ];
+    FORMULARIOS.forEach(function(par){
+      ligarFormulario(document.getElementById(par[0]), document.getElementById(par[1]));
+    });
+
+    // Story 86-12 (AC4) — InitiateCheckout no PRIMEIRO foco em nome ou WhatsApp,
+    // de QUALQUER um dos formulários. A landing não tem passos sequenciais como
+    // o formulário de qualificação; o primeiro foco num campo é o sinal real de
+    // "engajou com o formulário", e é um momento que hoje ninguém mede.
+    // Uma vez por carregamento de página (não por formulário): o evento mede
+    // engajamento do visitante, não do componente — dois disparos seriam duas
+    // conversões de topo de funil para a mesma pessoa.
     (function(){
       var T = window.TrifoldTracking;
-      if (!T) return; // tracking bloqueado — o formulário segue funcionando
+      if (!T) return; // tracking bloqueado — os formulários seguem funcionando
       var disparado = false;
       function aoFocar(){
         if (disparado) return;
         disparado = true;
         T.evento('InitiateCheckout');
       }
-      ['nome','whats'].forEach(function(id){
+      ['nome','whats','nomeMobile','whatsMobile','nomeSaber','whatsSaber'].forEach(function(id){
         var el = document.getElementById(id);
         if (el) el.addEventListener('focus', aoFocar, { once:true });
       });
     })();
-
-    form.addEventListener('submit', function(e){
-      e.preventDefault();
-      // Reentrância: barra antes de qualquer efeito colateral. Fica ANTES do
-      // checkValidity porque um form inválido não liga a flag — logo, não há
-      // estado a destravar nesse caminho.
-      if (enviando) return;
-      if(!form.checkValidity()){ form.reportValidity(); return; }
-      var data = {
-        nome: form.nome.value.trim(),
-        whatsapp: form.whatsapp.value.trim(),
-        email: form.email.value.trim(),
-        empresa: form.empresa.value.trim() // honeypot — deve chegar vazio
-      };
-
-      // Story 86-12 (AC4) — dois event_id DISTINTOS, gerados aqui, no mesmo
-      // instante: um para `Lead`, outro para `CompleteRegistration`. Os dois
-      // eventos saem juntos porque esta landing não tem um segundo marco
-      // temporal (página única, POST atômico) — ressalva documentada na story.
-      // Ids distintos deixam os Test Events auditáveis sem ambiguidade.
-      var T = window.TrifoldTracking;
-      var eventIdLead = T ? T.novoId('e') : '';
-      var eventIdCadastro = T ? T.novoId('e') : '';
-      if (T) {
-        var atrib = T.atribuicao();
-        data.tracking = {
-          event_id: eventIdLead,
-          complete_registration_event_id: eventIdCadastro,
-          visitor_id: T.visitorId(),
-          page_url: T.pageUrl
-        };
-        if (atrib.fbc) data.tracking.fbc = atrib.fbc;
-        if (atrib.fbp) data.tracking.fbp = atrib.fbp;
-        if (atrib.fbclid) data.tracking.fbclid = atrib.fbclid;
-        // client_ip/client_ua e `landing` NÃO vão daqui: o browser não sabe o
-        // próprio IP e não deve ditar nenhum dos três. O proxy `api/lead.js` os
-        // preenche — os dois primeiros a partir dos headers que só ele enxerga,
-        // o `landing` a partir de uma constante do próprio arquivo (AC5/AC8).
-      }
-
-      // Trava a partir daqui: a request está de fato a caminho. `liberar()` roda
-      // nos DOIS desfechos (ok e fail) — se ficasse só no sucesso, um erro de
-      // rede deixaria o formulário morto, sem nenhuma forma de reenviar.
-      enviando = true;
-      if (botaoEnviar) botaoEnviar.disabled = true;
-      function liberar(){
-        enviando = false;
-        if (botaoEnviar) botaoEnviar.disabled = false;
-      }
-
-      function ok(){
-        msg.className = 'form-msg ok';
-        msg.textContent = 'Cadastro enviado! Em breve entraremos em contato.';
-        form.reset();
-        liberar();
-      }
-      function fail(){
-        msg.className = 'form-msg err';
-        msg.textContent = 'Não foi possível enviar agora. Tente novamente em instantes.';
-        liberar();
-      }
-
-      fetch(CONFIG.leadEndpoint, {
-        method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)
-      }).then(function(r){
-        if(!r.ok){ fail(); return; }
-        // `tracked: false` = honeypot (bot). O proxy responde 200 de propósito,
-        // para não sinalizar ao bot; mas sem lead no CRM não há contraparte
-        // server-side, e disparar no Pixel poluiria o dataset com um evento
-        // sem deduplicação. Corpo ilegível/antigo → assume tracked (o caminho
-        // normal), que é o comportamento correto para um envio real.
-        return r.json().catch(function(){ return {}; }).then(function(corpo){
-          if (T && (!corpo || corpo.tracked !== false)) {
-            T.pixelTrack('Lead', eventIdLead);
-            T.pixelTrack('CompleteRegistration', eventIdCadastro);
-          }
-          ok();
-        });
-      }).catch(fail);
-      // Sem branch de "endpoint não configurado": o `console.log('[lead
-      // capturado]', data)` do Vind Residence (defeito 86.11-QA-005, OPEN)
-      // imprimiria `fbc`/`fbp` no console do browser. Clonar aqui seria uma
-      // regressão INTRODUZIDA por esta story, não herdada (AC10).
-    });
   </script>
 </body>
 </html>
