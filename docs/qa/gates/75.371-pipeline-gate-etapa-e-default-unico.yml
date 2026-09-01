@@ -1,0 +1,314 @@
+schema: 1
+story: "75-371"
+story_title: "Pipeline: quem vê o botão é quem pode criar, e etapa padrão volta a ser única"
+gate: CONCERNS
+status_reason: >-
+  O conserto que o Joabe precisava está CERTO e é o mais forte possível: a tela agora chama
+  literalmente a MESMA função com a MESMA chave que a API — `can(user.id, user.orgId,
+  "configuracoes.pipeline_editar")` no `page.tsx:15` contra
+  `requireCapability(appUser, "configuracoes.pipeline_editar")` que é `can()` por dentro
+  (`api-auth.ts:76`). Divergência tela↔API deixou de ser possível por construção, não por
+  convenção. Varri a regressão de permissão nas duas direções e ela NÃO existe: quem perdeu o
+  botão é exatamente quem a API já recusava com 403 (seed `configuracoes.pipeline_editar` =
+  só admin, migs 225/226/227/241/243 idênticas; RLS mig 229 lê a mesma chave). Suíte, tipos e
+  lint verdes, rodados por mim.
+  O que segura o PASS são QUATRO achados, dois deles no banco:
+  (1) revertendo o conserto PRINCIPAL — a tela de volta ao gate antigo — a suíte inteira fica
+  **299 arquivos / 3.930 verdes**: a AC1 não tem UMA linha de teste, e a AC7 pede "gate da tela
+  pela capability" explicitamente;
+  (2) `provision_org()` é declaradamente idempotente e, re-executado sobre uma org existente,
+  o trigger novo ZERA o padrão da org e o `ON CONFLICT DO NOTHING` descarta a linha que ia
+  substituí-lo — a org fica SEM padrão nenhum, que é textualmente o estado que o comentário da
+  migration 250 diz impedir;
+  (3) o datafix da 250 ordena por `position` sem olhar `is_active`, então pode eleger uma etapa
+  INATIVA como a padrão sobrevivente — a exata patologia que a story existe para matar;
+  (4) a AC4 entrega o 409 na API mas NUNCA na tela: `stages-table.tsx:77` faz `if (res.ok)` e
+  engole a recusa; clicar "Excluir" na etapa padrão não mostra nada. O ramo de 409 da função
+  pura é, hoje, código morto — provei que removê-lo mantém o teste verde.
+  Nada aqui quebra a produção de hoje (1 org, 1 padrão, ativa: a 250 é no-op e as mudanças de
+  app estão corretas). Mas a story não pode ir a Done assim.
+
+reviewer: "Quinn (Test Architect)"
+updated: "2026-09-01T14:10:00Z"
+base: "árvore de trabalho NÃO commitada sobre `fix/75-371-pipeline-etapa-gate-e-default-unico` (HEAD 1c3877a6)"
+
+o_que_eu_rodei:
+  - cmd: "npx vitest run packages/web/src/app/api/stages packages/web/src/app/dashboard/configuracoes/pipeline"
+    resultado: "2 arquivos, 9 testes, todos verdes"
+  - cmd: "npx vitest run (suíte inteira)"
+    resultado: "299 arquivos passed · 3.930 passed + 6 expected fail · 66s · exit 0"
+  - cmd: "npx tsc --noEmit -p packages/web/tsconfig.json"
+    resultado: "exit 0"
+  - cmd: "npm run lint (turbo, 8 tasks)"
+    resultado: "0 errors, 30 warnings — nenhuma nos arquivos tocados; todas pré-existentes"
+  - cmd: "psql / docker (tentei)"
+    resultado: >-
+      AUSENTES nesta máquina. Os dois achados de banco (QA-75-371-2 e -3) são ANALÍTICOS,
+      com o mecanismo nomeado — NÃO os medi. A prova pertence ao @dev, no mesmo
+      BEGIN…ROLLBACK de `scripts/lib/management-api.ts` que ele já usou.
+
+mutacoes_conferidas:
+  - id: M1
+    mutacao: "Apagar a guarda de DELETE inteira em `api/stages/[id]/route.ts:66-86`"
+    esperado: "vermelho"
+    medido: "2 failed | 2 passed — 409 virou 200 e `body.error` virou undefined. MATA."
+  - id: M2
+    mutacao: "Remover `if (status === 403) return SEM_PERMISSAO_PIPELINE` (comportamento ANTIGO)"
+    esperado: "vermelho"
+    medido: "2 failed | 3 passed. MATA — o 'Forbidden' cru não volta em silêncio."
+  - id: M3
+    mutacao: >-
+      Reverter o conserto PRINCIPAL: `page.tsx` de volta a
+      `canAccess(user.id, user.orgId, "configuracoes.pipeline")`
+    esperado: "vermelho (é a AC1, o bug reportado)"
+    medido: >-
+      **299 arquivos passed · 3.930 passed · VERDE.** Nenhum teste percebe. É o achado
+      QA-75-371-1.
+  - id: M4
+    mutacao: "Remover o ramo `if (status === 409 && daApi) return daApi` de `mensagem-de-erro.ts:26`"
+    esperado: "vermelho, se o ramo tiver função"
+    medido: >-
+      5 passed, VERDE — o `return daApi || fallback` da linha 28 já fazia exatamente isso.
+      Ramo redundante, e o teste do 409 não distingue. Confirma QA-75-371-4.
+  - nota: >-
+      Todas as 4 mutações foram desfeitas e conferidas com `diff` contra backup: a árvore
+      voltou byte a byte (5 M + 5 ?? idênticos ao estado inicial).
+
+achados:
+  - id: QA-75-371-1
+    severidade: high
+    ac: "AC1, AC7"
+    titulo: "O conserto principal não tem teste nenhum — reverter tudo deixa a suíte verde"
+    arquivo: "packages/web/src/app/dashboard/configuracoes/pipeline/page.tsx:15"
+    cenario: >-
+      Amanhã alguém 'simplifica' o gate da tela de volta para
+      `canAccess(user.id, user.orgId, "configuracoes.pipeline")` — ou copia o padrão antigo
+      numa tela nova de Configurações. `npx vitest run` fica 100% verde (medido em M3:
+      299 arquivos, 3.930 testes), `tsc` verde, `lint` verde, e o beco sem saída do Joabe
+      volta a produção sem nenhum sinal. A AC7 pede "gate da tela pela capability" e o T7
+      está marcado [x]; o que existe são 5 testes da mensagem + 4 do DELETE.
+      Nenhum toca `page.tsx`.
+    por_que_e_facil_de_fechar: >-
+      O projeto já tem o padrão pronto para exatamente isto, e a própria story cita o arquivo:
+      `configuracoes-gate.contract.test.ts` é teste de CÓDIGO-FONTE via `readFileSync`,
+      criado porque não há jsdom. Três asserções em `page.tsx` fecham a AC:
+      contém `can(`, contém `"configuracoes.pipeline_editar"`, e NÃO contém
+      `"configuracoes.pipeline"` como argumento de gate. Vale também travar
+      `stages-table.tsx` contra a volta da prop `isAdmin`.
+    recomendacao: "criar `pipeline/pipeline-gate.contract.test.ts` antes do @devops"
+
+  - id: QA-75-371-2
+    severidade: high
+    ac: "AC3, AC5"
+    titulo: "Trigger + `ON CONFLICT DO NOTHING`: re-provisionar uma org a deixa SEM padrão nenhum"
+    arquivo: "supabase/migrations/250_kanban_stages_default_unico.sql:47-56"
+    interage_com: "supabase/migrations/246_org_integrations_e_unicidade_whatsapp.sql:220-233 (`provision_org`)"
+    mecanismo: >-
+      Em Postgres, o trigger BEFORE INSERT dispara ANTES da arbitragem do `ON CONFLICT`, e o
+      efeito colateral do trigger NÃO é desfeito quando a ação é `DO NOTHING`. A seção 4 de
+      `provision_org()` insere 11 etapas com `ON CONFLICT (org_id, slug) DO NOTHING`, e a
+      primeira delas é `('Novo','novo', is_default = true)`.
+    cenario: >-
+      `provision_org()` é EXPLICITAMENTE idempotente ("a idempotência mora aqui", 246:44) e
+      `POST /api/platform/orgs` (`route.ts:76`) não tem guarda de "já existe": chamada com o
+      mesmo slug, ela reusa a org e re-roda as seções 2-5. Isso é caminho real — o passo 3
+      (convite do admin) pode falhar por rede/rate-limit sem derrubar a resposta, e reenviar o
+      wizard com o mesmo nome é a reação humana óbvia.
+      Na SEGUNDA chamada, para a linha 'Novo': `NEW.id` é um uuid novo (default
+      `gen_random_uuid()`), diferente do id da 'Novo' que já existe, então o trigger roda
+      `UPDATE kanban_stages SET is_default = false WHERE org_id = NEW.org_id AND is_default
+      AND id <> NEW.id` e DERRUBA o padrão real da org. Em seguida o INSERT bate no conflito de
+      `(org_id, slug)` e é DESCARTADO — ninguém assume o posto.
+      Resultado: `count(*) WHERE is_default` = **0** para aquela org. É literalmente o estado
+      que o comentário da 250 (linhas 42-45) e as Dev Notes dizem que o trigger existe para
+      impedir: "se o INSERT falhasse depois do UPDATE, a org ficaria SEM padrão nenhum".
+      `getDefaultStageId` cai no fallback "primeira etapa por posição" — mascarado numa org
+      recém-provisionada (posição 0 = 'Novo'), MAS silenciosamente errado em qualquer org que
+      já reordenou etapas ou criou etapa nova na posição 0.
+    por_que_a_prova_em_producao_nao_pegou: >-
+      A prova do @dev repetiu o clique do Joabe (INSERT simples de etapa nova) — caminho que o
+      trigger cobre bem. Ela não exercitou `INSERT … ON CONFLICT DO NOTHING`, que é a forma que
+      TODO o provisionamento de org usa.
+    reproducao_sugerida: >-
+      BEGIN; aplicar a 250; `SELECT provision_org('Prova','prova-qa-371')`; conferir
+      `count(*) FILTER (WHERE is_default)` = 1; chamar `provision_org('Prova','prova-qa-371')`
+      de NOVO; conferir a contagem — a expectativa é 0. ROLLBACK.
+    encaminhamentos_possiveis: >-
+      (a) guardar a seção 4 de `provision_org` com
+      `IF NOT EXISTS (SELECT 1 FROM kanban_stages WHERE org_id = v_org_id) THEN … END IF;`
+      — mais direto e não mexe no trigger; ou (b) no trigger, não fazer nada quando já existe
+      linha `(NEW.org_id, NEW.slug)` no INSERT. Trocar o trigger para AFTER **não** resolve:
+      AFTER roda depois da checagem do índice único, e índice único PARCIAL não pode ser
+      DEFERRABLE — o INSERT quebraria com 23505 antes de o trigger ceder o posto.
+
+  - id: QA-75-371-3
+    severidade: medium
+    ac: "AC5"
+    titulo: "O datafix pode eleger uma etapa INATIVA como a padrão sobrevivente"
+    arquivo: "supabase/migrations/250_kanban_stages_default_unico.sql:18-30"
+    cenario: >-
+      O `ORDER BY k2.position ASC, k2.created_at ASC, k2.id ASC` não filtra nem ordena por
+      `is_active`. Org com A(`position` 0, `is_active` false, `is_default` true) e
+      B(`position` 3, ativa, `is_default` true) — estado perfeitamente alcançável HOJE, porque
+      o soft delete atual não olha `is_default` (é o furo gêmeo que a própria story descreve).
+      Depois da 250 sobra A, a INATIVA, como único padrão. Todo lead novo passa a nascer numa
+      etapa que o Pipeline e os filtros não mostram: exatamente a patologia da seção "O furo
+      gêmeo, na exclusão".
+      Em produção é no-op (medição de 01/09: 1 padrão, ativo) — mas a migration se declara
+      "idempotente em QUALQUER ambiente", e nem o banco de teste nem as orgs futuras do SaaS
+      foram medidos.
+    correcao: "`ORDER BY k2.is_active DESC, k2.position ASC, k2.created_at ASC, k2.id ASC`"
+
+  - id: QA-75-371-4
+    severidade: medium
+    ac: "AC4"
+    titulo: "O 409 existe na API e nunca chega à tela — 'Excluir' na etapa padrão falha em silêncio"
+    arquivo: "packages/web/src/app/dashboard/configuracoes/pipeline/_components/stages-table.tsx:74-82"
+    cenario: >-
+      `handleDelete` faz `if (res.ok) onDelete(...)` e descarta o corpo. Admin clica "Excluir"
+      na etapa padrão → "Confirmar?" → "Sim": o botão pisca, a linha não sai, NENHUMA mensagem
+      aparece. Do ponto de vista de quem usa, a tela travou. A AC4 diz "recusado com mensagem
+      clara (409), explicando que é preciso eleger outra etapa como padrão antes" — a metade
+      "mensagem clara" não foi entregue em nenhuma superfície visível.
+      Corolário medido (M4): o ramo de 409 de `mensagem-de-erro.ts:26` é código morto — nenhum
+      chamador passa 409 (os dois chamadores são os modais de criar/editar, que não recebem
+      409), e removê-lo deixa os 5 testes verdes porque a linha 28 já devolvia o mesmo.
+    nota_de_escopo: >-
+      As Dev Notes declaram o tratamento de erro do DELETE/reorder fora de escopo, com o
+      argumento de que "com a AC1 os botões só aparecem para quem pode, então o 403 deixa de
+      ser alcançável por ali". O argumento vale para o 403 e NÃO vale para o 409, que a própria
+      story acabou de criar e que só é alcançável por quem PODE editar. Ou a AC4 ganha 4 linhas
+      no `handleDelete`, ou a AC4 precisa ser reescrita para dizer que a recusa é só de API.
+      Não pode ficar marcada como entregue como está.
+
+  - id: QA-75-371-5
+    severidade: low
+    ac: "AC3, AC4"
+    titulo: "Desmarcar o checkbox 'Etapa padrão' deixa a org sem padrão — sem qualquer fricção"
+    arquivo: "packages/web/src/app/dashboard/configuracoes/pipeline/_components/edit-stage-modal.tsx:57"
+    cenario: >-
+      O modal manda SEMPRE `is_default: isDefault`. Abrir "Editar" na etapa padrão, desmarcar o
+      checkbox e Salvar produz `is_default = false` sem nenhum guard: a org fica com zero
+      padrões e `getDefaultStageId` cai no fallback. A AC3 pede "no máximo uma", e nesse
+      sentido literal está cumprida — mas a guarda de 409 no DELETE e a ausência total de
+      guarda no desmarcar são a mesma invariante tratada com dois pesos.
+      Menos grave que o DELETE (não produz padrão em etapa inativa) e hoje mascarado em prod,
+      onde o padrão é a posição 0. Registro para não ser lido como "fechado".
+
+  - id: QA-75-371-6
+    severidade: low
+    titulo: "Guarda de DELETE falha ABERTA se a leitura der erro"
+    arquivo: "packages/web/src/app/api/stages/[id]/route.ts:70-78"
+    cenario: >-
+      `const { data: alvo } = await supabase…` descarta o `error`, e o teste é `alvo?.is_default`.
+      Qualquer falha transitória na leitura (timeout, RLS negando o SELECT) devolve `alvo = null`
+      → a guarda PASSA → `softDelete` roda e a etapa padrão vai para `is_active = false`. Guarda
+      de invariante deveria falhar FECHADA: checar `error` e devolver 500 em vez de seguir.
+      Risco residual baixo (o SELECT anterior é coberto por `stages_select_own_org`, mig 004,
+      que só pede a org), mas o custo de acertar é uma linha.
+
+  - id: QA-75-371-7
+    severidade: low
+    titulo: "Lacuna de evidência: o trigger nunca rodou sob RLS de usuário `authenticated`"
+    arquivo: "supabase/migrations/250_kanban_stages_default_unico.sql:58-60"
+    cenario: >-
+      A prova em produção foi feita via Management API, isto é SERVICE ROLE — que ignora RLS.
+      O `UPDATE` interno do trigger roda com direitos do INVOCADOR (correto, sem
+      `SECURITY DEFINER`), então em produção real ele passa pela policy `stages_manage_admin`
+      (mig 229, `FOR ALL USING (org_id = user_org_id() AND
+      has_capability('configuracoes.pipeline_editar'))`; sem `WITH CHECK` explícito o Postgres
+      reusa o `USING`). Se essa policy filtrasse os irmãos, o UPDATE atingiria 0 linhas EM
+      SILÊNCIO e o índice único do passo 2 transformaria o clique em 500 — exatamente o defeito
+      que a prova diz ter descartado.
+      **Analisei e o risco é baixo**: a mesma policy, a mesma org e a mesma capability que já
+      autorizaram o INSERT autorizam o UPDATE nos irmãos, então quem chegou lá passa.
+      Mas isso é raciocínio, não medição. Um smoke test logado como admin real depois de aplicar
+      a 250 (criar etapa marcando "Etapa padrão" e conferir que a antiga cedeu o posto) fecha a
+      lacuna em 30 segundos.
+
+nao_e_defeito_conferi:
+  - achado: "Regressão de permissão — NÃO existe"
+    evidencia: >-
+      `page.tsx:15` chama `can()`; `requireCapability` (`api-auth.ts:76`) chama `can()` com a
+      MESMA `CapabilityKey`. São a mesma decisão, não duas parecidas. Quem a tela deixou de
+      atender é precisamente quem a API recusava: seed
+      `configuracoes.pipeline_editar` = `[admin]` (`capabilities.ts:221`) e as linhas por role
+      são idênticas em 225/226/227/241/243 (admin true, os 9 demais false). Admin passa pela
+      herança do pai (`adminFullMatrix` não tem a chave dotada → recai em `configuracoes` =
+      true). Role customizado sem linha de capability herda `configuracoes` — e a API herda
+      igual, então continua consistente. Nenhum caminho perde acesso que a API concedia.
+  - achado: "`configuracoes.pipeline` continua no `config-cards.ts:94` — está CERTO"
+    evidencia: >-
+      O card é acesso de LEITURA à tela; o botão é a capability de escrita. É a AC1 ao pé da
+      letra ("vê a tela em leitura, sem botão nenhum"). Trocar a chave do card esconderia a
+      tela de quem tem direito de olhar.
+  - achado: "O reorder (drag) não é afetado pelo trigger"
+    evidencia: >-
+      `stages-table.tsx:222` manda `{ position }` e `buildUpdatePayload` (`api-utils.ts:10-17`)
+      só inclui campo presente no corpo — `is_default` fica FORA do SET, e
+      `BEFORE UPDATE OF is_default` não dispara. Confirmado nas duas pontas.
+  - achado: "404 vs 409 — ordem dos gates correta"
+    evidencia: >-
+      requireAuth → requireCapability → guarda do padrão → softDelete. Id inexistente ou de
+      outra org: a leitura devolve `null`, a guarda não opina e `softDelete` produz o 404 de
+      sempre (`api-utils.ts:44-46`). Etapa já inativa: idem, 404 — não 409. Preservado.
+      Coberto pelo teste "gate de capability vem antes da guarda".
+  - achado: "`getDefaultStageId` intacto (AC6)"
+    evidencia: "`lib/leads/default-stage.ts` não foi tocado; `git diff` confirma."
+  - achado: "Recursão do trigger é de fato inofensiva"
+    evidencia: >-
+      O UPDATE interno grava `is_default = false`, o trigger reentra com `NEW.is_default` false
+      e o `IF` não abre. Profundidade 2, termina. Convive com o `set_updated_at` de
+      `001_base_schema.sql:290` (dispara antes, por ordem alfabética) sem conflito — só bumpa o
+      `updated_at` da etapa que cedeu o posto, o que é cosmético.
+  - achado: "Convenção de migrations respeitada"
+    evidencia: >-
+      250 é o próximo número livre (249 é a última); sufixo descritivo; 3 dígitos;
+      `-- ROLLBACK PLAN` no fim (regra 4 do `supabase/migrations/README.md`); tudo transacional
+      (nada de `CONCURRENTLY`); `IF NOT EXISTS` / `CREATE OR REPLACE` / `DROP … IF EXISTS`
+      tornam o arquivo re-executável.
+  - achado: "Tema dark/light preservado nas telas tocadas"
+    evidencia: >-
+      O diff só mexe em renderização condicional e no nome da prop; nenhuma classe removida.
+      A mensagem nova cai no `<p className="… text-red-600 dark:text-red-300">` que já existia
+      nos dois modais (`create-stage-modal.tsx:156`, `edit-stage-modal.tsx:163`).
+  - achado: "Limitação conhecida do trigger, sem call site hoje"
+    evidencia: >-
+      Um único `UPDATE` que toque ≥2 linhas da mesma org com `is_default` no SET e ao menos um
+      `true` levantaria "tuple to be updated was already modified by an operation triggered by
+      the current command". A rota sempre atualiza por `id`, então não é alcançável pela
+      aplicação — mas o comentário da migration afirma que o trigger vale "para qualquer
+      escritor (SQL direto, seed, service role)", e para esse formato de statement não vale.
+
+ac_traceability:
+  AC1: "IMPLEMENTADA e correta · SEM TESTE (QA-75-371-1)"
+  AC2: "IMPLEMENTADA e testada · mutação M2 mata"
+  AC3: "IMPLEMENTADA · furo real em `ON CONFLICT DO NOTHING` (QA-75-371-2); sem rede de teste automatizada"
+  AC4: "META entregue (API 409, testado, M1 mata) · METADE FALTANDO (a mensagem nunca renderiza — QA-75-371-4)"
+  AC5: "IMPLEMENTADA e idempotente · ordenação pode eleger etapa inativa (QA-75-371-3)"
+  AC6: "OK — `default-stage.ts` intocado"
+  AC7: "PARCIAL — faltam os dois itens: 'gate da tela pela capability' e 'unicidade do padrão exercitada no nível da rota' (esta última é inexequível em vitest: a unicidade mora no trigger; a prova em prod é o substituto legítimo, mas então a AC precisa dizer isso)"
+
+recomendacao:
+  veredito: CONCERNS
+  bloqueia_devops: true
+  antes_do_push:
+    - "QA-75-371-1 — teste de contrato do gate de `page.tsx` (padrão `configuracoes-gate.contract.test.ts`). Sem isto, o conserto do Joabe não tem carrasco."
+    - "QA-75-371-2 — provar o cenário no BEGIN…ROLLBACK e fechar (guarda de existência na seção 4 de `provision_org`). É o único achado que pode deixar uma org do SaaS sem padrão."
+    - "QA-75-371-3 — uma linha: `ORDER BY k2.is_active DESC, …` no datafix."
+    - "QA-75-371-4 — decidir: 4 linhas no `handleDelete` OU reescrever a AC4. Não deixar [x] no estado atual."
+  pode_virar_story_propria:
+    - "QA-75-371-5 (desmarcar o padrão) e QA-75-371-6 (guarda falhando aberta) — baratos, mas legítimos como escopo separado."
+  depois_de_aplicar_a_250:
+    - "QA-75-371-7 — smoke test logado como admin real: criar etapa marcando 'Etapa padrão' e conferir que a antiga cedeu o posto. Fecha a única lacuna de evidência que a prova por service role deixou."
+
+armadilhas_do_meu_proprio_instrumento:
+  - >-
+    Não tenho `psql` nem `docker` nesta máquina: QA-75-371-2 e -3 são análise do mecanismo, não
+    medição. Registrei a reprodução exata em vez de afirmar que rodei — o oposto disso já
+    produziu falso verde neste projeto.
+  - >-
+    A mutação M1 mata 2 dos 4 testes do DELETE, não 4: "etapa comum continua sendo excluída" e
+    "gate de capability vem antes da guarda" continuam verdes sem a guarda, porque nenhum dos
+    dois discrimina a existência dela. São testes de não-regressão válidos, mas não são
+    carrascos — contei certo para não superestimar a rede.

@@ -21,6 +21,7 @@ import {
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { EditStageModal } from "./edit-stage-modal"
+import { mensagemDeErroDeEtapa } from "./mensagem-de-erro"
 import type { Stage } from "./types"
 import { ScrollableX } from "@web/components/ui/scrollable-x"
 
@@ -49,17 +50,18 @@ const GripIcon = () => (
 
 function SortableRow({
   stage,
-  isAdmin,
+  canEdit,
   onUpdate,
   onDelete,
 }: {
   stage: Stage
-  isAdmin: boolean
+  canEdit: boolean
   onUpdate: (updated: Stage) => void
   onDelete: (id: string) => void
 }) {
   const [confirming, setConfirming] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [erro, setErro] = useState<string | null>(null)
 
   const {
     attributes,
@@ -73,11 +75,20 @@ function SortableRow({
 
   async function handleDelete() {
     setDeleting(true)
+    setErro(null)
     const res = await fetch(`/api/stages/${stage.id}`, { method: "DELETE" })
-    if (res.ok) {
-      onDelete(stage.id)
-    }
     setDeleting(false)
+    // 75-371 (@qa QA-75-371-4) — antes o `if (res.ok)` engolia a falha e o clique em
+    // "Excluir" não mostrava NADA. É por aqui que chega o 409 da etapa padrão, que só
+    // quem PODE editar alcança — o motivo pelo qual a recusa existe fica invisível
+    // sem isto.
+    if (!res.ok) {
+      const corpo = await res.json().catch(() => ({}))
+      setErro(mensagemDeErroDeEtapa(res.status, corpo as { error?: string }, "Erro ao excluir etapa."))
+      setConfirming(false)
+      return
+    }
+    onDelete(stage.id)
     setConfirming(false)
   }
 
@@ -89,7 +100,7 @@ function SortableRow({
     >
       <td className="px-6 py-4 text-sm text-gray-500 dark:text-stone-400">
         <div className="flex items-center gap-2">
-          {isAdmin && (
+          {canEdit && (
             <span
               ref={setActivatorNodeRef}
               {...listeners}
@@ -127,7 +138,7 @@ function SortableRow({
       <td className="px-6 py-4 text-sm text-gray-500 dark:text-stone-400">
         {stage.is_default ? "Sim" : "-"}
       </td>
-      {isAdmin && (
+      {canEdit && (
         <td className="px-6 py-4 text-right">
           <div className="flex items-center justify-end gap-2">
             <EditStageModal stage={stage} onUpdate={onUpdate} />
@@ -157,6 +168,11 @@ function SortableRow({
               </button>
             )}
           </div>
+          {erro && (
+            <p className="mt-2 max-w-xs text-right text-xs text-red-600 dark:text-red-300">
+              {erro}
+            </p>
+          )}
         </td>
       )}
     </tr>
@@ -182,10 +198,10 @@ function DragOverlayRow({ stage }: { stage: Stage }) {
 
 export function StagesTable({
   initialStages,
-  isAdmin,
+  canEdit,
 }: {
   initialStages: Stage[]
-  isAdmin: boolean
+  canEdit: boolean
 }) {
   const [stages, setStages] = useState(initialStages)
   const [activeStage, setActiveStage] = useState<Stage | null>(null)
@@ -255,7 +271,7 @@ export function StagesTable({
               <th className="px-6 py-3">Tipo</th>
               <th className="px-6 py-3">Cor</th>
               <th className="px-6 py-3">Padrão</th>
-              {isAdmin && <th className="px-6 py-3"></th>}
+              {canEdit && <th className="px-6 py-3"></th>}
             </tr>
           </thead>
           <SortableContext items={stages.map((s) => s.id)} strategy={verticalListSortingStrategy}>
@@ -264,7 +280,7 @@ export function StagesTable({
                 <SortableRow
                   key={stage.id}
                   stage={stage}
-                  isAdmin={isAdmin}
+                  canEdit={canEdit}
                   onUpdate={handleStageUpdate}
                   onDelete={handleStageDelete}
                 />
@@ -272,7 +288,7 @@ export function StagesTable({
               {stages.length === 0 && (
                 <tr>
                   <td
-                    colSpan={isAdmin ? 6 : 5}
+                    colSpan={canEdit ? 6 : 5}
                     className="px-6 py-8 text-center text-sm text-gray-500 dark:text-stone-400"
                   >
                     Nenhuma etapa configurada.
