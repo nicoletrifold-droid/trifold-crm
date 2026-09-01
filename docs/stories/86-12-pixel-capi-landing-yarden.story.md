@@ -1240,3 +1240,132 @@ do lado do @dev.** A transição para `Done` cabe ao @devops depois de T12
 com `content_category: "landing_yarden"` + não-regressão do Vind Residence).
 
 — Quinn, guardião da qualidade 🛡️
+
+---
+
+### Review Date: 2026-09-01 — iteração 2 (conteúdo definitivo, 3 formulários)
+
+### Reviewed By: Quinn (@qa — Test Architect)
+
+**Veredito: CONCERNS** (não bloqueante) · Gate: `docs/qa/gates/86.12-pixel-capi-landing-yarden.yml`
+
+**Metadata conferida rodando `git`/`gh`, não lida do contexto do spawn:** branch
+`feat/86-12-yarden-conteudo-definitivo`, HEAD `f2ad92e9`, 5 commits novos desde o
+gate da iteração 1 (`aee1fb54`, `8606f09b`, `b8ed634b`, `49954854`, `f2ad92e9`).
+`git ls-remote --heads origin feat/86-12-yarden-conteudo-definitivo` → **vazio**;
+`gh pr list --head feat/86-12-yarden-conteudo-definitivo` → **`[]`**. **Nenhum
+push, nenhum PR.** Não há `.vercel/` em `landing-pages/yarden/` — T12 não tentada.
+O PR #512 é da iteração 1 e está MERGED desde 2026-08-28 (squash `0c2b4eb8`).
+
+#### Escopo real desta leva — delimitado por `git diff`, não por relato
+
+`git diff 5a115358..HEAD --stat -- landing-pages/yarden/api landing-pages/trifold-design-system packages/`
+volta **vazio**. Os proxies, a CSP e o CRM não foram tocados: o PASS da iteração 1
+continua valendo na íntegra para AC5/AC6/AC7/AC8/AC9, sem re-verificação. Esta
+revisão cobre o que mudou — `index.html` (775 linhas de diff), 12 assets novos,
+`tracking-browser.test.ts` e `README.md`.
+
+#### O que está certo (verificado no código, não no relato)
+
+- **Isolamento dos 3 formulários — real.** `ligarFormulario(form, msg)` é chamada
+  uma vez por par; `var enviando = false` (`index.html:710`) vive **dentro** do
+  closure; o honeypot é lido por `form.empresa.value` (`:723`) — acesso nomeado do
+  `HTMLFormElement`, escopado ao `<form>` — e nunca por `getElementById`; os 3
+  honeypots têm `id` distintos (`uniq -d` sobre todos os `id` do arquivo volta
+  vazio); `eventIdLead`/`eventIdCadastro` são gerados dentro do handler (`:732-733`),
+  a cada submissão; `botaoEnviar` vem de `form.querySelector`, não de seletor global.
+- **Dataset idêntico nos 2 pontos do `<head>`:** `1337310707164669` no
+  `window.TRIFOLD_PIXEL_ID` (`:30`, usado no `fbq('init')` `:39`) e no `<noscript>`
+  (`:474`).
+- **AC10:** a **única** ocorrência de `console.` no arquivo inteiro está na linha
+  790, **dentro de um comentário** que explica por que o log do Vind não foi clonado.
+- **Checkbox padronizado:** os 3 blocos `label.check` (519-522 / 551-554 / 625-628 —
+  exatamente as linhas da tabela do AC12) são **byte-a-byte idênticos**, md5
+  `21132e2e14ba53163e602ca03cffeddc` após remover indentação.
+- **`noindex` removido** (`git diff` mostra a linha `-  <meta name="robots" ...>`),
+  com o README ganhando a proibição de reintroduzi-lo. Fecha `86.12-QA-001`.
+- **Bijeção HTML↔assets exata:** 12 arquivos no disco, 12 referências únicas.
+  Nenhum ignorado pelo git; o `.vercelignore` (`.claude`, `README.md`, `*.test.ts`)
+  **não** exclui `assets/` — conferi, porque excluir seria 404 silencioso sob o hero.
+- **Story bate com o código:** tabela "estado real" do AC12, DT-1 (checkboxes sem
+  `id`/`name`, `data` em `:719-723`, payload do proxy em `api/lead.js:188-192`) e
+  File List — todos **corretos** quando cruzados com o arquivo.
+
+#### Mutação — 11 aplicadas, 6 mataram teste, **5 sobreviveram**
+
+Cada mutação foi aplicada por script que aborta se o texto-alvo não aparecer
+exatamente 1× (mutação não-aplicada é falso verde), e revertida por
+`git checkout --` com `git status` limpo ao final.
+
+**Mataram teste (a guarda é real):** srcset apontando para arquivo inexistente
+(2 falhas); asset novo nomeado `hero-vind-residence.svg` (1); asset órfão no disco
+(1); volta ao placeholder, zero refs (2, inclui o piso `>= 12`); id divergente no
+`<noscript>` (1); retorno do `console.log('[lead capturado]', data)` (1).
+
+**Sobreviveram — 23 passed em todas:**
+
+| Mutação | Efeito real em produção |
+|---|---|
+| `var enviando` içada para fora do closure de `ligarFormulario` | trava de duplo-envio vira **global**: preencher o 2º formulário com o 1º em voo é barrado — exatamente o que o comentário do arquivo (`:691-698`) diz que não pode acontecer |
+| remove `['leadFormMobile','formMsgMobile']` de `FORMULARIOS` (`:801`) | formulário do hero mobile fica **inerte**: sem listener, sem lead, sem CAPI |
+| remove `tabindex`/`aria-hidden` do honeypot `empresaSaber` (`:610`) | honeypot entra na tabulação; usuário real o preenche e é classificado como bot |
+| remove `role="status"`/`aria-live` do `#formMsgSaber` (`:630`) | leitor de tela não anuncia sucesso nem erro naquele formulário |
+| apaga o `label.check` inteiro do `leadFormSaber` | 3º formulário volta a enviar lead sem aceite de política |
+
+Causa comum: as asserções estáticas de `tracking-browser.test.ts` foram escritas na
+era do formulário único e não acompanharam a passagem para 3 — `:106` lista só os 6
+`id` do hero desktop, `:110-111` só `#empresa`, `:118-119` só `#formMsg`, e
+`:126-131` procura literais que **sobrevivem** ao içamento da variável.
+
+#### Achados
+
+| ID | Sev | Achado | Ação sugerida |
+|---|---|---|---|
+| `86.12-QA-005` | medium | A garantia-título da leva (trava de duplo-envio **por formulário**) não tem teste: içar `var enviando` para fora do closure deixa a suíte verde | Caso que prove que submeter o form A não bloqueia o B, ou assert estrutural de que `var enviando` fica entre `function ligarFormulario(` e `form.addEventListener` |
+| `86.12-QA-004` | medium | `leadFormMobile` e `leadFormSaber` são funcionalmente não testados — 4 mutações independentes sobreviveram, inclusive deixar um formulário inteiro inerte | Parametrizar as 3 asserções estáticas sobre a tabela dos 3 formulários + assert de que os 3 pares estão em `FORMULARIOS` + `exatamente 3` checkboxes `required` |
+| `86.12-QA-006` | low | `index.html:617` — `nomeSaber` é `required` mas o placeholder é `"Nome"`, sem o `* ` que os outros 8 campos usam (inclusive os 2 do mesmo formulário) | Confirmar com @po se é fidelidade ao mockup naquele ponto ou esquecimento. Se for esquecimento, 1 caractere |
+| `86.12-QA-007` | low | Resíduo factual no **Dev Agent Record** (D4/D5: "Os dois checkboxes obrigatórios do AC12 existem" — falso desde a emenda 0.10/0.11; D7 remete a seção de README que não existe mais; tabela de validações ainda com 3146 testes). AC12, DT-1, File List e README estão corretos — o desalinho é só nesse bloco, que é alçada do @dev | @dev: marcar D4/D5 e D7 como histórico superado, apontando para a emenda do @po e o Change Log 0.11/0.12 |
+| `86.12-QA-008` | low | Buraco latente: o extrator de refs (`tracking-browser.test.ts:31-42`) só casa caminhos que começam literalmente com `assets/` — um `./assets/x.webp` inexistente escaparia. Hoje o HTML tem **zero** caminhos nessa forma | Normalizar `./`/`/` iniciais ou casar por `/(?:^\|\/)assets\//`. 2 linhas |
+
+`86.12-QA-001` → **RESOLVIDO** (noindex removido). `86.12-QA-002` → OPEN,
+inalterado. `86.12-QA-003` → INHERITED, inalterado (`api/track.js` não tocado).
+
+**DT-1 não é achado meu** — conferi contra o código e a descrição da story está
+correta; é débito aceito explicitamente pelo stakeholder.
+
+#### Falsos positivos descartados
+
+- **`name="empresa"` repetido nos 3 honeypots** parecia o bug clássico de `id`
+  duplicado. Não é: os `id` são distintos e o handler usa `form.empresa`, resolvido
+  dentro do `<form>`. Compartilhar o `name` é correto (é o que o proxy espera).
+- **Dois formulários de hero no DOM ao mesmo tempo** não duplicam captação: as media
+  queries são `min-width:980px` e `max-width:979.98px` — sem lacuna, sem sobreposição.
+- **`InitiateCheckout` com flag global** é decisão documentada (mede o visitante, não
+  o componente), não vazamento de isolamento.
+- **Branch atrasada em relação a `origin/main`** — o `git diff main..HEAD` "apagando"
+  Epic 87/90 é artefato de repo squash-merge, não conteúdo da branch.
+
+#### Evidência que rodei eu mesmo (nada aceito por relato)
+
+| Verificação | Resultado |
+|---|---|
+| `npx vitest run` (suíte completa) | **255 arquivos / 3155 passed + 6 expected fail**, exit 0 |
+| `npx turbo run type-check --force` | 8/8, **0 cached**, exit 0 (cache hit não é evidência) |
+| `npx turbo run lint --force` | 8/8, **0 cached**, **0 errors**, 34 warnings — todas em `packages/web`, zero em `landing-pages/` |
+| `git diff 5a115358..HEAD` em `yarden/api`, `packages/`, `trifold-design-system/` | **vazio** |
+| 11 mutações com verificação de aplicação + reversão | 6 mataram teste, 5 sobreviveram; `git status` limpo |
+| `git ls-remote` / `gh pr list --head` | vazio / `[]` |
+
+### Gate Status
+
+Gate: CONCERNS → `docs/qa/gates/86.12-pixel-capi-landing-yarden.yml`
+
+**Status: mantido em `InReview`.** Não promovi para `Done` — mesma lógica dos gates
+anteriores: T12/T13 seguem `[ ]`, `trifold.eng.br/yarden/` não está no ar e o AC13
+não foi validado. **CONCERNS não bloqueia o merge:** os 5 achados são 2 `medium` de
+cobertura de teste e 3 `low` (UI, documentação, buraco latente). Nenhum é defeito de
+comportamento — o conteúdo definitivo entrou correto em todos os ACs verificáveis
+fora de produção. O que falta é rede de proteção para o próximo merge que tocar o
+HTML, num arquivo que o próprio README avisa que vai ser mexido de novo.
+
+— Quinn, guardião da qualidade 🛡️
