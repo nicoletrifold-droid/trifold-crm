@@ -311,3 +311,39 @@ mutação que mata.
 
 Regressão da rodada 3: **301 arquivos, 3.945 passed + 6 expected fail**, tsc exit 0, lint 0 errors
 (30 warnings, mesmo número).
+
+---
+
+## R5 FECHADO — smoke test do trigger sob RLS de `authenticated` (01/09/2026)
+
+O resíduo dizia: a prova da migration foi por service role (RLS desligada), então o ramo de
+**transferência** do trigger nunca havia rodado como usuário logado de verdade. Fechado sem
+depender de clique na UI: impersonação por `SET LOCAL role authenticated` +
+`SET LOCAL request.jwt.claims` com o `auth_id` do usuário (é o que `has_capability()` lê, via
+`u.auth_id = auth.uid()`, mig 225:54), tudo dentro de `BEGIN … ROLLBACK` em produção.
+
+O ATO medido: `UPDATE kanban_stages SET is_default = true WHERE slug = 'follow-up'` — ou seja,
+transferir o padrão de "Aguardando atendimento" para "Follow-up".
+
+| Impersonado | `has_capability('configuracoes.pipeline_editar')` | padrão antes | linhas `is_default` depois | padrão depois | padrão em etapa inativa |
+|---|---|---|---|---|---|
+| **admin** | `true` | Aguardando atendimento | **1** | Follow-up | 0 |
+| **gerente-comercial** (Joabe) | `true` | Aguardando atendimento | **1** | Follow-up | 0 |
+
+Duas conclusões: o trigger **transfere corretamente sob RLS de `authenticated`**, não só por service
+role; e a capability que o Marcos ligou no painel está valendo **no banco** para o perfil
+Gerente-Comercial, não apenas na tela. Estado de prod após o ROLLBACK conferido: índice ✓ trigger ✓
+1 padrão ("Aguardando atendimento") ✓ 18 etapas ✓ 0 de 8 policies de obra quebradas ✓.
+
+Script: `<scratchpad da sessão 1bda188e>/smoke-r5.ts`.
+
+### Correção de fato sobre o que foi aplicado em prod
+
+O @devops relatou "três migrations (248, 249, 250)" no `db:apply`. **Foram duas.** O ledger
+`trifold_migrations_aplicadas` mostra `249 → 01/09 14:02:39` e `250 → 01/09 14:02:42`, enquanto a
+**248 entrou em 31/08 12:32:13** por outra sessão. `count(*) FILTER (aplicada_em::date = CURRENT_DATE)`
+= **2**, e o total 273 fecha com o `271 aplicadas + 2 PENDENTES` lido antes de aplicar. O corpo do
+PR #551 precisa ser corrigido nesse ponto.
+
+**Resíduo que continua aberto:** apenas o **R6** — as etapas "Follow-up" e "Joabe" ativas em prod,
+cuja exclusão é decisão do dono.
