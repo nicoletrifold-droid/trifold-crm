@@ -72,9 +72,9 @@ clique").
 **AC6 — Menu `⋯` com 3 ações: Ver empresa · Integrações · Copiar identificador.**
 - "Ver empresa" → mesmo destino do clique na linha (`/platform/orgs/[id]`).
 - "Integrações" → `/platform/orgs/[id]/integracoes`.
-- "Copiar identificador" → copia o `slug` para a área de transferência (`navigator.clipboard.
-  writeText`), com feedback visual (ex. trocar o rótulo por "Copiado!" por 2s). É a única parte
-  desta story que precisa de `"use client"`.
+- "Copiar identificador" → copia o `slug` para a área de transferência
+  (`navigator.clipboard.writeText`), com feedback visual (ex. trocar o rótulo por "Copiado!" por
+  2s). É a única parte desta story que precisa de `"use client"`.
 - **"Ativar/Desativar" NÃO entra neste menu nesta story** — é mutação de plataforma com
   confirmação e trilha, escopo de `900-60`. O menu nasce com 3 itens e ganha o 4º naquela story,
   sem reescrever este componente do zero.
@@ -194,6 +194,7 @@ Mesma função já usada em `orgs/page.tsx` e na story `900-56`. A regra de "pen
 | 2026-08-31 | 0.1 | Draft inicial — busca, filtros, coluna de integrações e menu de ações da lista de empresas (sem ativar/desativar, que é a `900-60`). | @sm (River) |
 | 2026-08-31 | 0.2 | **Validada pelo @po (Pax) — GO, nota 7/10.** GO após correção do @po. AC4 pedia consulta agregada com GROUP BY, que o PostgREST deste projeto não faz (`PGRST123`). Reescrita para agrupamento em memória + AC10 nova (saturação, helper compartilhado com a 900-56). Status Draft → Ready. | @po (Pax) |
 | 2026-08-31 | 0.3 | **Implementada.** Branch saída da `900-56/57` (medido: `origin/main` não tem a rota da empresa nem os helpers da AC10). Busca/filtros em memória com o motivo medido; `orgsComPendencia` sobre a saída das funções da "Precisa de você"; coluna Integrações cruzando tiles (conectadas) e linhas cruas (em erro). Achado corrigido: o menu `⋯` da última linha era recortado pelo `overflow-hidden` da tabela e ficava inalcançável. 53 testes novos, 5 mutações vermelhas. Status Ready → Ready for Review. | @dev (Dex) |
+| 2026-08-31 | 0.4 | **Ressalvas fechadas (gate CONCERNS + PR #549).** DOC-001: recorte remedido no log do CI (17 → 18 arquivos, 312 → 365 testes) com a contaminação da árvore registrada e o `+52` do CI explicado — subtração entre duas bases de merge diferentes. DOC-002: `whatsapp_config` tem 3 linhas `inactive`, não está vazia. TEST-001: redação do fail-closed corrigida (a guarda melhora o diagnóstico, não o veredicto). REL-001: registrada como dívida nomeada, sem tocar código. CodeRabbit: identificador quebrado por quebra de linha no `.md`; e o `Esc` passou a devolver o foco ao botão `⋯` (2 testes novos, mutação 🔴). | @dev (Dex) |
 
 ## Dev Agent Record
 
@@ -299,14 +300,59 @@ texto-fonte, e o `it` final prova que a régua **não** acusa a fonte correta.
 | `eslint .` em `packages/web` | 0 erros | **0 erros**, 0 avisos nos arquivos desta story |
 | `pnpm --filter web build` | — | **rc=0**, `/platform/orgs` como rota dinâmica |
 | suíte completa (`npx vitest run`) | CI verde no base | **302 arquivos, 4096 passam + 6 expected fail** |
-| `lib/tenancy` + `painel` + `app/platform` | 16 arquivos / 312 testes | **18 / 370** |
+| `lib/tenancy` + `painel` + `app/platform` | 17 arquivos / 312 testes | **18 / 367** |
+
+⚠️ **Como esses números foram REmedidos (DOC-001).** A linha de recorte dizia "16 → 18 arquivos /
+312 → 370" e não era reproduzível. As duas causas, e a procedência de cada número:
+
+1. **Árvore suja.** O `370` saiu de um `vitest` rodado nesta árvore compartilhada, onde
+   `webhook-org.test.ts` carrega ~136 linhas **não commitadas de outra frente** (53 testes na
+   árvore, **48** commitados). O estado commitado do recorte é **365** — 370 menos os 5 que não
+   são deste commit nem estão no índice.
+2. **Fonte trocada por uma que não mede a árvore de trabalho.** A base agora vem do log do CI,
+   não de contagem local: run **33453693612** (PR #547, `c2720149`) → **17 arquivos / 312
+   testes** no recorte; run **33459113464** (PR #549, `00a3f3c6`) → **18 / 365**. Os dois logs
+   trazem a contagem por arquivo do reporter do vitest; somei só os três diretórios. O `312` da
+   base estava exato desde o início, e o `17` bate com `git ls-tree` (o `16` era contagem à mão).
+
+**Delta no recorte: +1 arquivo, +53 testes** em `00a3f3c6` (18 / **365**), mais os **2** da
+rodada 0.4 → **367**. Esse 367 é composição, não medição direta: 365 (CI, run 33459113464) menos
+os 53 de `console-lista-empresas.test.ts` naquele run, mais os **55** que o arquivo tem agora
+(`npx vitest run` naquele arquivo). Os outros 17 arquivos do recorte não foram tocados nesta
+rodada. O CI confirma o 367 no próximo run — até lá, é aritmética declarada, não log. O que
+FECHA a conta aqui: `npx vitest run` nos três diretórios devolve **372** nesta árvore, e 372
+menos os **5** que `webhook-org.test.ts` carrega fora do índice dá exatamente **367**.
+
+⚠️ **A suíte inteira roda 4.098 nesta árvore, e isso NÃO é o número desta branch.** O CI do
+commit mede **4.082 + 6 xfail**; a diferença de 16 é `+2` desta rodada mais `+14` de três
+arquivos de **outras frentes**, não commitados, que convivem na mesma árvore
+(`webhook-org.test.ts`, `meta/process-lead.test.ts`, `webhook/whatsapp/__tests__/route.test.ts`:
+**123** testes aqui contra **109** no CI). Toda contagem local desta branch tem que descontá-los.
+
+⚠️ **E o `+52` do CI é outra grandeza — não o delta desta story.** A suíte inteira vai de
+**301 arquivos / 4.030 passando + 6 xfail** (run 33453693612) para **302 / 4.082 + 6 xfail** (run
+33459113464), e `4082 − 4030 = +52`. Essa subtração **mistura duas bases de merge**: os dois são
+eventos `pull_request`, mas o #547 tem base `main` e o #549 tem base `story/900-56-57-console-plataforma`
+(a pilha). Entre as duas bases há o PR #548, que **acrescentou um teste** a
+`app/api/cron/boleto-scan/route.test.ts` — **17** `it` na `main`, **16** na pilha, num arquivo que
+este commit nunca tocou (`git diff --name-only c2720149 00a3f3c6` no diretório: vazio). A conta
+fecha exatamente: `+53` dentro do recorte `−1` fora dele `= +52` no total. O número honesto para
+esta story é **+53**; o `+52` só apareceria se as duas medições tivessem a mesma base, e não têm.
 
 `platform-query-scan.test.ts` ficou **vermelha** com a mudança: ela ancorava no literal
 `platformQuery("users", "org_id, id, auth_id")`, e a projeção ganhou `created_at` (exigido por
 `AdminDaOrg.criadoEm`, que `pendenciasDeConvite` pede — é a mesma projeção de
 `app/platform/page.tsx`). Âncora atualizada. Aproveitei para tornar aquele recorte **fail-closed
 explícito**: `indexOf` devolve `-1` quando a âncora some e `slice(-1)` devolve o último caractere
-do arquivo, o que poderia virar aprovação por acidente do que estivesse no fim da fonte.
+do arquivo.
+
+⚠️ **Correção de redação (TEST-001).** A guarda melhora o DIAGNÓSTICO, não o veredicto. O
+contrafactual foi medido pelo @qa: com a âncora quebrada **e** a guarda removida, o teste ainda
+falha (`expected '\n' to match /\.eq\("role", "admin"\)/`), porque as duas asserções pós-`slice`
+são `toMatch` **positivos** — `slice(-1)` jamais as aprovaria. A afirmação anterior ("poderia
+virar aprovação por acidente") é falsa **para este teste**. A forma perigosa do `-1` é a
+comparação de ORDEM, e ela existe na régua da base (`console-fail-closed.test.ts:486`) protegida
+por dois `ocorrenciasNoCodigo(...) === 1` logo acima; não há furo vivo.
 
 ### Validado na tela
 
@@ -354,12 +400,36 @@ Para a linha da AC4 foram alteradas TEMPORARIAMENTE duas linhas já existentes d
    mesmo do `⋯` (`relative z-10` acima do pseudo-elemento), e esse **foi** medido na tela — o
    clique no `⋯` não navegou. A régua de texto-fonte exige o embrulho `relative z-10` em volta do
    `ReenviarConvite`.
-5. **O tile do WhatsApp contando como conectado na TELA.** `whatsapp_config` está vazia no banco
-   de teste. Coberto por unidade com a forma exata medida em produção pela QA-900-51-2
+5. **O tile do WhatsApp contando como conectado na TELA.** `whatsapp_config` tem **3 linhas** no
+   banco de teste, uma por org, **todas `inactive`** (medido pelo @qa; a afirmação anterior,
+   "está vazia", era falsa e era falsificável com uma chamada HTTP). Como nenhuma é `active`, o
+   caminho do tile conectado não é alcançável ali sem escrita. Coberto por unidade com a forma exata medida em produção pela QA-900-51-2
    (`org_integrations.whatsapp = disconnected` convivendo com `whatsapp_config.status = active`),
    nos dois sentidos.
 6. **CodeRabbit CLI não executado** — o review que vale neste repositório é o GitHub App, e ele
    dispara na abertura do PR (que é do @devops).
+
+### Dívida nomeada — REL-001, deixada de fora DE PROPÓSITO
+
+A coluna **Usuários** é o único contador desta tela **sem declaração**. O `porOrg` sai de
+`platformQuery("users", "org_id")` e é renderizado cru: `paginaSaturada(usuarios)` nunca é
+calculado e `usuariosFalhou` não entra em `listaIncompleta`. Com `users` no teto do PostgREST
+(1.000), aquela célula mostraria um número exato que o sistema não sabe — exatamente o defeito
+que a AC10 existe para impedir, na mesma linha da tabela.
+
+**Por que não consertei aqui:** está fora da LETRA da AC10, que nomeia `org_integrations` e o
+`users` da pendência, e não o contador da coluna. Medido em produção hoje: **113 usuários** — 11%
+do teto. Custo do conserto: `contarComTeto` na leitura de `users` mais um termo em
+`listaIncompleta`; é barato, mas é AC nova.
+
+**Candidata natural: `900-61`**, que já mexe em diagnóstico de integração da empresa. Quem abrir
+a story leva a régua junto — `paginaSaturada(usuarios)` sem `listaIncompleta` é meia declaração
+e não vale.
+
+⚠️ **Não a registrei em `docs/backlog.md` nem no `epic-900`:** os dois arquivos carregam
+alterações **não commitadas de outra frente** nesta árvore (26 e 40 linhas), e `git add` de
+qualquer um dos dois arrastaria o trabalho alheio para este commit. O registro no backlog fica
+para quem é dono daquele bloco.
 
 ### File List
 
@@ -376,5 +446,66 @@ Para a linha da AC4 foram alteradas TEMPORARIAMENTE duas linhas já existentes d
 - `packages/web/src/lib/tenancy/platform-query-scan.test.ts` — âncora da projeção de admin +
   recorte fail-closed
 
+**Modificados na rodada 0.4 (fechamento das ressalvas)**
+- `packages/web/src/app/platform/orgs/_components/org-row-menu.tsx` — `Esc` devolve o foco ao
+  botão `⋯` (CodeRabbit no PR #549)
+- `packages/web/src/lib/tenancy/console-lista-empresas.test.ts` — a régua do retorno de foco e o
+  controle positivo que a envenena (53 → 55 testes)
+
 ## QA Results
-_(Preenchido pelo @qa.)_
+
+### Review Date: 2026-09-01
+### Reviewed By: Quinn (Test Architect)
+
+**Gate: CONCERNS** → `docs/qa/gates/900.58-lista-de-empresas-busca-filtros-acoes.yml`
+
+As 10 ACs estão implementadas e com carrasco. Nada aqui foi aceito de segunda mão.
+
+**Reproduzido.** A pilha (`git cat-file -e origin/main:<path>`: os 5 ausentes ausentes, os 2
+presentes presentes). As **5 mutações declaradas**, com o número exato de vermelhos (2/1/1/1/2),
+`tsc` rc=0 antes de cada contagem e `sha256` conferido na restauração. **M3 e M4 têm kill sets
+disjuntos** — um teste cada, testes diferentes: a régua discrimina os dois sentidos da classe em
+vez de colapsá-los. Mais **7 sondas minhas** (Q1–Q7), todas mortas — inclusive as dos "não
+provados" nº 3 (`falhou: orgsFalhou || pendenciaFalhou` → `orgsFalhou`, 3 vermelhos) e nº 4
+(tirar o `relative z-10` do `ReenviarConvite`, 1 vermelho). Réguas: `tsc` rc=0, `pnpm lint
+--force` rc=0, `eslint` 0 problemas nos 7 arquivos, `build` rc=0 com `/platform/orgs` dinâmica,
+suíte 302/4096 + 6 xfail.
+
+**O instrumento que mentiu, reproduzido.** Playwright 1.60 local, sem rede: `<ul absolute>`
+dentro de `overflow:hidden` vazando pela borda → `isVisible()` responde **`true`**, e
+`elementFromPoint` no centro do último item devolve o `DIV` do contêiner, não o `LI`. Com
+`fixed`, `isVisible()` responde `true` também. **`isVisible()` não distingue os dois casos;
+`elementFromPoint` distingue.** A régua nova **não** se apoia nele: é texto-fonte
+(`position: "fixed"` + `getBoundingClientRect` + fechar na rolagem, medida em par com o
+`overflow-hidden` que continua existindo), e a sonda Q4 (`fixed` → `absolute`) a mata em 2
+testes.
+
+**Banco de teste restaurado.** `org_integrations` = 18 linhas, todas `disconnected`. Rastro
+forense do rollback: exatamente as 2 linhas nomeadas na story carregam `updated_at`
+`2026-09-01T01:08:42`, posterior a todas as outras. Alvo `xnxvygyfyyyzwhiuoehz`; produção só
+lida (113 users / 1 org / 6 org_integrations — longe do teto).
+
+**As 4 concerns — nenhuma bloqueia:**
+
+1. **DOC-001 (medium).** A linha de recorte da tabela de Réguas não é reproduzível. Declarado
+   "16 → 18 arquivos, 312 → 370 testes". Medido: a base `c2720149` tem **17** arquivos de teste
+   nesses diretórios, não 16; e o "370" está contaminado — `webhook-org.test.ts` carrega 136
+   linhas **não commitadas de outra frente** na árvore compartilhada (48 testes commitados × 53
+   na árvore). Estado commitado: **365**. O `312` da base está exato. Delta real deste commit:
+   **+1 arquivo, +53 testes**.
+2. **DOC-002 (low).** "`whatsapp_config` está vazia no banco de teste" é **falso**: 3 linhas, uma
+   por org, todas `inactive`, criadas antes do commit. A conclusão sobrevive (nenhuma é `active`,
+   então o tile conectado não é alcançável), mas o motivo escrito não.
+3. **REL-001 (low, dívida — não reabrir esta story).** A coluna **Usuários** é o único contador
+   desta tela **sem declaração**: `paginaSaturada(usuarios)` nunca é calculado e `usuariosFalhou`
+   não entra em `listaIncompleta`. Com `users` no teto, a célula mostra um número exato que o
+   sistema não sabe — o defeito que a AC10 existe para impedir, na mesma linha. Fora da letra da
+   AC10 e longe do teto hoje.
+4. **TEST-001 (low).** O "fail-closed" de `platform-query-scan.test.ts` **não é portador do
+   veredicto**. Contrafactual medido: com a âncora quebrada **e** a guarda nova removida, o teste
+   ainda falha (`expected '\n' to match /\.eq\("role", "admin"\)/`) — as duas asserções
+   pós-`slice` são `toMatch` positivos. A guarda melhora a mensagem, não o veredicto.
+
+**Próximo passo:** DOC-001/DOC-002/TEST-001 são 3 edições de texto na story, sem tocar código.
+REL-001 vai para dívida nomeada (candidata natural: `900-61`). O PR é **empilhado** sobre o #547
+e não pode ser mergeado antes dele.
