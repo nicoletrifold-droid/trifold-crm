@@ -1,4 +1,4 @@
--- 250_pausar_retomar_empresa.sql
+-- 251_pausar_retomar_empresa.sql
 -- Story 900-60 (Epic 900, Frente 2 "Console") — pausar / retomar o processamento automático de
 -- uma empresa. A PRIMEIRA mutação nova do console fora de integrações.
 --

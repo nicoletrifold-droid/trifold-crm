@@ -11,7 +11,7 @@
  *
  * ## Por que o efeito é uma RPC, e não um `.update()` aqui
  *
- * Três razões, todas medidas (a longa está no cabeçalho da migration `250`):
+ * Três razões, todas medidas (a longa está no cabeçalho da migration `251`):
  *   1. `orgs_ativas_depois` (AC10) só é verdade lido na MESMA transação do `UPDATE`.
  *   2. A contagem exata não é alcançável daqui: `platformQuery()` recusa `(` desde a `900-42a`,
  *      agregado é `HTTP 400 PGRST123` neste Supabase, e contar em memória sofreria o corte de
@@ -43,7 +43,7 @@ import { getPlatformAdmin } from "@web/lib/tenancy/platform-guard"
 import { platformQuery } from "@web/lib/tenancy/platform-query"
 import { createAdminClient } from "@web/lib/supabase/admin"
 
-/** O que a migration `250` levanta, e o status HTTP que cada código merece. */
+/** O que a migration `251` levanta, e o status HTTP que cada código merece. */
 const STATUS_POR_CODIGO_SQL: Record<string, number> = {
   // Motivo vazio. A rota já barra antes; a função é a segunda rede, para quando a RPC for
   // chamada por outra superfície.

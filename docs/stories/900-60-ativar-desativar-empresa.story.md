@@ -277,7 +277,8 @@ Não repetir aqui; a seção "⚠️ Achado que corrige a premissa" é normativa
 |---|---|---|---|
 | 2026-08-31 | 0.1 | Draft inicial — primeira mutação nova do console. Corrige a premissa do pedido original: `organizations.is_active` hoje só pausa crons (`forEachActiveOrg`), não bloqueia login (`middleware.ts`/`api-auth.ts` checam `users.is_active`, coluna diferente). Confirmação e trilha refletem o efeito real, não o assumido. | @sm (River) |
 | 2026-08-31 | 0.2 | **Validada pelo @po (Pax) — GO, nota 6/10.** GO após correção do @po — era NO-GO como estava. O achado do @sm estava certo mas INCOMPLETO: faltava o terceiro consumidor de `organizations.is_active`, `resolveSoleOrg()` (`webhook-org.ts:244-248`), vivo em `telegram/webhook` e `webhooks/landing-page`, que lê a coluna como CONTAGEM de orgs ativas — logo pausar uma empresa altera o roteamento de leads de OUTRA. Tabela do achado completada; AC3 ganhou a terceira frase obrigatória; AC8 (rótulo do botão: Pausar/Retomar), AC9 (dependência do corte `WEBHOOK_ORG_ROUTING`) e AC10 (`orgs_ativas_depois` na trilha) novas. Status Draft → Ready. | @po (Pax) |
-| 2026-09-01 | 1.0 | **Implementada — Status Ready → Ready for Review.** Migration `250` (RPC `organization_set_active_as_platform`, mesmo padrão da `248`: `SECURITY DEFINER`, REVOKE + GRANT a `service_role`, reusa `platform_audit()`), rota `PATCH /api/platform/orgs/[id]`, diálogo por portal com as três frases verbatim, 4º item no menu `⋯`, badge Ativa/Pausada. O `UPDATE` foi para a RPC — e não ficou na rota — porque `orgs_ativas_depois` (AC10) só é verdade na MESMA transação, agregado é `PGRST123` neste Supabase, e `app/api/platform/**` proíbe `.from(<literal>)`. **Carona fora do escopo desta story:** `app/page.tsx`, a 2ª porta de entrada, que a `900-56` deixou roteando só por `role`. 21 mutantes medidos com `tsc` rc=0; provado na tela com as 3 contas do banco de teste, nos dois sentidos e no caminho de falha. | @dev (Dex) |
+| 2026-09-01 | 1.0 | **Implementada — Status Ready → Ready for Review.** Migration `251` (RPC `organization_set_active_as_platform`, mesmo padrão da `248`: `SECURITY DEFINER`, REVOKE + GRANT a `service_role`, reusa `platform_audit()`), rota `PATCH /api/platform/orgs/[id]`, diálogo por portal com as três frases verbatim, 4º item no menu `⋯`, badge Ativa/Pausada. O `UPDATE` foi para a RPC — e não ficou na rota — porque `orgs_ativas_depois` (AC10) só é verdade na MESMA transação, agregado é `PGRST123` neste Supabase, e `app/api/platform/**` proíbe `.from(<literal>)`. **Carona fora do escopo desta story:** `app/page.tsx`, a 2ª porta de entrada, que a `900-56` deixou roteando só por `role`. 21 mutantes medidos com `tsc` rc=0; provado na tela com as 3 contas do banco de teste, nos dois sentidos e no caminho de falha. | @dev (Dex) |
+| 2026-09-01 | 1.1 | **Conserto pontual — colisão de numeração.** A migration foi de `250` para **`251`**: `origin/main` já tem `250_kanban_stages_default_unico.sql` (Story 75-371), mergeada depois que esta pilha nasceu. Sem colisão de CONTEÚDO (tabelas e funções disjuntas). Causa registrada: medir o próximo livre só contra a `main` não vê o que está em voo — o livre passa a ser medido em TODAS as refs após `git fetch --prune`. Referências ajustadas na story, na rota, no teste da rota e no comentário de `admin-client-allowlist.test.ts`. Mais a reconferência da bateria de mutantes de `app/page.tsx` (restauro por `cp`, sha256 dos dois lados, conjuntos de morte 2 e 7, baseline reproduzido). Suíte idêntica: 308 arquivos, 4187 passed + 6 expected fail. | @dev (Dex) |
 
 ## Dev Agent Record
 
@@ -307,7 +308,7 @@ story). `pnpm --filter web type-check` (`tsc --noEmit`) → **rc=0**. `pnpm buil
 
 ---
 
-### Decisão 1 — o `UPDATE` mora numa RPC (migration `250`), não na rota
+### Decisão 1 — o `UPDATE` mora numa RPC (migration `251`), não na rota
 
 A AC2 pede `createAdminClient()`, e ele está lá. O que **não** pôde ficar na rota foi o `.from(
 "organizations").update(...)`, por três razões medidas, em ordem de força:
@@ -535,10 +536,69 @@ Três asserções pré-existentes ficaram vermelhas **corretamente** — elas af
    acrescentada a asserção que faltava: **o veneno acertou o alvo certo** — a outra devolução de foco
    sobrevive à mutação.
 
+### Colisão de numeração de migration: `250` → `251` (conserto pontual, 2026-09-01)
+
+A migration nasceu como `250_pausar_retomar_empresa.sql` e **colidia**: `origin/main` já tem
+`250_kanban_stages_default_unico.sql` (Story 75-371), mergeada **depois** que esta pilha nasceu.
+Renumerada para **`251`**.
+
+**A causa, nomeada:** medi o próximo número livre **só contra a `main` do momento em que a pilha
+começou**. Uma pilha longa (`#547 → #549 → porta de entrada → esta`) vive dias fora da `main`, e o
+prefixo é um recurso global disputado por **todas as frentes em voo** — não só pelo que já está
+mergeado. É a **segunda** vez nesta onda do Epic 900.
+
+**O que passa a valer, e foi o que usei aqui:** o livre é medido varrendo `supabase/migrations` em
+**todas as refs** depois de um `git fetch --prune` — `origin/main`, as branches da pilha e qualquer
+outra branch remota ou local com migration nova:
+
+```bash
+git fetch --prune
+for ref in $(git for-each-ref --format='%(refname)' refs/heads refs/remotes); do
+  git ls-tree -r --name-only "$ref" -- supabase/migrations
+done | sed 's#supabase/migrations/##' | sort -u | tail -5
+```
+
+Medido agora: o **nome de arquivo** mais alto em qualquer ref é `250` (dois deles — o `kanban` da
+`main` e o meu, que era a colisão); `251_` **não aparece em ref nenhuma**. O ledger de produção tem
+273 **linhas**, que é contagem e não numeração — o registro da 245 é chaveado por arquivo + sha256,
+justamente porque prefixo já colidiu neste repositório (074/075).
+
+**Colisão de conteúdo: não há.** A `250_kanban_stages_default_unico.sql` mexe em `kanban_stages`
+(datafix, índice único parcial `kanban_stages_default_unico_por_org`, função + trigger
+`kanban_stages_default_unico`). A `251` cria `organization_set_active_as_platform` e escreve em
+`organizations`/`platform_audit_log`. Zero objetos em comum, zero ordem de aplicação exigida entre
+elas. A `250` **cita** `provision_org()` em comentário, mas não redefine a função.
+
+**Referências ajustadas junto ao arquivo** (`grep -rn "250_pausar"` sai vazio): esta story (File
+List e Change Log), `api/platform/orgs/[id]/route.ts`, `api/platform/orgs/[id]/route.test.ts` e o
+comentário em `scripts/admin-client-allowlist.test.ts`. Renomear arquivo não muda teste: a suíte
+tem de ficar idêntica, e ficou.
+
+### Reconferência da bateria de mutantes de `app/page.tsx` (2026-09-01)
+
+Durante a bateria original eu **restaurei `app/page.tsx` com `git checkout --`**. O arquivo é
+rastreado e tinha edição pendente, então o `checkout` apagou a mudança em vez de só desfazer o
+veneno, e quatro mutantes rodaram contra o código antigo. O sintoma que denunciou foi **mutantes
+diferentes com o mesmo número de falhas**. Refiz com snapshot por CÓPIA (`cp`), que é o que passa
+a valer para qualquer arquivo rastreado.
+
+Reconferido agora, com `cp` e sha256 dos dois lados:
+
+| Estado de `app/page.tsx` | `tsc --noEmit` | `page.test.ts` |
+|---|---|---|
+| baseline (= `HEAD`, sha `bf7d4969…`) | rc=0 | **9 passed** |
+| mutante A — o ramo `is_platform_admin` some | rc=0 | **2 failed** / 7 passed (metade 1) |
+| mutante B — `=== true` vira `!== true` | rc=0 | **7 failed** / 2 passed (as duas metades) |
+| restaurado por `cp` (sha `bf7d4969…`, `git diff` vazio) | rc=0 | **9 passed** |
+
+Os conjuntos de morte são **disjuntos e de tamanhos diferentes** (2 e 7) — era exatamente essa
+distinção que a bateria corrompida não conseguia mostrar. O restaurado é **byte a byte** o
+baseline (mesmo sha256, `git diff -- packages/web/src/app/page.tsx` vazio) e reproduz os 9 verdes.
+
 ### O que NÃO consegui provar
 
 1. **Nada foi verificado em produção.** Só leitura de metadados seria permitida, e nada aqui
-   precisou disso. A migration `250` **não** foi aplicada em produção — isso é do `@devops`, na ordem
+   precisou disso. A migration `251` **não** foi aplicada em produção — isso é do `@devops`, na ordem
    do deploy.
 2. **A trilha não foi conferida pela TELA** (`/platform/trilha` é a `900-59`, ainda não implementada).
    Ela foi conferida por leitura direta do `platform_audit_log` no banco de teste, que é o que a
@@ -556,7 +616,7 @@ Três asserções pré-existentes ficaram vermelhas **corretamente** — elas af
 ### File List
 
 **Criados**
-- `supabase/migrations/250_pausar_retomar_empresa.sql`
+- `supabase/migrations/251_pausar_retomar_empresa.sql`
 - `packages/web/src/app/api/platform/orgs/[id]/route.ts`
 - `packages/web/src/app/api/platform/orgs/[id]/route.test.ts`
 - `packages/web/src/lib/tenancy/console-pausa-empresa.ts`
@@ -578,7 +638,8 @@ Três asserções pré-existentes ficaram vermelhas **corretamente** — elas af
 
 | Date | Version | Description | Author |
 |---|---|---|---|
-| 2026-09-01 | 1.0 | Implementada. Migration `250` (RPC `organization_set_active_as_platform`, padrão da `248`), rota `PATCH`, diálogo por portal, 4º item do menu, badge Ativa/Pausada. Mais a 2ª porta de entrada (`app/page.tsx`), pendência da `900-56`. 3 arquivos de teste novos, +53 testes; 21 mutantes medidos com `tsc` rc=0. Provado na tela com as 3 contas do banco de teste, incluindo os dois sentidos e o caminho de falha. | @dev (Dex) |
+| 2026-09-01 | 1.0 | Implementada. Migration `251` (RPC `organization_set_active_as_platform`, padrão da `248`), rota `PATCH`, diálogo por portal, 4º item do menu, badge Ativa/Pausada. Mais a 2ª porta de entrada (`app/page.tsx`), pendência da `900-56`. 3 arquivos de teste novos, +53 testes; 21 mutantes medidos com `tsc` rc=0. Provado na tela com as 3 contas do banco de teste, incluindo os dois sentidos e o caminho de falha. | @dev (Dex) |
+| 2026-09-01 | 1.1 | **Conserto pontual — colisão de numeração.** A migration foi de `250` para **`251`**: `origin/main` já tem `250_kanban_stages_default_unico.sql` (Story 75-371), mergeada depois que esta pilha nasceu. Sem colisão de CONTEÚDO (tabelas e funções disjuntas). Causa registrada: medir o próximo livre só contra a `main` não vê o que está em voo — o livre passa a ser medido em TODAS as refs após `git fetch --prune`. Referências ajustadas na story, na rota, no teste da rota e no comentário de `admin-client-allowlist.test.ts`. Mais a reconferência da bateria de mutantes de `app/page.tsx` (restauro por `cp`, sha256 dos dois lados, conjuntos de morte 2 e 7, baseline reproduzido). Suíte idêntica: 308 arquivos, 4187 passed + 6 expected fail. | @dev (Dex) |
 
 
 ## QA Results

@@ -66,7 +66,7 @@ const allowlist = JSON.parse(readFileSync(CAMINHO_JSON, "utf-8"))
  *
  * Re-medido pela Story 900-60 (**242 → 243**): +1 em `plataforma`,
  * `app/api/platform/orgs/[id]/route.ts` — a rota `PATCH` que pausa/retoma uma empresa. Ela chama
- * a RPC `organization_set_active_as_platform` (migration 250), que é
+ * a RPC `organization_set_active_as_platform` (migration 251), que é
  * `GRANT EXECUTE … TO service_role`; a autorização acontece na rota (`getPlatformAdmin()`), não
  * no SQL. O `UPDATE` mora na RPC, e não na rota, porque `orgs_ativas_depois` (AC10) só é verdade
  * lido na MESMA transação do `UPDATE`.

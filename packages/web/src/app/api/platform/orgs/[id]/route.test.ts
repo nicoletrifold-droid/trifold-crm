@@ -76,7 +76,7 @@ const ORG_DA_ROTA = "org-da-rota"
 const ORG_DO_CORPO = "org-de-outra-empresa"
 const ATOR = "platform-admin-1"
 
-/** O que a migration `250` devolve num sucesso — e o `7` é o número que a rota não calcula. */
+/** O que a migration `251` devolve num sucesso — e o `7` é o número que a rota não calcula. */
 const RETORNO_DA_RPC = {
   is_active: false,
   is_active_anterior: true,
