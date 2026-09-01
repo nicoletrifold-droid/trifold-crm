@@ -542,6 +542,25 @@ describe("AC6 — o menu tem os TRÊS itens, e não o quarto (que é da `900-60`
     // reavaliar as duas decisões juntas em vez de só uma.
     expect(codigoDe(fonteDaLista())).toContain('<div className="overflow-hidden rounded-xl border border-slate-800">')
   })
+
+  it("`Esc` fecha o menu E devolve o foco ao botão `⋯`", () => {
+    // Achado do CodeRabbit no PR #549. Fechar sem devolver o foco desmonta o `<ul>` com o item
+    // focado DENTRO dele: o foco cai em `document.body` e quem navega por teclado recomeça a
+    // ordem de tabulação do topo da página, longe da linha em que estava. É a mesma classe do
+    // menu recortado — o controle existe e o teclado não o alcança — por outra porta.
+    const fonte = fs.readFileSync(
+      path.join(SRC, "app/platform/orgs/_components/org-row-menu.tsx"),
+      "utf8",
+    )
+    // Recorte DELIMITADO pelo próprio manipulador: `toContain` no arquivo inteiro ficaria verde
+    // com um `focus()` escrito em qualquer outro lugar (no `alternar`, por exemplo) e não
+    // afirmaria nada sobre o `Esc`.
+    const aoTeclar = trechoDelimitado(fonte, "function aoTeclar(", "\n    }")
+    expect(aoTeclar).not.toBe("") // fail-closed: recorte que não achou o alvo não aprova
+    expect(aoTeclar).toContain('evento.key !== "Escape"')
+    expect(aoTeclar).toContain("setAberto(false)")
+    expect(aoTeclar).toContain("botao.current?.focus()")
+  })
 })
 
 describe("AC4 — a tela não reimplementa `conectado`", () => {
@@ -685,6 +704,23 @@ describe("controles positivos", () => {
     expect(codigoDe(envenenada)).not.toContain('position: "fixed"')
     // A metade `getBoundingClientRect` SOBREVIVE — é por isso que a asserção mede o PAR.
     expect(codigoDe(envenenada)).toContain("botao.current?.getBoundingClientRect()")
+  })
+
+  it("tirar o retorno de foco do `Esc` — o menu fecha e o teclado perde o lugar", () => {
+    const fonte = fs.readFileSync(
+      path.join(SRC, "app/platform/orgs/_components/org-row-menu.tsx"),
+      "utf8",
+    )
+    // Uma ocorrência só: `replace` sem `g` acerta a PRIMEIRA, e com duas a mutação deixaria a
+    // outra viva — o controle aprovaria uma fonte ainda defeituosa.
+    expect(ocorrenciasNoCodigo(fonte, "botao.current?.focus()")).toBe(1)
+    const envenenada = fonte.replace("      botao.current?.focus()\n", "")
+    expect(envenenada).not.toBe(fonte)
+    const aoTeclar = trechoDelimitado(envenenada, "function aoTeclar(", "\n    }")
+    expect(aoTeclar).not.toBe("")
+    // O FECHAMENTO sobrevive — a régua mede o PAR (fecha E devolve o foco), não só "fecha".
+    expect(aoTeclar).toContain("setAberto(false)")
+    expect(aoTeclar).not.toContain("botao.current?.focus()")
   })
 
   it("apagar o href da linha — o clique na linha deixa de existir", () => {

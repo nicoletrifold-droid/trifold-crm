@@ -97,7 +97,13 @@ export function OrgRowMenu({ orgId, slug }: { orgId: string; slug: string }) {
       if (!caixa.current?.contains(evento.target as Node)) setAberto(false)
     }
     function aoTeclar(evento: KeyboardEvent) {
-      if (evento.key === "Escape") setAberto(false)
+      if (evento.key !== "Escape") return
+      setAberto(false)
+      // O foco VOLTA para o `⋯`. Sem esta linha o `<ul>` desmonta com o item focado dentro
+      // dele e o foco cai em `document.body`: quem navega por teclado recomeça a ordem de
+      // tabulação do topo da página, longe da linha em que estava. Fechar sem devolver o foco
+      // é a mesma classe do menu recortado — o controle existe e o teclado não o alcança.
+      botao.current?.focus()
     }
     // A caixa é `fixed`: ela não acompanha a rolagem, então rolar tem que FECHAR. `true` na
     // fase de captura porque quem rola pode ser um contêiner interno, não a janela.
