@@ -289,4 +289,40 @@ describe("AC7 — falha de escrita NUNCA vira 'salvo'", () => {
     respostaDaRpc = { data: null, error: { code: "P0023", message: "afetou 0 linhas" } }
     expect((await chamar(CORPO_VALIDO)).status).toBe(500)
   })
+
+  // QA-900-60-2 — deploy fora de ordem (código antes da migration `251`). Sem esta rede o
+  // desfecho é um 500 genérico numa tela que parece pronta, e o jargão do PostgREST sobre
+  // "schema cache" não diz ao operador o que fazer.
+  it("`PGRST202` (função ausente no schema cache) → 503, e a mensagem NOMEIA a migration", async () => {
+    respostaDaRpc = {
+      data: null,
+      error: {
+        code: "PGRST202",
+        message: "Could not find the function public.organization_set_active_as_platform in the schema cache",
+      },
+    }
+    const res = await chamar(CORPO_VALIDO)
+    expect(res.status).toBe(503)
+    const json = await res.json()
+    expect(json.message).toContain("251")
+    expect(json.message).not.toContain("schema cache")
+    // A resposta continua não afirmando estado nenhum: nada foi gravado.
+    expect(json).not.toHaveProperty("isActive")
+  })
+
+  it("`42883` (`undefined_function` do Postgres) → o MESMO desfecho", async () => {
+    respostaDaRpc = { data: null, error: { code: "42883", message: "function does not exist" } }
+    const res = await chamar(CORPO_VALIDO)
+    expect(res.status).toBe(503)
+    expect((await res.json()).message).toContain("251")
+  })
+
+  it("controle negativo: um erro qualquer NÃO é tratado como função ausente", async () => {
+    // Sem isto, `naoPublicada = true` para todo mundo passaria — e toda falha de escrita viraria
+    // "a migration não subiu", escondendo a causa real.
+    respostaDaRpc = { data: null, error: { code: "P0023", message: "afetou 0 linhas" } }
+    const json = await (await chamar(CORPO_VALIDO)).json()
+    expect(json.message).toContain("afetou 0 linhas")
+    expect(json.message).not.toContain("251")
+  })
 })

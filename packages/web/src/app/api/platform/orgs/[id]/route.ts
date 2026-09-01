@@ -54,6 +54,22 @@ const STATUS_POR_CODIGO_SQL: Record<string, number> = {
   P0023: 500,
 }
 
+/**
+ * A RPC **ainda não existe no banco** — o sintoma exato de deploy fora de ordem (código antes da
+ * migration `251`). Achado do gate, QA-900-60-2: sem isto o desfecho cai no `?? 500` genérico, e o
+ * operador lê "não foi possível concluir" numa tela que parece pronta, sem nada que aponte para a
+ * causa.
+ *
+ * `PGRST202` é o PostgREST não achando a função no schema cache; `42883` é o `undefined_function`
+ * do próprio Postgres. `503` porque o pedido volta a funcionar sozinho quando a migration subir:
+ * não é erro do cliente (4xx) nem defeito do código (500).
+ *
+ * ⚠️ Isto é uma REDE, não a solução: a ordem certa continua sendo `251` primeiro, deploy depois.
+ */
+const CODIGOS_DE_FUNCAO_NAO_PUBLICADA = new Set(["PGRST202", "42883"])
+const MENSAGEM_DE_FUNCAO_NAO_PUBLICADA =
+  "A função de banco desta tela ainda não foi publicada (migration 251). Nada foi alterado."
+
 interface CorpoDaPausa {
   isActive?: unknown
   reason?: unknown
@@ -122,12 +138,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   // quando o `UPDATE` e a linha de trilha aconteceram na mesma transação.
   if (error) {
     const codigo = (error as { code?: string }).code ?? ""
+    const naoPublicada = CODIGOS_DE_FUNCAO_NAO_PUBLICADA.has(codigo)
     return NextResponse.json(
       {
         error: codigo || "ESCRITA_FALHOU",
-        message: error.message ?? "Não foi possível concluir. Nada foi alterado.",
+        // A mensagem crua do PostgREST para função ausente fala de "schema cache" — verdadeira e
+        // inútil para quem está olhando a tela. As outras falhas continuam devolvendo a do banco.
+        message: naoPublicada
+          ? MENSAGEM_DE_FUNCAO_NAO_PUBLICADA
+          : (error.message ?? "Não foi possível concluir. Nada foi alterado."),
       },
-      { status: STATUS_POR_CODIGO_SQL[codigo] ?? 500 },
+      { status: naoPublicada ? 503 : (STATUS_POR_CODIGO_SQL[codigo] ?? 500) },
     )
   }
 
