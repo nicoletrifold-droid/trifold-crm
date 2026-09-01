@@ -77,8 +77,18 @@ function SortableRow({
   async function handleDelete() {
     setDeleting(true)
     setErro(null)
-    const res = await fetch(`/api/stages/${stage.id}`, { method: "DELETE" })
-    setDeleting(false)
+    // Rejeição de transporte (rede caiu, request abortado) não é `!res.ok`: é throw. Sem o
+    // try/finally o `deleting` ficava true para sempre — botão desabilitado, sem mensagem.
+    let res: Response
+    try {
+      res = await fetch(`/api/stages/${stage.id}`, { method: "DELETE" })
+    } catch {
+      setErro("Não foi possível falar com o servidor. Verifique a conexão e tente de novo.")
+      setConfirming(false)
+      return
+    } finally {
+      setDeleting(false)
+    }
     // 75-371 (@qa QA-75-371-4) — antes o `if (res.ok)` engolia a falha e o clique em
     // "Excluir" não mostrava NADA. É por aqui que chega o 409 da etapa padrão, que só
     // quem PODE editar alcança — o motivo pelo qual a recusa existe fica invisível
@@ -154,7 +164,12 @@ function SortableRow({
                   {deleting ? "..." : "Sim"}
                 </button>
                 <button
-                  onClick={() => setConfirming(false)}
+                  onClick={() => {
+                    // Sem isto o texto do 409 ficava na linha indefinidamente — inclusive
+                    // depois de o admin eleger outra padrão e a exclusão já ser possível.
+                    setErro(null)
+                    setConfirming(false)
+                  }}
                   className="rounded bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-200 dark:bg-stone-700 dark:text-stone-300 dark:hover:bg-stone-600"
                 >
                   Não
@@ -170,7 +185,7 @@ function SortableRow({
             )}
           </div>
           {erro && (
-            <p className="mt-2 max-w-xs text-right text-xs text-red-600 dark:text-red-300">
+            <p className="ml-auto mt-2 max-w-xs text-right text-xs text-red-600 dark:text-red-300">
               {erro}
             </p>
           )}

@@ -335,7 +335,9 @@ role; e a capability que o Marcos ligou no painel está valendo **no banco** par
 Gerente-Comercial, não apenas na tela. Estado de prod após o ROLLBACK conferido: índice ✓ trigger ✓
 1 padrão ("Aguardando atendimento") ✓ 18 etapas ✓ 0 de 8 policies de obra quebradas ✓.
 
-Script: `<scratchpad da sessão 1bda188e>/smoke-r5.ts`.
+Script **versionado**: `scripts/75-371-smoke-trigger-default-rls.ts` — roda em qualquer ambiente
+(`TRIFOLD_ENV`), exercita todos os papéis com a capability e sai com código 1 se algum reprovar.
+O caminho de scratchpad da primeira execução era efêmero (apontado pelo CodeRabbit).
 
 ### Correção de fato sobre o que foi aplicado em prod
 
@@ -347,3 +349,22 @@ PR #551 precisa ser corrigido nesse ponto.
 
 **Resíduo que continua aberto:** apenas o **R6** — as etapas "Follow-up" e "Joabe" ativas em prod,
 cuja exclusão é decisão do dono.
+
+---
+
+## Rodada 4 — CodeRabbit (01/09/2026)
+
+Quatro apontamentos no PR #551, os quatro procedentes — nenhum descartado como ruído.
+
+| # | Apontamento | Correção |
+|---|---|---|
+| 1 | O gate ainda listava **R3 como pendente** em `antes_do_deploy_recomendado`, embora já corrigido — "o próximo leitor reimplementa um fix que já existe" | R3 marcado `status: FECHADO` com o método e a mutação; listas do gate atualizadas (R1, R2, R4 também) |
+| 2 | `route.test.ts` substitui **`@web/lib/api-auth` inteiro**: renomear `requireAuth`/`requireCapability` quebra produção e a suíte segue verde | Teste de contrato com `importActual` contra o módulo real |
+| 3 | Se o `fetch` do DELETE **rejeitar** (rede caiu), `setDeleting(false)` nunca roda: botão travado, sem mensagem | `try/catch/finally` com mensagem de falha de transporte |
+| 4 | R4, dois nits do erro novo: `max-w-xs text-right` sem `ml-auto` desalinha a mensagem dos botões; e o texto do 409 ficava na linha para sempre | `ml-auto` + `setErro(null)` ao cancelar o "Confirmar?" |
+
+O apontamento 2 é da mesma família do achado principal do @qa: **régua que não pode falhar não é
+régua**. Um mock que fabrica o módulo inteiro é verde por construção.
+
+Regressão da rodada 4: 25 testes nos 4 arquivos da story, suíte completa e tsc/lint conferidos
+abaixo.

@@ -74,6 +74,18 @@ function pedidoPatch(body: Record<string, unknown>) {
 
 const params = Promise.resolve({ id: "s-1" })
 
+describe("contrato do módulo mockado", () => {
+  // O factory acima substitui `@web/lib/api-auth` INTEIRO e fabrica os dois símbolos. Se um
+  // deles for renomeado ou removido, a rota quebra em produção e esta suíte segue verde —
+  // o mock continuaria "funcionando" contra um módulo que não existe mais.
+  it("`@web/lib/api-auth` exporta o que a rota importa", async () => {
+    const real = await vi.importActual<typeof import("@web/lib/api-auth")>("@web/lib/api-auth")
+
+    expect(typeof real.requireAuth).toBe("function")
+    expect(typeof real.requireCapability).toBe("function")
+  })
+})
+
 describe("DELETE /api/stages/[id] — guarda da etapa padrão", () => {
   beforeEach(() => {
     role = "admin"

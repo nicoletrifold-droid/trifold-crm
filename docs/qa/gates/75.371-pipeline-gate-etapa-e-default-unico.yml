@@ -316,6 +316,14 @@ resíduos:
       Em `handleStageUpdate`, quando `updated.is_default` for true, zerar `is_default` nas outras
       linhas do estado — espelhar no client o que o trigger fez no banco. Uma linha.
     recomendacao: "fazer antes do deploy; não bloqueia o gate"
+    status: FECHADO
+    fechado_em: "2026-09-01 (rodada 3, commit 8523e892)"
+    como: >-
+      `handleStageUpdate` passou a delegar para `aplicarAtualizacaoDeEtapa` (função pura, 4
+      testes) — quando a etapa editada vira a padrão, as demais perdem `is_default` no estado
+      local, espelhando a transferência que o trigger da migration 250 faz no banco. Mutação
+      que mede: remover a transferência da função pura → 2 testes falham.
+
   - id: R4
     severidade: low
     origem: "achado NOVO desta rodada (item (d))"
@@ -379,10 +387,10 @@ recomendacao:
   veredito: PASS
   bloqueia_devops: false
   antes_do_deploy_recomendado:
-    - "R3 — uma linha em `handleStageUpdate`. A tela desta story não deveria mostrar dois padrões."
+    - "Nenhum. R1, R2, R3 e R4 foram fechados na rodada 3 (commits 8523e892 e seguinte)."
   follow_up_barato:
-    - "R1 e R2 — duas linhas no contract test, fechando as duas cegueiras que EU medi."
-    - "R4 — `ml-auto` e limpar `erro` ao cancelar."
+    - "FECHADO — R1 e R2: duas asserções no contract test, cada uma com mutação que mata."
+    - "FECHADO — R4: `ml-auto` no erro e `setErro(null)` ao cancelar o Confirmar."
   ja_em_producao_agir_agora:
     - >-
       **R6 — remover as etapas de teste "Follow-up" e "Joabe" de produção.** É o único achado
