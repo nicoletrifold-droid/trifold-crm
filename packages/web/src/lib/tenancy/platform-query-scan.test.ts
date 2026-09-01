@@ -124,7 +124,15 @@ describe("AC-B3 — orgs/page.tsx passou a ler por platformQuery", () => {
   // sem harness; o que ela impede é a linha sumir num refactor sem ninguém notar.
   it("a consulta dedicada de admin desempata pelo mesmo critério da escrita", () => {
     const fonte = fs.readFileSync(PAGE, "utf8")
-    const consulta = fonte.slice(fonte.indexOf('platformQuery("users", "org_id, id, auth_id")'))
+    // A projeção ganhou `created_at` na Story 900-58: `pendenciasDeConvite` exige
+    // `AdminDaOrg.criadoEm`, que é a fonte de tempo do convite. É a MESMA projeção de
+    // `app/platform/page.tsx`, e tem que continuar sendo — as duas telas derivam o mesmo estado.
+    const ANCORA = 'platformQuery("users", "org_id, id, auth_id, created_at")'
+    // Fail-closed explícito: `indexOf` devolve `-1` quando a âncora some, e `slice(-1)` devolve
+    // o ÚLTIMO caractere do arquivo — um recorte que não achou o alvo não pode virar aprovação
+    // por acidente do que estiver no fim da fonte.
+    expect(fonte.indexOf(ANCORA), "âncora da consulta de admin").toBeGreaterThanOrEqual(0)
+    const consulta = fonte.slice(fonte.indexOf(ANCORA))
     expect(consulta).toMatch(/\.eq\("role", "admin"\)/)
     expect(consulta).toMatch(/\.order\("created_at", \{ ascending: true \}\)/)
   })
