@@ -1859,3 +1859,433 @@ describe("Story 87-20 — trava de loop bot-a-bot no webhook", () => {
     })
   })
 })
+
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Cartão de contato (vCard) inbound — bug de produção de 01/09/2026
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+//
+// Medido na conversa `fd2f5f39-2d73-483a-b499-1ad35c3ddff9`: o lead mandou o telefone da
+// namorada como cartão de contato (`type: "contacts"`) e a linha NUNCA existiu em `messages`.
+// Não é bolha vazia — é ausência total: o `else` final do bloco de montagem devolvia
+// `{status:"ok"}` antes de qualquer INSERT. O corretor teve de pedir o número por escrito.
+//
+// O carrasco destes testes é o próprio `else`: enquanto `contacts` não tiver branch,
+// `db.messages` fica VAZIO e as três asserções abaixo ficam vermelhas.
+describe("WhatsApp webhook — cartão de contato (vCard) inbound", () => {
+  const APP_SECRET = "test-secret"
+
+  beforeEach(() => {
+    db = freshDb()
+    nextId = 0
+    logEventMock.mockClear()
+    fetchMock.mockClear()
+    coachMock.mockClear()
+    coachMock.mockResolvedValue(undefined)
+    process.env.META_APP_SECRET = APP_SECRET
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "http://localhost"
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "test-key"
+    process.env.META_WHATSAPP_VERIFY_TOKEN = "verify"
+  })
+
+  /** Payload real da Cloud API: `messages[0].contacts` é um ARRAY de cartões. */
+  function buildContactsPayload(opts: {
+    from: string
+    wamid: string
+    contacts: unknown
+  }) {
+    return {
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                messages: [
+                  {
+                    from: opts.from,
+                    id: opts.wamid,
+                    type: "contacts",
+                    contacts: opts.contacts,
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    }
+  }
+
+  it("1 contato com 1 telefone: a mensagem EXISTE, com nome e número no texto", async () => {
+    const { POST } = await import("../route")
+
+    const res = await POST(
+      signedRequest(
+        buildContactsPayload({
+          from: "+5544999689446",
+          wamid: "wamid.VCARD-1",
+          contacts: [
+            {
+              name: { formatted_name: "Maria Silva", first_name: "Maria" },
+              phones: [{ phone: "+55 41 99999-9999", wa_id: "5541999999999" }],
+            },
+          ],
+        }),
+        APP_SECRET
+      )
+    )
+    expect(res.status).toBe(200)
+
+    // A AC é esta: a linha existe. Vem primeiro porque, sob o defeito, é ela que fica
+    // vermelha — asserção de texto sobre `undefined` apontaria para outro sintoma.
+    const userMsg = db.messages.find((m) => m.role === "user")
+    expect(userMsg).toBeTruthy()
+    expect(userMsg!.role).toBe("user")
+    expect(userMsg!.content).toBe("[Contato recebido] Maria Silva — +55 41 99999-9999")
+
+    // O número tem de sobreviver a uma edição do texto: fica estruturado no metadata.
+    expect(userMsg!.metadata.contacts).toEqual([
+      { nome: "Maria Silva", telefones: ["+55 41 99999-9999"] },
+    ])
+    expect(userMsg!.metadata.whatsapp_message_id).toBe("wamid.VCARD-1")
+    // Não é mídia: as colunas de mídia continuam limpas.
+    expect(userMsg!.media_type).toBeNull()
+  })
+
+  it("contato com múltiplos telefones: todos aparecem, separados por vírgula", async () => {
+    const { POST } = await import("../route")
+
+    const res = await POST(
+      signedRequest(
+        buildContactsPayload({
+          from: "+5544999689446",
+          wamid: "wamid.VCARD-2",
+          contacts: [
+            {
+              name: { first_name: "João", last_name: "Souza" },
+              phones: [
+                { phone: "+55 41 98888-8888", type: "CELL" },
+                // Sem `phone`: cai no `wa_id`, que é o que a Meta manda quando o
+                // cartão veio de um contato já salvo no WhatsApp.
+                { wa_id: "5541977777777", type: "WORK" },
+              ],
+            },
+          ],
+        }),
+        APP_SECRET
+      )
+    )
+    expect(res.status).toBe(200)
+
+    const userMsg = db.messages.find((m) => m.role === "user")
+    expect(userMsg).toBeTruthy()
+    expect(userMsg!.content).toBe(
+      "[Contato recebido] João Souza — +55 41 98888-8888, 5541977777777"
+    )
+    expect(userMsg!.metadata.contacts).toEqual([
+      { nome: "João Souza", telefones: ["+55 41 98888-8888", "5541977777777"] },
+    ])
+  })
+
+  it("`contacts: []` — a mensagem AINDA existe, com texto honesto, e o webhook GRITA", async () => {
+    const { POST } = await import("../route")
+
+    const res = await POST(
+      signedRequest(
+        buildContactsPayload({
+          from: "+5544999689446",
+          wamid: "wamid.VCARD-VAZIO",
+          contacts: [],
+        }),
+        APP_SECRET
+      )
+    )
+    expect(res.status).toBe(200)
+
+    // Nunca sumir em silêncio: sem dado legível, a bolha diz o que houve.
+    const userMsg = db.messages.find((m) => m.role === "user")
+    expect(userMsg).toBeTruthy()
+    expect(userMsg!.content).toBe(
+      "[Contato recebido — não foi possível ler os dados]"
+    )
+
+    const grito = logEventMock.mock.calls.find(
+      (c) => (c[0] as { event_type?: string })?.event_type === "contacts_payload_vazio"
+    )
+    expect(grito).toBeDefined()
+    expect((grito![0] as { level: string }).level).toBe("warn")
+  })
+})
+
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Tipos não suportados: nenhum some em silêncio
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+//
+// Mesma raiz do cartão de contato: o `else` final do bloco de montagem devolvia
+// `{status:"ok"}` para TUDO que não fosse text/audio/voice/image/document. Localização,
+// vídeo, figurinha, reação e qualquer tipo novo da Meta sumiam antes do INSERT.
+//
+// Carrascos aqui: (a) sob o defeito, `db.messages` fica vazio nos três primeiros testes;
+// (b) sob o defeito, `db.webhook_logs` fica vazio no teste de arquivamento; (c) o teste de
+// reação depende do par controle/reação — o controle prova que `pipelineMock` É chamado no
+// caminho normal, então a ausência na reação não é asserção vazia.
+describe("WhatsApp webhook — tipos não suportados nunca somem em silêncio", () => {
+  const APP_SECRET = "test-secret"
+
+  beforeEach(() => {
+    db = freshDb()
+    nextId = 0
+    logEventMock.mockClear()
+    fetchMock.mockClear()
+    fetchMock.mockImplementation((async () => ({ ok: true, json: async () => ({}) })) as never)
+    coachMock.mockClear()
+    coachMock.mockResolvedValue(undefined)
+    pipelineMock.mockClear()
+    pipelineMock.mockImplementation(async () => ({
+      response: "Mocked Nicole reply",
+      qualificationScore: 0,
+    }))
+    // Callbacks retidos por describes anteriores não podem entrar na conta deste.
+    afterPromises = []
+    falharLeitura = null
+    process.env.META_APP_SECRET = APP_SECRET
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "http://localhost"
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "test-key"
+    process.env.META_WHATSAPP_VERIFY_TOKEN = "verify"
+    // Mesma razão do bloco 87-20: a janela anti-rajada (75-359) é um `setTimeout` de ~1s
+    // ANTES do pipeline. Zerá-la é o que permite ao teste de CONTROLE alcançar a Nicole.
+    process.env.NICOLE_ANTI_RAJADA_MS = "0"
+  })
+
+  afterEach(() => {
+    delete process.env.NICOLE_ANTI_RAJADA_MS
+  })
+
+  /** Monta um payload com um `msg` arbitrário (o tipo é o eixo do teste). */
+  function buildTipoPayload(opts: {
+    from: string
+    wamid: string
+    type: string
+    extra?: Record<string, unknown>
+  }) {
+    return {
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                messages: [
+                  {
+                    from: opts.from,
+                    id: opts.wamid,
+                    type: opts.type,
+                    ...(opts.extra ?? {}),
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    }
+  }
+
+  it("location: bolha com nome, endereço e link do Google Maps", async () => {
+    const { POST } = await import("../route")
+
+    const res = await POST(
+      signedRequest(
+        buildTipoPayload({
+          from: "+5544999689446",
+          wamid: "wamid.LOC-1",
+          type: "location",
+          extra: {
+            location: {
+              latitude: -25.4284,
+              longitude: -49.2733,
+              name: "Obra Torre Alfa",
+              address: "Rua XV de Novembro, 100",
+            },
+          },
+        }),
+        APP_SECRET
+      )
+    )
+    expect(res.status).toBe(200)
+
+    const userMsg = db.messages.find((m) => m.role === "user")
+    expect(userMsg).toBeTruthy()
+    expect(userMsg!.content).toBe(
+      "[Localização recebida] Obra Torre Alfa — Rua XV de Novembro, 100 https://maps.google.com/?q=-25.4284,-49.2733"
+    )
+    // O link é o que faz a bolha ser acionável: sem ele o corretor não abre mapa nenhum.
+    expect(userMsg!.content).toContain("https://maps.google.com/?q=-25.4284,-49.2733")
+    expect(userMsg!.metadata.location).toEqual({
+      latitude: -25.4284,
+      longitude: -49.2733,
+      name: "Obra Torre Alfa",
+      address: "Rua XV de Novembro, 100",
+    })
+  })
+
+  it("CONTROLE — texto normal ACIONA a Nicole (senão a asserção da reação seria vazia)", async () => {
+    const { POST } = await import("../route")
+
+    await POST(
+      signedRequest(
+        buildPayload({ from: "+5544999689446", wamid: "wamid.CTRL-IA", text: "quanto custa?" }),
+        APP_SECRET
+      )
+    )
+    await drenarAfter()
+
+    expect(pipelineMock).toHaveBeenCalled()
+  })
+
+  it("reaction: a bolha é gravada e a Nicole NÃO é acionada", async () => {
+    const { POST } = await import("../route")
+
+    const res = await POST(
+      signedRequest(
+        buildTipoPayload({
+          from: "+5544999689446",
+          wamid: "wamid.REACT-1",
+          type: "reaction",
+          extra: { reaction: { emoji: "❤️", message_id: "wamid.ORIGINAL" } },
+        }),
+        APP_SECRET
+      )
+    )
+    expect(res.status).toBe(200)
+    await drenarAfter()
+
+    const userMsg = db.messages.find((m) => m.role === "user")
+    expect(userMsg).toBeTruthy()
+    expect(userMsg!.content).toBe("[O lead reagiu com ❤️]")
+    expect(userMsg!.metadata.reaction).toEqual({
+      emoji: "❤️",
+      message_id: "wamid.ORIGINAL",
+    })
+
+    // O que importa: responder a um ❤️ é pior que o silêncio.
+    expect(pipelineMock).not.toHaveBeenCalled()
+  })
+
+  it("tipo desconhecido: bolha genérica nomeando o tipo, e a Nicole NÃO é acionada", async () => {
+    const { POST } = await import("../route")
+
+    const res = await POST(
+      signedRequest(
+        buildTipoPayload({
+          from: "+5544999689446",
+          wamid: "wamid.ORDER-1",
+          type: "order",
+          extra: { order: { catalog_id: "CAT-1" } },
+        }),
+        APP_SECRET
+      )
+    )
+    expect(res.status).toBe(200)
+    await drenarAfter()
+
+    const userMsg = db.messages.find((m) => m.role === "user")
+    expect(userMsg).toBeTruthy()
+    expect(userMsg!.content).toBe(
+      "[O lead enviou algo que o CRM ainda não exibe: order]"
+    )
+    expect(pipelineMock).not.toHaveBeenCalled()
+  })
+
+  it("sticker e video: bolha própria, sem colunas de mídia (não há download)", async () => {
+    const { POST } = await import("../route")
+
+    await POST(
+      signedRequest(
+        buildTipoPayload({ from: "+5544999689446", wamid: "wamid.STK", type: "sticker" }),
+        APP_SECRET
+      )
+    )
+    await POST(
+      signedRequest(
+        buildTipoPayload({ from: "+5544999689446", wamid: "wamid.VID", type: "video" }),
+        APP_SECRET
+      )
+    )
+
+    const conteudos = db.messages.filter((m) => m.role === "user").map((m) => m.content)
+    expect(conteudos).toContain("[Figurinha recebida]")
+    expect(conteudos).toContain("[Vídeo recebido — o CRM ainda não exibe vídeos]")
+    expect(db.messages.filter((m) => m.role === "user").every((m) => m.media_type === null)).toBe(
+      true
+    )
+  })
+
+  it("o payload CRU vai para `webhook_logs` com source 'whatsapp' — a segunda cópia", async () => {
+    const { POST } = await import("../route")
+
+    await POST(
+      signedRequest(
+        buildContatoSimples("+5544999689446", "wamid.LOG-1"),
+        APP_SECRET
+      )
+    )
+    await drenarAfter()
+
+    const log = db.webhook_logs.find(
+      (l) => (l as { event_type?: string }).event_type === "tipo_nao_suportado:contacts"
+    ) as Record<string, unknown> | undefined
+
+    expect(log).toBeDefined()
+    expect(log!.source).toBe("whatsapp")
+    expect(log!.org_id).toBe("org-1")
+    // A bolha FOI gravada: não é falha de processamento.
+    expect(log!.processed).toBe(true)
+    // O objeto `msg` inteiro — é isto que teria salvado o telefone de 01/09.
+    expect(JSON.stringify(log!.payload)).toContain("+55 41 99999-9999")
+    expect((log!.payload as { id?: string }).id).toBe("wamid.LOG-1")
+  })
+
+  it("texto puro NÃO vai para `webhook_logs` (o arquivo é só dos tipos não suportados)", async () => {
+    const { POST } = await import("../route")
+
+    await POST(
+      signedRequest(
+        buildPayload({ from: "+5544999689446", wamid: "wamid.LOG-TXT", text: "oi" }),
+        APP_SECRET
+      )
+    )
+    await drenarAfter()
+
+    expect(db.webhook_logs).toHaveLength(0)
+  })
+})
+
+/** Cartão de contato mínimo — reaproveitado pelo teste de `webhook_logs`. */
+function buildContatoSimples(from: string, wamid: string) {
+  return {
+    entry: [
+      {
+        changes: [
+          {
+            value: {
+              messages: [
+                {
+                  from,
+                  id: wamid,
+                  type: "contacts",
+                  contacts: [
+                    {
+                      name: { formatted_name: "Maria Silva" },
+                      phones: [{ phone: "+55 41 99999-9999" }],
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ],
+  }
+}

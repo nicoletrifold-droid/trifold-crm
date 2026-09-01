@@ -401,6 +401,16 @@ export async function POST(request: NextRequest) {
     media_download_failed?: boolean
   } = {}
   let isVoiceMessage = false
+  // Dados estruturados dos tipos NÃO-mídia (cartão de contato, localização, reação).
+  // Fica FORA do `mediaMetadata` de propósito: nada aqui tem `media_id` nem download,
+  // então as colunas `media_*` continuam NULL.
+  const extraMetadata: Record<string, unknown> = {}
+  // Reação (❤️) e tipo desconhecido gravam a bolha mas NÃO acionam a IA — ver a guarda
+  // dentro do `after()` da Nicole, mais abaixo.
+  let acionaNicole = true
+
+  /** Normaliza campo textual do payload da Meta: string aparada, ou "". */
+  const limpar = (v: unknown) => (typeof v === "string" ? v.trim() : "")
 
   const IMAGE_MIME_TYPES = new Set([
     "image/jpeg",
@@ -424,9 +434,131 @@ export async function POST(request: NextRequest) {
       media_type: msg.type,
       media_id: msg.type === "image" ? msg.image?.id : msg.document?.id,
     }
+  } else if (msg.type === "contacts") {
+    // Bug de produção 01/09/2026 — conversa fd2f5f39-2d73-483a-b499-1ad35c3ddff9: o lead
+    // mandou o telefone da namorada como CARTÃO DE CONTATO. `contacts` não tinha branch,
+    // caía no `else` abaixo e a mensagem NUNCA chegava a `messages` — não era bolha vazia,
+    // era ausência total. Nem a Nicole nem o corretor viam; o número teve de ser pedido
+    // de novo por escrito.
+    //
+    // Payload da Cloud API: `contacts: [{ name:{formatted_name,first_name,last_name},
+    // phones:[{phone, wa_id, type}], emails, org }]`. Aqui só interessam nome e telefone —
+    // é o que resolve o caso real. E-mail/empresa ficam de fora por escopo.
+    const cartoes: unknown[] = Array.isArray(msg.contacts) ? msg.contacts : []
+
+    const lidos = cartoes
+      .map((bruto) => {
+        const c = (bruto ?? {}) as {
+          name?: { formatted_name?: unknown; first_name?: unknown; last_name?: unknown }
+          phones?: unknown
+        }
+        const nome =
+          limpar(c.name?.formatted_name) ||
+          [limpar(c.name?.first_name), limpar(c.name?.last_name)].filter(Boolean).join(" ")
+
+        const telefones = (Array.isArray(c.phones) ? c.phones : [])
+          // `phone` é o número como o remetente digitou; `wa_id` é o fallback que a Meta
+          // manda quando o cartão veio de um contato já salvo no WhatsApp. Guardamos o
+          // valor CRU — normalizar aqui esconderia o que de fato chegou.
+          .map((t) => {
+            const tel = (t ?? {}) as { phone?: unknown; wa_id?: unknown }
+            return limpar(tel.phone) || limpar(tel.wa_id)
+          })
+          .filter((t) => t.length > 0)
+
+        return { nome, telefones }
+      })
+      // Cartão sem nome E sem telefone não vira linha: não há o que mostrar.
+      .filter((c) => c.nome !== "" || c.telefones.length > 0)
+
+    if (lidos.length === 0) {
+      // Nunca sumir em silêncio: sem dado legível a bolha diz o que houve, e o evento
+      // deixa rastro para investigar o payload.
+      text = "[Contato recebido — não foi possível ler os dados]"
+      logEvent({
+        level: "warn",
+        category: "webhook",
+        event_type: "contacts_payload_vazio",
+        message: `Mensagem type=contacts sem nome nem telefone legível (wamid ${messageId})`,
+        metadata: { wamid: messageId, cartoes_recebidos: cartoes.length },
+        source: "api/webhook/whatsapp",
+      })
+    } else {
+      // Prefixo em CADA linha (e não só na primeira): a bolha pode ser truncada na lista
+      // de conversas e a Nicole lê o texto linha a linha — cada linha tem de se explicar
+      // sozinha. Um contato por linha.
+      text = lidos
+        .map((c) => {
+          const nome = c.nome || "Sem nome"
+          return c.telefones.length > 0
+            ? `[Contato recebido] ${nome} — ${c.telefones.join(", ")}`
+            : `[Contato recebido] ${nome} (sem telefone)`
+        })
+        .join("\n")
+    }
+
+    // Estruturado no metadata: se alguém editar o texto da bolha, o número continua lá.
+    extraMetadata.contacts = lidos
+  } else if (msg.type === "location") {
+    const loc = (msg.location ?? {}) as {
+      latitude?: unknown
+      longitude?: unknown
+      name?: unknown
+      address?: unknown
+    }
+    // A Meta manda lat/lng como número, mas já mandou string em integrações antigas.
+    const coord = (v: unknown): number | null => {
+      if (typeof v === "number" && Number.isFinite(v)) return v
+      if (typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v))) {
+        return Number(v)
+      }
+      return null
+    }
+    const lat = coord(loc.latitude)
+    const lng = coord(loc.longitude)
+    const nome = limpar(loc.name)
+    const endereco = limpar(loc.address)
+
+    const partes = ["[Localização recebida]"]
+    if (nome) partes.push(nome)
+    if (endereco) partes.push(nome ? `— ${endereco}` : endereco)
+    // O link é o que torna a bolha ACIONÁVEL pelo corretor: um par de coordenadas
+    // solto no texto não abre mapa nenhum.
+    if (lat !== null && lng !== null) partes.push(`https://maps.google.com/?q=${lat},${lng}`)
+    text = partes.join(" ")
+
+    extraMetadata.location = { latitude: lat, longitude: lng, name: nome || null, address: endereco || null }
+  } else if (msg.type === "video") {
+    // Sem download: exibir vídeo no CRM é outro trabalho. O que esta correção garante é
+    // que o corretor SAIBA que o lead mandou um vídeo em vez de ver a conversa muda.
+    text = "[Vídeo recebido — o CRM ainda não exibe vídeos]"
+  } else if (msg.type === "sticker") {
+    text = "[Figurinha recebida]"
+  } else if (msg.type === "reaction") {
+    const reacao = (msg.reaction ?? {}) as { emoji?: unknown; message_id?: unknown }
+    const emoji = limpar(reacao.emoji)
+    text = emoji ? `[O lead reagiu com ${emoji}]` : "[O lead reagiu a uma mensagem]"
+    // `message_id` é o wamid da mensagem reagida — sem ele a reação fica órfã.
+    extraMetadata.reaction = { emoji: emoji || null, message_id: limpar(reacao.message_id) || null }
+    // Uma reação não é pedido. A Nicole responder a um ❤️ é pior que o silêncio.
+    acionaNicole = false
   } else {
-    return NextResponse.json({ status: "ok" })
+    // `system`, `order`, `unsupported` e qualquer tipo que a Meta venha a inventar.
+    // Antes disto o `else` devolvia 200 e DESCARTAVA a mensagem: nada em `messages`,
+    // nada em log, ninguém sabia. Agora a bolha existe e nomeia o tipo.
+    text = `[O lead enviou algo que o CRM ainda não exibe: ${limpar(msg.type) || "tipo desconhecido"}]`
+    extraMetadata.tipo_nao_suportado = limpar(msg.type) || null
+    // Não sabemos o que é — a IA não tem o que responder com segurança.
+    acionaNicole = false
   }
+
+  // Tipos originalmente suportados pelo pipeline (texto + as mídias que baixam).
+  // Tudo fora desta lista tem o payload CRU arquivado em `webhook_logs` mais abaixo:
+  // foi justamente a falta desse arquivo que tornou o telefone perdido em 01/09
+  // irrecuperável.
+  const tipoNaoSuportado = !["text", "audio", "voice", "image", "document"].includes(
+    msg.type as string
+  )
 
   // ---- Resolve org/whatsapp_config (sync) — Story 900-24, AC3 -----------
   //
@@ -488,6 +620,38 @@ export async function POST(request: NextRequest) {
   }
 
   const orgId = config.org_id
+
+  // ---- Arquiva o payload CRU dos tipos não suportados --------------------
+  //
+  // Em 01/09/2026 o telefone que veio num cartão de contato ficou IRRECUPERÁVEL porque
+  // este webhook — ao contrário do de meta_ads — nunca gravou payload em `webhook_logs`.
+  // A bolha (INSERT síncrono, mais abaixo) é a recuperação primária; isto aqui é a
+  // segunda cópia, com o objeto `msg` inteiro, para o que a bolha não souber traduzir.
+  //
+  // `processed: true` de propósito: a mensagem FOI processada (virou bolha). A coluna
+  // marca falha de processamento, e usar `false` aqui faria toda mensagem de figurinha
+  // parecer pendente numa fila que ninguém drena.
+  //
+  // Fire-and-forget: uma falha ao arquivar não pode derrubar o webhook nem atrasar o 200 —
+  // e, principalmente, não pode impedir o INSERT da mensagem, que vem depois.
+  if (tipoNaoSuportado) {
+    after(async () => {
+      try {
+        await getSupabaseAdmin()
+          .from("webhook_logs")
+          .insert({
+            org_id: orgId,
+            source: "whatsapp",
+            event_type: `tipo_nao_suportado:${msg.type}`,
+            payload: msg,
+            signature_valid: true,
+            processed: true,
+          })
+      } catch (err) {
+        console.error("[webhook] falha ao arquivar payload não suportado (ignorado):", err)
+      }
+    })
+  }
 
   // ---- Find-or-upsert lead (sync) ---------------------------------------
   // AC3 + AC4 + AC5b: use `phone_normalized` as the dedup key. `.maybeSingle`
@@ -715,6 +879,10 @@ export async function POST(request: NextRequest) {
         metadata: {
           whatsapp_message_id: messageId,
           ...mediaMetadata,
+          // Cartão de contato / localização / reação / tipo desconhecido: dado
+          // estruturado, para que o número (ou a coordenada) sobreviva a uma edição
+          // do texto da bolha.
+          ...extraMetadata,
         },
       })
       // Story 75-359 — o `created_at` desta linha é a referência da guarda
@@ -972,6 +1140,13 @@ export async function POST(request: NextRequest) {
 
       // Skip Nicole if there's no text and no media at all
       if (!asyncText && !asyncMediaBlock) return
+
+      // Reação (❤️) e tipo desconhecido: a bolha JÁ foi gravada no INSERT síncrono, mas a
+      // IA não responde. Uma reação não é pedido, e responder a um coração é pior que o
+      // silêncio; para tipo desconhecido não sabemos sequer o que foi enviado.
+      // Este é o MESMO ponto que já decidia se a Nicole roda: tudo daqui para baixo —
+      // inclusive o `processMessageWithMetadata` — está depois deste early-return.
+      if (!acionaNicole) return
 
       // Update conversation timestamp
       await supabase
