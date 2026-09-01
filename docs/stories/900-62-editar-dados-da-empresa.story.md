@@ -829,6 +829,7 @@ ganho de auditabilidade correspondente.
 | 2026-09-01 | 0.2 | **Escopo expandido por decisão do dono do produto**: contato (responsável/e-mail/telefone) e dados fiscais (CNPJ/razão social/endereço) ENTRAM — armazenados em `organizations.settings` (jsonb, chaves `contato`/`fiscal`), não em colunas novas, por critério medido contra o precedente do repositório (dado só-exibição/sem filtro SQL → jsonb; dado filtrado ou de máquina-de-estado → coluna). Decisão de NÃO esperar a fundação de cobrança para os campos fiscais, citando o próprio princípio do epic ("o artefato nasce onde é primeiro usado, e é refinado depois", linha 542). RPC renomeada de `_org_identity_*` para `_org_details_*` (escopo maior que "identidade"). Validação real reaproveitada de `@web/lib/validation/contato.ts` — achado desta sessão: `isValidCnpj`/`normalizeCpfCnpj` (com dígito verificador, Story 75-282) e `isValidEmail`/`isValidPhoneBR` **já existem no repositório**, nada foi escrito do zero. Merge em `settings` via `jsonb_set` encadeado por chave, nunca substituição do objeto inteiro (protege `materiais_url`/`relatorio_diario_destinatarios`, chaves de outras features no mesmo `settings`). **Logo saiu do escopo desta story** — vira story irmã `900-63` (forma técnica diferente: upload/Storage, não texto validado; achado crítico: `logo_url` tem ZERO consumidores no código hoje). Numeração de migration reconfirmada: `251` (candidato da v0.1) já foi consumido pela própria `900-60` (commit local `750b08ec`, ainda não empurrado — por isso invisível à varredura só-remota) — segunda colisão desta leva; candidato atual é `252`, a reconfirmar no dia. Seção de LGPD nova: contato é dado pessoal (registrado em texto claro na trilha, decisão consciente, não mascarado); CNPJ/razão social/endereço não são dado pessoal (pessoa jurídica), exceção MEI não tratada. Rota e RPC renomeadas nas Tasks/AC; título da story atualizado. | @sm (River) |
 | 2026-09-01 | 0.3 | **Validação @po (Pax) — GO 9/10, correções aplicadas dentro da autoridade do PO (AC/escopo).** (1) **AC5 reescrita:** o `jsonb_set` encadeado da v0.2 está MEDIDO como defeituoso em duas frentes silenciosas — `jsonb_set` é STRICT (um `NULL` anula a coluna `settings` inteira, e `normalizeCpfCnpj('')` devolve `null`, então salvar com o CNPJ em branco apagaria `city`/`state`/`materiais_url`/`relatorio_diario_destinatarios`, as 4 chaves que existem em produção hoje) e `create_missing=true` NÃO cria o objeto-pai (como `contato`/`fiscal` são chaves novas, as 6 escritas cairiam no vazio em 100% dos casos, com `200` na tela). Forma nova medida: `coalesce(settings,'{}'::jsonb) \|\| jsonb_build_object(...)`. (2) **AC3/AC5 — trava otimista:** `updated_at <> NULL` avalia para `NULL` e o `IF` não entra no ramo; a trava falhava ABERTA. Passa a ser `IS DISTINCT FROM` + `RAISE P0024` para `p_expected_updated_at IS NULL`. (3) **AC4:** comparação do no-op com `coalesce(...,'')` — chave ausente devolvia `NULL` e o no-op nunca seria detectado. (4) **AC13 NOVA:** a projeção de `orgs/[id]/page.tsx:84` não tem `updated_at` nem `settings` — sem eles a AC7 é inexequível e o operador que edita só o `name` APAGA o contato/fiscal já gravados; régua de âncora obrigatória. (5) **AC14 NOVA:** `PATCH /api/organization` já existe e deixa um admin do tenant escrever `settings` com chaves arbitrárias, sem validação, sem trava e sem trilha — denylist de `contato`/`fiscal` com controle positivo em `city`. (6) **AC15 NOVA:** contato/fiscal exibidos no card, não só dentro do diálogo — sem isso a story entrega a escrita e não a leitura que a própria User Story usa como justificativa. (7) **LGPD: decisão de não mascarar ACEITA**, com correção obrigatória de minimização — `metadata.antes`/`.depois` carregam só as chaves de `campos_alterados` (medido: a coluna `metadata` é imutável por `IS NOT DISTINCT FROM` no trigger da `248`, logo cada cópia é permanente e ineliminável). (8) **Task 1.4 reescrita:** o carrasco da v0.2 passava verde sob os dois defeitos (media o nada); 4 cenários novos + carrasco da trava, em `BEGIN/ROLLBACK`. (9) `cnpjCnpjError` não existe e `cpfCnpjError` aceita CPF de 11 dígitos no campo CNPJ — corrigido para `isValidCnpj`. (10) **Migration `252` RECONFIRMADA** contra `refs/heads` + `refs/remotes` + `git log --all` + as 4 branches da pilha + `git stash` + produção (`max_num=250`). Status Draft → Ready. | @po (Pax) |
 | 2026-09-01 | 1.0 | **Implementada (@dev).** Migration `252` (número remedido no dia contra `refs/heads` + `refs/remotes` + `git log --all` + árvore de trabalho, maior = `251`; e contra produção pela Management API, `max_num = 250`). Núcleo `_org_details_update` + wrapper `org_details_update_as_platform`, com merge raso `coalesce(settings,'{}') \|\| jsonb_build_object(...)`, `IS DISTINCT FROM` + `RAISE P0024` para a trava, e trilha só com as chaves de `campos_alterados`. Os 4 cenários da Task 1.4, o 1.4b e a minimização de LGPD foram medidos VERMELHO contra a forma da v0.2 redefinida dentro da mesma transação, e VERDE contra a forma nova — em `BEGIN/ROLLBACK`, no `trifold-crm-dev`. Rota `PATCH /api/platform/orgs/[id]/dados` (arquivo distinto do da `900-60`), diálogo de três seções, projeção da AC13 com régua de âncora, AC15 no card, denylist da AC14 com controle positivo em `city`, registro na allowlist (243 → 244). 12 mutações medidas com `tsc` rc=0. Dois achados de régua herdada durante a implementação (a guarda de embedding da `900-42a` e o delimitador de `console-fail-closed.test.ts` da `900-57`), os dois consertados MOVENDO o código, sem tocar nas réguas. Validado na tela com login pelo formulário no banco de teste, incluindo um conflito real de dois operadores. Status Ready → Ready for Review. | @dev (Dex) |
+| 2026-09-01 | 1.1 | **Ressalvas do gate fechadas (@dev), escopo fechado — nenhuma AC nova, nenhuma funcionalidade nova.** **QA-900-62-1:** refiz o PROBE-1 na árvore de antes (seis literais `""` na prop `inicial`, projeção intacta → `tsc` rc=0 e suíte 311/4274/6, zero vermelho) e fechei por EXTRAÇÃO, não por âncora de texto: `dadosIniciaisDoDialogo(org)` foi para o módulo puro. O mesmo mutante agora é vermelho (M-A), e o mutante que mantém o call site e quebra a função também (M-B) — régua de forma e de comportamento, as duas. **QA-900-62-2:** `linhasDeContatoEFiscal()` tira a AC15 do ponto cego do `.tsx` (o que saiu não é markup, é a decisão de quais seis rótulos, com que valor e com que travessão); apagar as seis linhas do card, verde antes (PROBE-2), é vermelho agora (M-C), e tirar o travessão também (M-D). **OBS-1:** o `409` não devolve mais `settings` inteiro ao navegador, só os oito campos editáveis pela mesma fronteira `lerContatoEFiscal` (M-E vermelho). **OBS-2:** "Nada foi alterado." saiu do `catch` de rede do diálogo e do ramo genérico da rota — falha de transporte depois do `COMMIT` teria alterado; a frase de função-não-publicada continua afirmando, porque ali a escrita provadamente não saiu. **OBS-3:** acentuação da entrada do allowlist. Achado HERDADO da `900-57` (a âncora `? "—"` satisfeita por `??`) registrado e NÃO consertado — é de outra story, e a `900-62` soma zero. Suíte 311 / 4.286 / 6 (delta +12 conferido por contagem: 8 + 3 + 1, zero arquivo novo); `type-check` rc=0, `lint` rc=0 com os mesmos 30 warnings do baseline, `build` rc=0. Produção não tocada nesta rodada. | @dev (Dex) |
 
 ## Dev Agent Record
 
@@ -970,11 +971,10 @@ O delta desta story é **+3 arquivos e +74 testes**: 34 (`console-dados-empresa.
    colateral carregando o estado dessas cinco. Consequência: `db:status` mostra `252` como
    `PENDENTE` num banco onde a função existe. `CREATE OR REPLACE` é idempotente, então reaplicar
    pelo caminho sancionado é inofensivo.
-2. **A AC15 (as linhas de contato/fiscal no card) não tem carrasco automatizado.** É JSX em
-   `.tsx`, e o `vitest.config.ts` coleta `*.test.ts` e não `.tsx`. O que existe é a régua da AC13
-   (a projeção) mais a fronteira de `lerContatoEFiscal()` (que tem `it` provando que nenhuma
-   chave fora de `contato`/`fiscal` sai dela) — nenhuma das duas prova que as linhas estão
-   **renderizadas**. A prova aqui é a tela, acima.
+2. ~~**A AC15 (as linhas de contato/fiscal no card) não tem carrasco automatizado.**~~
+   **RESOLVIDO na rodada de ressalvas do gate (QA-900-62-2).** O @qa mediu (PROBE-2) que dava
+   para extrair: a decisão saiu do JSX para `linhasDeContatoEFiscal()`, e a mutação que apagava
+   as seis linhas — verde antes — agora é vermelha. Ver "As duas ressalvas do gate" abaixo.
 3. **A AC11 não tem carrasco para o resto da cadeia.** A régua de forma que escrevi cobre
    `dados/route.ts` (nenhum `console.*` em linha de código). Ela **não** cobre a RPC nem
    middleware/observabilidade de terceiros.
@@ -989,6 +989,90 @@ O delta desta story é **+3 arquivos e +74 testes**: 34 (`console-dados-empresa.
    pela Management API com `User-Agent` identificado e PAT. Nenhuma chave de serviço, nenhuma
    escrita, nenhum DDL.
 
+### As duas ressalvas do gate — fechadas (rodada de 2026-09-01, depois do `CONCERNS`)
+
+Escopo fechado: nenhuma AC nova, nenhuma funcionalidade nova. Baseline desta rodada, medido por
+mim antes de tocar em qualquer arquivo: **311 arquivos · 4.274 passando · 6 xfail · rc=0** —
+idêntico ao que o gate declarou. `tsc --noEmit` rc=0 antes de contar cada vermelho; restauro de
+mutante por `cp` de snapshot com `shasum -a 256` conferido, nunca `git checkout --`.
+
+#### QA-900-62-1 — a fiação, que a régua da AC13 não alcançava
+
+Refiz o PROBE-1 do @qa **na árvore de antes**, para não herdar a medição: com a projeção intacta,
+`...dadosDeContato` trocado por seis literais `""` na prop `inicial` deixa `tsc` rc=0 e a suíte
+**311 / 4274 / 6 — zero vermelho**. Confirmado com as minhas mãos: a régua prendia a coluna na
+projeção e não prendia a coluna chegando ao campo.
+
+Escolhi a **extração** que o @qa preferia, e não o terceiro `it` de âncora de texto: âncora de
+texto-fonte foi enganada sete vezes nesta onda. `dadosIniciaisDoDialogo(org)` foi para
+`console-dados-empresa.ts`; o `.tsx` só chama.
+
+| Mutante (todos com `tsc --noEmit` rc=0) | Antes | Depois |
+|---|---|---|
+| **M-A** — os seis literais `""` na prop `inicial` (o aceite literal do pedido) | **0 vermelho** (PROBE-1) | **1 vermelho** — `a prop 'inicial' é a função pura` |
+| **M-B** — call site intacto, a **função pura** passa a devolver seis `""` | — | **1 vermelho** — `controle positivo: empresa COM contato e fiscal abre o diálogo preenchido` |
+
+O M-B é o que separa esta correção de uma régua de forma: o mutante que mantém o texto do call
+site e quebra o comportamento também morre. E o inverso — função pura bem testada com componente
+que a ignora — está fechado por duas âncoras de **linha** (não `toContain` no arquivo inteiro):
+a prop tem de ser exatamente `inicial={dadosIniciaisDoDialogo(org)}`, e o `import` do módulo tem
+de trazer o nome. Linha de comentário começa com `//`, `/*` ou `*` depois do `trim` e não casa
+com o filtro; duas linhas casando também reprova, porque `toHaveLength(1)` é exigência.
+
+#### QA-900-62-2 — a AC15 sai do ponto cego do `.tsx`
+
+O que saiu do JSX não é markup: é a decisão de **quais seis rótulos, com que valor, com que
+travessão e com qual deles mascarado** — `linhasDeContatoEFiscal(settings)`, com `maskCpfCnpj`
+aplicado ali. O que sobrou no `.tsx` é `map` e uma função de classe de CSS.
+
+| Mutante | Antes | Depois |
+|---|---|---|
+| **M-C** — as seis linhas apagadas do card (o PROBE-2 do @qa) | **0 vermelho** | **1 vermelho** — `AC15: o card CHAMA as seis linhas e as imprime` |
+| **M-D** — `ou = (v) => v` (o travessão de "não cadastrado" some) | — | **1 vermelho** — `sem dado → as SEIS linhas trazem o travessão` |
+
+O CNPJ é conferido contra o literal `11.222.333/0001-81`, e **não** contra `maskCpfCnpj(...)`:
+régua que monta o esperado chamando a função que testa não reprova a função.
+
+#### Observações OBS-1 e OBS-3 — corrigidas; OBS-2 — corrigida nas duas pontas
+
+- **OBS-1:** o `409` devolvia `settings` **inteiro** ao navegador do platform admin. Agora
+  devolve os oito campos editáveis, pela MESMA fronteira que a página usa (`lerContatoEFiscal`).
+  **M-E** — voltar a `settings: linha.settings` → **1 vermelho**, e o `it` também exige que
+  `contatoNome` continue chegando: sem esse segundo `expect`, "devolver menos" passaria por
+  "devolver nada".
+- **OBS-2:** `"Nada foi alterado."` afirmava o que não foi medido. No `catch` de rede do diálogo
+  e no ramo genérico da rota, a frase passa a ser "não dá para confirmar se a alteração foi
+  gravada — recarregue a página". A frase de `MENSAGEM_DE_FUNCAO_NAO_PUBLICADA` **continua
+  afirmando**, e de propósito: ali a escrita provadamente não saiu, porque a função nem foi
+  chamada. (O mesmo `catch` existe em `pausar-empresa-dialog.tsx`, da `900-60` — **não tocado**,
+  é de outra story.)
+- **OBS-3:** a entrada da rota em `admin-client-allowlist.json` ganhou a acentuação que as três
+  irmãs do mesmo bloco já tinham. Só texto de auditoria; nenhuma contagem mudou.
+
+#### Achado HERDADO da `900-57` — registrado, **não consertado**
+
+A âncora `desenho: '? "—"'` do ramo fail-closed da Identidade
+(`console-fail-closed.test.ts`) é satisfeita por `{org?.name ?? "—"}`, porque `??` **contém**
+`? `. O `it` do ramo é colinear; o kill set não é vazio (o controle positivo mata).
+**A `900-62` soma zero**: o @qa mediu 3 ocorrências no recorte antes (`31f6ebcc`) e 3 depois, e
+as seis linhas da AC15 usavam `||` e `: "—"`. Depois desta rodada elas nem existem mais no
+`.tsx` — o travessão passou a ser a constante `SEM_DADO` dentro do módulo, então a contagem do
+recorte da `900-57` continua intocada. **Não corrigi**: a régua é de outra story, e mexer nela
+daqui é editar fora do escopo. Vira item de backlog para a dona da régua.
+
+### Réguas desta rodada
+
+- `pnpm test`: **311 arquivos · 4.286 passando · 6 xfail · rc=0**.
+  Delta conferido por **contagem**, não por subtração: `console-dados-empresa.test.ts` **+8**,
+  `platform-query-scan.test.ts` **+3**, `dados/route.test.ts` **+1** = **+12** (4.274 → 4.286).
+  **Zero arquivo novo** — 311 antes e depois.
+- `pnpm type-check --force` rc=0. `pnpm lint --force` rc=0 — 30 problems, 0 errors, 30 warnings,
+  **os mesmos 30 do baseline** e nenhum em arquivo desta story. `pnpm build` rc=0, com
+  `ƒ /api/platform/orgs/[id]/dados` no manifesto.
+- ⚠️ **A folga de 5 contra o CI segue aberta e sem dono.** Não inventei conta para fechá-la.
+- Produção: **não tocada nesta rodada** — nenhuma leitura, nenhuma escrita, nenhuma chave.
+  Nenhuma sessão forjada, nenhuma linha nova em `platform_audit_log` (que é append-only).
+
 ### File List
 
 **Novos**
@@ -1001,10 +1085,14 @@ O delta desta story é **+3 arquivos e +74 testes**: 34 (`console-dados-empresa.
 - `packages/web/src/app/api/organization/route.test.ts`
 
 **Modificados**
-- `packages/web/src/app/platform/orgs/[id]/page.tsx` — projeção da AC13, linhas da AC15, botão da AC7
+- `packages/web/src/app/platform/orgs/[id]/page.tsx` — projeção da AC13, linhas da AC15, botão da
+  AC7; na rodada de ressalvas passou a consumir `dadosIniciaisDoDialogo` e `linhasDeContatoEFiscal`
+  (QA-900-62-1/2), e não decide mais nada sobre esses dados
 - `packages/web/src/app/api/organization/route.ts` — denylist da AC14
-- `packages/web/src/lib/tenancy/platform-query-scan.test.ts` — bloco de âncora da AC13
-- `docs/audits/admin-client-allowlist.json` — a rota nova na seção `plataforma` (AC6)
+- `packages/web/src/lib/tenancy/platform-query-scan.test.ts` — bloco de âncora da AC13, mais as
+  duas âncoras de consumo do `.tsx` (QA-900-62-1/2)
+- `docs/audits/admin-client-allowlist.json` — a rota nova na seção `plataforma` (AC6); acentuação
+  corrigida na rodada de ressalvas (OBS-3)
 - `scripts/admin-client-allowlist.test.ts` — `TOTAL_ESPERADO` 243 → 244
 - `docs/stories/900-62-editar-dados-da-empresa.story.md` — este registro
 
@@ -1024,4 +1112,106 @@ O delta desta story é **+3 arquivos e +74 testes**: 34 (`console-dados-empresa.
   consegui provar", item 1.
 
 ## QA Results
-_(Preenchido pelo @qa.)_
+
+**Gate:** `CONCERNS` — nenhum item bloqueia o push · **Revisor:** Quinn (Test Architect) ·
+**Data:** 2026-09-01 · **Base:** `0ee9fe58`, `merge-base` com `origin/main` = `1393fa68`
+**Arquivo do gate:** `docs/qa/gates/900.62-editar-dados-da-empresa.yml`
+
+**Zero defeito vivo, zero regressão.** Refiz as medições em vez de aceitá-las.
+
+### Os quatro defeitos previstos — reproduzidos por mim em `trifold-crm-dev`
+
+Cada cenário num `BEGIN;` cujo último passo é um `RAISE EXCEPTION` carregando o resultado: o
+`ROLLBACK` fica garantido pelo mecanismo, não pela minha disciplina. A forma defeituosa foi
+redefinida DENTRO da mesma transação. Zero resíduo depois (`organizations` 3, `platform_audit_log`
+9, iguais ao antes).
+
+| Cenário | Forma entregue | Forma da v0.2 |
+|---|---|---|
+| **(a)** `p_fiscal_cnpj = NULL`, org com as 4 chaves de produção | `settings` viva; `city`/`materiais_url` intactos; `contato.nome` gravado | **`settings IS NULL`** — as 4 chaves somem juntas |
+| **(b)** nenhum parâmetro nulo | lê `"Ana Souza"` de volta do banco | lê **`null`**, com a RPC devolvendo sucesso |
+| **(c)** vizinhos | `materiais_url` preservado no MESMO `UPDATE` que cria `contato` | — |
+| **1.4b** trava com `NULL` | `P0024`, `name` intacto | **`NOME SEQUESTRADO`** gravado |
+| **5.1b** LGPD | 1 linha · `campos_alterados=["name"]` · `antes`/`depois` só com `name` · **zero** valor de contato/fiscal | — |
+| **5.2** no-op (AC4) | **0** linhas de trilha | — |
+
+**Além do que foi pedido:** o `md5` do corpo **VIVO** das duas funções em `trifold-crm-dev` é
+idêntico ao corpo do arquivo (`c42d2713…` / `2002fd1b…`) — "aplicada por escrita direta" não
+significa "aplicada diferente". Privilégios pela superfície real (`has_function_privilege`):
+`anon`/`authenticated` `false` nas duas; o `service_role` no núcleo privado é o default do
+Supabase e é idêntico aos 5 núcleos irmãos da `248` — não é regressão desta story.
+
+**Produção (leitura, agregados, Management API com `User-Agent`, sem chave de serviço):**
+`max_num = 250`; 1 org, `settings` não-nula, `tem_contato = 0`, `tem_fiscal = 0`, chaves =
+`city, materiais_url, relatorio_diario_destinatarios, state`. Isso torna o cenário (a) concreto:
+com o `jsonb_set`, o primeiro "Salvar" com o CNPJ em branco teria anulado o `settings` da única
+org de produção.
+
+### Mutações (todas com `tsc --noEmit` rc=0 antes de contar o vermelho; restauro por `cp` + `shasum -a 256`)
+
+- **M7** — confirmado: **1 vermelho, e é SÓ o controle positivo do `city`**; os 5 `it` de recusa
+  ficam verdes. É ele que impede "fechei demais" passar por "protegi".
+- **M9** — confirmado: **não compila** (`TS2322` em `console-dados-empresa.ts(125,5)`). **Não
+  contei como vermelho de carrasco** — quem reprova ali é o tipo.
+- **M10** — 2 vermelhos, `tsc` rc=0.
+- **PROBE-4 (minha)** — `console.error(corpo)` no fonte da rota: 1 vermelho. A régua da AC11 tem
+  guarda de vivacidade (`>50` linhas de código), então recorte vazio não a aprova.
+
+### O achado — QA-900-62-1 (medium, não bloqueia, recomendado fechar antes do merge)
+
+**A régua da AC13 para uma casa antes do dano que ela nomeia.** Ela prende a PROJEÇÃO; não
+prende a FIAÇÃO. **PROBE-1:** com a projeção INTACTA, trocar `...dadosDeContato` por seis
+literais `""` no `inicial` do diálogo deixa `tsc` rc=0 e a suíte **311 / 4274 / 6 — idêntica ao
+baseline**. O desfecho é a frase da AC13 palavra por palavra: o operador abre para corrigir o
+`name`, salva, e **apaga o contato e o fiscal já gravados, com `200` na tela**. Não é defeito
+vivo — o código entregue lê `...dadosDeContato`. É carrasco ausente para a regressão que a
+própria AC declara ser a razão de a régua existir. Remédio exato no gate.
+
+### As duas perguntas que o @dev deixou em aberto
+
+- **AC15 é extraível — sim.** Confirmei por medição (**PROBE-2**) que remover as seis linhas do
+  card deixa tudo verde. O precedente é a 900-60: o que precisa sair do `.tsx` não é o markup, é
+  a DECISÃO — `linhasDeContatoEFiscal(settings) → Array<{rotulo, valor}>`, com `maskCpfCnpj`
+  aplicado ali. A prova deixa de ser só a tela.
+- **A denylist de rota BASTA para a AC14, com dívida nomeada.** Medi os três server actions: os
+  três leem `settings` FRESCO dentro da própria action e dão spread — não conseguem escrever
+  `contato`/`fiscal` e PRESERVAM as duas chaves. O resíduo é uma janela de lost-update de
+  milissegundos que já existia para `city`/`state`. Não vira concern bloqueante; vira backlog
+  (`CHECK`/trigger na tabela).
+
+### As duas réguas herdadas — o conserto foi no lugar certo
+
+Confirmado: os dois consertos foram por **mover código**, com zero linha de régua alterada
+(`git diff` em `platform-query-scan.ts` e em `console-fail-closed.test.ts` é vazio).
+**A oitava vez de "comentário engana régua de texto-fonte": procurei e NÃO achei nesta leva.**
+Achei outra coisa, e é herdada da 900-57 (**PROBE-3**): a âncora `desenho: '? "—"'` do ramo
+Identidade é satisfeita por `{org?.name ?? "—"}` — `??` contém `? `. **Medi que esta story não
+piorou nada:** 3 ocorrências no recorte ANTES (`31f6ebcc`) e 3 DEPOIS; as seis linhas da AC15
+usam `||` e `: "—"` e somam ZERO. Kill set não-vazio (o controle positivo mata). Fica para a
+dona da régua.
+
+### Réguas — qual baseline usei
+
+**O LOCAL desta árvore**, medido por mim: **311 arquivos · 4274 passed · 6 expected fail · rc=0**
+— bate EXATO com o declarado. Conferi o delta por contagem, não por subtração: 9 + 34 + 28 + 3 =
+**74**, e **+3 arquivos**. **A folga de 5 contra o CI (#555: 308/4.186/6) continua aberta e sem
+dono — não inventei conta para fechá-la.**
+`pnpm lint --force` rc=0 (0 erros, 30 warnings, nenhum em arquivo desta story) ·
+`pnpm type-check --force` rc=0 · `pnpm build` rc=0 com `ƒ /api/platform/orgs/[id]/dados` no
+manifesto. **Migration `252` livre**, remedido hoje contra todas as `refs/heads` + `refs/remotes`
++ `git log --all` + diretório de trabalho (maior = `251`) e contra produção (`max_num = 250`).
+
+### Concerns (nenhuma bloqueia o push)
+
+| id | severidade | resumo |
+|---|---|---|
+| QA-900-62-1 | medium | a régua da AC13 não cobre a fiação projeção→prop (PROBE-1) — **fechar antes do merge** |
+| QA-900-62-2 | low | AC15 sem carrasco, e É extraível (PROBE-2) |
+| QA-900-62-3 | low | `252` fora do ledger de teste — aceitável; o corpo vivo bate por `md5` |
+| QA-900-62-4 | low | denylist é da rota, não da tabela — backlog |
+
+**Observações (não bloqueiam):** o corpo do `409` devolve `settings` inteiro ao navegador ·
+`"Nada foi alterado."` no `catch` de rede e no `?? 500` **afirma o que não foi medido** · a
+entrada nova no `admin-client-allowlist.json` está sem acentuação, diferente das irmãs.
+
+— Quinn, guardião da qualidade 🛡️

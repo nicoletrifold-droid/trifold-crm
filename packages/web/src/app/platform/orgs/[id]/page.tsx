@@ -44,9 +44,18 @@
  * configuração do tenant (medido em produção: `city`, `state`, `materiais_url`,
  * `relatorio_diario_destinatarios`). É alargamento real da superfície de leitura da Trifold sobre
  * o dado do cliente. O que a AC13 PROÍBE é renderizar qualquer chave fora de `contato`/`fiscal` —
- * e é isso que este arquivo faz: só as seis passam por `lerContatoEFiscal()`.
+ * e é isso que este arquivo faz: as duas funções importadas de `console-dados-empresa` são a
+ * fronteira, e nenhuma delas deixa passar uma sétima chave.
+ *
+ * ## Nenhuma DECISÃO sobre esses dados mora neste arquivo (QA-900-62-1 / QA-900-62-2)
+ *
+ * `vitest.config.ts` casa `*.test.ts` e **não** `.tsx`: o que for decidido aqui não tem carrasco.
+ * O gate mediu os dois buracos que isso abriu — a fiação dos seis campos até o diálogo e as seis
+ * linhas do card ficavam verdes ao serem apagadas. Por isso as duas viraram função pura, e o que
+ * sobra aqui é `map` e classe de CSS.
  */
 
+import { Fragment } from "react"
 import Link from "next/link"
 import { platformQuery } from "@web/lib/tenancy/platform-query"
 import { leituraFalhou } from "@web/lib/tenancy/console-visao-geral"
@@ -66,8 +75,11 @@ import {
 } from "@web/lib/integrations/painel/providers"
 import { ReenviarConvite } from "../_components/reenviar-convite"
 import { EditarDadosEmpresa } from "../_components/editar-dados-empresa"
-import { lerContatoEFiscal } from "@web/lib/tenancy/console-dados-empresa"
-import { maskCpfCnpj } from "@web/lib/validation/contato"
+import {
+  dadosIniciaisDoDialogo,
+  linhasDeContatoEFiscal,
+  type LinhaDeDadoDaEmpresa,
+} from "@web/lib/tenancy/console-dados-empresa"
 import {
   LinhaDaTrilhaDaPlataforma,
   ListaDeTrilha,
@@ -205,10 +217,11 @@ export default async function ResumoDaEmpresaPage({
   // exatamente o gesto que uma tela de diagnóstico não deve pedir. Nenhuma consulta nova — a
   // AC13 já trouxe `settings` na projeção acima.
   //
-  // `lerContatoEFiscal` é a fronteira da AC13: só as SEIS chaves saem dele. `city`, `state`,
-  // `materiais_url` e `relatorio_diario_destinatarios` chegam nesta página dentro de `settings` e
-  // NÃO são renderizadas em lugar nenhum.
-  const dadosDeContato = lerContatoEFiscal(org?.settings)
+  // `linhasDeContatoEFiscal` é a fronteira da AC13: só as SEIS chaves saem dele, já com o
+  // travessão e com o CNPJ mascarado. `city`, `state`, `materiais_url` e
+  // `relatorio_diario_destinatarios` chegam nesta página dentro de `settings` e NÃO são
+  // renderizadas em lugar nenhum. As seis linhas têm carrasco em `console-dados-empresa.test.ts`.
+  const secoesDeDados = linhasDeContatoEFiscal(org?.settings)
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
@@ -245,34 +258,24 @@ export default async function ResumoDaEmpresaPage({
                 : "○ inativa"}
           </dd>
 
-          {/* AC15 — contato e fiscal. `—` quando vazio: aqui ele significa "não cadastrado", e
-              não "não medido" como no Status acima — a diferença é que estas seis chaves vêm da
-              MESMA leitura que já decidiu `orgFalhou`, e o card inteiro sumiria com ela. */}
-          <dt className="col-span-2 pt-3 text-[0.65rem] font-semibold uppercase tracking-wide text-slate-500">
-            Contato responsável
-          </dt>
-          <dt className="text-slate-400">Responsável</dt>
-          <dd className="text-slate-100">{dadosDeContato.contatoNome || "—"}</dd>
-          <dt className="text-slate-400">E-mail</dt>
-          <dd className="text-slate-100">{dadosDeContato.contatoEmail || "—"}</dd>
-          <dt className="text-slate-400">Telefone</dt>
-          <dd className="text-slate-100">{dadosDeContato.contatoTelefone || "—"}</dd>
-
-          <dt className="col-span-2 pt-3 text-[0.65rem] font-semibold uppercase tracking-wide text-slate-500">
-            Dados fiscais
-          </dt>
-          <dt className="text-slate-400">CNPJ</dt>
-          {/* A lição da Story 75-282: gravar CRU (só dígitos) e mascarar na EXIBIÇÃO, nunca o
-              contrário — foi gravar mascarado que gerou 19 registros que não casavam na busca. */}
-          <dd className="font-mono text-xs text-slate-300">
-            {dadosDeContato.fiscalCnpj ? maskCpfCnpj(dadosDeContato.fiscalCnpj) : "—"}
-          </dd>
-          <dt className="text-slate-400">Razão social</dt>
-          <dd className="text-slate-100">{dadosDeContato.fiscalRazaoSocial || "—"}</dd>
-          <dt className="text-slate-400">Endereço</dt>
-          <dd className="whitespace-pre-line text-slate-100">
-            {dadosDeContato.fiscalEndereco || "—"}
-          </dd>
+          {/* AC15 — contato e fiscal. Os rótulos, os valores, o travessão e a máscara do CNPJ
+              são decididos por `linhasDeContatoEFiscal`; aqui só se imprime. O travessão
+              significa "não cadastrado", e não "não medido" como no Status acima — a diferença é
+              que estas seis chaves vêm da MESMA leitura que já decidiu `orgFalhou`, e o card
+              inteiro sumiria com ela. */}
+          {secoesDeDados.map((secao) => (
+            <Fragment key={secao.titulo}>
+              <dt className="col-span-2 pt-3 text-[0.65rem] font-semibold uppercase tracking-wide text-slate-500">
+                {secao.titulo}
+              </dt>
+              {secao.linhas.map((linha) => (
+                <Fragment key={linha.rotulo}>
+                  <dt className="text-slate-400">{linha.rotulo}</dt>
+                  <dd className={classeDoValor(linha)}>{linha.valor}</dd>
+                </Fragment>
+              ))}
+            </Fragment>
+          ))}
         </dl>
 
         {/* Sem `org` não há `updated_at`, e sem `updated_at` não há trava otimista — o diálogo
@@ -282,7 +285,7 @@ export default async function ResumoDaEmpresaPage({
           <div className="mt-4">
             <EditarDadosEmpresa
               orgId={orgId}
-              inicial={{ name: org.name, slug: org.slug, ...dadosDeContato }}
+              inicial={dadosIniciaisDoDialogo(org)}
               expectedUpdatedAt={org.updated_at}
             />
           </div>
@@ -383,6 +386,18 @@ export default async function ResumoDaEmpresaPage({
       />
     </div>
   )
+}
+
+/**
+ * A única coisa que sobrou do card de contato/fiscal neste arquivo: classe de CSS.
+ *
+ * Não é decisão de produto — é o mesmo `font-mono` do `slug` logo acima (CNPJ é identificador) e
+ * o `whitespace-pre-line` que preserva as quebras de um endereço de duas linhas. Quais rótulos,
+ * quais valores e quando o travessão aparece foi para `linhasDeContatoEFiscal`, onde há carrasco.
+ */
+function classeDoValor(linha: LinhaDeDadoDaEmpresa): string {
+  if (linha.mono) return "font-mono text-xs text-slate-300"
+  return linha.multilinha ? "whitespace-pre-line text-slate-100" : "text-slate-100"
 }
 
 function Cartao({ titulo, children }: { titulo: string; children: React.ReactNode }) {

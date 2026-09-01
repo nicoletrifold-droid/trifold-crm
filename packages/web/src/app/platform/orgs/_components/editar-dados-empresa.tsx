@@ -139,7 +139,14 @@ function DialogoDeEdicao({
       router.refresh()
       aoFechar()
     } catch {
-      setErro("Não foi possível falar com o servidor. Nada foi alterado.")
+      // OBS-2 do gate da 900-62: NÃO dizer "nada foi alterado" aqui. A requisição pode ter
+      // chegado, gravado e a resposta ter se perdido na volta — o `catch` do `fetch` não
+      // distingue "não saiu" de "não voltou". O diálogo fica aberto com os oito campos
+      // digitados; o que muda é a frase parar de afirmar o que não foi medido.
+      setErro(
+        "Não foi possível falar com o servidor — não dá para confirmar se a alteração foi " +
+          "gravada. Recarregue a página para ver o estado atual.",
+      )
       setEnviando(false)
     }
   }

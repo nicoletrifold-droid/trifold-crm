@@ -189,6 +189,70 @@ describe("AC13 (900-62) — a projeção de orgs/[id]/page.tsx", () => {
     expect(projecaoDeOrganizations().split(", ")).toContain("settings")
   })
 
+  /**
+   * QA-900-62-1 — a coluna lida CHEGA aos seis campos.
+   *
+   * Os dois `it` acima prendem a projeção. O gate mediu que isso parava uma casa antes do dano
+   * que a AC13 nomeia: com `settings` na projeção, trocar o espalhamento por seis literais `""`
+   * na prop `inicial` deixava `tsc` rc=0 e a suíte INTEIRA verde — e apagava contato e fiscal com
+   * `200` na tela.
+   *
+   * O COMPORTAMENTO da montagem tem carrasco próprio em `console-dados-empresa.test.ts`
+   * (`dadosIniciaisDoDialogo`). O que só se pode medir por texto é o `.tsx` CONSUMIR aquela
+   * função — função pura bem testada com componente que a ignora é o mesmo verde vazio.
+   *
+   * Medida por LINHA, e não por `toContain` no arquivo inteiro: um comentário que reproduzisse a
+   * âncora satisfaria o `toContain` sem que uma linha de código mudasse. Linha de comentário
+   * começa com `//`, `/*` ou `*` depois do `trim` e não casa com `inicial=` — e duas linhas
+   * casando também reprova, porque `toHaveLength(1)` é exigência, não tolerância.
+   */
+  function linhaDaPropInicial(): string {
+    const fonte = fs.readFileSync(PAGE, "utf8")
+    const casadas = fonte
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l.startsWith("inicial="))
+    expect(casadas, "prop `inicial` de <EditarDadosEmpresa /> em orgs/[id]/page.tsx").toHaveLength(
+      1,
+    )
+    return casadas[0]!
+  }
+
+  it("a prop `inicial` é a função pura — os seis campos não são montados no JSX", () => {
+    expect(linhaDaPropInicial()).toBe("inicial={dadosIniciaisDoDialogo(org)}")
+  })
+
+  it("as duas funções vêm do módulo com carrasco, e não de cópias locais do `.tsx`", () => {
+    // Sem isto, um `dadosIniciaisDoDialogo` definido dentro do próprio `.tsx` — de volta ao ponto
+    // cego do vitest — satisfaria a âncora de cima com exatamente o mesmo texto.
+    const fonte = fs.readFileSync(PAGE, "utf8")
+    const importes = [
+      ...fonte.matchAll(/import \{[^}]*\} from "@web\/lib\/tenancy\/console-dados-empresa"/g),
+    ]
+    expect(importes, "import de `console-dados-empresa` em orgs/[id]/page.tsx").toHaveLength(1)
+    expect(importes[0]![0]).toContain("dadosIniciaisDoDialogo")
+    expect(importes[0]![0]).toContain("linhasDeContatoEFiscal")
+  })
+
+  /**
+   * QA-900-62-2 — a AC15 tem carrasco de COMPORTAMENTO em `console-dados-empresa.test.ts`
+   * (`linhasDeContatoEFiscal`). Aqui fica só o elo que nenhum teste de comportamento alcança: o
+   * card de fato pedir as seis linhas e de fato imprimi-las. Sem o segundo `expect`, a chamada
+   * poderia continuar existindo com o resultado jogado fora — que é o desfecho que o gate mediu
+   * (PROBE-2: apagar as seis linhas do card deixava a suíte inteira verde).
+   */
+  it("AC15 — o card CHAMA as seis linhas e as imprime", () => {
+    const fonte = fs.readFileSync(PAGE, "utf8")
+    const chamadas = fonte
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l.startsWith("const secoesDeDados"))
+    expect(chamadas, "a chamada de `linhasDeContatoEFiscal` no card").toEqual([
+      "const secoesDeDados = linhasDeContatoEFiscal(org?.settings)",
+    ])
+    expect(fonte.split("\n").filter((l) => l.includes("secoesDeDados.map("))).toHaveLength(1)
+  })
+
   it("controle: a régua lê o literal, e não o comentário que fala das duas colunas", () => {
     // Sem esta asserção, a leitura poderia ter voltado a região inteira do arquivo (comentário
     // incluído) e os dois `it` acima passariam com a projeção vazia. A projeção é uma lista de

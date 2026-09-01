@@ -40,7 +40,7 @@
 import { NextResponse } from "next/server"
 import { getPlatformAdmin } from "@web/lib/tenancy/platform-guard"
 import { createAdminClient } from "@web/lib/supabase/admin"
-import { validarDadosDaEmpresa } from "@web/lib/tenancy/console-dados-empresa"
+import { lerContatoEFiscal, validarDadosDaEmpresa } from "@web/lib/tenancy/console-dados-empresa"
 
 /** O que a migration `252` levanta, e o status HTTP que cada código merece. */
 const STATUS_POR_CODIGO_SQL: Record<string, number> = {
@@ -120,6 +120,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   })
 
   // Falha de escrita NÃO pode virar "salvo". A UI só fecha o diálogo sobre um 200.
+  //
+  // OBS-2 do gate da 900-62: o desfecho genérico NÃO afirma "nada foi alterado". Um erro de
+  // transporte depois do `COMMIT` teria alterado, e a rota não tem como saber qual dos dois
+  // aconteceu — a mesma régua que a AC8 aplica a si mesma. Dizer "não consegui confirmar" custa a
+  // mesma linha e é verdade nos dois casos. A frase de `MENSAGEM_DE_FUNCAO_NAO_PUBLICADA`
+  // continua afirmando, porque ali a escrita provadamente não saiu: a função nem foi chamada.
   if (error) {
     const codigo = (error as { code?: string }).code ?? ""
     const naoPublicada = CODIGOS_DE_FUNCAO_NAO_PUBLICADA.has(codigo)
@@ -128,7 +134,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         error: codigo || "ESCRITA_FALHOU",
         message: naoPublicada
           ? MENSAGEM_DE_FUNCAO_NAO_PUBLICADA
-          : (error.message ?? "Não foi possível concluir. Nada foi alterado."),
+          : (error.message ??
+            "Não foi possível confirmar se a alteração foi gravada — recarregue a página."),
       },
       { status: naoPublicada ? 503 : (STATUS_POR_CODIGO_SQL[codigo] ?? 500) },
     )
@@ -143,6 +150,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   // AC3 — o corpo devolve os valores ATUAIS do banco, para a UI poder mostrar "isto foi alterado
   // por outra pessoa" com o valor real em vez de com o que o operador digitou.
+  //
+  // OBS-1 do gate da 900-62: só os OITO campos editáveis, e NUNCA `settings` inteiro. O "custo
+  // declarado" da AC13 é sobre o que a página lê do servidor; devolver a coluna crua ao navegador
+  // do platform admin estende esse custo para o cliente HTTP, com `city`, `materiais_url` e
+  // `relatorio_diario_destinatarios` do tenant junto — e nada na tela precisa deles para resolver
+  // um conflito. `lerContatoEFiscal` é a MESMA fronteira que a página usa.
   if (linha.conflito) {
     return NextResponse.json(
       {
@@ -150,7 +163,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         atual: {
           name: linha.name,
           slug: linha.slug,
-          settings: linha.settings,
+          ...lerContatoEFiscal(linha.settings),
           updatedAt: linha.updated_at,
         },
       },

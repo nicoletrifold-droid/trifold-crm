@@ -21,9 +21,12 @@ import {
   AVISO_DOS_DADOS_FISCAIS,
   AVISO_DO_IDENTIFICADOR,
   LIMITES,
+  SEM_DADO,
+  dadosIniciaisDoDialogo,
   decidirDesfechoDaEdicao,
   houveMudanca,
   lerContatoEFiscal,
+  linhasDeContatoEFiscal,
   podeSalvar,
   validarDadosDaEmpresa,
   type DadosDaEmpresaEditaveis,
@@ -247,6 +250,150 @@ describe("AC13/AC7 — `lerContatoEFiscal`", () => {
         fiscalEndereco: "",
       })
     }
+  })
+})
+
+/**
+ * QA-900-62-1 — a fiação, que a régua da AC13 não alcançava.
+ *
+ * A AC13 prende a PROJEÇÃO (`settings` na lista de colunas). O gate mediu que ela parava uma casa
+ * antes do dano que ela mesma nomeia: com a projeção intacta, seis literais `""` no lugar do
+ * espalhamento deixavam `tsc` rc=0 e a suíte INTEIRA verde (PROBE-1) — e o operador que abrisse o
+ * diálogo para corrigir o `name` apagaria contato e fiscal, com `200` na tela.
+ *
+ * Com a montagem aqui, esse mutante é vermelho por COMPORTAMENTO. A parte que continua sendo
+ * forma — o `.tsx` chamar esta função — está presa por uma âncora de linha em
+ * `platform-query-scan.test.ts`: função pura bem testada com componente que a ignora é o mesmo
+ * verde vazio.
+ */
+describe("AC7/AC13 — `dadosIniciaisDoDialogo`, a fiação entre a coluna lida e os campos", () => {
+  const ORG_COM_DADOS = {
+    name: "Empresa A",
+    slug: "empresa-a",
+    settings: {
+      city: "Maringá",
+      materiais_url: "https://x/y",
+      contato: { nome: "Ana", email: "ana@x.com", telefone: "(44) 99999-9999" },
+      fiscal: { cnpj: CNPJ_VALIDO, razao_social: "A LTDA", endereco: "Rua X, 10" },
+    },
+  }
+
+  it("controle positivo — empresa COM contato e fiscal abre o diálogo preenchido", () => {
+    // Este é o `it` que o mutante da fiação derruba: seis literais `""` aqui devolvem os seis
+    // campos vazios sobre uma empresa que TEM os dados gravados.
+    expect(dadosIniciaisDoDialogo(ORG_COM_DADOS)).toEqual({
+      name: "Empresa A",
+      slug: "empresa-a",
+      contatoNome: "Ana",
+      contatoEmail: "ana@x.com",
+      contatoTelefone: "(44) 99999-9999",
+      fiscalCnpj: CNPJ_VALIDO,
+      fiscalRazaoSocial: "A LTDA",
+      fiscalEndereco: "Rua X, 10",
+    })
+  })
+
+  it("os seis campos vêm VAZIOS quando não há dado — nunca o travessão da leitura", () => {
+    // Trocar a fonte destes seis por `linhasDeContatoEFiscal` (a função irmã) despejaria `—`
+    // dentro de um `<input>`, e o primeiro "Salvar" gravaria o travessão como nome do
+    // responsável. Vazio é o único valor que a AC4 sabe classificar como no-op.
+    for (const settings of [null, undefined, {}, { city: "Maringá" }]) {
+      const inicial = dadosIniciaisDoDialogo({ name: "Empresa A", slug: "empresa-a", settings })
+      expect(inicial, JSON.stringify(settings)).toEqual({
+        name: "Empresa A",
+        slug: "empresa-a",
+        contatoNome: "",
+        contatoEmail: "",
+        contatoTelefone: "",
+        fiscalCnpj: "",
+        fiscalRazaoSocial: "",
+        fiscalEndereco: "",
+      })
+      expect(JSON.stringify(inicial)).not.toContain(SEM_DADO)
+    }
+  })
+
+  it("AC13 — nenhuma chave de `settings` fora de contato/fiscal entra no diálogo", () => {
+    const inicial = dadosIniciaisDoDialogo(ORG_COM_DADOS)
+    expect(Object.keys(inicial).sort()).toEqual([
+      "contatoEmail",
+      "contatoNome",
+      "contatoTelefone",
+      "fiscalCnpj",
+      "fiscalEndereco",
+      "fiscalRazaoSocial",
+      "name",
+      "slug",
+    ])
+    expect(JSON.stringify(inicial)).not.toContain("Maringá")
+    expect(JSON.stringify(inicial)).not.toContain("materiais")
+  })
+})
+
+/**
+ * QA-900-62-2 — a AC15 sai do ponto cego do `.tsx`.
+ *
+ * O gate mediu (PROBE-2) que remover as seis linhas do card não reprovava nada. O que precisava
+ * sair do componente não era o markup: era a DECISÃO de quais seis rótulos, com que valor, com
+ * que travessão e com qual deles mascarado.
+ */
+describe("AC15 — `linhasDeContatoEFiscal`, as duas seções do card Identidade", () => {
+  const SETTINGS_COMPLETO = {
+    city: "Maringá",
+    materiais_url: "https://x/y",
+    contato: { nome: "Ana", email: "ana@x.com", telefone: "(44) 99999-9999" },
+    fiscal: { cnpj: CNPJ_VALIDO, razao_social: "A LTDA", endereco: "Rua X, 10\nSala 2" },
+  }
+
+  it("duas seções, seis linhas, nesta ordem", () => {
+    const secoes = linhasDeContatoEFiscal(SETTINGS_COMPLETO)
+    expect(secoes.map((s) => s.titulo)).toEqual(["Contato responsável", "Dados fiscais"])
+    expect(secoes.flatMap((s) => s.linhas).map((l) => l.rotulo)).toEqual([
+      "Responsável",
+      "E-mail",
+      "Telefone",
+      "CNPJ",
+      "Razão social",
+      "Endereço",
+    ])
+  })
+
+  it("os valores gravados aparecem, e o CNPJ sai MASCARADO", () => {
+    const valores = linhasDeContatoEFiscal(SETTINGS_COMPLETO)
+      .flatMap((s) => s.linhas)
+      .map((l) => l.valor)
+    // O literal, e não `maskCpfCnpj(CNPJ_VALIDO)`: régua derivada da fonte que ela testa não
+    // reprova a fonte.
+    expect(valores).toEqual([
+      "Ana",
+      "ana@x.com",
+      "(44) 99999-9999",
+      "11.222.333/0001-81",
+      "A LTDA",
+      "Rua X, 10\nSala 2",
+    ])
+  })
+
+  it("sem dado → as SEIS linhas trazem o travessão, e continuam sendo seis", () => {
+    // Seis linhas com `—` é "não cadastrado". Sumir com as linhas seria a tela escondendo a
+    // pergunta em vez de respondê-la.
+    for (const settings of [null, undefined, {}, { contato: null }, { city: "Maringá" }]) {
+      const linhas = linhasDeContatoEFiscal(settings).flatMap((s) => s.linhas)
+      expect(linhas, JSON.stringify(settings)).toHaveLength(6)
+      expect(linhas.map((l) => l.valor)).toEqual(Array(6).fill(SEM_DADO))
+    }
+  })
+
+  it("só o CNPJ é monoespaçado e só o endereço é multilinha", () => {
+    const linhas = linhasDeContatoEFiscal(SETTINGS_COMPLETO).flatMap((s) => s.linhas)
+    expect(linhas.filter((l) => l.mono).map((l) => l.rotulo)).toEqual(["CNPJ"])
+    expect(linhas.filter((l) => l.multilinha).map((l) => l.rotulo)).toEqual(["Endereço"])
+  })
+
+  it("AC13 — nenhuma chave de `settings` fora de contato/fiscal chega ao card", () => {
+    const desenho = JSON.stringify(linhasDeContatoEFiscal(SETTINGS_COMPLETO))
+    expect(desenho).not.toContain("Maringá")
+    expect(desenho).not.toContain("materiais")
   })
 })
 

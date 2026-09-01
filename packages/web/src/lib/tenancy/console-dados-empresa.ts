@@ -39,6 +39,7 @@ import {
   isValidCnpj,
   isValidEmail,
   isValidPhoneBR,
+  maskCpfCnpj,
   normalizeCpfCnpj,
   normalizeEmail,
 } from "@web/lib/validation/contato"
@@ -226,6 +227,107 @@ export function lerContatoEFiscal(
     fiscalRazaoSocial: texto(fiscal.razao_social),
     fiscalEndereco: texto(fiscal.endereco),
   }
+}
+
+/** A empresa como a página do Resumo a leu — só o que o diálogo de edição precisa dela. */
+export interface OrgParaODialogo {
+  name: string
+  slug: string
+  settings: unknown
+}
+
+/**
+ * AC7/AC13 — os OITO valores com que o diálogo de edição ABRE.
+ *
+ * ## Por que isto não é uma linha de JSX (QA-900-62-1)
+ *
+ * A régua da AC13 prende a PROJEÇÃO — que `settings` esteja na lista de colunas. Ela não prendia
+ * a FIAÇÃO: que a coluna lida chegue de fato aos seis campos. O gate mediu o buraco (PROBE-1) —
+ * com a projeção intacta, trocar o espalhamento por seis literais `""` na prop deixava `tsc`
+ * rc=0 e a suíte INTEIRA verde, e produzia o desfecho que a AC13 existe para impedir: o operador
+ * abre o diálogo para corrigir o `name`, salva, e apaga o contato e o fiscal já gravados, com
+ * `200` na tela.
+ *
+ * Montado aqui, o mesmo defeito fica vermelho por COMPORTAMENTO (`it` abaixo: org com
+ * `settings.contato` produz `contatoNome` não-vazio) e não só por forma. O que resta no `.tsx` é
+ * a chamada, presa por âncora de uma linha em `platform-query-scan.test.ts`.
+ *
+ * ⚠️ Os seis vêm VAZIOS quando não há dado — nunca `—`. O travessão é linguagem de LEITURA
+ * (`linhasDeContatoEFiscal`); despejado num `<input>`, ele viraria o valor gravado no primeiro
+ * "Salvar".
+ */
+export function dadosIniciaisDoDialogo(org: OrgParaODialogo): DadosDaEmpresaEditaveis {
+  return {
+    name: org.name,
+    slug: org.slug,
+    ...lerContatoEFiscal(org.settings),
+  }
+}
+
+/** Uma linha do card "Identidade": rótulo à esquerda, valor já pronto para a tela à direita. */
+export interface LinhaDeDadoDaEmpresa {
+  rotulo: string
+  /** Já mascarado, já com o `—` de "não cadastrado". A tela imprime, não decide. */
+  valor: string
+  /** CNPJ é identificador: fonte monoespaçada, como o `slug` acima dele. */
+  mono?: boolean
+  /** Endereço é o único campo de várias linhas — `whitespace-pre-line` preserva as quebras. */
+  multilinha?: boolean
+}
+
+export interface SecaoDeDadosDaEmpresa {
+  titulo: string
+  linhas: LinhaDeDadoDaEmpresa[]
+}
+
+/** O que o card escreve quando a chave não está cadastrada. */
+export const SEM_DADO = "—"
+
+/**
+ * AC15 — as duas seções de contato/fiscal do card "Identidade", decididas FORA do JSX.
+ *
+ * ## O que sai daqui não é markup, é decisão (QA-900-62-2)
+ *
+ * Quais seis rótulos, com que valor, com que travessão e com qual deles mascarado — nada disso
+ * tinha carrasco enquanto morava no `.tsx` (`vitest.config.ts` casa `*.test.ts`, e **não**
+ * `.tsx`). O gate mediu: remover as seis linhas do card deixava a suíte inteira verde (PROBE-2).
+ * Mesmo precedente da `900-60`, onde `decidirDesfecho` saiu do componente pelo mesmo motivo.
+ *
+ * ## O travessão aqui significa "não cadastrado", e não "não medido"
+ *
+ * Distinção deliberada em relação ao Status logo acima no mesmo card: estas seis chaves vêm da
+ * MESMA leitura que já decidiu `orgFalhou`, e o card inteiro é substituído quando ela não volta.
+ *
+ * ## O CNPJ é mascarado NA EXIBIÇÃO
+ *
+ * A lição da Story 75-282: gravar cru (só dígitos) e mascarar aqui, nunca o contrário — foi
+ * gravar mascarado que gerou 19 registros que não casavam na busca.
+ */
+export function linhasDeContatoEFiscal(settings: unknown): SecaoDeDadosDaEmpresa[] {
+  const d = lerContatoEFiscal(settings)
+  const ou = (v: string) => v || SEM_DADO
+  return [
+    {
+      titulo: "Contato responsável",
+      linhas: [
+        { rotulo: "Responsável", valor: ou(d.contatoNome) },
+        { rotulo: "E-mail", valor: ou(d.contatoEmail) },
+        { rotulo: "Telefone", valor: ou(d.contatoTelefone) },
+      ],
+    },
+    {
+      titulo: "Dados fiscais",
+      linhas: [
+        {
+          rotulo: "CNPJ",
+          valor: d.fiscalCnpj ? maskCpfCnpj(d.fiscalCnpj) : SEM_DADO,
+          mono: true,
+        },
+        { rotulo: "Razão social", valor: ou(d.fiscalRazaoSocial) },
+        { rotulo: "Endereço", valor: ou(d.fiscalEndereco), multilinha: true },
+      ],
+    },
+  ]
 }
 
 const CHAVES: ReadonlyArray<keyof DadosDaEmpresaEditaveis> = [

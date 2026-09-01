@@ -143,6 +143,34 @@ describe("AC3 — a trava otimista é obrigatória, e é barrada ANTES de tudo",
     expect(json.atual.name).toBe("Nome de Outra Pessoa")
     expect(json.atual.updatedAt).toBe(RETORNO_DA_RPC[0]!.updated_at)
   })
+
+  it("OBS-1 — o 409 devolve os campos editáveis, e NUNCA `settings` inteiro", async () => {
+    // A fixture carrega `city: "Maringá"` de propósito: é uma chave de configuração do TENANT
+    // que a RPC devolve junto e que o navegador do platform admin não precisa ver para resolver
+    // um conflito. Devolver a coluna crua estenderia ao cliente HTTP o "custo declarado" que a
+    // AC13 assumiu só para a leitura do servidor.
+    respostaDaRpc = {
+      data: [{ ...RETORNO_DA_RPC[0]!, conflito: true }],
+      error: null,
+    }
+    const json = await (await chamar(CORPO_VALIDO)).json()
+    expect(json.atual.settings).toBeUndefined()
+    expect(JSON.stringify(json)).not.toContain("Maringá")
+    // E o que a tela PRECISA continua chegando — sem isto, "devolver menos" passaria por
+    // "devolver nada".
+    expect(json.atual.contatoNome).toBe("Ana")
+    expect(Object.keys(json.atual).sort()).toEqual([
+      "contatoEmail",
+      "contatoNome",
+      "contatoTelefone",
+      "fiscalCnpj",
+      "fiscalEndereco",
+      "fiscalRazaoSocial",
+      "name",
+      "slug",
+      "updatedAt",
+    ])
+  })
 })
 
 describe("AC2 — validação, sempre com a escrita ausente junto", () => {
