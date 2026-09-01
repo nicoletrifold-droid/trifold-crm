@@ -30,6 +30,7 @@
 import Link from "next/link"
 import { platformQuery } from "@web/lib/tenancy/platform-query"
 import {
+  FUSO_DO_CONSOLE,
   ROTULOS_DE_ADMIN_NA_LISTA,
   statusDeAdminDeclarado,
 } from "@web/lib/tenancy/console-leitura"
@@ -313,8 +314,9 @@ export default async function VisaoGeralPage({
                       <span className="font-medium">{p.orgNome}</span>
                       <span className="text-slate-400">
                         {" "}
-                        — convite do admin pendente há {p.dias}{" "}
-                        {p.dias === 1 ? "dia" : "dias"}
+                        {p.dias === null
+                          ? "— convite do admin pendente (não foi possível medir há quanto tempo)"
+                          : `— convite do admin pendente há ${p.dias} ${p.dias === 1 ? "dia" : "dias"}`}
                       </span>
                     </span>
                     <ReenviarConvite orgId={p.orgId} />
@@ -374,7 +376,7 @@ export default async function VisaoGeralPage({
               >
                 <span className="font-medium">{org.name}</span>
                 <span className="text-xs text-slate-500">
-                  criada {new Date(org.created_at).toLocaleDateString("pt-BR")}
+                  criada {new Date(org.created_at).toLocaleDateString("pt-BR", { timeZone: FUSO_DO_CONSOLE })}
                 </span>
                 <span className="text-xs text-slate-400">
                   {ROTULOS_DE_ADMIN_NA_LISTA[statusConvite]}

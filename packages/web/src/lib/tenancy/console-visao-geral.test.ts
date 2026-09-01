@@ -243,6 +243,32 @@ describe("há quantos dias o convite está pendente — DUAS fontes, e só duas"
       }),
     ).toBe(0)
   })
+
+  it("carimbo ILEGÍVEL devolve `null` — e nunca `NaN`", () => {
+    // CodeRabbit #547. `new Date("30/08/2026").getTime()` é `NaN`, e `Math.max(0, Math.floor(NaN))`
+    // continua `NaN`: a tela escrevia "pendente há NaN dias". Duas pontas, dois casos.
+    for (const orgCriadaEm of ["", "30/08/2026", "não é data", "2026-13-45T99:99:99Z"]) {
+      const dias = diasDesdeOConvite({ agora: AGORA, admin: null, orgCriadaEm })
+      expect(dias, orgCriadaEm).toBeNull()
+      expect(Number.isNaN(dias as unknown as number), orgCriadaEm).toBe(false)
+    }
+    expect(
+      diasDesdeOConvite({
+        agora: AGORA,
+        admin: { id: "a1", authId: null, criadoEm: "carimbo torto" },
+        // A org tem carimbo BOM: sem a guarda, cair para ela mascararia o defeito. A primeira
+        // fonte existe e é ilegível — a resposta é "não sei", não a segunda fonte.
+        orgCriadaEm: "2026-08-21T12:00:00.000Z",
+      }),
+    ).toBeNull()
+    expect(
+      diasDesdeOConvite({
+        agora: new Date("relógio quebrado"),
+        admin: null,
+        orgCriadaEm: "2026-08-21T12:00:00.000Z",
+      }),
+    ).toBeNull()
+  })
 })
 
 describe("Precisa de você — convites", () => {

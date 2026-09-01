@@ -29,6 +29,7 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { platformQuery } from "@web/lib/tenancy/platform-query"
 import { leituraFalhou } from "@web/lib/tenancy/console-visao-geral"
+import { FUSO_DO_CONSOLE } from "@web/lib/tenancy/console-leitura"
 import { AbasDaEmpresa } from "../_components/abas-da-empresa"
 
 export const dynamic = "force-dynamic"
@@ -88,7 +89,7 @@ export default async function EmpresaLayout({
           </div>
           <p className="mt-0.5 text-xs text-slate-400">
             <span className="font-mono">{org.slug}</span> · criada em{" "}
-            {new Date(org.created_at).toLocaleDateString("pt-BR")} ·{" "}
+            {new Date(org.created_at).toLocaleDateString("pt-BR", { timeZone: FUSO_DO_CONSOLE })} ·{" "}
             {/* "Plano: —" e não a omissão da linha: a lacuna fica visível, e um `0` ou um valor
                 inventado seria pior que o travessão (§5 do desenho). */}
             <span className="text-slate-500">Plano: —</span>

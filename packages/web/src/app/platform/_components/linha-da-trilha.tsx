@@ -11,6 +11,8 @@
  * distingue as linhas. Quem sabe o contexto é quem renderiza.
  */
 
+import { FUSO_DO_CONSOLE } from "@web/lib/tenancy/console-leitura"
+
 /** A forma de `platform_audit_log` que a tela precisa. */
 export interface LinhaDeTrilhaDaPlataforma {
   id: string
@@ -51,7 +53,7 @@ export function LinhaDaTrilhaDaPlataforma({
   return (
     <li className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 px-4 py-2 text-xs">
       <span className="font-mono text-slate-500">
-        {new Date(linha.created_at).toLocaleString("pt-BR")}
+        {new Date(linha.created_at).toLocaleString("pt-BR", { timeZone: FUSO_DO_CONSOLE })}
       </span>
       <span className="text-slate-300">{rotuloDoAtor(linha)}</span>
       <span className="text-slate-500">({linha.actor_type})</span>

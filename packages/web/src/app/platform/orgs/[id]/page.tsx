@@ -29,6 +29,7 @@ import { platformQuery } from "@web/lib/tenancy/platform-query"
 import { leituraFalhou } from "@web/lib/tenancy/console-visao-geral"
 import {
   AVISO_DE_LEITURA_QUE_NAO_VOLTOU,
+  FUSO_DO_CONSOLE,
   estadoDaEmpresaDeclarado,
   estadoDaLeitura,
   statusDeAdminDeclarado,
@@ -166,7 +167,7 @@ export default async function ResumoDaEmpresaPage({
           <dd className="font-mono text-xs text-slate-300">{org?.slug ?? "—"}</dd>
           <dt className="text-slate-400">Criada em</dt>
           <dd className="text-slate-100">
-            {org ? new Date(org.created_at).toLocaleDateString("pt-BR") : "—"}
+            {org ? new Date(org.created_at).toLocaleDateString("pt-BR", { timeZone: FUSO_DO_CONSOLE }) : "—"}
           </dd>
           <dt className="text-slate-400">Status</dt>
           <dd className={estadoDaEmpresa === "ativa" ? "text-emerald-400" : "text-slate-400"}>

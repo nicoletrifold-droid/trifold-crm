@@ -30,7 +30,7 @@ import {
   classesDaPaleta,
   type ClassesDaPaleta,
 } from "@web/components/integrations/paleta"
-import { callSiteDe, codigoDe, linhasDeCodigo } from "./fonte-scan"
+import { arquivosDeProducao, callSiteDe, codigoDe, linhasDeCodigo } from "./fonte-scan"
 
 const AQUI = path.dirname(fileURLToPath(import.meta.url))
 const SRC = path.resolve(AQUI, "../..") // packages/web/src
@@ -47,23 +47,6 @@ const INTEGRACOES_DO_CONSOLE = path.join(SRC, "app/platform/orgs/[id]/integracoe
  */
 const ESCALA_DO_CRM = "sto" + "ne-"
 const ESCALA_DO_CONSOLE = "sla" + "te-"
-
-/** Todo arquivo `.ts`/`.tsx` de produção sob `dir`. */
-function arquivosDeProducao(dir: string, acc: string[] = []): string[] {
-  if (!fs.existsSync(dir)) return acc
-  for (const entrada of fs.readdirSync(dir, { withFileTypes: true })) {
-    const alvo = path.join(dir, entrada.name)
-    if (entrada.isDirectory()) {
-      if (["__tests__", "__fixtures__", "__mocks__"].includes(entrada.name)) continue
-      arquivosDeProducao(alvo, acc)
-      continue
-    }
-    if (!/\.tsx?$/.test(entrada.name)) continue
-    if (/\.test\.tsx?$/.test(entrada.name)) continue
-    acc.push(alvo)
-  }
-  return acc
-}
 
 /** As linhas de `fonte` que citam uma escala de cinza. Fonte limpa ⇒ `[]`. */
 function linhasComEscala(fonte: string, escala: string): string[] {

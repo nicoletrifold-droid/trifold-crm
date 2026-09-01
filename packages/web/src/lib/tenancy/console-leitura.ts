@@ -28,6 +28,19 @@
 import { deriveAdminInviteStatus, type AdminInviteStatus } from "@web/lib/tenancy/admin-invite"
 
 /**
+ * O fuso em que o console DECLARA uma data.
+ *
+ * CodeRabbit #547 — `toLocaleDateString("pt-BR")` sem fuso resolve pelo fuso do PROCESSO. Estas
+ * telas são Server Components: quem formata é o servidor da Vercel, que roda em UTC. Uma empresa
+ * criada às 21h de São Paulo tem `created_at` no dia SEGUINTE em UTC, e a tela mostrava um dia a
+ * mais em produção e o dia certo na máquina do desenvolvedor — a data renderizada dependia de
+ * ONDE o processo estava, não de quando o fato aconteceu.
+ *
+ * É o mesmo fuso fixado que o resto do repositório já usa em texto de tela.
+ */
+export const FUSO_DO_CONSOLE = "America/Sao_Paulo"
+
+/**
  * O estado de um bloco que desenha o resultado de uma leitura de lista.
  *
  * Três, e não dois: `"vazio"` é uma AFIRMAÇÃO ("não há nada"), e só pode ser feita quando a

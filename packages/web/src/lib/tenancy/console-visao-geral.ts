@@ -200,20 +200,33 @@ export interface OrgDoConsole {
  *
  * `agora` é PARÂMETRO, não `Date.now()`: um cálculo de tempo que lê o relógio por dentro não tem
  * como ser reprovado por um teste.
+ *
+ * ## `null` quando o carimbo não dá para ler — CodeRabbit #547
+ *
+ * `new Date("qualquer coisa").getTime()` é `NaN`, e `Math.max(0, Math.floor(NaN))` é `NaN`: a tela
+ * escrevia "convite do admin pendente há NaN dias". Um carimbo ilegível não autoriza afirmar uma
+ * duração, e é a mesma regra que o resto deste console já segue — o que não foi medido vira `—`,
+ * nunca um número. ⚠️ `null` NÃO é erro de compilação no JSX (React aceita `null` como filho e
+ * renderiza vazio): quem garante que a tela não escreve "pendente há  dias" é a régua sobre o
+ * texto-fonte do call site, não o `tsc`.
+ *
+ * `admin.criadoEm` nulo continua CAINDO para `organizations.created_at` (é a segunda fonte, não
+ * uma falha); só a impossibilidade de ler as DUAS pontas produz `null`.
  */
 export function diasDesdeOConvite(entrada: {
   agora: Date
   admin: AdminDaOrg | null
   orgCriadaEm: string
-}): number {
-  const origem = entrada.admin?.criadoEm ?? entrada.orgCriadaEm
-  const decorrido = entrada.agora.getTime() - new Date(origem).getTime()
-  return Math.max(0, Math.floor(decorrido / UM_DIA_EM_MS))
+}): number | null {
+  const origem = new Date(entrada.admin?.criadoEm ?? entrada.orgCriadaEm).getTime()
+  const agora = entrada.agora.getTime()
+  if (!Number.isFinite(origem) || !Number.isFinite(agora)) return null
+  return Math.max(0, Math.floor((agora - origem) / UM_DIA_EM_MS))
 }
 
 /** Uma linha da seção "Precisa de você". */
 export type Pendencia =
-  | { tipo: "convite"; orgId: string; orgNome: string; dias: number }
+  | { tipo: "convite"; orgId: string; orgNome: string; dias: number | null }
   | { tipo: "integracao"; orgId: string; orgNome: string; provider: string }
 
 /**

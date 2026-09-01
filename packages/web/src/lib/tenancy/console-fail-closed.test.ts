@@ -38,11 +38,21 @@
  * metade prova que ela NÃO acusa a forma correta. Régua de fonte sem os dois lados é ou
  * decoração (não morde) ou trava (morde tudo, e a próxima edição legítima a apaga).
  *
- * ⚠️ `linhasDeCodigo` filtra a linha que COMEÇA com marcador de comentário. A linha de
- * CONTINUAÇÃO de um comentário JSX de duas linhas sobrevive ao filtro e vira "código" — por
- * isso nenhuma asserção aqui se contenta com "a âncora aparece": cada uma exige o PAR
- * (o teste do estado e o aviso que ele desenha) dentro de um recorte delimitado. O furo está
- * exercitado em "âncora na CONTINUAÇÃO de um comentário JSX".
+ * ⚠️ `linhasDeCodigo` era um filtro por PREFIXO, e a linha de CONTINUAÇÃO de um comentário de
+ * bloco sobrevivia a ele como "código" (achado do CodeRabbit no PR #547 — o corpus real tem seis
+ * comentários JSX de duas linhas). Hoje é uma varredura com estado e o furo está fechado, com o
+ * par de controles em "âncora na CONTINUAÇÃO de um comentário JSX" e no `it` seguinte.
+ *
+ * A disciplina que veio dele fica de pé mesmo assim: nenhuma asserção aqui se contenta com "a
+ * âncora aparece" — cada uma exige o PAR (o teste do estado e o aviso que ele desenha) dentro de
+ * um recorte delimitado, ou uma CONTAGEM ancorada. Duas redes, porque a de texto-fonte é sempre
+ * uma aproximação de um parser.
+ *
+ * ⚠️ E a régua do próprio arquivo: asserção que aceita TODO o contradomínio (`expect(todos)
+ * .toContain(f(x))`) ou que compara dois LITERAIS (`expect("").not.toContain("…")`) não pode
+ * falhar. As duas existiram aqui, e as duas foram trocadas por asserções que medem — a primeira
+ * deixava passar `estadoDaEmpresaDeclarado` devolvendo `"inativa"` sobre leitura caída, que é
+ * literalmente a afirmação mais cara deste console.
  */
 
 import { describe, it, expect } from "vitest"
@@ -61,7 +71,13 @@ import {
   type EstadoDaLeitura,
   type StatusDeAdminDeclarado,
 } from "./console-leitura"
-import { codigoDe, linhasDeCodigo, ocorrenciasNoCodigo, trechoDelimitado } from "./fonte-scan"
+import {
+  arquivosDeProducao,
+  codigoDe,
+  linhasDeCodigo,
+  ocorrenciasNoCodigo,
+  trechoDelimitado,
+} from "./fonte-scan"
 
 const AQUI = path.dirname(fileURLToPath(import.meta.url))
 const SRC = path.resolve(AQUI, "../..") // packages/web/src
@@ -229,10 +245,29 @@ describe("`estadoDaEmpresaDeclarado` — `○ inativa` é a afirmação mais car
   })
 
   it("com leitura boa e org na mão, os dois estados reais aparecem", () => {
-    const todos: readonly EstadoDaEmpresaDeclarado[] = ["desconhecido", "ativa", "inativa"]
     expect(estadoDaEmpresaDeclarado({ falhou: false, org: { is_active: true } })).toBe("ativa")
     expect(estadoDaEmpresaDeclarado({ falhou: false, org: { is_active: false } })).toBe("inativa")
-    expect(todos).toContain(estadoDaEmpresaDeclarado({ falhou: true, org: null }))
+  })
+
+  it("falha DE LEITURA e org ausente ao mesmo tempo continua `desconhecido`", () => {
+    // CodeRabbit #547 — aqui estava `expect(todos).toContain(estadoDaEmpresaDeclarado(…))`, com
+    // `todos` sendo os TRÊS estados do tipo. Uma asserção que aceita todo o contradomínio não
+    // pode falhar: `tsc` já proíbe um quarto valor, então ela media o compilador. Passava verde
+    // com a função devolvendo "inativa" no cruzamento das duas causas de "não sei" — que é
+    // exatamente a afirmação que este `describe` existe para impedir.
+    expect(estadoDaEmpresaDeclarado({ falhou: true, org: null })).toBe("desconhecido")
+  })
+
+  it("os três estados do tipo são todos ALCANÇÁVEIS — nenhum é decorativo", () => {
+    // Âncora literal, como em `estadoDaLeitura`: um estado que o tipo declara e a função nunca
+    // devolve é um ramo de tela que nunca acende. Colapsar dois estados num só reprova aqui.
+    const todos: readonly EstadoDaEmpresaDeclarado[] = ["desconhecido", "ativa", "inativa"]
+    const produzidos = [
+      estadoDaEmpresaDeclarado({ falhou: true, org: null }),
+      estadoDaEmpresaDeclarado({ falhou: false, org: { is_active: true } }),
+      estadoDaEmpresaDeclarado({ falhou: false, org: { is_active: false } }),
+    ]
+    expect([...produzidos].sort()).toEqual([...todos].sort())
   })
 })
 
@@ -602,16 +637,32 @@ describe("controles positivos — a régua acusa a mutação, e só ela", () => 
       '      {estado === "vazio" ? (\n',
     )
     expect(envenenada).not.toBe(fonte)
+
+    // CodeRabbit #547 — a asserção final aqui era `expect("").not.toContain("{AVISO…}")`: dois
+    // literais, decidida em tempo de LEITURA e cega a tudo que este arquivo vigia. Amarrá-la ao
+    // valor (`expect(recorte).not.toContain(…)`) também não resolve: com `recorte === ""` ela é
+    // ENTAILED pela linha de cima, e nenhuma mutação a derruba sem derrubar aquela antes.
+    //
+    // O que MEDE o veneno é a contagem: âncora literal na fonte correta, e a envenenada tem
+    // exatamente uma ocorrência a menos. Poison que não aplicou, poison que come duas, e uma
+    // varredura que passe a devolver código de menos — os três acendem aqui.
+    const AVISO_NO_JSX = "{AVISO_DE_LEITURA_QUE_NAO_VOLTOU}"
+    expect(ocorrenciasNoCodigo(fonte, AVISO_NO_JSX), "fonte correta").toBe(1)
+    expect(ocorrenciasNoCodigo(envenenada, AVISO_NO_JSX), "envenenada").toBe(
+      ocorrenciasNoCodigo(fonte, AVISO_NO_JSX) - 1,
+    )
+
+    // E o fail-closed do recorte: sem a abertura, `trechoDelimitado` devolve `""` — um recorte
+    // que não achou o alvo nunca vira aprovação para o `toContain` da régua lá de cima.
     expect(trechoDelimitado(envenenada, '{estado === "falhou" ? (', "</div>")).toBe("")
-    // Fail-closed do próprio recorte: sem a abertura, `trechoDelimitado` devolve `""`, e `""`
-    // reprova o `toContain`. Um recorte que não achou o alvo nunca vira aprovação.
-    expect("").not.toContain("{AVISO_DE_LEITURA_QUE_NAO_VOLTOU}")
   })
 
-  it("âncora na CONTINUAÇÃO de um comentário JSX — o furo que o filtro de linha não pega", () => {
-    // A terceira forma da lista de `fonte-scan.ts`, na variante que ainda escapa: o filtro
-    // olha o INÍCIO da linha, e a segunda linha de um comentário JSX de duas linhas não começa
-    // com marcador nenhum. Ela sobrevive como "código".
+  it("âncora na CONTINUAÇÃO de um comentário JSX — o furo do PR #547, agora fechado", () => {
+    // A forma 4 de `fonte-scan.ts`. O filtro antigo olhava o INÍCIO da linha, então descartava a
+    // linha de ABERTURA do bloco e devolvia as de continuação como "código". Este `it` prova o
+    // conserto pelos dois lados: acusa a fonte envenenada, e o `it` seguinte prova que continua
+    // NÃO acusando a fonte legítima.
+    const ANCORA = '{estado === "falhou" ? ('
     const fonte = fonteDaTela(TRILHA)
     const envenenada = fonte.replace(
       '      {estado === "falhou" ? (\n' +
@@ -626,18 +677,64 @@ describe("controles positivos — a régua acusa a mutação, e só ela", () => 
     )
     expect(envenenada).not.toBe(fonte)
 
-    // A forma INGÊNUA — "a âncora aparece numa linha de código" — fica VERDE: a linha de
-    // continuação passou pelo filtro.
-    expect(
-      linhasDeCodigo(envenenada).some((l) => l.includes('{estado === "falhou" ? (')),
-    ).toBe(true)
+    // O FURO, encenado: o filtro por prefixo devolvia a continuação como código. Este é o
+    // predicado ANTIGO, escrito à mão — é a medida do que se ganhou, e não uma chamada a
+    // `linhasDeCodigo`, que agora seria a resposta nova. Mantê-lo aqui é o que impede o conserto
+    // de ser desfeito sem ninguém notar.
+    const filtroPorPrefixo = (texto: string) =>
+      texto
+        .split("\n")
+        .map((l) => l.trim())
+        .filter(
+          (l) =>
+            !l.startsWith("*") &&
+            !l.startsWith("//") &&
+            !l.startsWith("/" + "*") &&
+            !l.startsWith("{/" + "*"),
+        )
+    expect(filtroPorPrefixo(envenenada).some((l) => l.includes(ANCORA))).toBe(true)
 
-    // A régua exige o PAR dentro do recorte, e o recorte agora fecha no `</div>` do ramo
-    // `vazio`, que desenha a frase de ausência em vez do aviso. Reprova.
-    const recorte = trechoDelimitado(envenenada, '{estado === "falhou" ? (', "</div>")
-    expect(recorte).not.toBe("")
+    // A régua de hoje: a âncora comentada NÃO é código.
+    expect(linhasDeCodigo(envenenada).some((l) => l.includes(ANCORA))).toBe(false)
+    expect(codigoDe(envenenada)).not.toContain(ANCORA)
+
+    // A segunda rede continua de pé: o recorte fecha no `</div>` do ramo `vazio`, que desenha a
+    // frase de ausência em vez do aviso.
+    const recorte = trechoDelimitado(envenenada, ANCORA, "</div>")
     expect(recorte).not.toContain("{AVISO_DE_LEITURA_QUE_NAO_VOLTOU}")
     expect(recorte).toContain("Nenhuma ação registrada ainda")
+  })
+
+  it("controle NEGATIVO do mesmo conserto — a fonte legítima continua sendo lida como código", () => {
+    // Sem este `it`, "descartar tudo" satisfaria o positivo acima. As três telas do corpus têm
+    // comentário JSX de DUAS linhas de verdade (`orgs/[id]/page.tsx` tem três), então o corpus
+    // exercita a varredura com estado sem precisar de fixture.
+    for (const { arquivo, ancora } of [
+      { arquivo: TRILHA, ancora: '{estado === "falhou" ? (' },
+      { arquivo: RESUMO, ancora: '{estadoDaEmpresa === "desconhecido"' },
+      { arquivo: VISAO_GERAL, ancora: "adminsIndisponiveis: adminsFalhou" },
+    ]) {
+      const fonte = fonteDaTela(arquivo)
+      const rotulo = path.relative(SRC, arquivo)
+      expect(linhasDeCodigo(fonte).some((l) => l.includes(ancora)), rotulo).toBe(true)
+      // Vivacidade: o comentário de bloco fecha, e o código DEPOIS dele sobrevive. Uma varredura
+      // que perdesse o estado ligado engoliria o arquivo inteiro a partir do primeiro bloco — e
+      // o `some` acima é cego a isso quando a âncora vem antes.
+      expect(codigoDe(fonte).length, rotulo).toBeGreaterThan(500)
+      expect(linhasDeCodigo(fonte).filter((l) => l !== "").length, rotulo).toBeGreaterThan(20)
+    }
+  })
+
+  it("o que o filtro NÃO pode comer: código na mesma linha do comentário, e `//` de URL", () => {
+    // Descartar demais é falso vermelho. Estes quatro casos são o piso do que tem que sobrar.
+    const abre = "/" + "*"
+    const fecha = "*" + "/"
+    expect(linhasDeCodigo(`const a = 1 ${abre} nota ${fecha} + 2`)).toEqual(["const a = 1  + 2"])
+    expect(linhasDeCodigo(`<div> {${abre} nota ${fecha}}`)).toEqual(["<div>"])
+    expect(linhasDeCodigo(`const u = "https://exemplo.com/a"`)).toEqual([
+      `const u = "https://exemplo.com/a"`,
+    ])
+    expect(linhasDeCodigo(`${abre} bloco\nengolido\n${fecha} const b = 2`)).toEqual(["const b = 2"])
   })
 
   it("comentário citando `.limit(LIMITE_DE_LINHAS + 1)` não substitui a chamada", () => {
@@ -688,5 +785,74 @@ describe("controles positivos — a régua acusa a mutação, e só ela", () => 
       expect(recorte, ramo.rotulo).toContain(ramo.teste)
       expect(recorte, ramo.rotulo).toContain(ramo.desenho)
     }
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────────────────
+// METADE 3 — o que o console DECLARA sem ter medido (CodeRabbit PR #547)
+// ─────────────────────────────────────────────────────────────────────────────────────────
+
+describe("data na tela do console é declarada num fuso FIXO", () => {
+  const CONSOLE = path.join(SRC, "app/platform")
+
+  it("nenhuma chamada de `toLocale…` em `app/platform/**` fica sem `timeZone`", () => {
+    // Afirmação ABSOLUTA, e não "as telas que eu lembrei": sem fuso, quem decide a data é o fuso
+    // do PROCESSO. Estas telas renderizam no servidor (UTC na Vercel) e no laptop (UTC-3) — a
+    // mesma `created_at` de 21h vira dois dias diferentes. A régua vale para o arquivo que a
+    // próxima story criar, que é o ponto de medir o diretório em vez de uma lista.
+    const arquivos = arquivosDeProducao(CONSOLE)
+    expect(arquivos.length, "vivacidade: a varredura achou arquivos").toBeGreaterThan(5)
+
+    const semFuso: string[] = []
+    let chamadas = 0
+    for (const arquivo of arquivos) {
+      const codigo = codigoDe(fs.readFileSync(arquivo, "utf8"))
+      for (const forma of ["toLocaleDateString(", "toLocaleString(", "toLocaleTimeString("]) {
+        for (let i = codigo.indexOf(forma); i >= 0; i = codigo.indexOf(forma, i + 1)) {
+          // O primeiro `)` fecha a própria chamada: nenhuma destas tem parêntese aninhado. Se um
+          // dia tiver, o recorte encurta e a chamada entra em `semFuso` — falso VERMELHO, que é
+          // o lado seguro de errar.
+          const fim = codigo.indexOf(")", i)
+          const chamada = fim < 0 ? codigo.slice(i) : codigo.slice(i, fim + 1)
+          chamadas += 1
+          if (!chamada.includes("timeZone")) {
+            semFuso.push(`${path.relative(SRC, arquivo)}: ${chamada}`)
+          }
+        }
+      }
+    }
+    expect(chamadas, "vivacidade: o console formata data em algum lugar").toBeGreaterThan(0)
+    expect(semFuso).toEqual([])
+  })
+
+  it("o controle POSITIVO: tirar o `timeZone` de uma tela real acende a régua", () => {
+    const fonte = fonteDaTela(VISAO_GERAL)
+    const COM = 'toLocaleDateString("pt-BR", { timeZone: FUSO_DO_CONSOLE })'
+    const SEM = 'toLocaleDateString("pt-BR")'
+    expect(ocorrenciasNoCodigo(fonte, COM), "fonte correta").toBe(1)
+    const envenenada = fonte.replace(COM, SEM)
+    expect(envenenada).not.toBe(fonte)
+    expect(codigoDe(envenenada)).toContain(SEM)
+    expect(codigoDe(envenenada)).not.toContain("timeZone")
+  })
+})
+
+describe("duração que não foi medida não vira número na tela", () => {
+  it("a Visão geral tem o ramo do `dias === null` — e a frase dele não afirma um prazo", () => {
+    // `number | null` NÃO é erro de compilação no JSX: React renderiza `null` como vazio, e a
+    // tela escreveria "pendente há  dias" sem que o `tsc` visse nada. Quem guarda é esta régua.
+    const codigo = codigoDe(fonteDaTela(VISAO_GERAL))
+    expect(codigo).toContain("p.dias === null")
+    expect(codigo).toContain("não foi possível medir há quanto tempo")
+    // E o ramo do número continua existindo — uma régua que só exige o `null` é satisfeita por
+    // uma tela que nunca mostra o prazo.
+    expect(codigo).toContain('p.dias === 1 ? "dia" : "dias"')
+  })
+
+  it("o controle POSITIVO: sem o ramo do `null`, a régua acende", () => {
+    const fonte = fonteDaTela(VISAO_GERAL)
+    const envenenada = fonte.replace("p.dias === null", "false")
+    expect(envenenada).not.toBe(fonte)
+    expect(codigoDe(envenenada)).not.toContain("p.dias === null")
   })
 })
