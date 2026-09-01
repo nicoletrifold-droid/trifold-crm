@@ -969,6 +969,31 @@ LEITURA de plataforma e deveria virar `platformQuery`).
 
 ---
 
+### [Epic 900] 🟠 O diálogo de "Pausar empresa" diz "**pode** mudar" — vira "**muda**" no dia do corte da `900-55`
+
+**Adicionado em:** 2026-09-01 · **Origem:** AC9.2 da Story `900-60`, no fechamento dela.
+**Prioridade:** P2 hoje, **P1 no instante em que `WEBHOOK_ORG_ROUTING=identifier` for promovido.**
+**Endereçado a:** quem executar o corte da `900-55` — é um co-requisito dele, não um item solto.
+
+A terceira frase do diálogo de pausar/retomar
+(`packages/web/src/lib/tenancy/console-pausa-empresa.ts`, `FRASE_DO_ROTEAMENTO`) diz hoje:
+*"Isso **pode** mudar para onde vão os leads de OUTRA empresa."* O "pode" é literal e foi medido:
+`decidirModoRoteamento()` (`lib/tenancy/webhook-org.ts:278-282`) devolve `"both"` porque
+`WEBHOOK_ORG_ROUTING` não existe em nenhum arquivo de env do repositório — e em `both` quem decide
+o `orgId` é o **legado**. `resolveSoleOrg()` só alimenta o campo `divergiu` da telemetria do
+dual-run. O efeito de roteamento é **latente**.
+
+**No dia em que a `900-55` promover `identifier`, `resolveSoleOrg()` passa a DECIDIR** — e a frase
+fica errada por omissão de certeza, que é o tipo de erro que ninguém percebe: o operador lê "pode",
+calcula que talvez não aconteça, e acontece. O conserto é uma linha (`pode mudar` → `muda`) mais o
+teste que a ancora verbatim (`console-pausa-empresa.test.ts`, constante `FRASE_III`, âncora literal
+digitada à mão — ela **vai** ficar vermelha, e é para ficar).
+
+**Por que isto é um item e não um comentário:** o comentário existe (no cabeçalho do módulo, com o
+`git grep` da env que o encontra), mas comentário não tem dono nem gatilho. Quem faz o corte da
+`900-55` mexe em `webhook-org.ts` e em env — não tem por que abrir o texto de um diálogo do
+console. Este item é o que liga as duas frentes.
+
 ### [Epic 900] 🟡 Contagem de usuários por org em `/platform/orgs` sofre o corte de 1000 linhas do PostgREST
 
 **Adicionado em:** 2026-08-28
