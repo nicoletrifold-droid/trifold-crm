@@ -1,6 +1,6 @@
 # Story 90-6 — URLs limpas (`/sobre-nos`, `/empreendimentos`, `/corporativas`, `/blog`) + redirect 301
 
-**Status:** InReview (deployada em produção por @devops em 2026-08-28 — `dpl_7AWyj2cgKsEFXU2fBcbpXNseZSDv`, smoke test em `trifold.eng.br` 100% PASS; promoção a `Done` após merge do PR #523)
+**Status:** Done (PR #523 squash-mergeado em `main` em 2026-09-01 — `7c97ff93`; deployada em produção por @devops em 2026-08-28 — `dpl_7AWyj2cgKsEFXU2fBcbpXNseZSDv`, smoke test em `trifold.eng.br` 100% PASS)
 **Epic:** 90 — SEO Técnico do site institucional trifold.eng.br
 **Executor:** @dev (Dex)
 **Quality Gate:** @qa (Quinn) — `*qa-gate` ao fim da implementação
@@ -499,6 +499,7 @@ Duas coisas para o @devops no momento do deploy:
 | 2026-08-28 | 0.2 | NO-GO do @po (4/10) corrigido: contagem de arquivos corrigida para 6 (não 8, incluindo Artigo.dc.html); contagem de ocorrências por link corrigida para 3× (não 2×); Home.dc.html incluído no escopo (AC5, normalização para `/` com 301, preservando `#contato`); forma canônica de trailing slash definida (AC2, sem barra); nota de rollback do vercel.json adicionada; story marcada para rodar primeiro no epic (sequenciamento). | @sm (River) |
 | 2026-08-28 | 0.3 | Must-fix da 2ª validação @po: AC5 corrigida — fragmento (`#contato`) nunca é enviado ao servidor, então o `destination` do redirect é sempre `/` (nunca `/#contato`); verificação do fragmento passa a ser por Playwright, não `curl`. Should-fix: Dev Notes trocou a afirmação de "3 ocorrências fixas" por tabela de contagem real por arquivo (reconferida pelo @po) + instrução de grep exaustivo. Status → `Ready`. | @sm (River) |
 | 2026-08-28 | 1.0 | Implementada por @dev. `Sobre Nós.dc.html` renomeado para `sobre-nos.dc.html`; 10 `redirects` e 4 `rewrites` novos no `vercel.json` (`statusCode: 301`, porque `permanent: true` na Vercel emite 308); links de nav/rodapé/CTA atualizados nos 6 arquivos. 2 CTAs em JavaScript (`ctaHref`) fora da tabela de contagem das Dev Notes foram encontrados e corrigidos. Verificado com `curl -IL`, crawl de 31 links e 34 asserções Playwright — **tudo contra `vercel dev` local**; prova em produção depende do deploy manual do @devops. Status → `Ready for Review`. | @dev (Dex) |
+| 2026-09-01 | 1.1 | PR #523 squash-mergeado em `main` (`7c97ff93`). Checks de CI verdes, sem conflito com `main` (nenhum commit de `main` tocou `landing-pages/` desde a merge-base). Achados restantes do CodeRabbit eram todos `Minor` de prosa/formatação na própria story, já triados no PR. Produção reconferida no dia do merge: 5 URLs limpas em 200 e 6 redirects em 301 de 1 hop. Status → `Done`. | @devops (Gage) |
 
 ## QA Results
 
@@ -763,3 +764,24 @@ silenciosamente publicaria mudança de produção sem story nem gate.
 
 Toda a evidência de produção está fechada, mas a promoção para `Done` segue a convenção do repo:
 sai por branch `docs/90-6-done` + PR, depois do PR #523 mergeado e com o site estável em observação.
+
+### Promoção a `Done` — @devops (Gage), 2026-09-01
+
+PR #523 **squash-mergeado** em `main`: commit `7c97ff93`, método `squash` (padrão do repositório —
+todo merge commit recente tem parent único). Conferências antes do merge:
+
+- **CI:** `type-check · lint · test` SUCCESS, `Vercel – trifold-crm` SUCCESS, check do CodeRabbit
+  SUCCESS. `gate de tenancy (não-bloqueante)` SUCCESS — os 86 FAIL do comentário são dívida de RLS
+  pré-existente do banco, sem relação com um diff de HTML estático + documentação.
+- **Conflito com `main`:** nenhum. `mergeable: MERGEABLE` / `mergeStateStatus: CLEAN`, e nenhum dos
+  22 commits que entraram em `main` desde a merge-base (`563e639f`) tocou `landing-pages/`.
+  `git merge-tree` a seco sem conflito.
+- **Reviews:** o único `CHANGES_REQUESTED` era do bot CodeRabbit, com todos os achados restantes
+  classificados `Minor` e já respondidos no PR (formatação e prosa desta própria story; o achado do
+  `Artigo.dc.html` é pré-existente e foi ao backlog do épico). Nenhum review humano pendente.
+- **Produção no dia do merge:** `/`, `/sobre-nos`, `/empreendimentos`, `/corporativas` e `/blog` em
+  200; `Sobre Nós.dc.html`, `Empreendimentos.dc.html`, `B2B.dc.html`, `Blog.dc.html`, `Home.dc.html`
+  e `/sobre-nos/` em 301 de 1 hop para a URL limpa. Site estável — nada a reverter.
+
+O merge é apenas de registro em git: este site não é git-based e já estava publicado desde
+2026-08-28.
