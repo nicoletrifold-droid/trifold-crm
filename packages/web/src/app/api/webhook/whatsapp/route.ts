@@ -405,9 +405,23 @@ export async function POST(request: NextRequest) {
   // Fica FORA do `mediaMetadata` de propósito: nada aqui tem `media_id` nem download,
   // então as colunas `media_*` continuam NULL.
   const extraMetadata: Record<string, unknown> = {}
-  // Reação (❤️) e tipo desconhecido gravam a bolha mas NÃO acionam a IA — ver a guarda
-  // dentro do `after()` da Nicole, mais abaixo.
+  // ⚠️ DUAS FLAGS, DE PROPÓSITO — NÃO UNIFICAR.
+  //
+  // Elas parecem duplicadas porque hoje só divergem no tipo desconhecido, mas a divergência
+  // É a decisão do dono do produto:
+  //
+  //   • `reaction`            → sem IA  E  sem push. Um ❤️ não é pedido: a Nicole responder a
+  //                             ele é pior que o silêncio, e o push vira ruído no celular do
+  //                             corretor.
+  //   • tipo desconhecido     → sem IA  MAS  COM push. É exatamente o caso em que o corretor
+  //     (system/order/…)       precisa ser avisado para ir olhar no WhatsApp: o CRM sabe que
+  //                             chegou algo e sabe que NÃO consegue mostrar o conteúdo. Calar
+  //                             o push aqui recriaria o defeito de 01/09 numa camada acima —
+  //                             a bolha existiria e ninguém olharia.
+  //
+  // Unificar as duas em um booleano só desfaz silenciosamente a segunda linha.
   let acionaNicole = true
+  let notificaCorretor = true
 
   /** Normaliza campo textual do payload da Meta: string aparada, ou "". */
   const limpar = (v: unknown) => (typeof v === "string" ? v.trim() : "")
@@ -540,15 +554,19 @@ export async function POST(request: NextRequest) {
     text = emoji ? `[O lead reagiu com ${emoji}]` : "[O lead reagiu a uma mensagem]"
     // `message_id` é o wamid da mensagem reagida — sem ele a reação fica órfã.
     extraMetadata.reaction = { emoji: emoji || null, message_id: limpar(reacao.message_id) || null }
-    // Uma reação não é pedido. A Nicole responder a um ❤️ é pior que o silêncio.
+    // Uma reação não é pedido. A Nicole responder a um ❤️ é pior que o silêncio — e um push
+    // por ❤️ é ruído puro no celular do corretor. Único tipo em que AS DUAS caem.
     acionaNicole = false
+    notificaCorretor = false
   } else {
     // `system`, `order`, `unsupported` e qualquer tipo que a Meta venha a inventar.
     // Antes disto o `else` devolvia 200 e DESCARTAVA a mensagem: nada em `messages`,
     // nada em log, ninguém sabia. Agora a bolha existe e nomeia o tipo.
     text = `[O lead enviou algo que o CRM ainda não exibe: ${limpar(msg.type) || "tipo desconhecido"}]`
     extraMetadata.tipo_nao_suportado = limpar(msg.type) || null
-    // Não sabemos o que é — a IA não tem o que responder com segurança.
+    // Não sabemos o que é — a IA não tem o que responder com segurança. Mas o push ao corretor
+    // CONTINUA (`notificaCorretor` segue true): é a única forma de alguém ir ver no WhatsApp o
+    // que o CRM não consegue exibir.
     acionaNicole = false
   }
 
@@ -632,25 +650,38 @@ export async function POST(request: NextRequest) {
   // marca falha de processamento, e usar `false` aqui faria toda mensagem de figurinha
   // parecer pendente numa fila que ninguém drena.
   //
-  // Fire-and-forget: uma falha ao arquivar não pode derrubar o webhook nem atrasar o 200 —
-  // e, principalmente, não pode impedir o INSERT da mensagem, que vem depois.
+  // AGUARDADO de propósito, e NÃO em `after()`. O `webhooks/landing-page/route.ts` documenta
+  // que na Vercel o callback de `after()` era descartado de forma INTERMITENTE e sem exceção —
+  // foi assim que leads sumiram lá. Arquivar a prova no caminho que já provou perder prova
+  // esvaziaria a garantia justamente no caso raro. O custo é um INSERT num handler que já faz
+  // vários awaits antes do 200.
+  //
+  // O `try/catch` é o que mantém isto inofensivo: falha ao arquivar é ENGOLIDA (console.error).
+  // Não derruba o webhook, não muda o status HTTP e não impede o INSERT da mensagem, que vem
+  // depois. Perder o arquivo é ruim; perder a bolha por causa do arquivo seria pior.
   if (tipoNaoSuportado) {
-    after(async () => {
-      try {
-        await getSupabaseAdmin()
-          .from("webhook_logs")
-          .insert({
-            org_id: orgId,
-            source: "whatsapp",
-            event_type: `tipo_nao_suportado:${msg.type}`,
-            payload: msg,
-            signature_valid: true,
-            processed: true,
-          })
-      } catch (err) {
-        console.error("[webhook] falha ao arquivar payload não suportado (ignorado):", err)
+    try {
+      const { error: erroArquivo } = await getSupabaseAdmin()
+        .from("webhook_logs")
+        .insert({
+          org_id: orgId,
+          source: "whatsapp",
+          event_type: `tipo_nao_suportado:${msg.type}`,
+          payload: msg,
+          signature_valid: true,
+          processed: true,
+        })
+      // PostgREST devolve erro no objeto, não por exceção: sem esta leitura, uma violação de
+      // CHECK/RLS passaria despercebida e o `catch` nunca seria acionado.
+      if (erroArquivo) {
+        console.error(
+          "[webhook] falha ao arquivar payload não suportado (ignorado):",
+          erroArquivo.message
+        )
       }
-    })
+    } catch (err) {
+      console.error("[webhook] falha ao arquivar payload não suportado (ignorado):", err)
+    }
   }
 
   // ---- Find-or-upsert lead (sync) ---------------------------------------
@@ -918,15 +949,21 @@ export async function POST(request: NextRequest) {
     // nada) vivem dentro do helper. Fire-and-forget: não bloqueia o HTTP 200.
     // Vem APÓS o early-return de wamid duplicado (23505): uma reentrega não
     // dispara push repetido ao corretor.
-    after(async () => {
-      await notifyBrokerOnReply({
-        supabase: getSupabaseAdmin(),
-        leadId: lead.id,
-        conversationId: conversation.id,
-        orgId,
-        messageExcerpt: text ?? "",
+    //
+    // `notificaCorretor` é uma flag SEPARADA de `acionaNicole` — ver o comentário longo na
+    // declaração das duas. Resumo: reação não notifica; tipo desconhecido notifica, ainda que
+    // nenhum dos dois acione a IA.
+    if (notificaCorretor) {
+      after(async () => {
+        await notifyBrokerOnReply({
+          supabase: getSupabaseAdmin(),
+          leadId: lead.id,
+          conversationId: conversation.id,
+          orgId,
+          messageExcerpt: text ?? "",
+        })
       })
-    })
+    }
 
     // Story 90-1 (Epic 90) — Live Coach: sugestão de resposta à objeção do lead
     // quando o CORRETOR conduz a conversa. `after()` dedicado e independente do

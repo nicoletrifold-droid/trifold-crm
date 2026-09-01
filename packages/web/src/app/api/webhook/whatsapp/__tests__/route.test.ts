@@ -157,6 +157,17 @@ vi.mock("@web/lib/coach/generate-suggestion", () => ({
   generateCoachSuggestion: (...args: unknown[]) => coachMock(...(args as [])),
 }))
 
+/**
+ * Story 63-12 — push ao corretor. Mockado para que o teste possa AFIRMAR sobre a chamada:
+ * o helper real decide sozinho (corretor assumiu? existe corretor?) e engole tudo, então
+ * observar o efeito colateral não distinguiria "a rota não chamou" de "o helper desistiu".
+ * O eixo aqui é a decisão da ROTA.
+ */
+const pushCorretorMock = vi.fn(async () => {})
+vi.mock("@web/lib/broker/notify-on-reply", () => ({
+  notifyBrokerOnReply: (...args: unknown[]) => pushCorretorMock(...(args as [])),
+}))
+
 // ---- In-memory Supabase mock ---------------------------------------------
 
 interface MessageRow {
@@ -283,6 +294,18 @@ let selectsPorTabela: Array<{ table: string; cols: string | null }> = []
  */
 let falharLeitura:
   | ((table: string, cols: string | null) => string | null)
+  | null = null
+
+/**
+ * Injeção de falha de ESCRITA (INSERT), irmã de `falharLeitura`.
+ *
+ * Dois modos porque o cliente falha de duas formas distintas, e o código de produção precisa
+ * sobreviver às DUAS: o PostgREST devolve `{data:null, error}` (violação de CHECK/RLS) sem
+ * lançar, enquanto rede/cliente/timeout LANÇA. Um `try/catch` sozinho só cobre a segunda; um
+ * `if (error)` sozinho só cobre a primeira. O fake sabia produzir nenhuma das duas.
+ */
+let falharInsert:
+  | ((table: string) => { lanca: boolean; motivo: string } | null)
   | null = null
 
 /** Colunas de uma projeção simples, ou `null` (`*`, embed, `->>`, agregados). */
@@ -491,6 +514,11 @@ function buildSupabaseMock() {
       }
 
       if (state.action === "insert" || state.action === "upsert") {
+        const falha = falharInsert?.(String(table)) ?? null
+        if (falha) {
+          if (falha.lanca) throw new Error(falha.motivo)
+          return Promise.resolve({ data: null, error: { message: falha.motivo } })
+        }
         const items = Array.isArray(state.payload)
           ? state.payload
           : [state.payload]
@@ -2289,3 +2317,193 @@ function buildContatoSimples(from: string, wamid: string) {
     ],
   }
 }
+
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// O arquivo de payload é AGUARDADO — e é inofensivo quando falha
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+//
+// O INSERT em `webhook_logs` saiu do `after()` porque a Vercel já provou descartar callbacks de
+// `after()` em silêncio (documentado em `webhooks/landing-page/route.ts`) — arquivar a prova no
+// caminho que perde prova esvazia a garantia. Aguardar tem um preço: agora o arquivo está ANTES
+// do INSERT da mensagem no mesmo caminho síncrono, e uma falha nele poderia derrubar a bolha.
+//
+// É exatamente isso que estes testes trancam. Carrasco: tirar o `try/catch` (ou o `if (error)`)
+// da rota faz `db.messages` ficar vazio e a resposta deixar de ser 200.
+describe("WhatsApp webhook — falha ao arquivar payload não derruba a mensagem", () => {
+  const APP_SECRET = "test-secret"
+
+  beforeEach(() => {
+    db = freshDb()
+    nextId = 0
+    logEventMock.mockClear()
+    fetchMock.mockClear()
+    fetchMock.mockImplementation((async () => ({ ok: true, json: async () => ({}) })) as never)
+    coachMock.mockClear()
+    coachMock.mockResolvedValue(undefined)
+    pushCorretorMock.mockClear()
+    pipelineMock.mockClear()
+    pipelineMock.mockImplementation(async () => ({
+      response: "Mocked Nicole reply",
+      qualificationScore: 0,
+    }))
+    afterPromises = []
+    falharLeitura = null
+    falharInsert = null
+    process.env.META_APP_SECRET = APP_SECRET
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "http://localhost"
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "test-key"
+    process.env.META_WHATSAPP_VERIFY_TOKEN = "verify"
+    process.env.NICOLE_ANTI_RAJADA_MS = "0"
+  })
+
+  afterEach(() => {
+    // Não pode vazar para nenhum outro bloco: derrubaria todo INSERT da suíte.
+    falharInsert = null
+    delete process.env.NICOLE_ANTI_RAJADA_MS
+  })
+
+  it("INSERT do arquivo LANÇA: a mensagem é gravada e a resposta é 200", async () => {
+    const { POST } = await import("../route")
+    // Só `webhook_logs` falha — se derrubasse `messages` também, o teste mediria outra coisa.
+    falharInsert = (table) =>
+      table === "webhook_logs" ? { lanca: true, motivo: "conexão caiu" } : null
+
+    const res = await POST(
+      signedRequest(buildContatoSimples("+5544999689446", "wamid.LOG-THROW"), APP_SECRET)
+    )
+
+    expect(res.status).toBe(200)
+    expect(db.webhook_logs).toHaveLength(0) // o arquivo realmente não foi gravado
+    const userMsg = db.messages.find((m) => m.role === "user")
+    expect(userMsg).toBeTruthy()
+    expect(userMsg!.content).toBe("[Contato recebido] Maria Silva — +55 41 99999-9999")
+  })
+
+  it("INSERT do arquivo devolve `error` do PostgREST: idem — a bolha não depende do arquivo", async () => {
+    const { POST } = await import("../route")
+    // O outro modo de falha: violação de CHECK/RLS não LANÇA, vem no objeto.
+    falharInsert = (table) =>
+      table === "webhook_logs"
+        ? { lanca: false, motivo: 'new row violates check constraint "webhook_logs_source_check"' }
+        : null
+
+    const res = await POST(
+      signedRequest(buildContatoSimples("+5544999689446", "wamid.LOG-ERR"), APP_SECRET)
+    )
+
+    expect(res.status).toBe(200)
+    expect(db.webhook_logs).toHaveLength(0)
+    expect(db.messages.find((m) => m.role === "user")).toBeTruthy()
+  })
+})
+
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Push ao corretor: reação cala, tipo desconhecido grita
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+//
+// `notificaCorretor` é uma flag SEPARADA de `acionaNicole`, e estes testes são o que impede
+// alguém de "simplificar" unificando as duas: sob a unificação, o teste do tipo desconhecido
+// fica vermelho (o corretor deixaria de ser avisado justo no caso em que o CRM não sabe exibir
+// o conteúdo).
+describe("WhatsApp webhook — push ao corretor por tipo de mensagem", () => {
+  const APP_SECRET = "test-secret"
+
+  beforeEach(() => {
+    db = freshDb()
+    nextId = 0
+    logEventMock.mockClear()
+    fetchMock.mockClear()
+    fetchMock.mockImplementation((async () => ({ ok: true, json: async () => ({}) })) as never)
+    coachMock.mockClear()
+    coachMock.mockResolvedValue(undefined)
+    pushCorretorMock.mockClear()
+    pipelineMock.mockClear()
+    pipelineMock.mockImplementation(async () => ({
+      response: "Mocked Nicole reply",
+      qualificationScore: 0,
+    }))
+    afterPromises = []
+    falharLeitura = null
+    falharInsert = null
+    process.env.META_APP_SECRET = APP_SECRET
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "http://localhost"
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "test-key"
+    process.env.META_WHATSAPP_VERIFY_TOKEN = "verify"
+    process.env.NICOLE_ANTI_RAJADA_MS = "0"
+  })
+
+  afterEach(() => {
+    delete process.env.NICOLE_ANTI_RAJADA_MS
+  })
+
+  /** Mesmo payload arbitrário por tipo usado no bloco de tipos não suportados. */
+  function porTipo(wamid: string, type: string, extra?: Record<string, unknown>) {
+    return {
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                messages: [
+                  { from: "+5544999689446", id: wamid, type, ...(extra ?? {}) },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    }
+  }
+
+  it("CONTROLE — texto normal CHAMA o push (senão os `not.toHaveBeenCalled` abaixo seriam vazios)", async () => {
+    const { POST } = await import("../route")
+
+    await POST(
+      signedRequest(
+        buildPayload({ from: "+5544999689446", wamid: "wamid.PUSH-CTRL", text: "oi" }),
+        APP_SECRET
+      )
+    )
+    await drenarAfter()
+
+    expect(pushCorretorMock).toHaveBeenCalled()
+  })
+
+  it("reaction: NÃO notifica o corretor — um ❤️ é ruído no celular dele", async () => {
+    const { POST } = await import("../route")
+
+    const res = await POST(
+      signedRequest(
+        porTipo("wamid.PUSH-REACT", "reaction", {
+          reaction: { emoji: "❤️", message_id: "wamid.ORIGINAL" },
+        }),
+        APP_SECRET
+      )
+    )
+    expect(res.status).toBe(200)
+    await drenarAfter()
+
+    // A bolha existe (a reação não some) — só o push é suprimido.
+    expect(db.messages.find((m) => m.role === "user")).toBeTruthy()
+    expect(pushCorretorMock).not.toHaveBeenCalled()
+  })
+
+  it("tipo desconhecido: NOTIFICA o corretor — é o caso em que só ele pode ir ver no WhatsApp", async () => {
+    const { POST } = await import("../route")
+
+    const res = await POST(
+      signedRequest(
+        porTipo("wamid.PUSH-ORDER", "order", { order: { catalog_id: "CAT-1" } }),
+        APP_SECRET
+      )
+    )
+    expect(res.status).toBe(200)
+    await drenarAfter()
+
+    // A divergência com `acionaNicole` mora aqui: sem IA, MAS com push.
+    expect(pipelineMock).not.toHaveBeenCalled()
+    expect(pushCorretorMock).toHaveBeenCalled()
+  })
+})
