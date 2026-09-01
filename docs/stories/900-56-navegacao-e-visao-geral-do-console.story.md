@@ -265,6 +265,7 @@ paralelo é como se perde uma correção de segurança num merge. Se a assinatur
 | 2026-08-31 | 0.4 | **Concerns do gate fechadas (QA-900-56-1/2/3/4).** As 4 consultas passam a LER o `error`: `ContagemDeclarada` ganha o terceiro estado `indisponivel`, `formatarContagem` devolve `—`, e o vazio de partida ("Nenhuma empresa ainda") só renderiza quando a consulta de `organizations` SUCEDEU. "N integrações conectadas" passa a herdar saturação de `org_integrations` **e** de `whatsapp_config`, e a contar por `rotuloDeStatusDoTile(...).tom === "ok"` — a tradução única de status, em vez de uma terceira. O predicado do período saiu do `page.tsx` para `ehNovaNoPeriodo()`, com carrasco de borda. 7 mutações novas, cada uma com `tsc --noEmit` rc=0 medido antes do vermelho. | @dev (Dex) |
 | 2026-08-31 | 0.5 | **Rodada 3 — os 4 achados do CodeRabbit (PR #547) fechados, e medidos.** O achado desta story era o **consumidor cego**: a rodada 2 criou o sinal `adminsFalhou` e deixou `pendenciasDeConvite` e a coluna de admin de "Entraram recentemente" sem lê-lo — com a consulta de `users` caída, toda org com `admin_invite_email` virava pendência por falta de dado. `adminsIndisponiveis` passa a ser campo obrigatório. ⚠️ **Os quatro consertos entraram em produção ANTES de existir régua, e a mutação mostrou que três eram decorativos** (verdes com o conserto neutralizado); `console-fail-closed.test.ts` (48 testes) é o que os transforma em entrega. Ver Dev Agent Record → "Rodada 3", inclusive os dois defeitos da própria régua e a correção do delta de testes. | @dev (Dex) |
 | 2026-08-31 | 0.6 | **Rodada 4 — 2ª passada do CodeRabbit no PR #547 (4 achados `Minor`).** Os DOIS primeiros eram defeitos na própria régua construída na rodada 3: `expect(todos).toContain(estadoDaEmpresaDeclarado(…))` aceitava todo o contradomínio (mutante que devolve `"inativa"` sobre leitura caída ficava VERDE — medido), e `expect("").not.toContain(…)` comparava dois literais. Trocadas por asserções que medem. `diasDesdeOConvite` devolvia `NaN` com carimbo ilegível ("pendente há NaN dias") e passa a devolver `null`, com a tela dizendo que não mediu. Datas do console ganharam fuso fixo (`FUSO_DO_CONSOLE`), com régua ABSOLUTA sobre `app/platform/**`. Ver Dev Agent Record → "Rodada 4". | @dev (Dex) |
+| 2026-09-01 | 0.7 | **Rodada 5 — a porta de entrada, reportada pelo dono do produto no preview.** Ele logou com a conta de plataforma e caiu no CRM de uma empresa vazia: *"continua a mesma página de uma empresa cliente e não de admin de fato"*. Medido: `login/actions.ts` não tinha ramo para `is_platform_admin`, e `grep -rn '/platform' packages/web/src` fora de `src/app/platform/` devolvia **zero links** — o console tinha `← Voltar ao CRM` e nenhum caminho de ida. Duas peças: (A) o login manda o platform admin para `/platform`, com a precedência contra `role` **declarada e medida** (0 colisões nos dois bancos hoje); (B) o CRM ganha o atalho "Painel da plataforma" no rodapé da barra lateral e na barra do mobile, só para platform admin. 3 arquivos de régua novos, 36 testes, 9 mutações com `tsc --noEmit` rc=0 medido antes de cada vermelho, e prova na tela com as 3 contas do banco de teste (`elementFromPoint`, não `isVisible()`). Ver Dev Agent Record → "Rodada 5". | @dev (Dex) |
 
 
 ## Dev Agent Record
@@ -375,6 +376,181 @@ zero linhas fora de `disconnected`, `whatsapp_config` de volta a `inactive`/`nul
 - `packages/web/src/lib/tenancy/console-visao-geral.test.ts` *(rodada 4 — o carimbo ilegível)*
 - `packages/web/src/app/platform/page.tsx` *(rodada 4 — fuso fixo e o ramo do `dias === null`)*
 - `packages/web/src/app/platform/orgs/page.tsx` *(rodada 4 — o 5º call site de data, achado pela varredura de `app/platform/**`)*
+
+**Rodada 5 — a porta de entrada (criados)**
+- `packages/web/src/app/login/actions.test.ts` *(metade A — para onde o login manda)*
+- `packages/web/src/components/layout/sidebar-nav.test.ts` *(metade B — o item na tela + a ligação no layout)*
+- `packages/web/src/lib/platform.test.ts` *(a autoridade `isPlatformAdmin`, sem teste desde a 75-314)*
+
+**Rodada 5 — a porta de entrada (modificados)**
+- `packages/web/src/app/login/actions.ts` *(ramo de `is_platform_admin` ANTES dos ramos por `role`)*
+- `packages/web/src/lib/platform.ts` *(`atalhoDoConsole()` — o par `{href,label}`, ou `null`)*
+- `packages/web/src/components/layout/sidebar-nav.tsx` *(prop `atalhoDoConsole`, rodapé do desktop + barra do mobile)*
+- `packages/web/src/app/dashboard/layout.tsx` *(calcula e passa o atalho)*
+
+### Rodada 5 — a porta de entrada: o mecanismo existia e ninguém chegava nele
+
+Achado pelo **dono do produto** avaliando o preview da `900-58`. Ele logou com a conta de
+plataforma, foi parar no CRM e reportou: *"continua a mesma página de uma empresa cliente e não de
+admin de fato"*. Ele está certo, e é a mesma classe do resto desta onda: o console foi construído
+e o caminho até ele nunca foi.
+
+#### Decisão de escopo — [AUTO-DECISÃO], para o @po confirmar ou realocar
+
+**Tratado como DEFEITO dentro desta story (`900-56`), e não como story nova.** Motivo: a matéria
+da `900-56` é a **navegação** do console (AC1/AC2 são a barra de itens), e a porta de entrada é
+navegação — a metade dela que fica do lado de fora. A `900-57` é a casca da empresa e a `900-58` é
+a lista; nenhuma das duas tem jurisdição sobre "como se chega ao console". A alternativa
+considerada foi abrir uma `900-62`; foi descartada porque produziria uma story cuja única AC seria
+"a AC1 da 900-56 vale também na direção de entrada" — dependência circular com o registro aqui.
+**Se o @po discordar, o realocamento é de registro, não de código.**
+
+O que **não** foi feito, e é declarado: as ACs desta story **não** foram editadas (o @dev não tem
+autoridade sobre AC). O conserto está registrado aqui, no Change Log e na File List.
+
+#### O que foi medido antes de escrever qualquer linha
+
+| medição | resultado |
+|---|---|
+| ramos de `destination` em `login/actions.ts` | 5: `broker`, `cliente` (3 desfechos), `obras`/`gerente-relacionamento`, e um `else` que varre o resto para `/dashboard`. **Zero** leem `is_platform_admin` |
+| links do CRM para `/platform` | **zero**. `grep -rn '/platform' packages/web/src` fora de `src/app/platform/` devolve só comentários e rotas de API |
+| caminho de volta | existe: `← Voltar ao CRM` em `app/platform/layout.tsx`. **O de ida nunca foi construído** |
+| segunda porta da frente | `app/page.tsx` também roteia por `role` (`broker` → `/broker`, resto → `/dashboard`) e também não lê a coluna — ver "O que continua aberto" |
+
+⚠️ **Correção a uma medição recebida.** O relatório do achado descreveu os ramos como "`cliente`,
+`obras`/`gerente-relacionamento`, e tudo o mais cai em `/dashboard`". Falta o ramo `broker`
+(`actions.ts:69`), que é o primeiro da cadeia. Não muda a conclusão, mas muda a cadeia em que a
+precedência nova é inserida — e é por isso que o ramo `broker` tem caso de teste próprio nas duas
+metades.
+
+#### Peça A — o login manda o platform admin para `/platform`
+
+A ordem dos ramos **não** foi escolhida por conveniência. `is_platform_admin` é ortogonal a
+`role`: um valor não diz nada sobre o outro, e sem precedência explícita o desfecho de quem casa
+dois ramos seria decidido pela ordem em que os `else if` foram escritos.
+
+**Medição, leitura pura nos dois bancos (2026-09-01):**
+
+| banco | usuários | `is_platform_admin` | roles desses | casam TAMBÉM um ramo não-`/dashboard` |
+|---|---|---|---|---|
+| teste `xnxvygyfyyyzwhiuoehz` | 3 | 1 | `admin` | **0** |
+| produção `dsopqkqjkmhytudaaolv` | 113 | 1 | `admin` | **0** |
+
+Hoje a ordem não muda o destino de ninguém. **Escolha: plataforma vence**, porque o desfecho é
+recuperável num sentido só — de `/platform` existe `← Voltar ao CRM`, e de `/dashboard` o `role`
+volta a mandar; o caminho inverso é exatamente o defeito. O comentário no código carrega a medição
+e a razão, para que quem mexer amanhã não precise refazê-la.
+
+A coluna entra na consulta que **já existia** (`.select("id, name, role, org_id,
+is_platform_admin")`), não numa segunda: duas leituras da mesma linha abrem uma janela em que elas
+discordam.
+
+#### Peça B — o caminho de ida, e por que ele NÃO é um booleano
+
+O atalho é o par `{href,label}`, montado no servidor por `atalhoDoConsole()`
+(`lib/platform.ts`, `server-only`) e passado como prop. A alternativa óbvia — um booleano
+`ehPlatformAdmin` com a rota escrita dentro de `sidebar-nav.tsx` — **vaza**: aquele arquivo é
+`"use client"`, o literal `"/platform"` viajaria no bundle de **todo** usuário logado, e esconder
+o item esconderia só o pixel. A régua mede isso: zero ocorrências de `/platform` no texto-fonte do
+componente, e zero no HTML renderizado de quem não é platform admin.
+
+**Onde ele mora:** rodapé da barra lateral do desktop, entre o bloco do usuário e o `Sair`
+(simetria com o `← Voltar ao CRM` do outro lado), **e** na barra superior do mobile como ícone com
+`aria-label`. O desktop sozinho deixaria o celular sem saída: o sheet "Mais" do mobile só existe
+quando há mais de 4 itens de menu, então não é lugar garantido.
+
+**A autoridade é reúso, não invenção:** `isPlatformAdmin()` de `@web/lib/platform` (Story
+75-314) — a mesma coluna de `lib/tenancy/platform-guard.ts` e da função SQL das policies do Epic
+78. E deliberadamente **não** é `platform-guard`/`platform-query`: os dois são proibidos em
+`app/dashboard/**` por `dashboard-platform-boundary.test.ts` (AC9 da 900-51), porque carregam o
+caminho de leitura cross-org. `isPlatformAdmin` só responde uma pergunta booleana sobre a própria
+linha do usuário.
+
+`isPlatformAdmin()` **não tinha nenhum teste** desde a 75-314. Até agora ela guardava três rotas
+de API de billing; passou a decidir o que aparece na barra lateral do CRM. `lib/platform.test.ts`
+é dela.
+
+#### As duas metades, e os conjuntos de morte — 9 mutações, `tsc --noEmit` rc=0 antes de cada vermelho
+
+Baseline do CI: **302 arquivos / 4.084 passando / 6 xfail** (run `33463174314`). Árvore local
+depois: **305 / 4.134 / 6**. Os 3 arquivos são meus e somam **36** testes (medido isolando-os);
+os outros **+14** vêm de 3 arquivos de teste de OUTRAS frentes modificados e não commitados nesta
+árvore compartilhada (`whatsapp/__tests__/route.test.ts`, `meta/process-lead.test.ts`,
+`tenancy/webhook-org.test.ts` — 9 `it(` novos mais expansões de `.each`). Não foram tocados nem
+serão commitados. A contagem de ARQUIVOS bate exata: 302 + 3 = 305.
+
+| # | mutação | `tsc` | metade 1 (vê / vai) | metade 2 (não vê / não vai) | outras suítes |
+|---|---|---|---|---|---|
+| MA0 | login sem o ramo de plataforma (**o estado de antes**) | rc=0 | 🔴 4 | 🟢 | 🟢 |
+| MA1b | login manda **todo mundo** para `/platform` | rc=0 | 🟢 | 🔴 8 | 🟢 |
+| MA2 | login com a condição **invertida** | rc=0 | 🔴 4 | 🔴 8 | 🟢 |
+| MB0b | o atalho **nunca** renderiza (**o estado de antes**) | rc=0 | 🔴 4 | 🟢 | 🟢 |
+| MB1 | o atalho renderiza para **todo mundo** | rc=0 | 🟢 | 🔴 2 | 🟢 |
+| MB2 | a condição do atalho **invertida** | rc=0 | 🔴 4 | 🔴 2 | 🟢 |
+| MB3 | o layout passa o atalho **incondicionalmente** | rc=0 | 🟢 | 🟢 | 🔴 2 (ligação) |
+| MB4 | o layout **deixa de passar** o atalho | rc=0 | 🟢 | 🟢 | 🔴 2 (ligação) |
+| MC2b | `isPlatformAdmin` lê **sem filtro** (`.eq("id", …)` apagado) | rc=0 | 🟢 | 🟢 | 🔴 2 (autoridade) |
+| MC1b | `isPlatformAdmin` responde **true** para todo mundo | rc=0 | 🟢 | 🟢 | 🔴 5 (autoridade) |
+
+**Os conjuntos de morte das duas metades são disjuntos**, nos dois lados: MA0/MB0b matam só a
+metade 1, MA1b/MB1 matam só a metade 2, e só a inversão mata as duas. Sem isso a régua não
+distinguiria "protegi o item" de "escondi o item de todo mundo" — que é o estado de antes, e ele
+não pode passar.
+
+**Duas mutações não contam, e o motivo é o mesmo:** `MA3` (tirar `is_platform_admin` da projeção
+do `.select()`) e `MC1` (a primeira forma de "responde true sempre") saíram com **`tsc` rc=2**.
+No `MA3` isso é um achado, não um acidente: o `postgrest-js` **estreita o tipo da linha a partir
+da string do `.select()`**, então o mutante de projeção nem compila — quem reprova ali é o
+compilador, não o teste. A régua tem carrasco independente disso (o caso "coluna AUSENTE da
+projeção", montado no dado), mas o vermelho da mutação de projeção **não** é meu.
+
+**Uma colinearidade achada na própria régua, e consertada.** O primeiro teste de "lê a linha do
+usuário pedido" montava o vizinho como platform admin e eu como comum, e ficava **verde** sob a
+mutação que apaga o `.eq("id", …)`: sem filtro, duas linhas em `.maybeSingle()` viram `PGRST116`,
+e o ramo de erro também responde `false`. É o sentido **inverso** — o vizinho comum e eu admin —
+que reprova. O teste passou a afirmar os dois sentidos.
+
+#### Prova na tela — 3 contas reais do banco de teste, `elementFromPoint` e não `isVisible()`
+
+`pnpm dev` (banco `xnxvygyfyyyzwhiuoehz`, o mesmo do ambiente de teste), Chromium 1440×900, login
+de verdade pelo formulário. Nenhuma sessão forjada: `generateLink`/`verifyOtp` com chave de
+serviço é impersonação, e é o que a decisão D14 removeu deste produto.
+
+| conta | destino do login | atalhos no DOM de `/dashboard` | `elementFromPoint` no centro | `/platform` no HTML | clique |
+|---|---|---|---|---|---|
+| Empresa A — admin | `/dashboard` | **0** | n/a | **false** | n/a |
+| Empresa B — admin | `/dashboard` | **0** | n/a | **false** | n/a |
+| Plataforma | **`/platform`** | **1** | **o próprio atalho** | true | leva a `/platform`, `h1` = "Visão geral" |
+
+`isVisible()` do Playwright **não** foi usado: já foi medido nesta onda (900-58) que ele responde
+`true` para elemento recortado por `overflow-hidden` de ancestral. `elementFromPoint` no centro do
+retângulo devolveu o próprio atalho — ou seja, nada o cobre. As duas capturas de tela foram
+olhadas: o item aparece em âmbar com ícone de escudo, acima do `Sair`, e some por completo na
+conta de empresa.
+
+#### O que continua aberto — declarado, não consertado
+
+1. **`app/page.tsx` é uma SEGUNDA porta da frente e continua roteando só por `role`.** Quem chega
+   em `/` com sessão viva (o caso do dono do produto abrindo o preview de novo, sem deslogar) cai
+   em `/dashboard`. Não foi consertado porque o achado nomeia o login, e porque a peça B torna o
+   desfecho **recuperável** — de `/dashboard` o atalho está lá. Duas linhas fecham (a consulta já
+   lê `users`), e é decisão do @po se entra aqui ou vira item de backlog.
+2. **`getRoleRedirect()` em `lib/auth.ts` é código morto** — zero consumidores, medido. Ela
+   duplica a decisão do login sem a coluna nova, e é a próxima armadilha para quem "reusar o
+   helper que já existe". Não removida: está fora do escopo do defeito.
+3. **A ligação no layout é medida por régua ESTÁTICA, não comportamental.** O
+   `app/dashboard/layout.tsx` é um server component `async` com dezenas de consultas e não é
+   renderizável em node. A régua afirma a expressão inteira (`atalhoDoConsole={atalhoDoConsole(await
+   isPlatformAdmin(user.id))}`, recortada do call site do `<SidebarNav>` e filtrada de
+   comentários por `codigoDe`), então qualquer desvio reprova — mas **MB3 e MB4 produzem o mesmo
+   conjunto de morte**: uma régua de FORMA não distingue duas formas erradas entre si. Ela é gate,
+   não carrasco de dois lados. O que fecha esse elo de verdade é a prova na tela acima, e ela é
+   manual.
+4. **O `/broker` também usa `SidebarNav` e não passa o atalho.** Zero platform admins com
+   `role='broker'` hoje nos dois bancos; e com a peça A eles caem em `/platform` de qualquer
+   forma. Custaria as mesmas duas linhas do layout do CRM.
+5. **CodeRabbit CLI não executado** — o gatilho que vale é o GitHub App, e não há PR (esta branch
+   não foi empurrada).
 
 ### Rodada 4 — a 2ª passada do CodeRabbit (PR #547), e o defeito estava no instrumento
 
