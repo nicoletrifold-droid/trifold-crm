@@ -2,6 +2,16 @@ import { getServerUser } from "@web/lib/auth"
 import { createClient } from "@web/lib/supabase/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { can, getUserPermissions, podeVerMenuConfig, podeVerMenuCampanhas } from "@web/lib/permissions"
+// Story 900-56 (defeito da porta de entrada) — o CRM não tinha NENHUM caminho de ida para o
+// console `/platform`: zero links, e o layout de lá só oferece "← Voltar ao CRM". Quem opera a
+// plataforma caía no CRM e não tinha como sair dele.
+//
+// `@web/lib/platform` é a autoridade de plataforma que já existia (Story 75-314), e
+// deliberadamente NÃO é `lib/tenancy/platform-guard`/`platform-query`: aqueles dois são
+// proibidos em `app/dashboard/**` por `lib/tenancy/dashboard-platform-boundary.test.ts` (AC9 da
+// 900-51), porque carregam o caminho de LEITURA cross-org. Este só responde uma pergunta
+// booleana sobre a própria linha do usuário — nenhum dado de outra empresa atravessa.
+import { atalhoDoConsole, isPlatformAdmin } from "@web/lib/platform"
 import { getChatUnreadCount } from "@web/lib/chat/unread-count"
 import { getUpcomingAppointmentsCount } from "@web/lib/agenda/appointments-count"
 import { redirect } from "next/navigation"
@@ -330,6 +340,7 @@ export default async function DashboardLayout({
         userName={user.name}
         userRole={user.role}
         basePath="/dashboard"
+        atalhoDoConsole={atalhoDoConsole(await isPlatformAdmin(user.id))}
         alertCount={alertCount ?? 0}
         liveBadges={[
           ...(permissions["chat"]

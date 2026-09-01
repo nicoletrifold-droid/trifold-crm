@@ -4,7 +4,7 @@ import Link from "next/link"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
-import { MoreHorizontal } from "lucide-react"
+import { MoreHorizontal, ShieldCheck } from "lucide-react"
 import { LogoutButton } from "./logout-button"
 import { ThemeToggle } from "@web/components/theme-toggle"
 
@@ -35,6 +35,18 @@ interface SidebarNavProps {
    * Falha de fetch mantém os últimos valores daquele endpoint (fail-open).
    */
   liveBadges?: Array<{ href: string; endpoint: string }>
+  /**
+   * Story 900-56 (defeito da porta de entrada) — o caminho de IDA do CRM para o console de
+   * plataforma. `null`/ausente = a pessoa não é platform admin e nada é renderizado.
+   *
+   * O par `{href,label}` chega PRONTO do servidor (`atalhoDoConsole()` em `lib/platform.ts`) em
+   * vez de um booleano com a rota escrita aqui. Este arquivo é `"use client"`: um literal
+   * `"/platform"` daqui viajaria no bundle de todo usuário logado, e esconder o item deixaria a
+   * rota descobrível assim mesmo. A forma é declarada inline, e não importada de
+   * `@web/lib/platform`, porque aquele módulo é `server-only` — só o TIPO poderia atravessar, e
+   * um `import` que só não quebra por ser `type` é uma linha a um caractere de virar defeito.
+   */
+  atalhoDoConsole?: { href: string; label: string } | null
 }
 
 /** Classe de background do badge numérico conforme `badgeTone`. */
@@ -42,7 +54,7 @@ function badgeBg(item: NavItem): string {
   return item.badgeTone === "green" ? "bg-green-700" : "bg-orange-500"
 }
 
-export function SidebarNav({ items, userName, userRole, basePath, alertCount, liveBadges }: SidebarNavProps) {
+export function SidebarNav({ items, userName, userRole, basePath, alertCount, liveBadges, atalhoDoConsole }: SidebarNavProps) {
   const pathname = usePathname()
   // Story 63-18 — bottom sheet "Mais" (mobile).
   const [moreOpen, setMoreOpen] = useState(false)
@@ -252,6 +264,18 @@ export function SidebarNav({ items, userName, userRole, basePath, alertCount, li
               </div>
               <ThemeToggle />
             </div>
+            {atalhoDoConsole && (
+              <Link
+                href={atalhoDoConsole.href}
+                data-atalho-console="sidebar"
+                className="mb-1 flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium text-amber-700 transition-all hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-500/10"
+              >
+                <span className="flex h-5 w-5 items-center justify-center">
+                  <ShieldCheck className="h-[18px] w-[18px]" />
+                </span>
+                <span className="flex-1">{atalhoDoConsole.label}</span>
+              </Link>
+            )}
             <LogoutButton />
           </div>
         </div>
@@ -270,6 +294,17 @@ export function SidebarNav({ items, userName, userRole, basePath, alertCount, li
           <span className="text-sm font-semibold text-stone-900 dark:text-stone-100">Trifold</span>
         </div>
         <div className="flex items-center gap-2">
+          {atalhoDoConsole && (
+            <Link
+              href={atalhoDoConsole.href}
+              data-atalho-console="mobile"
+              aria-label={atalhoDoConsole.label}
+              title={atalhoDoConsole.label}
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-amber-700 dark:text-amber-400"
+            >
+              <ShieldCheck className="h-[18px] w-[18px]" />
+            </Link>
+          )}
           <ThemeToggle />
           <LogoutButton />
           <div className="flex h-7 w-7 items-center justify-center rounded-full bg-orange-100 text-[10px] font-semibold text-orange-700 dark:bg-orange-500/20 dark:text-orange-300">

@@ -43,9 +43,11 @@ export async function login(formData: FormData) {
   }
 
   // Need both the public.users.id (for cliente_obras lookup) and role.
+  // `is_platform_admin` entra aqui, e não numa segunda consulta, porque é a MESMA linha:
+  // uma consulta extra abriria a janela em que as duas leituras discordam.
   const { data: appUser } = await supabase
     .from("users")
-    .select("id, name, role, org_id")
+    .select("id, name, role, org_id, is_platform_admin")
     .eq("auth_id", user.id)
     .single()
 
@@ -65,7 +67,39 @@ export async function login(formData: FormData) {
 
   let destination: string
 
-  if (appUser?.role === "broker") {
+  // Story 900-56 (defeito da porta de entrada) — `is_platform_admin` vem ANTES de todos os
+  // ramos por `role`, e a ordem é decidida, não acidental.
+  //
+  // ## Por que a coluna é ortogonal ao `role`, e por que isso exige precedência declarada
+  //
+  // `users.role` diz o que a pessoa faz DENTRO de uma empresa; `users.is_platform_admin` diz
+  // que ela opera a plataforma, ACIMA das empresas (é a mesma autoridade da função SQL
+  // `is_platform_admin()` das policies do Epic 78, e de `lib/tenancy/platform-guard.ts`). Um
+  // valor não implica nada sobre o outro: um platform admin pode ter qualquer `role`, e sem
+  // ordem explícita o desfecho de quem casa dois ramos seria decidido pela ordem em que os
+  // `else if` foram escritos — que é acidente, não decisão.
+  //
+  // ## O que foi medido antes de escolher a ordem (2026-09-01, leitura pura nos dois bancos)
+  //
+  //   • teste (`xnxvygyfyyyzwhiuoehz`): 3 usuários, 1 com `is_platform_admin`, `role='admin'`.
+  //   • produção (`dsopqkqjkmhytudaaolv`): 113 usuários, 1 com `is_platform_admin`,
+  //     `role='admin'`.
+  //   • platform admins que TAMBÉM casam um ramo não-`/dashboard` (`broker`, `cliente`,
+  //     `obras`, `gerente-relacionamento`): **0** nos dois bancos.
+  //
+  // Ou seja: hoje a ordem não muda o destino de ninguém. Ela é escrita agora porque o dia em
+  // que mudar é o dia em que ninguém estará olhando.
+  //
+  // ## Por que a plataforma vence
+  //
+  // Porque o desfecho é RECUPERÁVEL num sentido só. De `/platform` existe `← Voltar ao CRM`,
+  // que leva ao `/dashboard` — e de lá o `role` volta a mandar. O caminho inverso é
+  // exatamente o defeito que esta mudança conserta: cair no CRM sem porta de volta ao painel.
+  // Escolher o lado com saída custa um clique a quem quer o CRM; escolher o outro custou um
+  // painel inalcançável.
+  if (appUser?.is_platform_admin === true) {
+    destination = "/platform"
+  } else if (appUser?.role === "broker") {
     destination = "/broker"
   } else if (appUser?.role === "cliente") {
     // Fetch up to 2 obras to decide: 1 → go directly, 2+ → selection screen.
