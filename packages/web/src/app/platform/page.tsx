@@ -60,6 +60,7 @@ import {
   type LinhaDeIntegracaoDoConsole,
   type OrgDoConsole,
 } from "@web/lib/tenancy/console-visao-geral"
+import { AvisoDeTeto } from "./_components/aviso-de-teto"
 import { ReenviarConvite } from "./orgs/_components/reenviar-convite"
 
 export const dynamic = "force-dynamic"
@@ -300,7 +301,7 @@ export default async function VisaoGeralPage({
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
             Precisa de você
           </h2>
-          {listaIncompleta && <AvisoDeTeto />}
+          {listaIncompleta && <AvisoDeTeto oQue="pendências" />}
           <ul className="divide-y divide-slate-800 overflow-hidden rounded-xl border border-slate-800">
             {pendencias.map((p) => (
               <li
@@ -425,12 +426,3 @@ function Card({
   )
 }
 
-function AvisoDeTeto() {
-  return (
-    <p className="rounded border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
-      Esta lista pode estar incompleta: uma das consultas não voltou, ou voltou no teto de{" "}
-      {TETO_POSTGREST} linhas do PostgREST — em qualquer dos casos há pendências que o sistema não
-      chegou a ver.
-    </p>
-  )
-}
