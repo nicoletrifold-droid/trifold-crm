@@ -222,6 +222,7 @@ desta story.
 | 2026-08-31 | 0.1 | Draft inicial — as "duas colunas baratas" pedidas explicitamente, fatiadas independente do resto da Fase 2 (não depende de `900-42a`/SEC-001 porque o dado é metadado técnico de integração, não conteúdo de lead/conversa). | @sm (River) |
 | 2026-08-31 | 0.2 | **Validada pelo @po (Pax) — GO, nota 8/10.** GO após correção do @po. `p_codigo` de `_org_integration_mark_error` é `text` sem CHECK (medido na migration 248) — `MENSAGENS_PT_BR[last_error]` podia renderizar `undefined`. AC6 ganhou regra de fallback e 3 casos de teste. Status Draft → Ready. | @po (Pax) |
 | 2026-09-01 | 0.3 | **Implementada (@dev).** Migration `253` aplicada no `trifold-crm-dev`; as 2 RPCs gravam e limpam as colunas (provado por SQL em transação abortada); a decisão de render saiu do JSX para `lib/integrations/painel/diagnostico.ts`; 10 mutantes mortos, todos com `tsc` rc=0. Status Ready → Ready for Review. | @dev (Dex) |
+| 2026-09-01 | 0.4 | **Validada NA TELA** (escrita no banco de teste autorizada pelo coordenador para esta tarefa, só pela tela). Os quatro casos conferidos no navegador, com o fuso provado contra a virada do dia em UTC. Empresa A fica com Telegram e Meta CAPI em erro para o dono do produto explorar. | @dev (Dex) |
 
 ## Dev Agent Record
 
@@ -299,20 +300,47 @@ componente intacto. As âncoras de texto-fonte são de **ordem** e de **igualdad
 `pnpm lint --force` (0 erros; os 30 warnings são pré-existentes e nenhum é destes arquivos),
 `pnpm type-check --force` rc=0, `pnpm build` completo, suíte inteira verde.
 
-### O que NÃO consegui provar
+### Validação NA TELA (autorizada pelo coordenador em 2026-09-01, para esta tarefa)
 
-1. **A tela com uma integração EM ERRO.** As 15 linhas do banco de teste estão todas
-   `disconnected`, e ver o diagnóstico exige uma escrita. Não fiz nenhuma: o caminho legítimo é
-   "Testar e salvar" com uma credencial inválida no próprio painel, e ele precisa de autorização.
-   O que está provado sem a tela: o comportamento das RPCs (tabela acima), a decisão de render
-   (testes de unidade) e o consumo dela pelas duas telas (réguas de texto-fonte).
-2. **Login no ambiente navegável.** `SENHA_AMBIENTE_TESTE` não está no shell, no `.env.teste`, no
-   `.env` nem no `packages/web/.env.development` — o seed a exige como export ad hoc. Sem ela não
-   há sessão de platform admin, e forjar sessão está proibido. O que deu para medir com o `pnpm
-   dev` no ar: `/`, `/platform` e `/platform/orgs` respondem `200` (as duas últimas caindo no
-   formulário de login, que é o guard funcionando), sem `500` e sem erro novo no log.
-3. **A aparência.** Não existe harness de render para RSC neste repositório; posição, cor e
-   espaçamento da linha nova no tile não foram vistos por olho nenhum.
+Login pelo formulário com a conta de plataforma (`plataforma@example.com`), Empresa A do
+`trifold-crm-dev`. Nenhuma sessão forjada, nenhum `INSERT`/`UPDATE` direto.
+
+| Caso | O que a tela mostrou |
+|---|---|
+| linha virgem (as 2 colunas `NULL`) | badge "Não conectado", **sem** linha de diagnóstico — o tile de antes, intacto |
+| erro produzido pelo BOTÃO "Testar e salvar" | badge "Com erro" + `Em erro desde 01/09/2026 — A credencial foi recusada. Confira se foi copiada sem espaços extras.` |
+| código fora do contrato de seis | `Em erro desde 01/09/2026 — motivo não reconhecido: quota_do_provider_estourada` — nem `undefined`, nem vazio, nem código cru sem rótulo |
+| reconexão | badge "Conectado" e a linha de diagnóstico **some** — o erro não fica grudado |
+| Visão geral, "Precisa de você" | `⚠ Empresa A — Teste — Telegram em erro desde 01/09/2026 (A credencial foi recusada…)` e a linha equivalente do Meta CAPI com o fallback |
+
+**O fuso foi provado contra o relógio, não contra o teste.** O `mark_error` do Meta CAPI rodou de
+propósito logo depois da virada do dia em UTC: `last_check_at = 2026-09-02 00:00:02+00`, que em São
+Paulo ainda é 01/09. A tela escreveu **01/09/2026**. Sem `timeZone` ela teria escrito 02/09.
+
+**Um degrau NÃO foi dado pelo botão, e é preciso dizer qual.** `gravarIntegracao`
+(`escrita.ts:128-134`) só chama `markError` quando o status já é `connected`/`active` — "uma
+digitação errada não deixa o tile vermelho para sempre". Como as 15 linhas do ambiente nasceram
+`disconnected`, uma tentativa frustrada **não** produz erro (medido: tentei pela tela, e o tile
+seguiu "Não conectado"). Chegar a `connected` exige uma credencial que passe numa chamada HTTP real
+ao provider, e não existe nenhuma nesta máquina (não há `TELEGRAM_BOT_TOKEN` em `.env`,
+`.env.teste` nem `packages/web/.env.development`). Esse único degrau foi dado pelas RPCs
+`org_integration_write_secret_as_platform` + `..._mark_connected_as_platform` — **a mesma porta de
+escrita que a rota usa**, não um `UPDATE` na tabela. Todo o resto (o erro, a mensagem, a data, o
+sumiço na reconexão) veio do botão e da leitura da tela.
+
+**Estado deixado no banco de teste, de propósito, para o dono do produto explorar:** Empresa A com
+**Telegram em erro** (código conhecido, produzido pelo botão) e **Meta CAPI em erro** (código
+desconhecido, mostrando o fallback). As linhas de `platform_audit_log` geradas ficam — a tabela é
+append-only por atributo de nascimento.
+
+### O que ainda NÃO está provado
+
+1. **A aparência.** Não há harness de render para RSC neste repositório; o que existe são as
+   capturas de tela desta sessão e o texto lido do DOM. Cor, posição e espaçamento da linha nova
+   não foram avaliados por olho humano.
+2. **Erro de ponta a ponta com credencial REAL.** O provider nunca foi contatado com uma
+   credencial válida — só com uma inválida. "Conectado" nesta empresa de teste é um estado
+   fabricado pela porta de escrita, não uma integração que funciona.
 
 ### Achados registrados, não consertados
 
