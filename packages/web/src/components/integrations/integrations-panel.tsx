@@ -34,6 +34,7 @@ import {
   rotuloDeStatusDoTile,
   type ProviderDoPainel,
 } from "@web/lib/integrations/painel/providers"
+import { linhaDeDiagnostico } from "@web/lib/integrations/painel/diagnostico"
 import {
   classesDaPaleta,
   type ClassesDaPaleta,
@@ -52,6 +53,10 @@ export interface EstadoDoTile {
   temSegredo: boolean
   /** ISO. `null` quando nunca foi tocado. */
   atualizadoEm: string | null
+  /** Story 900-61 — o CÓDIGO do último erro (nunca o texto cru do provider). */
+  ultimoErro: string | null
+  /** Story 900-61 — ISO da última verificação. `null` quando nunca houve uma. */
+  ultimaChecagem: string | null
 }
 
 export interface LinhaDaTrilha {
@@ -136,6 +141,14 @@ function Tile({
 
   const somenteLeitura = !def.gravaEmOrgIntegrations
 
+  // Story 900-61 — a decisão inteira ("tem o que declarar? em que fuso? e se o código não estiver
+  // no contrato de seis?") mora no módulo puro, que o vitest coleta. Aqui só sobra a interpolação.
+  const diagnostico = linhaDeDiagnostico({
+    status: estado.status,
+    lastError: estado.ultimoErro,
+    lastCheckAt: estado.ultimaChecagem,
+  })
+
   async function salvar() {
     setEnviando(true)
     setResposta(null)
@@ -198,6 +211,14 @@ function Tile({
             }. Não é uma verificação contínua.`
           : "Ainda não há credencial testada para esta integração."}
       </p>
+
+      {/* Story 900-61 · AC6 — sem as duas colunas o valor é `null` e nada é desenhado: o tile
+          volta a ser exatamente o de antes, com o badge sozinho. */}
+      {diagnostico && (
+        <p data-testid={`diagnostico-${estado.provider}`} className="mt-1 text-xs text-red-300">
+          {diagnostico}
+        </p>
+      )}
 
       {somenteLeitura ? (
         // QA-900-51-2 — o texto anterior mandava o usuário para "o fluxo de WhatsApp", e ele
@@ -321,6 +342,8 @@ export function IntegrationsPanel({
               config: {},
               temSegredo: false,
               atualizadoEm: null,
+              ultimoErro: null,
+              ultimaChecagem: null,
             } satisfies EstadoDoTile)
           return (
             <Tile
