@@ -74,6 +74,7 @@ import {
   orgsComPendencia,
   type FiltrosDaLista,
 } from "@web/lib/tenancy/console-lista-empresas"
+import { rotuloDoEstado } from "@web/lib/tenancy/console-pausa-empresa"
 import { AvisoDeTeto } from "../_components/aviso-de-teto"
 import { ReenviarConvite } from "./_components/reenviar-convite"
 import { OrgRowMenu } from "./_components/org-row-menu"
@@ -291,7 +292,10 @@ export default async function OrgsPage({
             [
               ["todas", "Todas"],
               ["ativas", "Ativas"],
-              ["inativas", "Inativas"],
+              // Story 900-60 · AC8 — o RÓTULO diz "Pausadas"; o VALOR continua `inativas`.
+              // O valor é contrato: ele está em `FILTROS_DE_STATUS` e em toda URL que alguém
+              // já compartilhou. O rótulo é a promessa ao humano, e é essa que estava errada.
+              ["inativas", "Pausadas"],
             ] as const
           ).map(([valor, rotulo]) => (
             <Link
@@ -437,15 +441,20 @@ export default async function OrgsPage({
                       )}
                     </td>
 
+                    {/* Story 900-60 · AC8 — "Pausada", nunca "Inativa". A palavra vem de
+                        `rotuloDoEstado`, a mesma fonte do item do menu e do título do diálogo:
+                        `organizations.is_active` não desliga a empresa nem bloqueia o login de
+                        ninguém (o gate de sessão lê `users.is_active`, outra tabela) — ela pausa
+                        o processamento automático. "Inativa" prometia o que o sistema não faz. */}
                     <td className="px-4 py-3">
                       <span
                         className={
                           org.is_active
                             ? "rounded bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-400"
-                            : "rounded bg-slate-700/40 px-2 py-0.5 text-xs text-slate-400"
+                            : "rounded bg-amber-500/15 px-2 py-0.5 text-xs text-amber-300"
                         }
                       >
-                        {org.is_active ? "ativa" : "inativa"}
+                        {rotuloDoEstado(org.is_active)}
                       </span>
                     </td>
 
@@ -457,7 +466,12 @@ export default async function OrgsPage({
 
                     {/* AC6 — o `⋯`. `relative z-10` mora dentro do componente, junto do motivo. */}
                     <td className="px-4 py-3 text-right">
-                      <OrgRowMenu orgId={org.id} slug={org.slug} />
+                      <OrgRowMenu
+                        orgId={org.id}
+                        slug={org.slug}
+                        nome={org.name}
+                        isActive={org.is_active}
+                      />
                     </td>
                   </tr>
                 )

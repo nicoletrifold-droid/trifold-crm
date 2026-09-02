@@ -266,6 +266,7 @@ paralelo é como se perde uma correção de segurança num merge. Se a assinatur
 | 2026-08-31 | 0.5 | **Rodada 3 — os 4 achados do CodeRabbit (PR #547) fechados, e medidos.** O achado desta story era o **consumidor cego**: a rodada 2 criou o sinal `adminsFalhou` e deixou `pendenciasDeConvite` e a coluna de admin de "Entraram recentemente" sem lê-lo — com a consulta de `users` caída, toda org com `admin_invite_email` virava pendência por falta de dado. `adminsIndisponiveis` passa a ser campo obrigatório. ⚠️ **Os quatro consertos entraram em produção ANTES de existir régua, e a mutação mostrou que três eram decorativos** (verdes com o conserto neutralizado); `console-fail-closed.test.ts` (48 testes) é o que os transforma em entrega. Ver Dev Agent Record → "Rodada 3", inclusive os dois defeitos da própria régua e a correção do delta de testes. | @dev (Dex) |
 | 2026-08-31 | 0.6 | **Rodada 4 — 2ª passada do CodeRabbit no PR #547 (4 achados `Minor`).** Os DOIS primeiros eram defeitos na própria régua construída na rodada 3: `expect(todos).toContain(estadoDaEmpresaDeclarado(…))` aceitava todo o contradomínio (mutante que devolve `"inativa"` sobre leitura caída ficava VERDE — medido), e `expect("").not.toContain(…)` comparava dois literais. Trocadas por asserções que medem. `diasDesdeOConvite` devolvia `NaN` com carimbo ilegível ("pendente há NaN dias") e passa a devolver `null`, com a tela dizendo que não mediu. Datas do console ganharam fuso fixo (`FUSO_DO_CONSOLE`), com régua ABSOLUTA sobre `app/platform/**`. Ver Dev Agent Record → "Rodada 4". | @dev (Dex) |
 | 2026-09-01 | 0.7 | **Rodada 5 — a porta de entrada, reportada pelo dono do produto no preview.** Ele logou com a conta de plataforma e caiu no CRM de uma empresa vazia: *"continua a mesma página de uma empresa cliente e não de admin de fato"*. Medido: `login/actions.ts` não tinha ramo para `is_platform_admin`, e `grep -rn '/platform' packages/web/src` fora de `src/app/platform/` devolvia **zero links** — o console tinha `← Voltar ao CRM` e nenhum caminho de ida. Duas peças: (A) o login manda o platform admin para `/platform`, com a precedência contra `role` **declarada e medida** (0 colisões nos dois bancos hoje); (B) o CRM ganha o atalho "Painel da plataforma" no rodapé da barra lateral e na barra do mobile, só para platform admin. 3 arquivos de régua novos, 36 testes, 9 mutações com `tsc --noEmit` rc=0 medido antes de cada vermelho, e prova na tela com as 3 contas do banco de teste (`elementFromPoint`, não `isVisible()`). Ver Dev Agent Record → "Rodada 5". | @dev (Dex) |
+| 2026-09-01 | 0.8 | **Ressalva do gate do delta fechada (QA-900-56-D1 e D2) — só registro, a suíte não muda.** (1) O item 1 de "O que continua aberto" afirmava que `app/page.tsx` "continua roteando só por `role`… Não foi consertado" — **falso desde `ccc10c68`**, commit desta story: o texto é de `098bf4de` e o conserto veio depois sem voltar aqui. Item marcado como FECHADO, com o commit citado. (2) `app/page.tsx` e `app/page.test.ts` entram na File List da rodada 5 (estavam só na da `900-60`, como "carona"); lá ficou um ponteiro. (3) O item 3 foi reescrito com a classe certa: a régua de FORMA não é cega apenas entre "duas formas erradas" — é cega a **qualquer** mutante que preserve o texto do call site, e o @qa mediu um (rebind de `isPlatformAdmin` por homônimo local, `tsc` rc=0, suíte inteira verde, console vazando para todo usuário logado). Continua não bloqueando: as duas pontas de comportamento têm carrasco disjunto. | @dev (Dex) |
 
 
 ## Dev Agent Record
@@ -381,12 +382,18 @@ zero linhas fora de `disconnected`, `whatsapp_config` de volta a `inactive`/`nul
 - `packages/web/src/app/login/actions.test.ts` *(metade A — para onde o login manda)*
 - `packages/web/src/components/layout/sidebar-nav.test.ts` *(metade B — o item na tela + a ligação no layout)*
 - `packages/web/src/lib/platform.test.ts` *(a autoridade `isPlatformAdmin`, sem teste desde a 75-314)*
+- `packages/web/src/app/page.test.ts` *(a 2ª porta — commit `ccc10c68`, 9 testes)*
 
 **Rodada 5 — a porta de entrada (modificados)**
 - `packages/web/src/app/login/actions.ts` *(ramo de `is_platform_admin` ANTES dos ramos por `role`)*
 - `packages/web/src/lib/platform.ts` *(`atalhoDoConsole()` — o par `{href,label}`, ou `null`)*
 - `packages/web/src/components/layout/sidebar-nav.tsx` *(prop `atalhoDoConsole`, rodapé do desktop + barra do mobile)*
 - `packages/web/src/app/dashboard/layout.tsx` *(calcula e passa o atalho)*
+- `packages/web/src/app/page.tsx` *(a 2ª porta — commit `ccc10c68`, mesma precedência da peça A)*
+
+⚠️ Os dois últimos arquivos foram entregues no commit `ccc10c68 [Story 900-56]` e chegaram a
+constar **só** na File List da `900-60`, como "carona fora do escopo" — as duas coisas não podiam
+ser verdade ao mesmo tempo. QA-900-56-D1: o registro é aqui, e na `900-60` ficou um ponteiro.
 
 ### Rodada 5 — a porta de entrada: o mecanismo existia e ninguém chegava nele
 
@@ -530,22 +537,41 @@ conta de empresa.
 
 #### O que continua aberto — declarado, não consertado
 
-1. **`app/page.tsx` é uma SEGUNDA porta da frente e continua roteando só por `role`.** Quem chega
-   em `/` com sessão viva (o caso do dono do produto abrindo o preview de novo, sem deslogar) cai
-   em `/dashboard`. Não foi consertado porque o achado nomeia o login, e porque a peça B torna o
-   desfecho **recuperável** — de `/dashboard` o atalho está lá. Duas linhas fecham (a consulta já
-   lê `users`), e é decisão do @po se entra aqui ou vira item de backlog.
+1. ~~**`app/page.tsx` é uma SEGUNDA porta da frente e continua roteando só por `role`.**~~
+   **FECHADO no commit `ccc10c68` — que é `[Story 900-56]`, ou seja, dentro desta story.** O texto
+   original ("não foi consertado") foi escrito em `098bf4de` e o conserto veio logo depois, sem
+   voltar aqui: o registro ficou afirmando um furo que já não existia. Achado do gate,
+   QA-900-56-D1. Hoje `app/page.tsx` lê `is_platform_admin` **na mesma projeção** que já buscava
+   (`.select("id, name, role, org_id, is_platform_admin")`) e redireciona para `/platform`
+   **antes** de olhar o `role` — a mesma precedência da peça A, pelo mesmo motivo (o desfecho é
+   recuperável num sentido só). `app/page.test.ts` é o carrasco: 9 testes, e a bateria de mutantes
+   dele está registrada na `900-60` porque foi lá que ela foi refeita — some o ramo: **2 mortos**
+   (metade 1) · `if (true)`: **5** (metade 2) · inverte: **7** (a união exata, conjuntos
+   disjuntos). Os dois arquivos estão na File List da rodada 5, abaixo.
 2. **`getRoleRedirect()` em `lib/auth.ts` é código morto** — zero consumidores, medido. Ela
    duplica a decisão do login sem a coluna nova, e é a próxima armadilha para quem "reusar o
    helper que já existe". Não removida: está fora do escopo do defeito.
-3. **A ligação no layout é medida por régua ESTÁTICA, não comportamental.** O
-   `app/dashboard/layout.tsx` é um server component `async` com dezenas de consultas e não é
-   renderizável em node. A régua afirma a expressão inteira (`atalhoDoConsole={atalhoDoConsole(await
-   isPlatformAdmin(user.id))}`, recortada do call site do `<SidebarNav>` e filtrada de
-   comentários por `codigoDe`), então qualquer desvio reprova — mas **MB3 e MB4 produzem o mesmo
-   conjunto de morte**: uma régua de FORMA não distingue duas formas erradas entre si. Ela é gate,
-   não carrasco de dois lados. O que fecha esse elo de verdade é a prova na tela acima, e ela é
-   manual.
+3. **A ligação no layout é medida por régua ESTÁTICA, e o limite dela é maior do que eu tinha
+   declarado.** O `app/dashboard/layout.tsx` é um server component `async` com dezenas de consultas
+   e não é renderizável em node. A régua afirma a expressão inteira
+   (`atalhoDoConsole={atalhoDoConsole(await isPlatformAdmin(user.id))}`, recortada do call site do
+   `<SidebarNav>` e filtrada de comentários por `codigoDe`), então qualquer desvio de TEXTO
+   reprova. Eu havia escrito que o limite era "MB3 e MB4 produzem o mesmo conjunto de morte — uma
+   régua de FORMA não distingue duas formas erradas entre si". **Isso subestima o limite, e o gate
+   mediu o quanto** (QA-900-56-D2): ela é cega a **qualquer** mutante que PRESERVE o texto do call
+   site, não só a duas formas erradas. O exemplo medido pelo @qa é rebind de identificador —
+   `import { …, isPlatformAdmin as _real }` mais uma `async function isPlatformAdmin(_id: string)`
+   local devolvendo `true`: o texto do call site fica **idêntico**, o import continua apontando
+   para `@web/lib/platform`, `tsc --noEmit` sai rc=0 e a suíte **inteira** fica verde — enquanto o
+   item "Painel da plataforma" e o `href="/platform"` passam a aparecer para **todo** usuário
+   logado do CRM. É o defeito que a régua diz impedir.
+
+   **Por que isso não bloqueia:** as duas pontas de COMPORTAMENTO têm carrasco de dois lados e
+   disjunto — `atalhoDoConsole()` em `lib/platform.test.ts`, `isPlatformAdmin()` com 5 mortos
+   (MC1b), e o render em `sidebar-nav.test.ts` com 3 mortos (MB1, incluindo *a rota não está no
+   texto-fonte do componente*). O elo que sobra é de uma linha — "o layout passa ESTA expressão" —
+   e a prova dele é a tela, que é manual. Fechá-lo por teste exigiria jsdom, dependência que este
+   repositório não tem. **O que não se pode é chamar essa régua de carrasco: ela é gate.**
 4. **O `/broker` também usa `SidebarNav` e não passa o atalho.** Zero platform admins com
    `role='broker'` hoje nos dois bancos; e com a peça A eles caem em `/platform` de qualquer
    forma. Custaria as mesmas duas linhas do layout do CRM.
@@ -798,3 +824,68 @@ o commit e contra a árvore · teto de 1.000 **não morde nenhuma das 4 contagen
 
 **Merge liberado.** QA-900-56-1 e QA-900-56-2 antes do próximo PR que tocar esta tela.
 
+
+---
+
+### Delta — rodada 5 (porta de entrada): **CONCERNS** — @qa (Quinn), 2026-09-01
+
+Gate (seção `delta_rodada_5`): `docs/qa/gates/900.56-navegacao-e-visao-geral-do-console.yml`.
+Escopo: só os commits `170f005b` e `ccc10c68`. As AC1–AC9 continuam com o gate da rodada 1.
+
+**A decisão de escopo `[AUTO-DECISÃO]` está CONFIRMADA.** A porta de entrada é navegação, e
+navegação é a matéria desta story; `900-57` e `900-58` não têm jurisdição sobre "como se chega ao
+console", e uma `900-62` teria como única AC "a AC1 da 900-56 também vale na direção de entrada".
+O que **não** está certo é o registro — ver QA-900-56-D1.
+
+**Os dois sentidos, reproduzidos por mim** (snapshot por `cp`, sha256 conferido, `tsc --noEmit`
+rc=0 antes de cada vermelho, zero `git stash`):
+
+| mutante | `tsc` | mortos | quem morre |
+|---|---|---|---|
+| some o ramo `is_platform_admin` (estado de ANTES) | rc=0 | **2** | só a METADE 1 |
+| **`if (true)`** — todo mundo vai para `/platform` | rc=0 | **5** | só a METADE 2 |
+| inverte a condição | rc=0 | **7** | a união exata das duas |
+| `/platform` volta a ser literal no `sidebar-nav.tsx` client | rc=0 | **3** | só a METADE 2, inclusive a asserção de texto-fonte |
+| `isPlatformAdmin()` responde `true` sempre | rc=0 | **5** | a autoridade |
+
+Interseção das duas primeiras: **vazia**. `app/page.tsx` restaurado byte a byte
+(sha256 `bf7d4969…`, `git diff` vazio) e os 9 verdes reproduzidos.
+
+**O endereço não vaza — medido no bundle, não só no HTML.** Conta de empresa em `/dashboard`:
+**0** marcadores `[data-atalho-console]`, a substring `/platform` **ausente** do HTML servido, e
+dos **23** `script[src]` da página o **único** chunk que carrega o `sidebar-nav` compilado
+(`data-atalho-console`) **não contém a rota**. Conta de plataforma: 2 marcadores e a rota
+presente, como tem de ser.
+
+**A régua de FORMA do layout: basta como gate, e o limite declarado é menor que o real.** MB3 e
+MB4 matam os mesmos 2 testes — confirmado. A sonda do comentário JSX **reprova** (a porta do
+vizinho está fechada). Mas achei um mutante que **preserva o texto do call site** — rebind
+`isPlatformAdmin as _real` + função local homônima que responde `true` — com `tsc` rc=0 e a suíte
+**inteira verde (308 / 4187 / 6)**, vazando o console para todo usuário logado. Não bloqueio: as
+duas pontas de comportamento têm carrasco de dois lados, e o elo que sobra é fechado pela tela.
+Mas o registro precisa nomear a classe certa — QA-900-56-D2.
+
+**Prova na tela refeita por mim**, `pnpm dev` com banner `Supabase ref: xnxvygyfyyyzwhiuoehz
+(TESTE)`, login pelo formulário, nenhuma sessão forjada, `elementFromPoint` e **não** `isVisible()`:
+plataforma → `/platform` no login **e** na raiz com sessão viva; empresa A → `/dashboard` nos dois.
+
+#### Concerns do delta
+
+| ID | sev | o quê |
+|---|---|---|
+| QA-900-56-D1 | média | **O registro contradiz o código.** "O que continua aberto" item 1 ainda diz que `app/page.tsx` "continua roteando só por `role` … Não foi consertado" — falso desde `ccc10c68`, que é commit `[Story 900-56]`. E a File List da rodada 5 não lista `app/page.tsx`/`app/page.test.ts`; eles estão na File List da `900-60`. Conserto: fechar o item 1 citando o commit, e trazer os dois arquivos para a File List daqui (na `900-60`, trocar por ponteiro). É registro, a suíte não muda. |
+| QA-900-56-D2 | baixa | O item 3 de "O que continua aberto" diz que a régua não distingue MB3 de MB4. O limite real é maior: ela é cega a **qualquer** mutante que preserve o texto, inclusive rebind de identificador (medido, suíte inteira verde). Reescrever o item; se quiserem fechar barato: asserção extra de que `isPlatformAdmin` não é DECLARADO no layout. |
+
+#### Observações
+Continuam abertas, conferidas por mim: `app/broker/layout.tsx` usa `SidebarNav` e **não** passa o
+atalho; `getRoleRedirect()` em `lib/auth.ts` continua com **zero** consumidores — e agora é uma
+terceira decisão de destino que não conhece `is_platform_admin`.
+
+#### Réguas
+Baseline: **árvore de trabalho local** (não o CI da `main` — a árvore carrega +9 testes de outra
+frente, não commitados, que não são desta entrega). `vitest run` **308 arquivos / 4187 passed /
+6 expected fail / rc=0** · `tsc --noEmit` rc=0 · `pnpm lint --force` rc=0 (0 erros, 30 warnings
+alheios) · `pnpm type-check --force` rc=0 · `pnpm build` rc=0, 5/5.
+
+**Merge liberado.** QA-900-56-D1 antes do push — custa minutos e evita que alguém reabra um furo
+já fechado.
