@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { mensagemDeErroDeEtapa } from "./mensagem-de-erro"
 import type { Stage } from "./types"
 
 const STAGE_TYPES = [
@@ -59,7 +60,7 @@ export function EditStageModal({
     setLoading(false)
     if (!res.ok) {
       const data = await res.json().catch(() => ({}))
-      setError((data as { error?: string }).error ?? "Erro ao salvar.")
+      setError(mensagemDeErroDeEtapa(res.status, data as { error?: string }, "Erro ao salvar."))
       return
     }
     const updated = await res.json().then((d: { data: Stage }) => d.data).catch(() => null)

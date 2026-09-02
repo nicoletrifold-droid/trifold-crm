@@ -41,6 +41,28 @@
 --   `bloqueadas_sinal_b_15` fica na consulta de PROPÓSITO: é o carrasco histórico do
 --   limiar. Se algum dia ele voltar a 0, foi porque a população mudou — não porque o
 --   15 era seguro.
+--
+-- ── Rerrodada em 2026-09-01, ao acrescentar `fico no aguardo|fico aguardando|ficamos no aguardo` ──
+--   Motivo: em 01/09 a conversa `121ae078` foi contida pelo Sinal C e a inspeção mostrou
+--   que a Nicole se despede com fórmulas que a lista não via. Medido (90 dias):
+--     msgs_assistant  1910   conversas  501
+--     lista ATUAL (7 padrões):    conversas_com_encerramento 31   bloqueadas_sinal_c 1
+--     lista NOVA   (8 padrões):   conversas_com_encerramento 33   bloqueadas_sinal_c 2
+--   Custo aceito: +1 conversa contida em 90 dias.
+--
+--   REJEITADOS na mesma rodada, com o custo que cada um teria (bloqueadas_sinal_c):
+--     `boa sorte`                                       1 → 3
+--     `estarei aqui|estou por aqui`                     1 → 2, e o pico da janela 8 → 9
+--     `me chama quando|me avisa quando|é só me chamar`  1 → 4   (56 msgs, 51 conversas)
+--     `quando quiser (retomar|conversar|falar)`         1 → 3   (só 3 msgs, mas todas
+--                                                       em conversas já no limite)
+--   Os cinco juntos: 89 conversas com encerramento e 7 bloqueadas. É a medição que
+--   sustenta a lista ter parado em 8 padrões, e não em 12.
+--
+--   ⚠️ Esta rodada foi calculada fora do SQL (o caminho Management API estava indisponível
+--   na sessão): mesma definição de janela e mesmo predicado, sobre as mesmas linhas lidas
+--   via PostgREST. Os denominadores batem com o deslize esperado (1764→1910 msgs em 2 dias).
+--   Na próxima mudança de lista, prefira ESTA consulta — ela é a definição canônica.
 
 with fonte as (
   select conversation_id, created_at, btrim(content) as t
@@ -53,7 +75,7 @@ with fonte as (
 enc as (
   select conversation_id, created_at
   from fonte
-  where t ~* '(tchau|até mais|até logo|até breve|até a próxima|qualquer coisa (é )?só chamar|fico à disposição|foi um prazer (te )?atender|um abraço|nos falamos)'
+  where t ~* '(tchau|até mais|até logo|até breve|até a próxima|qualquer coisa (é )?só chamar|fico à disposição|foi um prazer (te )?atender|um abraço|nos falamos|fico no aguardo|fico aguardando|ficamos no aguardo)'
 ),
 -- Sinal C: encerramentos acumulados numa janela deslizante de 30 min.
 pico_c as (

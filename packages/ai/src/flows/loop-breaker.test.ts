@@ -171,7 +171,7 @@ describe("detectarLoopPorContagem (Sinal B — AC2)", () => {
 
 describe("ehMensagemDeEncerramento / PADROES_DE_ENCERRAMENTO (AC3)", () => {
   it("a lista não está vazia — uma lista vazia faz o Sinal C sumir em silêncio", () => {
-    expect(PADROES_DE_ENCERRAMENTO.length).toBeGreaterThanOrEqual(7)
+    expect(PADROES_DE_ENCERRAMENTO.length).toBeGreaterThanOrEqual(8)
   })
 
   it.each([
@@ -187,9 +187,18 @@ describe("ehMensagemDeEncerramento / PADROES_DE_ENCERRAMENTO (AC3)", () => {
     ["Foi um prazer atender você", true],
     ["Um abraço!", true],
     ["Nos falamos em breve", true],
+    // Acrescentado em 01/09/2026 — as três formas que a Nicole usa de verdade.
+    ["Fico no aguardo, Adenilce!", true],
+    ["Fico aguardando seu retorno.", true],
+    ["Ficamos no aguardo!", true],
     ["Qual dia seria melhor pra você?", false],
     ["Temos unidades de 2 e 3 dormitórios.", false],
+    // Os quatro candidatos REJEITADOS pela régua continuam NÃO sendo encerramento.
+    // Este bloco é o que reprova se alguém reintroduzir um deles sem remedir o custo.
     ["Se precisar, é só me chamar :)", false],
+    ["Boa sorte com a venda da casa!", false],
+    ["Estarei aqui quando quiser retomar.", false],
+    ["Me chama quando a casa vender.", false],
     ["", false],
     ["   ", false],
   ])("classifica %j como encerramento=%s", (texto, esperado) => {
