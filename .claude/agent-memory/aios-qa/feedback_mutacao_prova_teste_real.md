@@ -81,3 +81,32 @@ teste. E o corolário para o gate: quando `tsc` dá EXIT=0 numa árvore mutada, 
 real" no gate.
 
 Relacionado: [[epic-87-qa-patterns]], [[reverificacao-focada]]
+
+## Asserção "redundante" não é morta até a mutação dizer que é
+
+Numa re-review eu ia registrar como decorativa uma segunda asserção logicamente **implicada** pela
+primeira (`expect(mock).not.toHaveBeenCalled()` seguida de
+`expect(JSON.stringify(mock.mock.calls)).not.toContain("...")` — se não foi chamado, o join é `""`).
+O raciocínio estava certo e a conclusão errada.
+
+O experimento correto tem **duas** mutações ao mesmo tempo: remover a **primeira asserção** do teste
+E reverter o código. Resultado medido (gate do webhook do WhatsApp, iteração 2): o teste continuou
+**vermelho**, com `expected '{"supabase":...}' not to contain 'o CRM ainda não exibe'`. A segunda
+asserção inspeciona o **conteúdo do payload**, não a contagem — pega regressão que a primeira não
+pega (pipeline chamado com aquele texto por outro caminho).
+
+**Why:** "implicada quando a primeira passa" ≠ "sem poder próprio". Só a mutação separa as duas.
+**How to apply:** antes de escrever "asserção vazia/decorativa" num gate, remova a asserção vizinha
+e mute o código. Custa 2 minutos e evita mandar o @dev apagar uma rede que funciona.
+
+## Ordem de escrita não aparece em estado final — o carrasco é a sequência
+
+Quando a proteção é a ORDEM de dois writes (ex.: bolha antes do arquivo, para que um hang custe o
+arquivo e não a mensagem), teste de estado final fica verde nos dois arranjos. Dois carrascos que
+funcionam, medidos: (a) o fake registra `insertsPorTabela.push(table)` e o teste compara
+`indexOf`; (b) um espião no hook de INSERT lê o estado do banco **no instante** do segundo write
+(`bolhasNoMomentoDoArquivo`), inicializado em `-1` para falhar fechado se nunca disparar.
+Condição de validade: o hook tem de rodar em `execute()` (await-time), **antes** de a linha ser
+empurrada em `db[table]` — senão mede o próprio efeito. A mutação que valida os dois é mover o
+bloco para a linha imediatamente anterior, mesmo escopo: falhou com `expected +0 to be 1` e
+`expected 3 to be less than 2` — motivos certos, não o `-1` degenerado.

@@ -15,7 +15,7 @@ mão e caberia numa code review; deixamos fora o que é binário pesado gerado p
 
 | Versionado | O quê | Por quê |
 |---|---|---|
-| ✅ | 8 páginas `*.dc.html` (`Home`, `Empreendimentos`, `Blog`, `Artigo`, `Sobre Nós`, `Design System`, `Logo`, `B2B`) | ~253 KB somados. É onde vivem os snippets de pixel/GA, os endpoints chamados pelo form e a CSP inline — precisa ser revisável e diffável. |
+| ✅ | 8 páginas `*.dc.html` (`Home`, `Empreendimentos`, `Blog`, `Artigo`, `sobre-nos`, `Design System`, `Logo`, `B2B`) | ~253 KB somados. É onde vivem os snippets de pixel/GA, os endpoints chamados pelo form e a CSP inline — precisa ser revisável e diffável. |
 | ✅ | `support.js` | Runtime do template (roteamento client-side, form, animações). |
 | ✅ | `api/contact.js` | Serverless function do formulário de contato (honeypot, rate limit, allowlist de origem, Resend). Código de segurança — tem que ser auditável. |
 | ✅ | `vercel.json`, `.vercelignore` | Config de roteamento/segurança de produção, incluindo o proxy do Vind. |
@@ -38,7 +38,32 @@ O `.gitignore` local implementa essa separação. Ele **não é espelho do `.ver
 ## O que o `vercel.json` faz
 
 1. **Home:** rewrite de `/` → `/Home.dc.html` (o export não gera `index.html`).
-2. **Proxy do Vind** (`/vindresidence`): serve a landing do projeto Vercel separado
+   `/Home.dc.html` responde **301 para `/`** (Story 90-6): o arquivo continua sendo a
+   origem do conteúdo servido em `/`, mas deixa de ser uma URL pública duplicada.
+   Rewrite e redirect **não** entram em loop — na Vercel o `destination` de um rewrite
+   é resolvido contra o filesystem e não volta a passar pela fase de `redirects`.
+2. **URLs limpas do institucional** (Story 90-6): `/sobre-nos`, `/empreendimentos`,
+   `/corporativas` e `/blog`. Cada uma tem 3 peças:
+   - um `rewrite` da URL limpa para o `.dc.html` de origem
+     (`/corporativas` → `/B2B.dc.html`, e assim por diante);
+   - um `redirect` **301** da URL antiga com extensão para a limpa
+     (`/B2B.dc.html` → `/corporativas`);
+   - um `redirect` **301** da forma com barra final para a canônica sem barra
+     (`/blog/` → `/blog`).
+
+   **A forma canônica é sem barra final, e isso é funcional, não cosmético:** as páginas
+   referenciam `assets/…` e `./support.js` de forma relativa. Em `/sobre-nos` o diretório
+   base é `/`, então tudo resolve para `/assets/…`. Em `/sobre-nos/` resolveria para
+   `/sobre-nos/assets/…` e o site quebraria — daí o 301 da forma com barra.
+
+   Os redirects usam `"statusCode": 301` em vez de `"permanent": true` porque
+   `permanent: true` na Vercel emite **308**, e a AC3 da story pede 301 explicitamente.
+
+   `Sobre Nós.dc.html` foi renomeado para `sobre-nos.dc.html`: espaço e acento no nome
+   do arquivo tornam o `destination` do rewrite dependente de URL-encoding exato.
+   `Artigo.dc.html` **não** foi renomeado nem ganhou URL limpa — é roteado por query
+   string (`?slug=…`) e está fora do escopo da 90-6.
+3. **Proxy do Vind** (`/vindresidence`): serve a landing do projeto Vercel separado
    `vind-residence` sem duplicar arquivos. Composto por 4 partes, todas necessárias:
    - redirect trailing-slash (`/vindresidence` → `/vindresidence/`) para assets relativos resolverem;
    - 2 rewrites (`/vindresidence/` e `/vindresidence/:path*`) → `https://vind-residence.vercel.app`;

@@ -27,14 +27,14 @@
 
   <!-- ============ NAV ============ -->
   <div style="position:fixed;top:0;left:0;right:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:20px {{ sidePad }};box-sizing:border-box;background:linear-gradient(180deg,rgba(0,0,0,0.65),rgba(0,0,0,0))">
-    <a href="Home.dc.html" aria-label="Ir para a Home" style="display:flex;align-items:center"><dc-import name="Logo" tone="dark" size="{{ 26 }}" hint-size="220px,30px"></dc-import></a>
+    <a href="/" aria-label="Ir para a Home" style="display:flex;align-items:center"><dc-import name="Logo" tone="dark" size="{{ 26 }}" hint-size="220px,30px"></dc-import></a>
     <div style="{{ navLinksStyle }}">
-      <a href="Home.dc.html" style="color:#C9C9C9;white-space:nowrap;transition:color .2s ease" style-hover="color:#fff">HOME</a>
-      <a href="Sobre Nós.dc.html" style="color:#C9C9C9;white-space:nowrap;transition:color .2s ease" style-hover="color:#fff">SOBRE NÓS</a>
-      <a href="Empreendimentos.dc.html" style="color:#C9C9C9;white-space:nowrap;transition:color .2s ease" style-hover="color:#fff">EMPREENDIMENTOS</a>
-      <a href="B2B.dc.html" style="color:#C9C9C9;white-space:nowrap;transition:color .2s ease" style-hover="color:#fff">CORPORATIVAS</a>
-      <a href="Blog.dc.html" style="color:#fff;border-bottom:1px solid #F27A5E;padding-bottom:3px;white-space:nowrap">BLOG</a>
-      <a href="Home.dc.html#contato" style="padding:11px 22px;background:#F27A5E;color:#000;border-radius:2px;font-weight:600;letter-spacing:0.02em;white-space:nowrap;transition:filter .25s ease,transform .25s ease" style-hover="filter:brightness(1.08);transform:scale(1.02)">CONTATO</a>
+      <a href="/" style="color:#C9C9C9;white-space:nowrap;transition:color .2s ease" style-hover="color:#fff">HOME</a>
+      <a href="/sobre-nos" style="color:#C9C9C9;white-space:nowrap;transition:color .2s ease" style-hover="color:#fff">SOBRE NÓS</a>
+      <a href="/empreendimentos" style="color:#C9C9C9;white-space:nowrap;transition:color .2s ease" style-hover="color:#fff">EMPREENDIMENTOS</a>
+      <a href="/corporativas" style="color:#C9C9C9;white-space:nowrap;transition:color .2s ease" style-hover="color:#fff">CORPORATIVAS</a>
+      <a href="/blog" style="color:#fff;border-bottom:1px solid #F27A5E;padding-bottom:3px;white-space:nowrap">BLOG</a>
+      <a href="/#contato" style="padding:11px 22px;background:#F27A5E;color:#000;border-radius:2px;font-weight:600;letter-spacing:0.02em;white-space:nowrap;transition:filter .25s ease,transform .25s ease" style-hover="filter:brightness(1.08);transform:scale(1.02)">CONTATO</a>
     </div>
     <button onClick="{{ toggleMenu }}" style="{{ hamburgerBtnStyle }}">
       <span style="{{ barStyle }}"></span><span style="{{ barStyle }}"></span><span style="{{ barStyle }}"></span>
@@ -45,17 +45,17 @@
   <sc-if value="{{ menuOpen }}" hint-placeholder-val="{{ false }}">
     <div style="position:fixed;inset:0;z-index:200;background:#050505;display:flex;flex-direction:column;padding:26px 28px 40px;overflow-y:auto">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:52px">
-        <a href="Home.dc.html" aria-label="Ir para a Home" style="display:flex;align-items:center"><dc-import name="Logo" tone="dark" size="{{ 26 }}" hint-size="200px,28px"></dc-import></a>
+        <a href="/" aria-label="Ir para a Home" style="display:flex;align-items:center"><dc-import name="Logo" tone="dark" size="{{ 26 }}" hint-size="200px,28px"></dc-import></a>
         <button onClick="{{ toggleMenu }}" style="width:38px;height:38px;background:none;border:1px solid rgba(255,255,255,0.2);border-radius:6px;color:#fff;font-size:18px;cursor:pointer">✕</button>
       </div>
       <div style="display:flex;flex-direction:column;gap:8px;font-size:24px;font-weight:500">
-        <a href="Home.dc.html" style="padding:14px 4px;border-bottom:1px solid rgba(255,255,255,0.08)">Home</a>
-        <a href="Sobre Nós.dc.html" style="padding:14px 4px;border-bottom:1px solid rgba(255,255,255,0.08)">Sobre nós</a>
-        <a href="Empreendimentos.dc.html" style="padding:14px 4px;border-bottom:1px solid rgba(255,255,255,0.08)">Empreendimentos</a>
-        <a href="B2B.dc.html" style="padding:14px 4px;border-bottom:1px solid rgba(255,255,255,0.08)">Corporativas</a>
+        <a href="/" style="padding:14px 4px;border-bottom:1px solid rgba(255,255,255,0.08)">Home</a>
+        <a href="/sobre-nos" style="padding:14px 4px;border-bottom:1px solid rgba(255,255,255,0.08)">Sobre nós</a>
+        <a href="/empreendimentos" style="padding:14px 4px;border-bottom:1px solid rgba(255,255,255,0.08)">Empreendimentos</a>
+        <a href="/corporativas" style="padding:14px 4px;border-bottom:1px solid rgba(255,255,255,0.08)">Corporativas</a>
         <a href="#" onClick="{{ toggleMenu }}" style="padding:14px 4px;border-bottom:1px solid rgba(255,255,255,0.08);color:#F27A5E">Blog</a>
       </div>
-      <a href="Home.dc.html#contato" style="display:inline-flex;align-items:center;justify-content:center;margin-top:32px;padding:16px 24px;background:#F27A5E;color:#000;border-radius:2px;font-weight:600;font-size:15px">Contato</a>
+      <a href="/#contato" style="display:inline-flex;align-items:center;justify-content:center;margin-top:32px;padding:16px 24px;background:#F27A5E;color:#000;border-radius:2px;font-weight:600;font-size:15px">Contato</a>
     </div>
   </sc-if>
 
@@ -120,7 +120,7 @@
   <section style="padding:0 {{ sidePad }} 110px;max-width:700px;margin:0 auto;text-align:center">
     <span style="display:block;font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.22em;text-transform:uppercase;color:#F27A5E;margin-bottom:24px">Fique por dentro</span>
     <h2 style="margin:0 0 34px;font-size:clamp(24px,3.6vw,40px);font-weight:600;letter-spacing:-0.025em;line-height:1.15">Tem uma dúvida sobre seu próximo projeto?</h2>
-    <a href="Home.dc.html#contato" style="display:inline-flex;align-items:center;gap:10px;padding:16px 34px;background:#F27A5E;color:#000;border-radius:2px;font-size:15px;font-weight:600;letter-spacing:0.02em;transition:transform .25s ease,filter .25s ease" style-hover="filter:brightness(1.08);transform:translateY(-2px)">Falar com a Trifold <span style="font-size:17px;display:inline-block;transition:transform .25s ease" style-hover="transform:translateX(4px)">→</span></a>
+    <a href="/#contato" style="display:inline-flex;align-items:center;gap:10px;padding:16px 34px;background:#F27A5E;color:#000;border-radius:2px;font-size:15px;font-weight:600;letter-spacing:0.02em;transition:transform .25s ease,filter .25s ease" style-hover="filter:brightness(1.08);transform:translateY(-2px)">Falar com a Trifold <span style="font-size:17px;display:inline-block;transition:transform .25s ease" style-hover="transform:translateX(4px)">→</span></a>
   </section>
 
   <!-- ============ FOOTER ============ -->
@@ -131,7 +131,7 @@
           <dc-import name="Logo" tone="dark" size="{{ 30 }}" hint-size="280px,34px"></dc-import>
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:20px 26px;font-size:13px;letter-spacing:0.04em;color:#9A9A9A">
-          <a href="Home.dc.html" style="transition:color .2s ease" style-hover="color:#fff">HOME</a><a href="Sobre Nós.dc.html" style="transition:color .2s ease" style-hover="color:#fff">SOBRE</a><a href="Empreendimentos.dc.html" style="transition:color .2s ease" style-hover="color:#fff">EMPREENDIMENTOS</a><a href="B2B.dc.html" style="transition:color .2s ease" style-hover="color:#fff">CORPORATIVAS</a><a href="Blog.dc.html" style="transition:color .2s ease" style-hover="color:#fff">BLOG</a>
+          <a href="/" style="transition:color .2s ease" style-hover="color:#fff">HOME</a><a href="/sobre-nos" style="transition:color .2s ease" style-hover="color:#fff">SOBRE</a><a href="/empreendimentos" style="transition:color .2s ease" style-hover="color:#fff">EMPREENDIMENTOS</a><a href="/corporativas" style="transition:color .2s ease" style-hover="color:#fff">CORPORATIVAS</a><a href="/blog" style="transition:color .2s ease" style-hover="color:#fff">BLOG</a>
         </div>
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:20px;justify-content:space-between;align-items:center;padding-top:28px;font-family:'Space Mono',monospace;font-size:11px;color:#5A5A5A">

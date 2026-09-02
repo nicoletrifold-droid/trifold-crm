@@ -1,12 +1,18 @@
 # Landing Page — Yarden
 
 Landing standalone (HTML/CSS/JS puro, sem build) do empreendimento Yarden.
-Projeto Vercel `yarden`, servido em produção sob `https://trifold.eng.br/yarden/`
-via rewrite do projeto `trifold-design-system`.
+Destino **planejado**: projeto Vercel `yarden`, servido sob
+`https://trifold.eng.br/yarden/` via rewrite do projeto `trifold-design-system`.
 
-> **Status do conteúdo:** placeholder. Copy, imagens e seções de marketing são
-> dependência externa (Story 86-12 AC12) e ainda não foram fornecidas. O que já
-> está pronto e testado é a **infraestrutura**: formulário de captação funcional
+> **Ainda não está no ar.** O projeto Vercel e o deploy real são as tarefas
+> T12/T13 da Story 86-12, pendentes — hoje `https://trifold.eng.br/yarden/`
+> não serve esta landing. Tudo abaixo descreve a configuração pretendida.
+
+> **Status do conteúdo:** definitivo. Copy, cores e imagens vêm do mockup
+> "Yarden LP v1" fornecido pelo stakeholder (Story 86-12 AC12 — conteúdo é
+> dependência externa, nada aqui é inventado); os arquivos de `assets/` são
+> recortes desse mesmo mockup. A página é indexável (não há `noindex`).
+> A **infraestrutura** por baixo é a mesma desde o início: formulário de captação
 > + Pixel Meta + CAPI com deduplicação browser↔servidor.
 
 A landing WordPress antiga (`trifold.eng.br/y/`) não existe mais — retorna 404.
@@ -17,6 +23,7 @@ Esta é uma landing nova, não uma migração.
 ```
 yarden/
 ├── index.html               # página completa (CSS + JS inline)
+├── assets/                  # 13 arquivos: 5 imagens (jpg + webp cada) + 2 logos SVG + 1 PDF
 ├── api/lead.js              # proxy do lead → POST /api/webhooks/landing-page do CRM
 ├── api/track.js             # proxy dos eventos de topo de funil → .../landing-page/track
 ├── api-proxy.test.ts        # testes dos dois proxies (fora de api/ de propósito)
@@ -102,28 +109,46 @@ Testes (rodam com `pnpm vitest run` na raiz do repo):
 | Arquivo | Cobre |
 |---|---|
 | `api-proxy.test.ts` | os dois proxies serverless: identidade da landing (`page`/`landing`), repasse de `client_ip`/`client_ua`, honeypot, CORS, autenticação no CRM |
-| `tracking-browser.test.ts` | contrato estático do `index.html` (ids dos campos, endpoints, live region, guarda de duplo submit) + helpers do browser: `visitor_id`, `fbc`/`fbp`/`fbclid`, degradação graciosa |
+| `tracking-browser.test.ts` | contrato estático do `index.html` (ids dos campos, endpoints, live region, guarda de duplo submit, integridade de `assets/`) + helpers do browser: `visitor_id`, `fbc`/`fbp`/`fbclid`, degradação graciosa |
 
 Os dois ficam fora de `api/` de propósito — tudo dentro de `api/` vira função
 serverless no deploy.
 
-## Integrar o conteúdo definitivo
+## Alterar o conteúdo depois
 
-Quando a copy/design chegar:
+A página tem **três** marcações de formulário, uma única lógica:
 
-0. **Remova o `<meta name="robots" content="noindex, nofollow">`** do `<head>`.
-   Ele existe só para o placeholder não ser indexado; esquecê-lo mantém a
-   landing definitiva fora do Google (não afeta tráfego pago).
-1. Substitua as seções de placeholder do `<main>` e o bloco `:root` do `<style>`.
-2. **Preserve os `id` dos campos** usados pelo tracking: `nome`, `whats`,
-   `email`, `empresa` (honeypot), `leadForm`, `formMsg`. Se algum mudar,
-   atualize o `<script>` do fim da página no mesmo commit.
+| `<form>` | Onde | Mensagem |
+|---|---|---|
+| `leadForm` | hero, sobreposto à foto (desktop) | `formMsg` |
+| `leadFormMobile` | hero, em fluxo (mobile) | `formMsgMobile` |
+| `leadFormSaber` | seção "Quer saber mais?" | `formMsgSaber` |
+
+Só uma marcação do hero fica visível por media query — as duas existem porque o
+layout do mockup difere entre desktop e mobile, não porque a lógica difere.
+`ligarFormulario()` é chamada uma vez por formulário e é isso que dá a cada um
+**honeypot próprio**, **trava de duplo envio própria** (no closure) e **par de
+`event_id` próprio por submissão**. Compartilhar qualquer um dos três misturaria
+formulários distintos num só veredito.
+
+Ao mexer no conteúdo:
+
+1. **Preserve os `id` dos campos** de cada formulário: `nome`/`whats`/`email`/
+   `empresa` (honeypot) no hero desktop, com sufixo `Mobile` e `Saber` nos
+   outros. Se algum mudar, atualize `FORMULARIOS` e a lista de `InitiateCheckout`
+   no `<script>` do fim da página, no mesmo commit.
+2. **Todo arquivo de `assets/` tem que ser referenciado pelo HTML, e toda
+   referência tem que existir no disco.** Não há build para resolver caminho: um
+   `srcset` errado é 404 silencioso em produção. Há teste que confere os dois
+   sentidos, incluindo asset órfão (sobra de clone).
 3. **Não recrie o Pixel/CAPI.** O bloco do `<head>` e o handler de `submit` já
    estão corretos e validados.
 4. Não reintroduza `console.log` do corpo/resposta do envio de lead — imprimiria
    `fbc`/`fbp` no console do browser (defeito `86.11-QA-005`).
 5. Se o conteúdo introduzir uma segunda etapa real (ex.: agendamento),
    `CompleteRegistration` deve passar a disparar nela, e não junto com `Lead`.
+6. Não reintroduza `<meta name="robots" content="noindex">`: existia só enquanto
+   o conteúdo era placeholder e manteria a landing definitiva fora do Google.
 
 ## Deploy
 
