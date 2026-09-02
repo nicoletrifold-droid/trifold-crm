@@ -52,6 +52,19 @@ import {
 export const maxDuration = 60
 
 /**
+ * Teto do INSERT de arquivamento em `webhook_logs` (tipos não suportados).
+ *
+ * É o único `await` a Supabase que roda no caminho síncrono DEPOIS que a bolha já está
+ * gravada e ANTES de a resposta sair — ver o bloco `tipoNaoSuportado`. Sem teto, um Supabase
+ * LENTO pendura a lambda até `maxDuration` e o custo não é o arquivo: é o HTTP 200, e com ele
+ * o push ao corretor, o Live Coach e a Nicole, que só rodam DEPOIS da resposta.
+ *
+ * 5s é curto o bastante para caber com folga antes da reentrega da Meta e longo o bastante
+ * para um Supabase apenas lento (o normal é < 1s) ainda conseguir arquivar.
+ */
+const ARQUIVO_PAYLOAD_TIMEOUT_MS = 5000
+
+/**
  * Story 900-24 · Task 3.1 — o caminho LEGADO, extraído sem mudar uma vírgula do SQL.
  *
  * É literalmente a query que estava inline em `:394-398` antes desta story: `status='active'`,
@@ -401,6 +414,37 @@ export async function POST(request: NextRequest) {
     media_download_failed?: boolean
   } = {}
   let isVoiceMessage = false
+  // Dados estruturados dos tipos NÃO-mídia (cartão de contato, localização, reação).
+  // Fica FORA do `mediaMetadata` de propósito: nada aqui tem `media_id` nem download,
+  // então as colunas `media_*` continuam NULL.
+  const extraMetadata: Record<string, unknown> = {}
+  // ⚠️ DUAS FLAGS, DE PROPÓSITO — NÃO UNIFICAR. A tabela abaixo é a decisão do dono do
+  // produto, e cada linha tem teste próprio (nenhum dos cinco casos é omissão):
+  //
+  //   tipo                 | Nicole | push ao corretor
+  //   ---------------------|--------|------------------
+  //   contacts, location   |  SIM   |  SIM   → a IA tem o que fazer com o dado
+  //   video, sticker       |  NÃO   |  SIM   → gate `@qa` H-1
+  //   desconhecido (order…)|  NÃO   |  SIM   → só o corretor pode ir ver no WhatsApp
+  //   reaction             |  NÃO   |  NÃO   → ❤️ não é pedido nem merece push
+  //   system               |  NÃO   |  NÃO   → não é o lead falando
+  //
+  // Por que `video`/`sticker` não acionam a IA (H-1): o `text` deles DESCREVE UMA LIMITAÇÃO
+  // DO CRM ("o CRM ainda não exibe vídeos"). Como o pipeline recebe esse texto como se fosse
+  // fala do lead, a Nicole respondia ao lead sobre o nosso sistema — linguagem interna de
+  // produto vazando para o cliente. E uma figurinha 😂 é a mesma classe de um ❤️.
+  //
+  // Por que `system` não gera push, apesar de "tipo desconhecido → push": `system`
+  // (`user_changed_number`) é evento de PLATAFORMA, não mensagem. Não há nada no WhatsApp
+  // para o corretor ir ver — o push seria falso alarme. A regra do push é "o lead mandou
+  // algo que o CRM não sabe exibir", e aqui o lead não mandou nada.
+  //
+  // Unificar as duas flags num booleano só desfaz silenciosamente as linhas do meio.
+  let acionaNicole = true
+  let notificaCorretor = true
+
+  /** Normaliza campo textual do payload da Meta: string aparada, ou "". */
+  const limpar = (v: unknown) => (typeof v === "string" ? v.trim() : "")
 
   const IMAGE_MIME_TYPES = new Set([
     "image/jpeg",
@@ -424,9 +468,166 @@ export async function POST(request: NextRequest) {
       media_type: msg.type,
       media_id: msg.type === "image" ? msg.image?.id : msg.document?.id,
     }
+  } else if (msg.type === "contacts") {
+    // Bug de produção 01/09/2026 — conversa fd2f5f39-2d73-483a-b499-1ad35c3ddff9: o lead
+    // mandou o telefone da namorada como CARTÃO DE CONTATO. `contacts` não tinha branch,
+    // caía no `else` abaixo e a mensagem NUNCA chegava a `messages` — não era bolha vazia,
+    // era ausência total. Nem a Nicole nem o corretor viam; o número teve de ser pedido
+    // de novo por escrito.
+    //
+    // Payload da Cloud API: `contacts: [{ name:{formatted_name,first_name,last_name},
+    // phones:[{phone, wa_id, type}], emails, org }]`. Aqui só interessam nome e telefone —
+    // é o que resolve o caso real. E-mail/empresa ficam de fora por escopo.
+    const cartoes: unknown[] = Array.isArray(msg.contacts) ? msg.contacts : []
+
+    const lidos = cartoes
+      .map((bruto) => {
+        const c = (bruto ?? {}) as {
+          name?: { formatted_name?: unknown; first_name?: unknown; last_name?: unknown }
+          phones?: unknown
+        }
+        const nome =
+          limpar(c.name?.formatted_name) ||
+          [limpar(c.name?.first_name), limpar(c.name?.last_name)].filter(Boolean).join(" ")
+
+        const telefones = (Array.isArray(c.phones) ? c.phones : [])
+          // `phone` é o número como o remetente digitou; `wa_id` é o fallback que a Meta
+          // manda quando o cartão veio de um contato já salvo no WhatsApp. Guardamos o
+          // valor CRU — normalizar aqui esconderia o que de fato chegou.
+          .map((t) => {
+            const tel = (t ?? {}) as { phone?: unknown; wa_id?: unknown }
+            return limpar(tel.phone) || limpar(tel.wa_id)
+          })
+          .filter((t) => t.length > 0)
+
+        return { nome, telefones }
+      })
+      // Cartão sem nome E sem telefone não vira linha: não há o que mostrar.
+      .filter((c) => c.nome !== "" || c.telefones.length > 0)
+
+    if (lidos.length === 0) {
+      // Nunca sumir em silêncio: sem dado legível a bolha diz o que houve, e o evento
+      // deixa rastro para investigar o payload.
+      text = "[Contato recebido — não foi possível ler os dados]"
+      logEvent({
+        level: "warn",
+        category: "webhook",
+        event_type: "contacts_payload_vazio",
+        message: `Mensagem type=contacts sem nome nem telefone legível (wamid ${messageId})`,
+        metadata: { wamid: messageId, cartoes_recebidos: cartoes.length },
+        source: "api/webhook/whatsapp",
+      })
+    } else {
+      // Prefixo em CADA linha (e não só na primeira): a bolha pode ser truncada na lista
+      // de conversas e a Nicole lê o texto linha a linha — cada linha tem de se explicar
+      // sozinha. Um contato por linha.
+      text = lidos
+        .map((c) => {
+          const nome = c.nome || "Sem nome"
+          return c.telefones.length > 0
+            ? `[Contato recebido] ${nome} — ${c.telefones.join(", ")}`
+            : `[Contato recebido] ${nome} (sem telefone)`
+        })
+        .join("\n")
+    }
+
+    // Estruturado no metadata: se alguém editar o texto da bolha, o número continua lá.
+    extraMetadata.contacts = lidos
+  } else if (msg.type === "location") {
+    const loc = (msg.location ?? {}) as {
+      latitude?: unknown
+      longitude?: unknown
+      name?: unknown
+      address?: unknown
+    }
+    // A Meta manda lat/lng como número, mas já mandou string em integrações antigas.
+    const coord = (v: unknown): number | null => {
+      if (typeof v === "number" && Number.isFinite(v)) return v
+      if (typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v))) {
+        return Number(v)
+      }
+      return null
+    }
+    const lat = coord(loc.latitude)
+    const lng = coord(loc.longitude)
+    const nome = limpar(loc.name)
+    const endereco = limpar(loc.address)
+
+    const partes = ["[Localização recebida]"]
+    if (nome) partes.push(nome)
+    if (endereco) partes.push(nome ? `— ${endereco}` : endereco)
+    // O link é o que torna a bolha ACIONÁVEL pelo corretor: um par de coordenadas
+    // solto no texto não abre mapa nenhum.
+    if (lat !== null && lng !== null) partes.push(`https://maps.google.com/?q=${lat},${lng}`)
+    text = partes.join(" ")
+
+    extraMetadata.location = { latitude: lat, longitude: lng, name: nome || null, address: endereco || null }
+  } else if (msg.type === "video" || msg.type === "sticker") {
+    // Sem download: exibir vídeo/figurinha no CRM é outro trabalho. O que esta correção
+    // garante é que o corretor SAIBA que chegou algo, em vez de ver a conversa muda.
+    text =
+      msg.type === "video"
+        ? "[Vídeo recebido — o CRM ainda não exibe vídeos]"
+        : "[Figurinha recebida]"
+    // L-3: sem este marcador, "quantos vídeos recebemos?" vira string-matching no `content`,
+    // e o metadata destas bolhas fica indistinguível do de texto puro.
+    extraMetadata.tipo_nao_suportado = msg.type
+    // H-1: o texto acima descreve uma limitação NOSSA. Mandá-lo ao pipeline fazia a Nicole
+    // responder ao lead sobre o CRM. O corretor, esse sim, precisa ser avisado.
+    acionaNicole = false
+  } else if (msg.type === "reaction") {
+    const reacao = (msg.reaction ?? {}) as { emoji?: unknown; message_id?: unknown }
+    const emoji = limpar(reacao.emoji)
+    // `message_id` é o wamid da mensagem reagida — sem ele a reação fica órfã.
+    const alvo = limpar(reacao.message_id) || null
+    // L-2: `emoji: ""` COM `message_id` é como a Meta comunica que o usuário DESFEZ a reação.
+    // Tratá-lo junto do caso sem emoji gravava "[O lead reagiu a uma mensagem]" — mentira, e
+    // o par reagir/desfazer virava duas bolhas afirmando a mesma coisa.
+    const removida = emoji === "" && alvo !== null
+    text = removida
+      ? "[O lead removeu a reação]"
+      : emoji
+        ? `[O lead reagiu com ${emoji}]`
+        : "[O lead reagiu a uma mensagem]"
+    extraMetadata.reaction = { emoji: emoji || null, message_id: alvo, removida }
+    // Uma reação não é pedido. A Nicole responder a um ❤️ é pior que o silêncio — e um push
+    // por ❤️ é ruído puro no celular do corretor. Único tipo em que AS DUAS caem.
+    acionaNicole = false
+    notificaCorretor = false
+  } else if (msg.type === "system") {
+    // L-4: aviso da PLATAFORMA (ex.: `user_changed_number`), não mensagem do lead. A bolha
+    // existe porque o aviso é útil no histórico, mas não há nada para a IA responder nem nada
+    // no WhatsApp para o corretor ir ver — push aqui é falso alarme.
+    const sistema = (msg.system ?? {}) as { body?: unknown; type?: unknown; new_wa_id?: unknown }
+    const corpo = limpar(sistema.body)
+    text = corpo ? `[Aviso do WhatsApp] ${corpo}` : "[Aviso do WhatsApp: evento de sistema]"
+    extraMetadata.tipo_nao_suportado = "system"
+    extraMetadata.system = {
+      body: corpo || null,
+      type: limpar(sistema.type) || null,
+      new_wa_id: limpar(sistema.new_wa_id) || null,
+    }
+    acionaNicole = false
+    notificaCorretor = false
   } else {
-    return NextResponse.json({ status: "ok" })
+    // `order`, `unsupported`, `interactive` e qualquer tipo que a Meta venha a inventar.
+    // Antes disto o `else` devolvia 200 e DESCARTAVA a mensagem: nada em `messages`,
+    // nada em log, ninguém sabia. Agora a bolha existe e nomeia o tipo.
+    text = `[O lead enviou algo que o CRM ainda não exibe: ${limpar(msg.type) || "tipo desconhecido"}]`
+    extraMetadata.tipo_nao_suportado = limpar(msg.type) || null
+    // Não sabemos o que é — a IA não tem o que responder com segurança. Mas o push ao corretor
+    // CONTINUA (`notificaCorretor` segue true): é a única forma de alguém ir ver no WhatsApp o
+    // que o CRM não consegue exibir.
+    acionaNicole = false
   }
+
+  // Tipos originalmente suportados pelo pipeline (texto + as mídias que baixam).
+  // Tudo fora desta lista tem o payload CRU arquivado em `webhook_logs` mais abaixo:
+  // foi justamente a falta desse arquivo que tornou o telefone perdido em 01/09
+  // irrecuperável.
+  const tipoNaoSuportado = !["text", "audio", "voice", "image", "document"].includes(
+    msg.type as string
+  )
 
   // ---- Resolve org/whatsapp_config (sync) — Story 900-24, AC3 -----------
   //
@@ -715,6 +916,10 @@ export async function POST(request: NextRequest) {
         metadata: {
           whatsapp_message_id: messageId,
           ...mediaMetadata,
+          // Cartão de contato / localização / reação / tipo desconhecido: dado
+          // estruturado, para que o número (ou a coordenada) sobreviva a uma edição
+          // do texto da bolha.
+          ...extraMetadata,
         },
       })
       // Story 75-359 — o `created_at` desta linha é a referência da guarda
@@ -744,21 +949,86 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ status: "ok" })
     }
 
+    // ---- Arquiva o payload CRU dos tipos não suportados ------------------
+    //
+    // Em 01/09/2026 o telefone que veio num cartão de contato ficou IRRECUPERÁVEL porque este
+    // webhook — ao contrário do de meta_ads — nunca gravou payload em `webhook_logs`. A bolha
+    // (o INSERT logo acima) é a recuperação primária; isto aqui é a segunda cópia, com o objeto
+    // `msg` inteiro, para o que a bolha não souber traduzir.
+    //
+    // ⚠️ A ORDEM É A PROTEÇÃO, e é ela que não pode ser mexida — mais ainda que o `await`.
+    //
+    // Este INSERT é AGUARDADO e não vai para `after()`: o `webhooks/landing-page/route.ts`
+    // documenta que na Vercel o callback de `after()` era descartado de forma INTERMITENTE e
+    // sem exceção — foi assim que leads sumiram lá. Arquivar a prova no caminho que já provou
+    // perder prova esvaziaria a garantia justamente no caso raro.
+    //
+    // Mas aguardar tem um preço, e é por isso que o bloco vive AQUI, DEPOIS do INSERT em
+    // `messages` (gate `@qa` M-1). Enquanto ele rodava antes, um Supabase LENTO — não fora do
+    // ar — pendurava este INSERT até a lambda morrer no `maxDuration = 60`: nem `try/catch` nem
+    // `if (error)` cobrem hang, `lib/supabase/admin.ts` não tem `AbortSignal`, e o resultado era
+    // a bolha nunca ser escrita. O mecanismo criado para prevenir 01/09 recriaria 01/09.
+    // Nesta ordem, um hang custa o ARQUIVO, nunca a bolha — que é a prioridade declarada.
+    //
+    // A ordem sozinha, porém, NÃO era suficiente, e é isso que o `.abortSignal()` fecha: este
+    // `await` continua no caminho síncrono, ANTES dos `after()` de push (63-12), Live Coach
+    // (90-1) e da Nicole, e antes do 200. Um hang aqui não custaria "só o arquivo" — custaria
+    // os três, porque `after()` só executa DEPOIS que a resposta é enviada; mover o bloco para
+    // baixo dos `after()` não resolveria nada, pelo mesmo motivo. E o pior vem na sequência: a
+    // Meta reentrega, a reentrega bate no early-return de 23505 logo acima, e a mensagem fica
+    // sem Nicole PARA SEMPRE. Com o teto, a falha é o arquivo — ela cai no `if (error)` abaixo
+    // como qualquer outra, e o turno segue.
+    //
+    // Vem também depois do early-return de 23505: reentrega da Meta não duplica o arquivo.
+    //
+    // As duas formas de falha são engolidas (`console.error`): o PostgREST devolve
+    // `{data:null, error}` em violação de CHECK/RLS SEM lançar, enquanto rede/cliente LANÇA.
+    // Um `try/catch` sozinho cobre só a segunda.
+    if (tipoNaoSuportado) {
+      try {
+        const { error: erroArquivo } = await getSupabaseAdmin()
+          .from("webhook_logs")
+          .insert({
+            org_id: orgId,
+            source: "whatsapp",
+            event_type: `tipo_nao_suportado:${msg.type}`,
+            payload: msg,
+            signature_valid: true,
+            processed: true,
+          })
+          .abortSignal(AbortSignal.timeout(ARQUIVO_PAYLOAD_TIMEOUT_MS))
+        if (erroArquivo) {
+          console.error(
+            "[webhook] falha ao arquivar payload não suportado (ignorado):",
+            erroArquivo.message
+          )
+        }
+      } catch (err) {
+        console.error("[webhook] falha ao arquivar payload não suportado (ignorado):", err)
+      }
+    }
+
     // Story 63-12 — push ao corretor quando o lead responde. `after()` dedicado
     // e independente do bloco da Nicole (abaixo): uma falha no push não afeta o
     // pipeline e vice-versa. O gate (corretor já assumiu) + Q3 (sem corretor →
     // nada) vivem dentro do helper. Fire-and-forget: não bloqueia o HTTP 200.
     // Vem APÓS o early-return de wamid duplicado (23505): uma reentrega não
     // dispara push repetido ao corretor.
-    after(async () => {
-      await notifyBrokerOnReply({
-        supabase: getSupabaseAdmin(),
-        leadId: lead.id,
-        conversationId: conversation.id,
-        orgId,
-        messageExcerpt: text ?? "",
+    //
+    // `notificaCorretor` é uma flag SEPARADA de `acionaNicole` — ver o comentário longo na
+    // declaração das duas. Resumo: reação não notifica; tipo desconhecido notifica, ainda que
+    // nenhum dos dois acione a IA.
+    if (notificaCorretor) {
+      after(async () => {
+        await notifyBrokerOnReply({
+          supabase: getSupabaseAdmin(),
+          leadId: lead.id,
+          conversationId: conversation.id,
+          orgId,
+          messageExcerpt: text ?? "",
+        })
       })
-    })
+    }
 
     // Story 90-1 (Epic 90) — Live Coach: sugestão de resposta à objeção do lead
     // quando o CORRETOR conduz a conversa. `after()` dedicado e independente do
@@ -972,6 +1242,13 @@ export async function POST(request: NextRequest) {
 
       // Skip Nicole if there's no text and no media at all
       if (!asyncText && !asyncMediaBlock) return
+
+      // Reação (❤️) e tipo desconhecido: a bolha JÁ foi gravada no INSERT síncrono, mas a
+      // IA não responde. Uma reação não é pedido, e responder a um coração é pior que o
+      // silêncio; para tipo desconhecido não sabemos sequer o que foi enviado.
+      // Este é o MESMO ponto que já decidia se a Nicole roda: tudo daqui para baixo —
+      // inclusive o `processMessageWithMetadata` — está depois deste early-return.
+      if (!acionaNicole) return
 
       // Update conversation timestamp
       await supabase
