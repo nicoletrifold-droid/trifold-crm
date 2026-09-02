@@ -14,6 +14,7 @@ import fs from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { detectRawTableReads, detectEmbeddedTableReads } from "./platform-query-scan"
+import { callSiteDe, codigoDe, linhasDeCodigo, ocorrenciasNoCodigo, trechoDelimitado } from "./fonte-scan"
 
 const AQUI = path.dirname(fileURLToPath(import.meta.url))
 const SRC = path.resolve(AQUI, "../..") // packages/web/src
@@ -187,6 +188,26 @@ describe("AC13 (900-62) — a projeção de orgs/[id]/page.tsx", () => {
 
   it("carrega `settings` — sem ela, editar o nome APAGA o contato e o fiscal já gravados", () => {
     expect(projecaoDeOrganizations().split(", ")).toContain("settings")
+  })
+
+  /**
+   * Story 900-63 · AC11 — `logo_url` na MESMA linha, SOMADA e nunca substituindo as duas acima.
+   *
+   * Sem ela, `org.logo_url` é `undefined` e o bloco do logo mostra SEMPRE o placeholder —
+   * inclusive logo depois de um upload bem-sucedido e do `router.refresh()`. É o pior tipo de
+   * bug: o texto obrigatório da AC9 ("isto só guarda o arquivo") daria ao operador uma explicação
+   * plausível para aceitar o defeito como se fosse o comportamento declarado.
+   */
+  it("carrega `logo_url` (900-63) — sem ela o painel diz 'sem logo' para quem TEM logo", () => {
+    expect(projecaoDeOrganizations().split(", ")).toContain("logo_url")
+  })
+
+  it("as TRÊS colunas convivem — a segunda story SOMA, nunca substitui", () => {
+    // A regra de coordenação declarada entre a AC13 da `900-62` e a AC11 da `900-63`: as duas
+    // stories tocam esta única linha. Sem esta asserção, "acrescentar logo_url" removendo
+    // `settings` passaria pelos três `it` de cima um a um e reprovaria só em produção.
+    const colunas = projecaoDeOrganizations().split(", ")
+    expect(colunas).toEqual(expect.arrayContaining(["updated_at", "settings", "logo_url"]))
   })
 
   /**
@@ -396,5 +417,190 @@ describe("900-42a — varredura da árvore real por embedding", () => {
 
     const fonteEnvenenada = `${fonteLimpa}\nconst vazamento = platformQuery("organizations", "id, leads(name, phone)")\n`
     expect(detectEmbeddedTableReads(fonteEnvenenada)).toHaveLength(1)
+  })
+})
+
+/**
+ * Story 900-63 · AC6 — a régua NÃO é modificada, e este bloco fixa POR QUÊ.
+ *
+ * ## A suspeita do rascunho foi medida e é FALSA
+ *
+ * O rascunho v0.1 da `900-63` supunha que `admin.storage.from("org-logos")` casaria
+ * `detectRawTableReads` (receiver `storage`, "tabela" `org-logos`) e que por isso a story
+ * precisaria AFROUXAR o detector, excluindo `"storage"` como receiver. A regex captura o nome com
+ * `[a-zA-Z_]\w*`, e **`\w` não inclui hífen**: não acende, e não há o que consertar.
+ *
+ * ## E o "conserto" proposto era ativamente perigoso
+ *
+ * Excluir o receiver `storage` deixaria INVISÍVEL uma variável chamada `storage` lendo uma tabela
+ * de verdade — nome comum, e o detector trata receiver por EXCLUSÃO de identificador, não por
+ * forma de chamada. O controle positivo abaixo é exatamente a asserção que aquela "correção"
+ * teria quebrado, e é por isso que ela mora aqui.
+ *
+ * Soma-se a AC8 da `900-42a` (em produção), que **proíbe explicitamente** afrouxar esta guarda.
+ *
+ * ## O nome do bucket é LOAD-BEARING
+ *
+ * Se alguém renomear `org-logos` para uma forma sem hífen, a varredura de `AC-B4 item 2` acima
+ * passa a acusar o arquivo da rota. O conserto sancionado NÃO é excluir o receiver: é ancorar a
+ * exclusão na forma de dois segmentos `.storage.from(`, e isso é story própria.
+ */
+describe("900-63 · AC6 — `org-logos` não acende, e o que segura é o HÍFEN", () => {
+  const ROTA_DO_LOGO = path.join(SRC, "app/api/platform/orgs/[id]/logo/route.ts")
+
+  it("caracterização: `storage.from(\"org-logos\")` NÃO é lido como leitura crua de tabela", () => {
+    expect(detectRawTableReads('await admin.storage.from("org-logos").upload(p, b)')).toEqual([])
+  })
+
+  it("CONTROLE POSITIVO: um receiver chamado `storage` lendo tabela de verdade CONTINUA acendendo", () => {
+    // Esta é a asserção que a "correção" do rascunho teria quebrado. Sem ela, excluir o receiver
+    // `storage` abriria um buraco real na rede de segurança para resolver um problema inexistente.
+    expect(
+      detectRawTableReads('const storage = c(); await storage.from("organizations").select("id")'),
+    ).toEqual(["organizations"])
+  })
+
+  it("o que segura é o HÍFEN — as mesmas chamadas sem hífen ACENDEM", () => {
+    // Sem este par, a caracterização acima seria indistinguível de "o detector está morto".
+    expect(detectRawTableReads('await admin.storage.from("orglogos").upload(p, b)')).toEqual([
+      "orglogos",
+    ])
+    expect(detectRawTableReads('await admin.storage.from("org_logos").upload(p, b)')).toEqual([
+      "org_logos",
+    ])
+  })
+
+  it("a caracterização fixa a string que a ROTA de fato usa — não uma que ninguém escreve", () => {
+    // Sem isto, o bloco inteiro poderia estar verde sobre um nome de bucket hipotético enquanto a
+    // rota usa outro. Medido em LINHA DE CÓDIGO e exigido ÚNICO: um comentário que reproduzisse a
+    // constante satisfaria um `toContain` no arquivo inteiro.
+    const linhas = linhasDeCodigo(fs.readFileSync(ROTA_DO_LOGO, "utf8")).filter((l) =>
+      l.startsWith("export const BUCKET_DE_LOGOS"),
+    )
+    expect(linhas).toEqual(['export const BUCKET_DE_LOGOS = "org-logos"'])
+  })
+
+  it("o arquivo REAL da rota não acende nenhum dos dois detectores", () => {
+    // A varredura de `AC-B4 item 2` já cobre isto, mas ali o alvo é a árvore inteira e a falha
+    // chegaria como uma lista grande. Aqui a mensagem nomeia o arquivo desta story.
+    const fonte = fs.readFileSync(ROTA_DO_LOGO, "utf8")
+    expect(fonte.length).toBeGreaterThan(0)
+    expect(detectRawTableReads(fonte)).toEqual([])
+    expect(detectEmbeddedTableReads(fonte)).toEqual([])
+  })
+})
+
+/**
+ * Story 900-63 · AC8/AC9 — o elo que nenhum teste de comportamento alcança.
+ *
+ * As decisões do logo moram em `console-logo-empresa.ts`, com carrasco próprio. O que só se pode
+ * medir por texto é o `.tsx` CONSUMIR aquelas funções e o `.tsx` ser ALCANÇÁVEL — função pura bem
+ * testada com componente que a ignora é o mesmo verde vazio, e um bloco correto dentro de um ramo
+ * que nunca roda some da tela com tudo verde.
+ *
+ * Tudo medido sobre `linhasDeCodigo`/`callSiteDe`: comentário enganou régua de texto-fonte oito
+ * vezes nesta onda, e o docblock destes dois arquivos cita justamente as constantes que se afirma.
+ */
+describe("900-63 · AC8 — o bloco do logo está fiado e é ALCANÇÁVEL", () => {
+  const PAGE = path.join(SRC, "app/platform/orgs/[id]/page.tsx")
+  const COMPONENTE = path.join(SRC, "app/platform/orgs/_components/logo-empresa.tsx")
+  const GUARD = "{org && !orgFalhou && ("
+
+  const fontePage = () => fs.readFileSync(PAGE, "utf8")
+  const fonteComponente = () => fs.readFileSync(COMPONENTE, "utf8")
+
+  it("o call site existe UMA vez e recebe os dados LIDOS, não literais", () => {
+    // O mutante que isto mata: `logoUrl={null}` / `expectedUpdatedAt=""`. Os dois compilam, os
+    // dois deixam a suíte de `console-logo-empresa.test.ts` 100% verde, e os dois quebram a tela
+    // — o primeiro mostra "sem logo" para quem tem, o segundo mata a trava otimista.
+    expect(ocorrenciasNoCodigo(fontePage(), "<LogoDaEmpresa")).toBe(1)
+    // `codigoDe` ANTES de recortar, e não depois: `trechoDelimitado` faz `indexOf` na fonte CRUA,
+    // e o docblock do topo de `page.tsx` cita `<LogoDaEmpresa />` em prosa — medido nesta story,
+    // com o recorte devolvendo o COMENTÁRIO e a asserção reprovando o código certo. É a forma (1)
+    // do cabeçalho de `fonte-scan.ts`, e a citação fica lá de propósito, como controle vivo.
+    const call = callSiteDe(codigoDe(fontePage()), "<LogoDaEmpresa")
+    expect(call, "call site de <LogoDaEmpresa />").not.toBe("")
+    expect(call).toContain("orgId={orgId}")
+    expect(call).toContain("logoUrl={org.logo_url}")
+    expect(call).toContain("expectedUpdatedAt={org.updated_at}")
+  })
+
+  it("ALCANCE — o call site está DENTRO do ramo guardado por `org && !orgFalhou`", () => {
+    // Presença e ordem não bastam: mover o bloco para fora do ramo (ou para dentro de um ramo que
+    // nunca é verdade) some com ele da tela com tudo verde. O que se mede é que entre o guard mais
+    // próximo ANTES do call site e o próprio call site não há FECHAMENTO de bloco JSX.
+    const codigo = codigoDe(fontePage())
+    const i = codigo.indexOf("<LogoDaEmpresa")
+    expect(i, "call site de <LogoDaEmpresa /> no código").toBeGreaterThanOrEqual(0)
+    const guard = codigo.lastIndexOf(GUARD, i)
+    expect(guard, "o guard `org && !orgFalhou` antes do call site").toBeGreaterThanOrEqual(0)
+    expect(codigo.slice(guard, i), "nada fecha o ramo entre o guard e o call site").not.toContain(
+      ")}",
+    )
+  })
+
+  it("ALCANCE — e o ramo mora no card `Identidade`, que é onde a AC8 o coloca", () => {
+    const recorte = trechoDelimitado(
+      codigoDe(fontePage()),
+      '<Cartao titulo="Identidade">',
+      "</Cartao>",
+    )
+    expect(recorte, "recorte do card Identidade").not.toBe("")
+    expect(ocorrenciasNoCodigo(recorte, "<LogoDaEmpresa")).toBe(1)
+  })
+
+  it("o componente importa as decisões do módulo com carrasco, e não cópias locais", () => {
+    // Sem isto, um `validarArquivoDeLogo` definido dentro do próprio `.tsx` — de volta ao ponto
+    // cego do vitest — satisfaria as âncoras de uso abaixo com exatamente o mesmo texto.
+    const importes = [
+      ...fonteComponente().matchAll(
+        /import \{[^}]*\} from "@web\/lib\/tenancy\/console-logo-empresa"/g,
+      ),
+    ]
+    expect(importes, "import de `console-logo-empresa` em logo-empresa.tsx").toHaveLength(1)
+    for (const simbolo of [
+      "AVISO_DE_QUE_ISTO_SO_GUARDA",
+      "avisoDeArquivoNaoRemovido",
+      "decidirDesfechoDoLogo",
+      "urlDePreVisualizacao",
+      "validarArquivoDeLogo",
+    ]) {
+      expect(importes[0]![0], simbolo).toContain(simbolo)
+    }
+  })
+
+  it("e as CHAMA — import sobrevive à remoção do uso", () => {
+    // O outro sentido do mutante: a função pode continuar importada, perfeita e verde no seu
+    // próprio arquivo de teste, enquanto o componente decide sozinho no lugar dela.
+    const fonte = fonteComponente()
+    for (const chamada of [
+      "validarArquivoDeLogo(",
+      "decidirDesfechoDoLogo(",
+      "urlDePreVisualizacao(",
+      "avisoDeArquivoNaoRemovido(",
+    ]) {
+      expect(ocorrenciasNoCodigo(fonte, chamada), chamada).toBe(1)
+    }
+  })
+
+  it("AC9 — o aviso é IMPRESSO, e depois do botão de envio", () => {
+    // Duas coisas, e as duas são a AC: que a frase apareça (uma vez, em código, não em
+    // comentário) e que ela apareça ABAIXO do botão — um aviso acima do botão é lido antes de
+    // haver o que avisar.
+    const codigo = codigoDe(fonteComponente())
+    expect(codigo.split("{AVISO_DE_QUE_ISTO_SO_GUARDA}").length - 1).toBe(1)
+    const botao = codigo.indexOf('"Enviar logo"')
+    const aviso = codigo.indexOf("{AVISO_DE_QUE_ISTO_SO_GUARDA}")
+    expect(botao, "o rótulo do botão de envio").toBeGreaterThanOrEqual(0)
+    expect(aviso).toBeGreaterThan(botao)
+  })
+
+  it("AC8 — o placeholder de 'sem logo' é NEUTRO, e nunca a marca da Trifold", () => {
+    // Mostrar a marca da Trifold aqui sugeriria, erradamente, que é ela que o cliente vê por causa
+    // deste cadastro — que é exatamente o que a AC9 nega. Medido no CÓDIGO: o docblock do arquivo
+    // fala de "Trifold" de propósito, e um `toContain` no arquivo inteiro reprovaria por isso.
+    const codigo = codigoDe(fonteComponente())
+    expect(codigo).toContain("sem logo")
+    expect(codigo).not.toContain("Trifold")
   })
 })
