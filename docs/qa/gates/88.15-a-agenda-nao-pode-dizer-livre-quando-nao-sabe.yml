@@ -1,0 +1,192 @@
+schema: 1
+story: '88.15'
+titulo: 'A agenda não pode dizer "livre" quando não sabe'
+gate: CONCERNS
+status_reason: >-
+  O conserto fail-closed está correto e provado: 6 mutações reproduzidas por mim, os controles
+  da 81-1 verdes sob M1 (fail-closed não virou "tudo bloqueia") e o defeito de fixture da M5
+  confirmado como real. A ressalva é de cobertura, não de produção: as DUAS metades do
+  `vazioPorFalha` no pipeline sobrevivem a mutação vizinha com ZERO vermelhos.
+reviewer: 'Quinn (Guardian)'
+updated: '2026-08-17T21:55:00Z'
+branch: story/88-15-agenda-fail-closed
+base: origin/main 5456426d
+denominador: 'packages/ai 792 · packages/ai+web 2.541 (2.535 + 6 expected fail), 0 falhas'
+
+top_issues:
+  - id: 'TEST-001'
+    severity: medium
+    finding: >-
+      No pipeline, `const vazioPorFalha = slots.length === 0 && indisponiveis > 0` tem as duas
+      metades INERTES sob mutação vizinha. Medido por mim: `indisponiveis > 0` → `> 1` = 0
+      vermelhos em 792; `slots.length === 0` → `>= 0` = 0 vermelhos em 792. Os testes de
+      período no nível do pipeline só exercitam os extremos (nenhuma falha, ou todas). O
+      segundo caso é o X-1 da própria story ("qualquer erro bloqueia tudo") no nível em que o
+      bloco é decidido: com a mutação, um período com 3 horários livres e 1 sonda falha viraria
+      recusa, apagando oferta legítima. A degradação parcial está coberta no nível unitário
+      (AC3-iii de `freeSlotsInPeriod`), NÃO na composição do pipeline.
+    suggested_action: >-
+      Um teste em `pipeline-agenda-state.test.ts` com falha PARCIAL no período — o gancho já
+      suporta (contar as sondas dentro de `ehSondaDeSlot` e falhar só a 1ª). Asserção: o bloco
+      continua "Horários LIVRES nesse período", o CHECK sai com `indisponiveis > 0` e
+      `desfecho: "ofertou"`. ~15 linhas. NÃO bloqueia o deploy deste P0.
+  - id: 'DOC-001'
+    severity: low
+    finding: >-
+      As contagens de mutação são sensíveis à FORMA da mutação, e a story publica o número sem
+      publicar o diff aplicado. Medi M1 = 17 aplicando a linha original literal
+      (`const { data } = await`) e 16 mantendo a desestruturação e só ignorando o `error`: a
+      diferença é exatamente a régua da AC7, que tem vermelho próprio. Mesmo efeito em M4
+      (declarado 2 · @dev 2 · meu 3, mutando os dois sítios de slot) e M2 (@dev 34 · meu 32).
+      Nenhuma dessas divergências indica falha de qualidade — indica que o número sozinho não
+      é reproduzível.
+    suggested_action: >-
+      Nas próximas stories da família, publicar o hunk exato da mutação ao lado da contagem.
+  - id: 'MNT-001'
+    severity: low
+    finding: >-
+      A régua da AC7 só reconhece a forma `const {…} = await`. `const r = await q…; const data =
+      r.data` passa por ela. Limite conhecido de régua textual — a guarda real é o tipo
+      tri-estado, que o compilador cobra.
+    suggested_action: 'Nenhuma ação. Registrado para quem for estender a régua.'
+
+waiver: { active: false }
+
+# ─────────────────────────────────────────────────────────────────────────────
+# O que eu reproduzi (nada herdado)
+# ─────────────────────────────────────────────────────────────────────────────
+mutacoes_reproduzidas:
+  - id: M1a
+    forma: 'linha :571 original — `const { data } = await`, o `error` some do destructuring'
+    declarado: 16
+    dev: 16
+    quinn: 17
+    nota: >-
+      O 17º é a régua da AC7, que a variante do @dev não acende. Os 3 controles da 81-1
+      ficaram VERDES nas duas variantes — é essa a discriminação que separa "fail-closed" de
+      "qualquer erro bloqueia tudo".
+  - id: M1b
+    forma: 'mantém `const { data, error }`, apaga só o `if (error)`'
+    declarado: 16
+    dev: 16
+    quinn: 16
+  - id: M2
+    forma: 'probeSlot devolve "unknown" sempre'
+    declarado: 29
+    dev: 34
+    quinn: 32
+    nota: 'Divergência de forma da mutação. Direção idêntica; os controles positivos estão entre os vermelhos.'
+  - id: M3
+    forma: '`data === null && error === null` ⇒ "unknown" (o colapso)'
+    declarado: 26
+    dev: 31
+    quinn: 31
+    nota: >-
+      Bate com o @dev. Os 3 testes nomeados na AC6 (IMOB não bloqueia, HOUSE bloqueia, IMOB no
+      período) estão entre os vermelhos — verificado por nome.
+  - id: M4
+    forma: 'bloco de "ocupado" reusado nos dois sítios de slot'
+    declarado: 2
+    dev: 2
+    quinn: 3
+    nota: 'Minha mutação é superconjunto (mutei os dois sítios); a AC4-v acende junto.'
+  - id: M5
+    forma: 'o `unknown` do slot pedido não curto-circuita (estado "indisponivel" preservado)'
+    declarado: 3
+    dev: 3
+    quinn: 3
+    nota: >-
+      A primeira tentativa (deletar o bloco inteiro) deu 8 porque conflava duas mudanças
+      (sem curto-circuito E estado virando "ocupado"). Isolada, dá 3, exatos.
+  - id: M6
+    forma: '`vazioPorFalha = false` nos dois sítios de período'
+    declarado: 3
+    dev: 3
+    quinn: 3
+
+defeito_de_fixture_da_M5:
+  veredito: 'CONFIRMADO — o conserto é recuperação, não afrouxamento'
+  metodo: 'M5 aplicada + fixture da AC2-i revertida ao pré-`0faeec55` (`() => true`, todas as sondas falham)'
+  medido: '2 vermelhos — a AC2-i fica VERDE sob a mutação; com a fixture nova (`n === 1`), 3'
+  leitura: >-
+    Com todas as consultas falhando, a lista de alternativas saía vazia de graça: nenhum
+    candidato entraria com ou sem curto-circuito. O teste passava por um caminho que o nome
+    dele não descreve. A fixture nova faz os candidatos responderem LIVRE — a lista só fica
+    vazia porque o laço não roda.
+
+gancho_erroQuando:
+  veredito: 'os `filters` no descritor são carga, não conforto — confirmado'
+  metodo: '`ehSondaDeSlot` reduzido a `table==="appointments" && mode==="select"` (sem discriminar filtro)'
+  medido: '6 vermelhos'
+  leitura: >-
+    Sem discriminar `eq team=house`, a busca da visita ATIVA (`eq lead_id`) também falha, o
+    `activeAppointment` vem nulo e o turno cai no ramo de NOVO agendamento — que emite o MESMO
+    `RECUSA_AGENDA_SLOT`. O teste do sítio 2 ficaria verde por `ehRecusaDeAgenda` sozinho; o
+    que o segura é a asserção "A visita atual (sexta-feira, 14 de agosto às 10:00) segue
+    mantida", que está lá. Os contadores (`sondas`) também quebram.
+
+vermelho_contra_o_origin_main:
+  metodo: '`git checkout origin/main -- visit-slot.ts pipeline.ts`, testes novos por cima'
+  medido: '28 vermelhos em 148'
+  decomposicao: '9 adaptações mecânicas da AC6 + 10 do T2 (AC1/AC2/AC3/AC7) + 9 da AC4/AC5-a'
+  controles: 'os 4 controles positivos ("SEM erro, a mesma fixture GRAVA / REMARCA / OFERECE") ficaram VERDES contra o origin/main'
+  leitura: 'bate byte a byte com o Dev Agent Record (10 no T2, 9 na AC4/AC5-a)'
+
+sondas_proprias:
+  - id: 'P-A'
+    forma: 'remover "NÃO prometa retorno" dos dois blocos'
+    medido: '4 vermelhos — a cláusula tem lastro nos 4 sítios'
+  - id: 'P-B'
+    forma: 'o bloco PASSA a prometer ("Assim que eu tiver a resposta, te aviso")'
+    medido: '3 vermelhos, com a AC4-v acendendo — a lista de formas proibidas morde o TEXTO DE PRODUÇÃO, não só a própria fixture'
+  - id: 'P-C'
+    forma: '`indisponiveis > 0` → `> 1`'
+    medido: '0 vermelhos — INERTE (ver TEST-001)'
+  - id: 'P-D'
+    forma: '`slots.length === 0` → `>= 0`'
+    medido: '0 vermelhos — INERTE (ver TEST-001)'
+
+acs:
+  AC1: PASS   # 3 estados; régua `const { data } = await` = 0 em visit-slot.ts; forma proibida não transcrita nem no teste
+  AC2: PASS   # (i)(ii)(iii); curto-circuito asserido em 1 consulta, com controle de vivacidade (>1 no caminho ocupado)
+  AC3: PASS   # (i)(ii)(iii) + controle sem erro
+  AC4: PASS   # 4 sítios pelo TEXTO; par da AC4-ii na mesma fixture; AC4-iv com controle negativo; AC4-v com controle de vivacidade
+  AC5a: PASS
+  AC5b: 'NÃO VERIFICÁVEL AGORA — pós-deploy, janela de 7 dias'
+  AC6: PASS   # 85 → 99; 9 adaptações mecânicas; nenhum nome/horário/contagem alterado
+  AC7: PASS   # 1 arquivo, padrão por join, controle positivo E negativo
+  AC8: PASS   # tsc 0, turbo type-check 8/8, nenhum parser/regex tocado
+
+reguas:
+  vitest_ai: '35 arquivos · 792 (786 + 6 expected fail)'
+  vitest_ai_web: '199 arquivos · 2.541 (2.535 + 6), 0 falhas'
+  tsc_ai: '0 erros'
+  turbo_type_check: '8/8 tasks OK'
+  turbo_lint: '0 errors · 26 warnings — TODAS em packages/web, ZERO em packages/ai. Confirma 26 (o briefing dizia 23)'
+  prompts_check: 'verde — agent_prompts == snapshot (7 slugs). A story não toca agent_prompts'
+  regua_ac1: 'git grep -c --untracked "const { data } = await" -- visit-slot.ts → 0'
+  git_status_packages: 'vazio ao fim do gate; md5 dos 5 arquivos idênticos aos do início'
+
+medicoes_em_producao:
+  projeto: 'dsopqkqjkmhytudaaolv (SELECT apenas, nenhum DDL)'
+  r5_reconferido: >-
+    `pg_constraint` + `pg_indexes` de `appointments`: as únicas UNIQUE são `pkey`,
+    `calendly_event_uri_key` e `cancel_token_key`. Nenhum UNIQUE em `(lead_id, scheduled_at)`,
+    nenhum EXCLUDE de sobreposição. A sonda ERA a única guarda contra overbooking — o P0 se
+    justifica.
+  instrumento_da_ac5b: >-
+    `system_events` com `source='ai/pipeline'` em 30 dias: 2.335 `info`, 3 `error`, 3 `warn`.
+    O @po tinha medido só `info`; o nível `error` — que é o do `NICOLE_AGENDA_INDISPONIVEL` —
+    também chega. A AC5-b não nasce impossível em nenhum dos dois eventos.
+
+higiene:
+  worktree: 'nenhum criado — trabalhei na árvore principal, em `story/88-15-agenda-fail-closed`'
+  stash: 'stash@{0} de terceiros intacto, nenhum pop'
+  commits: 'nenhum'
+  push: 'nenhum'
+  ddl: 'nenhum'
+  fabricas_novas: >-
+    ZERO. Anthropic seguem 5 arquivos em packages/ai/src/chat; Supabase segue 1 fixture.
+    `__fixtures__/anthropic-harness.ts` do #445 confirmado AUSENTE de origin/main via
+    `git ls-tree` — o ramo "senão" do §7.4 é o correto.
+  consumidores_do_fake: '9 (8 em packages/ai + 1 em packages/web); só pipeline-agenda-state.test.ts mudou — os outros 8 intactos por diff'

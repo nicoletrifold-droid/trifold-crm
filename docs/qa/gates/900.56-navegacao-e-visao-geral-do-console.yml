@@ -1,0 +1,545 @@
+schema: 1
+story: "900.56"
+story_title: "Navegação de plataforma de verdade + `/platform` (Visão Geral, faixa 1)"
+gate: CONCERNS
+reviewer: "Quinn (Test Architect)"
+updated: "2026-08-31T18:20:00Z"
+base: >-
+  Commit `b968387e` sobre `1393fa68`, medido na ÁRVORE DE TRABALHO real (que carrega, não
+  commitados, os 6 arquivos da `900-55` — trabalho de outra frente que eu NÃO toquei).
+escopo_revisado: >-
+  AC1 a AC9. Não revisei as 6 rotas da `900-57`, que têm gate próprio; onde as duas se tocam
+  (`montarTilesDoPainel`, paleta) o achado está no gate da 57.
+
+status_reason: >-
+  **A entrega está certa e as duas decisões contra a letra da AC estão certas — uma delas está
+  certa por um motivo que só é visível em PRODUÇÃO, e eu o medi.** As 5 mutações que fiz sobre
+  `console-visao-geral.ts` mataram, cada uma com `tsc --noEmit` **rc=0 medido antes** do vermelho
+  (a 6ª, `rotuloDoProvider` sem guarda, só compilou depois de eu remodelá-la — a forma ingênua
+  quebra o `noUncheckedIndexedAccess`). Réguas reconferidas por mim na árvore real: **299 arquivos
+  / 3966 passed / 6 xfail**; baseline da MESMA árvore sem os 2 arquivos da story: **297 / 3934 /
+  6** ⇒ delta **+2 arquivos, +32 testes, xfail inalterado** — exatamente o declarado.
+  `turbo lint --force` rc=0 (0 erros, 30 warnings, **nenhum** em arquivo desta story);
+  `turbo type-check --force` 8/8; `build` de `packages/web` rc=0 com as 7 rotas de `/platform`
+  registradas. Nenhuma consulta usa `count()`, agregado ou embedding, e `platform-query.ts`
+  **não foi tocado** — conferido por `git diff 1393fa68..HEAD` e também contra a árvore.
+  **O que segura o gate são dois NÚMEROS da tela que podem mentir por caminhos que a AC9 não
+  enumera**: (1) as 4 consultas descartam o campo `error`, então uma falha de leitura vira
+  "Empresas ativas: **0**" e o convite "Nenhuma empresa ainda. Criar a primeira" — um zero com
+  cara de medida, que é literalmente a coisa que a AC9 existe para impedir, por outra porta;
+  (2) "N integrações conectadas" da seção "Entraram recentemente" é o ÚNICO número da tela sem
+  declaração de saturação, e `org_integrations` é a PRIMEIRA das 4 páginas a alcançar o teto de
+  1.000. Nenhum dos dois é defeito vivo hoje (produção tem 1 empresa e 6 linhas de integração),
+  nenhum bloqueia o merge.
+
+rodadas:
+  - data: "2026-08-31"
+    rodada: 1
+    base: "b968387e sobre 1393fa68, árvore de trabalho compartilhada"
+    gate: CONCERNS
+    concerns: 4
+    observacoes: 3
+    defeitos_vivos: 0
+    regressoes: 0
+  - data: "2026-09-01"
+    rodada: 2
+    escopo: "DELTA — só a rodada 5 (porta de entrada): commits `170f005b` e `ccc10c68`"
+    base: "750b08ec (ponta da pilha), árvore de trabalho compartilhada"
+    gate: CONCERNS
+    concerns: 2
+    observacoes: 2
+    defeitos_vivos: 0
+    regressoes: 0
+    ver: "seção `delta_rodada_5` no fim deste arquivo"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 1. A DISCREPÂNCIA DE BASELINE — resolvida ANTES de medir delta
+# ═══════════════════════════════════════════════════════════════════════════
+baseline:
+  qual_usei: >-
+    A árvore de trabalho real, **não** o número do CI da `main`. A árvore carrega 6 arquivos
+    modificados e não commitados da `900-55` (PR parado): `webhook/whatsapp/route.ts` + teste,
+    `lib/meta/process-lead.ts` + teste, `lib/tenancy/webhook-org.ts` + teste. Conferi que são
+    exatamente esses 6 e mais nada (`git status --short -- packages/`, `git ls-files --others`
+    vazio) — o @dev não os tocou nem commitou.
+  medicoes:
+    depois_arvore_real: "299 arquivos / 3966 passed / 6 xfail (3972 total) / rc=0"
+    os_2_arquivos_da_story_sozinhos: "2 arquivos / 32 testes (`console-visao-geral.test.ts` + `console-paleta.test.ts`)"
+    baseline_derivada: "297 arquivos / 3934 passed / 6 xfail (3940 total)"
+    delta: "+2 arquivos, +32 testes, xfail INALTERADO em 6 — bate com o declarado"
+  onde_o_numero_do_dev_estava_impreciso: >-
+    Ele reportou "297 / 3.934 / 6" para a árvore de trabalho. Os **297 arquivos** são do
+    BASELINE, não da árvore (a árvore tem 299 — os 2 dele entram). E **3.934** é a contagem de
+    `passed`, não o total: o total do baseline é 3.940 (3.934 + 6 xfail). Os dois números estão
+    certos; os rótulos, não. Nenhuma conclusão muda.
+  atribuicao_dos_32_do_ci: >-
+    `3.902` (CI da `main`) `+ 32` = `3.934` fecha aritmeticamente. Corroborei sem arriscar a
+    árvore: os 3 arquivos de teste da `900-55` ganharam **+11 blocos `it(` estáticos** contra o
+    `HEAD` (39→44, 22→25, 48→51) e **3 `it.each` novos** onde o `HEAD` não tinha nenhum — 11
+    blocos parametrizados expandindo para 32 casos é consistente. **Não fechei o último dígito
+    de propósito** — ver `perigo_encontrado` abaixo.
+  perigo_encontrado: >-
+    ⚠️ Tentei medir o baseline com `git stash push -- <6 arquivos>`. O `push` FALHOU por citação
+    do pathspec (nada foi guardado), mas o `git stash pop` que veio depois foi aplicar
+    **`stash@{0}`, que é de OUTRA sessão** ("WIP stories 87-11/88-2/88-15 + agent-memory"). Ele
+    abortou sozinho por conflito com as memórias modificadas, e conferi que a árvore ficou
+    idêntica. Há **9 entradas de stash** neste repositório, todas de outras frentes: `git stash
+    pop` sem ref explícita é uma arma apontada para o trabalho alheio. Não repeti.
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 2. MUTAÇÕES — cada vermelho precedido de `tsc --noEmit` rc=0
+# ═══════════════════════════════════════════════════════════════════════════
+mutacoes:
+  protocolo: >-
+    Harness fora da árvore: guarda os bytes, aplica, aborta se a mutação sair INERTE (arquivo
+    idêntico), roda `tsc --noEmit` em `packages/web`, roda o alvo do vitest, restaura e confere
+    `sha256` antes/depois. Todas as 12 restaurações conferiram.
+  sobre_console_visao_geral_ts:
+    - id: q5
+      mutacao: "`saturada` medida sobre o VALOR filtrado (`pagina.filter(p).length >= TETO`) em vez da página"
+      tsc: "rc=0"
+      resultado: "1 VERMELHO — `saturação é propriedade da PÁGINA, não do valor filtrado`"
+    - id: q6
+      mutacao: "`diasDesdeOConvite` sempre usa `orgCriadaEm` (some a fonte `users.created_at`)"
+      tsc: "rc=0"
+      resultado: "2 VERMELHOS, em describes diferentes (o cálculo e a lista de pendências)"
+    - id: q7
+      mutacao: "`paginaSaturada`: `>=` vira `>`"
+      tsc: "rc=0"
+      resultado: "2 VERMELHOS — o caso EXATAMENTE no teto e o de página × valor"
+    - id: q10
+      mutacao: "`normalizarPeriodo` vira passthrough de qualquer número finito (mata a allowlist positiva)"
+      tsc: "rc=0"
+      resultado: "1 VERMELHO — `?dias=99999` deixaria de cair no padrão"
+    - id: q12
+      mutacao: "`rotuloDoProvider` indexa `DEFINICOES_DE_PROVIDER` sem `ehProviderDoPainel` (o caso `google`)"
+      tsc: "rc=**2** na forma ingênua (TS2532 por `noUncheckedIndexedAccess`) — mutação REMODELADA"
+      resultado: "com `!` para compilar: `tsc` rc=0 e 1 VERMELHO"
+      licao: >-
+        Mutação por remoção de guarda **não compila** nesta base — o narrowing do TS é uma
+        segunda rede. Vale registrar: contar esse vermelho sem olhar o `tsc` teria creditado ao
+        teste um mérito que é do compilador.
+  sobre_platform_query_scan:
+    - id: q13
+      mutacao: "`createAdminClient().from(\"leads\").select(...)` cru dentro de `orgs/[id]/page.tsx`"
+      tsc: "rc=0"
+      resultado: "1 VERMELHO — a varredura de `app/platform/**` está VIVA contra os arquivos novos"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 3. AS DUAS DECISÕES CONTRA A LETRA DA AC — julgadas
+# ═══════════════════════════════════════════════════════════════════════════
+decisoes_contra_a_letra:
+  - decisao: '"Trilha" nasce desabilitada (`<span>`), não como `<Link>` — contra a AC2'
+    veredito: CERTO
+    fundamento: >-
+      Conferi: `packages/web/src/app/platform/trilha/page.tsx` **não existe**, e o `build`
+      registra `/platform`, `/platform/orgs`, `/platform/orgs/[id]` e as 5 abas — e **nenhuma**
+      `/platform/trilha`. A AC2 é internamente contraditória: afirma "rotas reais" sobre uma rota
+      que não existe, e o MOTIVO escrito nela mesma é "em vez de linkar para uma rota que dá
+      404". Obedecer à letra produziria exatamente o defeito que o motivo proíbe. Quando letra e
+      motivo brigam **e o motivo é verificável**, vale o motivo.
+    nit: >-
+      O comentário do `layout.tsx` diz que "a story que a cria (`900-59`) ainda não foi escrita".
+      Na árvore ela EXISTE — `docs/stories/900-59-trilha-de-plataforma.story.md`, **Status:
+      Ready** (não commitada, então a frase é verdadeira na história committada e falsa na árvore
+      de quem lê hoje). Uma linha para corrigir; registrado porque comentário que afirma estado
+      do repositório envelhece exatamente assim.
+  - decisao: '"Integrações conectadas" passa por `montarTilesDoPainel()` — além da letra da AC6'
+    veredito: CERTO, e **não é hipotético**
+    fundamento: >-
+      Reproduzi a aritmética de forma determinística (3 asserções num harness fora da árvore):
+      com a linha `whatsapp` de `org_integrations` em `disconnected` — que é o único estado
+      possível, pelo CHECK `whatsapp_sem_identificador_proprio` da migration 247 — e
+      `whatsapp_config` em `active` com `phone_number_id`, a montagem compartilhada devolve
+      **2** e a contagem literal devolveria **1**. E fui além do exemplo do @dev: medi
+      **PRODUÇÃO** por agregado (Management API, só leitura) — `org_integrations` tem **6 linhas,
+      6 `disconnected`**, e `whatsapp_config` tem **1 `active` com `phone_number_id` não nulo**.
+      Ou seja, **hoje, em produção**, a contagem literal diria "0 integrações conectadas" sobre
+      uma empresa cujo canal está no ar. A QA-900-51-2 não seria "reintroduzida em tese": ela
+      nasceria acesa na primeira renderização.
+    contraprova: >-
+      `status='active'` SEM `phone_number_id` **não** conta (a derivação exige os dois), e com
+      `whatsapp_config` inativo as duas contagens concordam em 1 — a divergência é do fato, não
+      um viés constante da montagem.
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 4. A REGRA "NENHUMA TELA EXIBE NÚMERO QUE O SISTEMA NÃO SABE" — tela por tela
+# ═══════════════════════════════════════════════════════════════════════════
+nenhum_numero_inventado:
+  metodo: >-
+    Varri toda a árvore de `app/platform/**` por `R$`, `MRR`, `receita`, `margem`,
+    `faturamento`, `mensalidade` e por todo dígito que chega ao JSX renderizado.
+  resultado_moeda_e_receita: >-
+    **Zero ocorrências fora de comentário.** As 6 aparições de "R$ 0,00" / "MRR" estão todas em
+    docblocks explicando por que o card NÃO existe. Faixa 2 (Receita) e faixa 3 (Margem) não
+    renderizam — nem título, nem placeholder (AC7 ✔).
+  numeros_da_visao_geral:
+    - { numero: "Empresas ativas", fonte: "organizations.is_active", declara_saturacao: true }
+    - { numero: "N inativa(s)", fonte: "organizations.is_active=false", declara_saturacao: true }
+    - { numero: "Novas no período", fonte: "organizations.created_at ≥ corte", declara_saturacao: true }
+    - { numero: "Convites pendentes", fonte: "deriveAdminInviteStatus sobre orgs × users", declara_saturacao: "true (HERDADA das duas páginas)" }
+    - { numero: "Integrações com erro", fonte: "org_integrations.status='error'", declara_saturacao: true }
+    - { numero: "convite pendente há N dias", fonte: "users.created_at, senão organizations.created_at — duas fontes, nenhuma terceira", declara_saturacao: "n/a" }
+    - { numero: "criada DD/MM/AAAA", fonte: "organizations.created_at", declara_saturacao: "n/a" }
+    - { numero: "N integrações conectadas", fonte: "montarTilesDoPainel", declara_saturacao: "**FALSE — ver QA-900-56-2**" }
+  literal_zero_encontrado: >-
+    Um só, em `uso/page.tsx`: `<code>0</code>` dentro da frase "Exibir `0` aqui afirmaria que a
+    empresa não teve atividade nenhuma". É a explicação da regra, não uma medida.
+  veredito: >-
+    A regra vale para 7 dos 8 números da Visão geral. O oitavo e o caminho de erro estão nas
+    concerns abaixo.
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 5. CONCERNS
+# ═══════════════════════════════════════════════════════════════════════════
+concerns:
+  - id: QA-900-56-1
+    severidade: media
+    bloqueante: false
+    titulo: "Erro de consulta descartado vira `0` com cara de medida — e vira o convite de partida"
+    achado: >-
+      As 4 leituras de `app/platform/page.tsx` destroem o campo `error`
+      (`const { data: X } = await platformQuery(...)`). Numa falha de leitura — timeout, chave
+      trocada, `PGRST` qualquer — `data` vem `null`, os `?? []` transformam isso em página vazia,
+      e a tela afirma **"Empresas ativas: 0"**, **"Convites pendentes: 0"**, **"Integrações com
+      erro: 0"** e renderiza o vazio DE PARTIDA: *"Nenhuma empresa ainda. **Criar a primeira**"*.
+      Um operador lendo isso conclui que o sistema está vazio. É a mesma classe que a AC9
+      conserta — "o sistema não sabe" apresentado como se soubesse — por uma porta que a AC9 não
+      enumera, porque a AC9 só fala de SATURAÇÃO.
+    nao_e_regressao: >-
+      O padrão é pré-existente: `orgs/page.tsx` (3 consultas), `orgs/[id]/layout.tsx`,
+      `orgs/[id]/page.tsx` e `orgs/[id]/trilha/page.tsx` também descartam `error`. Nas telas de
+      LISTA o efeito é uma lista vazia; aqui é a primeira vez que vira **número de manchete**.
+      Nas cascas da `900-57` o descarte é fail-closed (`notFound()`), o que é o estado seguro.
+    o_que_mudar: >-
+      Ler `error` nas 4 consultas e, quando houver, tratar como a AC9 já trata saturação: o card
+      para de afirmar um número. Reaproveitar a forma que já existe — trocar `ContagemDeclarada`
+      por um terceiro estado (`{ valor, saturada, indisponivel }`) e fazer `formatarContagem`
+      devolver `—`. Custo: o tipo, a função e as 4 destruturações. **E um teste por mutação:
+      `formatarContagem({indisponivel:true})` tem que ser `—`, não `0`.** O vazio de partida
+      (`orgs.length === 0`) só pode renderizar quando a consulta de `organizations` SUCEDEU.
+  - id: QA-900-56-2
+    severidade: media
+    bloqueante: false
+    titulo: "O único número sem declaração de saturação é justo o da tabela que satura primeiro"
+    achado: >-
+      `conectadas` (seção "Entraram recentemente") é um `number` cru, fora do mecanismo
+      `ContagemDeclarada`. A AC9 enumera "os 4 cards da AC4 e as duas listas da AC5" — a lista da
+      AC6 ficou de fora da letra, e o @dev implementou fiel. Mas a aritmética do teto aponta
+      exatamente para lá: `organizations` precisa de 1.000 empresas para saturar; `whatsapp_config`
+      idem; **`org_integrations` satura com ~200 empresas** (5 linhas por empresa — medido: 6
+      linhas para 1 empresa em produção, 18 para 3 no teste). Pior: essa consulta **não tem
+      `order by`**, então as 1.000 linhas que chegam são as que o Postgres devolver — e as
+      empresas mais NOVAS, que são exatamente as que esta seção mostra, são as menos prováveis de
+      estar entre elas. O resultado seria "0 integrações conectadas" nas 5 empresas em destaque,
+      sem uma palavra de aviso.
+    o_que_mudar: >-
+      Herdar a saturação: `paginaSaturada(integracoes) || paginaSaturada(linhasWhatsApp)` e, quando
+      verdadeira, a linha diz `≥ N` (ou some o número) — a função `formatarContagem` já faz isso.
+      Duas linhas. Alternativa mais barata e mais correta: pedir `.order("org_id")` na consulta de
+      `org_integrations`, para o corte ao menos ser determinístico.
+  - id: QA-900-56-3
+    severidade: baixa
+    bloqueante: false
+    titulo: "O predicado do período decide um NÚMERO e mora no `page.tsx` — contra a regra do próprio módulo"
+    achado: >-
+      `console-visao-geral.ts` abre declarando: *"Tudo que decide um NÚMERO ou uma LISTA está
+      neste arquivo, e o `page.tsx` só busca linhas e desenha"*. O predicado
+      `(o) => new Date(o.created_at) >= corteDoPeriodo` decide o card "Novas no período" e está
+      inline no `page.tsx`. `normalizarPeriodo` e `inicioDoPeriodo` têm carrasco (matei a mutação
+      da allowlist), mas a COMPARAÇÃO — parse de `created_at`, fuso, borda `>=` — não tem
+      nenhum. E é justamente o item que o @dev declara não ter conseguido discriminar na tela
+      (as 3 empresas do teste nasceram há ≤ 2 dias, então 7/30/90 devolvem as mesmas 3).
+    o_que_mudar: >-
+      Extrair `ehNovaNoPeriodo(org, corte)` (ou `contarNovasNoPeriodo`) para
+      `console-visao-geral.ts` e cobrir a borda: uma org criada exatamente no corte, uma um
+      milissegundo antes, uma depois. Mata o `>=`→`>` e o parse.
+  - id: QA-900-56-4
+    severidade: baixa
+    bloqueante: false
+    titulo: "Uma terceira tradução de `status`, na mesma leva que criou a segunda para eliminar a divergência"
+    achado: >-
+      A `900-57` moveu `status → rótulo + tom` para `providers.ts` com o argumento de que *"duas
+      traduções do mesmo `status` são o começo de duas telas do console discordando sobre o mesmo
+      fato — que é literalmente a QA-900-51-2"*. E a Visão geral traduz por conta própria:
+      `t.status === "connected" || t.status === "active"`. Hoje coincide com
+      `rotuloDeStatusDoTile(...).tom === "ok"`. No dia em que um sexto valor de `status` entrar
+      no mapa como `ok`, o Resumo e o painel o mostram verde e a Visão geral não o conta.
+    o_que_mudar: >-
+      `tiles.filter((t) => rotuloDeStatusDoTile(t.status).tom === "ok").length`. Uma linha, e
+      importa a função que a story irmã acabou de criar exatamente para isto.
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 6. OBSERVAÇÕES (não exigem ação)
+# ═══════════════════════════════════════════════════════════════════════════
+observacoes:
+  - id: OBS-1
+    titulo: "O ramo JSX da saturação não é exercitado por nada"
+    detalhe: >-
+      `contagem.saturada && <p>…teto de 1000 linhas…</p>` e `<AvisoDeTeto />` são os únicos
+      pontos onde a AC9 vira pixel, e nenhum teste os toca — o carrasco cobre a FUNÇÃO
+      (`formatarContagem`), não o ramo. É consistente com o resto do repositório (sem harness de
+      render para RSC) e o risco é baixo, porque o ramo é uma leitura direta do booleano já
+      testado. Registro porque é o único lugar onde "a regra existe" e "a regra aparece" ainda
+      não se encontram.
+  - id: OBS-2
+    titulo: "Os 5 itens declarados como não provados na tela — meu julgamento"
+    detalhe: >-
+      (1) forma `≥ N`: **basta** — os dois casos da AC estão cobertos e eu matei as duas mutações
+      que os atacam por lados opostos (q5 e q7), com conjuntos de morte parcialmente disjuntos.
+      (2) vazio de partida: **é o item mais fraco**, e não por si — porque é o MESMO ramo onde um
+      erro de consulta aterrissa (QA-900-56-1). Consertada a concern 1, ele deixa de ser
+      ambíguo. (3) classe "convite pendente": **basta** — 4 testes, e a mutação q6 mata em dois
+      describes. (4) trilha com conteúdo: ver o gate da `900-57` (QA-900-57-3); a justificativa
+      de não sujar uma tabela append-only está **correta** e eu a confirmei — `platform_audit_log`
+      tem **0 linhas em produção E no teste**. (5) discriminação de período: **não basta** →
+      QA-900-56-3.
+  - id: OBS-3
+    titulo: "A saturação HERDADA está feita direito"
+    detalhe: >-
+      `convitesPendentes.saturada = paginaSaturada(orgs) || paginaSaturada(linhasDeAdmin)` — o
+      card que cruza duas páginas herda de ambas, e há teste para isso. E `orgs` vem
+      `created_at DESC`, então o corte de 1.000 come as empresas ANTIGAS e nunca as 5 que a seção
+      "Entraram recentemente" mostra. As duas decisões estão certas e são o contraste que torna
+      a QA-900-56-2 visível.
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 7. RÉGUAS RECONFERIDAS POR MIM
+# ═══════════════════════════════════════════════════════════════════════════
+reguas:
+  vitest_arvore_real: "299 arquivos / 3966 passed / 6 xfail / rc=0"
+  vitest_baseline_derivada: "297 / 3934 passed / 6 xfail"
+  delta: "+2 arquivos, +32 testes, xfail inalterado"
+  turbo_lint_force: "rc=0 — 0 erros, 30 warnings, nenhum em arquivo desta story"
+  turbo_type_check_force: "rc=0 — 8/8"
+  build_web: "rc=0 — 2 warnings pré-existentes e alheios (crypto no Edge em `capi-hashing.ts`; NFT do `next.config.ts`)"
+  rotas_registradas: >-
+    `/platform`, `/platform/orgs`, `/platform/orgs/[id]`, `/platform/orgs/[id]/integracoes`,
+    `/platform/orgs/[id]/plano`, `/platform/orgs/[id]/trilha`, `/platform/orgs/[id]/uso`,
+    `/platform/orgs/[id]/usuarios`, `/platform/orgs/new` — e **nenhuma** `/platform/trilha`
+  platform_query_ts: "INTOCADO — `git diff 1393fa68..HEAD` e `git diff 1393fa68` vazios para o arquivo"
+  producao_agregados: >-
+    Só leitura, Management API: `organizations`=1, `users`=113 (`role='admin'`=5),
+    `org_integrations`=6 (**6 `disconnected`**), `whatsapp_config`=1 (**`active`, com
+    `phone_number_id`**), `platform_audit_log`=0.
+  teto_de_1000_morde_hoje: >-
+    **Não.** As 4 consultas estão em 1, 5, 6 e 1 linhas em produção. A primeira a alcançar 1.000
+    é `org_integrations`, por volta de **200 empresas**; `organizations` e `whatsapp_config`
+    precisam de 1.000 empresas; `users` está filtrada por `role='admin'`, então é limitada pelo
+    número de empresas e não pelos 113 usuários — a decisão de filtrar na consulta, e não em
+    memória, é o que segura isso.
+
+acs:
+  AC1: { status: ATENDIDA, nota: "5 itens na ordem do desenho; `bg-slate-950`/`bg-slate-900` e o badge âmbar preservados" }
+  AC2: { status: "ATENDIDA COM DIVERGÊNCIA JUSTIFICADA", nota: "Trilha também desabilitada — ver `decisoes_contra_a_letra`" }
+  AC3: { status: ATENDIDA, nota: "`/platform` registrada no build; era 404 na `main`" }
+  AC4: { status: ATENDIDA, nota: "4 cards, dado real, contagem em memória, zero `count()`/agregado/embedding" }
+  AC5: { status: ATENDIDA, nota: "duas classes, ação por classe, seção inteira some quando as duas listas estão vazias" }
+  AC6: { status: "ATENDIDA E EXCEDIDA", nota: "contagem por `montarTilesDoPainel` — ver `decisoes_contra_a_letra`; ressalva em QA-900-56-2" }
+  AC7: { status: ATENDIDA, nota: "zero ocorrência de receita/margem fora de comentário" }
+  AC8: { status: ATENDIDA, nota: "nenhum componente de série temporal" }
+  AC9: { status: ATENDIDA, nota: "os dois casos exigidos cobertos; mutações q5 e q7 matam por lados opostos" }
+
+recomendacao:
+  merge: "LIBERADO"
+  antes_do_proximo_pr_que_tocar_esta_tela: "QA-900-56-1 e QA-900-56-2"
+  proximo_agente: "@dev para as 4 concerns; @devops para o push, se o dono do produto quiser a tela no ar antes"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# DELTA — rodada 5 (a porta de entrada). Revisada em 2026-09-01 por Quinn.
+# Não é gate novo: é a seção de delta do gate CONCERNS já emitido em 2026-08-31.
+# ═══════════════════════════════════════════════════════════════════════════
+delta_rodada_5:
+  escopo: >-
+    Só o defeito da porta de entrada, consertado dentro desta story em dois commits:
+    `170f005b` (login + `atalhoDoConsole()` + `sidebar-nav` + `dashboard/layout`) e
+    `ccc10c68` (`app/page.tsx`, a segunda porta). As ACs originais (AC1–AC9) não foram
+    re-revisadas — o gate da rodada 1 continua valendo para elas.
+  gate_do_delta: CONCERNS
+  defeitos_vivos: 0
+
+  # ─────────────────────────────────────────────────────────────────────────
+  decisao_de_escopo_AUTO_DECISAO:
+    pergunta: "confirmar ou realocar o `[AUTO-DECISÃO]` do Dev Agent Record"
+    veredicto: "**CONFIRMO o enquadramento. O que não está confirmado é o REGISTRO — ele contradiz o código.**"
+    porque_confirmo: >-
+      A matéria da `900-56` é a NAVEGAÇÃO do console (AC1/AC2 são a barra de itens), e a porta de
+      entrada é a metade da navegação que fica do lado de fora. A `900-57` é a casca da empresa e a
+      `900-58` é a lista; nenhuma tem jurisdição sobre "como se chega ao console". Abrir uma
+      `900-62` produziria uma story cuja única AC seria "a AC1 da 900-56 vale também na direção de
+      entrada" — e o registro dela apontaria de volta para cá. O raciocínio do @dev está certo.
+    o_que_esta_errado_e_precisa_de_conserto: >-
+      O conserto foi PARTIDO em dois commits, e o registro seguiu caminhos diferentes:
+      `170f005b [Story 900-56]` está registrado aqui (File List da rodada 5, 7 arquivos);
+      **`ccc10c68` também está etiquetado `[Story 900-56]`, mas `app/page.tsx` e `app/page.test.ts`
+      só aparecem na File List da `900-60`**, como "carona fora do escopo". As duas coisas não
+      podem ser verdade ao mesmo tempo. Ver QA-900-56-D1.
+
+  # ─────────────────────────────────────────────────────────────────────────
+  os_dois_sentidos_reproduzidos:
+    metodo: >-
+      Snapshot por CÓPIA (`cp`), sha256 dos dois lados, restauro conferido por `git diff` vazio.
+      Nenhum `git stash` (9 stashes de outras sessões). `tsc --noEmit` rc=0 medido ANTES de contar
+      cada vermelho.
+    metade_A_login_e_raiz:
+      baseline: "`app/page.test.ts` 9 passed · `app/page.tsx` sha256 `bf7d4969…` (o mesmo declarado)"
+      A1_some_o_ramo: "rc=0 · **2 mortos** — só a METADE 1"
+      A2_if_true: "rc=0 · **5 mortos** — só a METADE 2 (o mutante que o pedido exigia)"
+      A3_inverte: "rc=0 · **7 mortos** — a UNIÃO exata de A1 e A2"
+      veredicto: >-
+        **Disjuntos, e de tamanhos diferentes.** Interseção A1∩A2 = ∅. A régua distingue
+        "protegi" de "abri para todos", e "escondi de todo mundo" (A1) é o estado de antes.
+    metade_B_o_atalho:
+      MB1_literal_no_client: >-
+        rc=0 · **3 mortos**, todos da METADE 2 — inclusive `a rota não está no TEXTO-FONTE do
+        componente`. A METADE 1 fica verde. É o carrasco específico do VAZAMENTO, não do pixel.
+      MC1b_isPlatformAdmin_true_sempre: "rc=0 · **5 mortos**"
+      MB3_layout_incondicional: "rc=0 · **2 mortos**"
+      MB4_layout_nao_passa: "rc=0 · **2 mortos** — o MESMO conjunto do MB3"
+
+  # ─────────────────────────────────────────────────────────────────────────
+  vazamento_do_endereco:
+    pergunta: "`/platform` aparece no HTML/bundle servido a conta de empresa?"
+    resposta: "**NÃO — e eu medi no bundle, não só no HTML.**"
+    ao_vivo:
+      plataforma_em_/dashboard: "2 marcadores `[data-atalho-console]` no DOM · `href=\"/platform\"` presente"
+      empresa_a_em_/dashboard: >-
+        **0** marcadores `[data-atalho-console]` · a string `/platform` **não aparece em lugar
+        nenhum** do HTML servido (busca pela substring crua, não só por `href=`) · "Painel da
+        plataforma" ausente
+    no_bundle:
+      metodo: >-
+        Baixei os **23** `script[src]` que a página `/dashboard` da conta de EMPRESA carrega e
+        procurei, em cada um, o marcador `data-atalho-console` (que é do `sidebar-nav.tsx`
+        compilado) e a rota.
+      resultado: >-
+        **1** chunk contém `data-atalho-console` (`packages_web_src_0gweq~t._.js`) e ele
+        **não contém `/platform`**. É a diferença exata entre esconder o pixel e não vazar o
+        endereço — e é o que o desenho `{href,label}` em `server-only` compra.
+    corroborado_por_mutacao: "MB1 acima — devolver o literal ao componente client reprova em 3 pontos"
+
+  # ─────────────────────────────────────────────────────────────────────────
+  julgamento_da_regua_de_FORMA:
+    pergunta: "a régua estática do `app/dashboard/layout.tsx` basta?"
+    o_que_o_dev_declarou: "MB3 e MB4 produzem o mesmo conjunto de morte — é gate, não carrasco de dois lados"
+    o_que_eu_medi: "**Confirmado, e o limite é MAIOR do que o declarado.**"
+    reproducao: "MB3 e MB4 matam os MESMOS 2 testes (`o layout passa o atalho calculado…` e `a ligação aparece UMA vez…`)"
+    sonda_de_vizinho: >-
+      Testei a forma que este repositório já viu driblar régua de fonte: escrevi a expressão
+      exata dentro de um `{/* … */}` no call site, com a prop real removida. **VERMELHO (2)** —
+      `codigoDe` não é satisfeito pelo comentário JSX. Essa porta está fechada.
+    o_residuo_que_eu_achei_e_ele_nao_declarou:
+      mutante: >-
+        `import { atalhoDoConsole, isPlatformAdmin as _real } from "@web/lib/platform"` +
+        `async function isPlatformAdmin(_id: string) { void _real; return true }` no próprio
+        layout. O **texto do call site fica idêntico**, o import `from "@web/lib/platform"`
+        continua lá, e o atalho passa a ser calculado por uma função local que responde `true`.
+      efeito: >-
+        O item "Painel da plataforma" e o `href=\"/platform\"` passam a aparecer no HTML de
+        **todo** usuário logado do CRM. É exatamente o defeito que a régua diz impedir.
+      medicao: "`tsc --noEmit` **rc=0** · suíte INTEIRA **308 arquivos / 4187 passed / 6 expected fail / rc=0** — **verde**"
+      veredicto: >-
+        A régua não é cega só entre "duas formas erradas" (MB3 × MB4): ela é cega a **qualquer
+        mutante que preserve o texto**, e rebind de identificador preserva o texto. O limite
+        declarado subestima o próprio limite.
+    basta?: >-
+      **Basta como gate, e eu não bloqueio por isso — mas o registro precisa dizer a verdade
+      maior.** As duas pontas de COMPORTAMENTO têm carrasco de dois lados e disjunto
+      (`atalhoDoConsole` em `lib/platform.test.ts`; `isPlatformAdmin` com 5 mortos em MC1b; o
+      render em `sidebar-nav.test.ts` com 3 mortos em MB1). O elo que sobra — "o layout passa
+      ESTA expressão" — é forma, e a prova de verdade dele é a tela, que eu refiz com as duas
+      contas. Um `.tsx` server component `async` não é renderizável em node **e** o repositório
+      não tem jsdom: fechar esse elo por teste hoje exigiria dependência nova, que é preço alto
+      para um elo de uma linha. Ver QA-900-56-D2.
+
+  # ─────────────────────────────────────────────────────────────────────────
+  prova_na_tela_refeita_por_mim:
+    ambiente: "`pnpm dev`, banner `✓ Supabase ref: xnxvygyfyyyzwhiuoehz (TESTE)`, Chromium 1440×900"
+    sessoes: "login pelo formulário com as contas do banco de teste. **Nenhuma sessão forjada.** Credenciais lidas de arquivo `600` fora do repositório, nunca copiadas nem impressas."
+    resultados:
+      plataforma: { login: "/platform", raiz_com_sessao_viva: "/platform", atalhos_no_dashboard: 2 }
+      empresa_a: { login: "/dashboard", raiz_com_sessao_viva: "/dashboard", atalhos_no_dashboard: 0 }
+      empresa_a_abre_/platform/orgs: "redirecionada para `/dashboard`"
+    metodo_de_alcancabilidade: >-
+      `document.elementFromPoint` no centro do retângulo. **`isVisible()` do Playwright não foi
+      usado** — ele responde `true` para elemento recortado por ancestral (medido na `900-58`).
+
+  # ─────────────────────────────────────────────────────────────────────────
+  reguas_do_delta:
+    baseline_que_usei: >-
+      A **árvore de trabalho local**, não o run do CI da `main`. A árvore carrega, de outra
+      frente e não commitados, `whatsapp/__tests__/route.test.ts`, `meta/process-lead.test.ts` e
+      `tenancy/webhook-org.test.ts` (+3 arquivos de produção irmãos). Não os toquei.
+    vitest: "308 arquivos / 4187 passed | 6 expected fail (4193) / rc=0"
+    tsc: "rc=0"
+    lint_force: "rc=0 — 0 erros, 30 warnings, nenhum em arquivo desta rodada"
+    type_check_force: "rc=0"
+    build: "rc=0, 5/5 tasks"
+
+  # ─────────────────────────────────────────────────────────────────────────
+  concerns_do_delta:
+    - id: QA-900-56-D1
+      severidade: media
+      titulo: "O registro desta story afirma o contrário do que o código faz, desde `ccc10c68`"
+      onde: "`docs/stories/900-56-navegacao-e-visao-geral-do-console.story.md`"
+      o_que_esta_errado:
+        - >-
+          **"O que continua aberto", item 1** diz: *"`app/page.tsx` é uma SEGUNDA porta da frente
+          e continua roteando só por `role`… Não foi consertado"*. **É falso desde `ccc10c68`**,
+          que é um commit `[Story 900-56]`. Eu medi o arquivo vivo: ele lê
+          `is_platform_admin` na mesma projeção e redireciona para `/platform` antes de olhar o
+          `role`. O texto foi escrito em `098bf4de` e o conserto veio logo depois, sem voltar aqui.
+        - >-
+          **A File List da rodada 5 não lista `app/page.tsx` nem `app/page.test.ts`.** Eles estão
+          na File List da `900-60`, marcados como "carona fora do escopo", enquanto o commit que
+          os traz é `[Story 900-56]`. Quem for reconstituir o que esta story entregou não acha os
+          dois arquivos que fecham o defeito que ela nomeia.
+      porque_importa: >-
+        É a classe "delta de rodada deixa a raiz mentindo": a rodada seguinte conserta e a raiz
+        continua declarando o furo aberto. O próximo leitor abre uma story para consertar algo já
+        consertado, ou confia num "continua aberto" que não está.
+      conserto_sugerido: >-
+        Na `900-56`: fechar o item 1 de "O que continua aberto" (dizendo em que commit foi
+        fechado) e acrescentar `packages/web/src/app/page.tsx` + `packages/web/src/app/page.test.ts`
+        à File List da rodada 5. Na `900-60`: manter a menção como contexto, retirando os dois da
+        File List — ou trocá-la por um ponteiro explícito ("registrado na `900-56`, commit
+        `ccc10c68`"). É registro, não código; a suíte não muda.
+    - id: QA-900-56-D2
+      severidade: baixa
+      titulo: "O limite declarado da régua de FORMA é menor do que o limite real"
+      o_que: >-
+        O Dev Agent Record diz que MB3 e MB4 produzem o mesmo conjunto de morte. Verdade — e
+        insuficiente: **qualquer** mutante que preserve o texto do call site sobrevive, inclusive
+        o rebind de `isPlatformAdmin` por um local homônimo, que passa `tsc` e deixa a suíte
+        inteira verde enquanto vaza o console para todo usuário logado (medido nesta rodada).
+      conserto_sugerido: >-
+        Não peço teste novo. Peço que o item 3 de "O que continua aberto" seja reescrito para
+        nomear a classe certa — *"a régua afirma a FORMA do call site; ela é cega a qualquer
+        mutante que preserve o texto, inclusive rebind de identificador"* — para que a próxima
+        pessoa não confunda "gate de forma" com "carrasco". Se alguém quiser fechar de verdade,
+        o caminho barato é uma asserção extra na mesma régua: `isPlatformAdmin` não pode ser
+        DECLARADO no layout (`codigoDe(layout)` sem `function isPlatformAdmin` e sem
+        `isPlatformAdmin =`).
+
+  observacoes_do_delta:
+    - id: OBS-D1
+      titulo: "Duas pendências declaradas na rodada 5 continuam abertas — conferidas por mim"
+      detalhe: >-
+        **(a)** `app/broker/layout.tsx` usa `SidebarNav` e **não** passa `atalhoDoConsole`
+        (medido: o call site não tem a prop). Zero platform admins com `role='broker'` hoje, e a
+        peça A os manda para `/platform` de qualquer jeito. **(b)** `getRoleRedirect()` em
+        `lib/auth.ts` continua com **zero** consumidores (medido) — e agora é pior do que código
+        morto: ela é uma TERCEIRA decisão de destino que não conhece `is_platform_admin`, pronta
+        para quem "reusar o helper que já existe".
+    - id: OBS-D2
+      titulo: "A precedência plataforma-antes-de-`role` está escrita duas vezes, e as duas concordam"
+      detalhe: >-
+        `login/actions.ts` e `app/page.tsx` põem `is_platform_admin === true` antes de todos os
+        ramos por `role`, e os dois usam `=== true` (não truthiness) — conferido no código e pelo
+        mutante A5/`valor não-booleano`. Duas portas que discordassem tornariam irreproduzível o
+        relato de quem reclama. Hoje concordam.
+
+  recomendacao_do_delta:
+    merge: "LIBERADO"
+    antes_do_push: "QA-900-56-D1 — é edição de story, custa minutos e evita que a próxima pessoa reabra um furo fechado"
+    proximo_agente: "@dev (ou @po, é registro) para QA-900-56-D1 e QA-900-56-D2; @devops para o push"

@@ -1,0 +1,850 @@
+schema: 1
+storyId: "87-11"
+story: "docs/stories/87-11-collected-data-sai-do-prompt-como-json-cru.story.md"
+title: "Quality Gate — o `collected_data` deixa de ir ao prompt como JSON cru (W1-6, penúltimo da fila da Onda 1)"
+epic: 87
+gate: CONCERNS
+verdict: CONCERNS
+review_round: 2
+reviewed_by: "@qa (Quinn)"
+reviewed_at: "2026-08-16"
+branch: "R1: main (árvore de trabalho) · R2: PR #428 `feat/87-11-collected-data-fora-do-prompt` @ 8e655ee8"
+base: "origin/main 199a7a84"
+
+status_reason: >
+  **Reproduzi tudo do zero, e tudo o que o @dev declarou reproduz.** As três coisas que ele derrubou
+  da própria story estão certas, e a segunda delas é um achado de verdade: **a mutação prevista pela
+  AC6 é falsa** — subir `VALOR_MAX_CHARS` de 120 para 10.000 **não** derruba a AC3-(i), porque a fala
+  de 2.103 chars da Ivone mora em `visit_availability`, que some pelo **filtro** de
+  `LEGACY_AGENDA_KEYS` e não pelo truncamento. Medi as duas guardas separadas (M3 e M5) e elas são
+  **disjuntas**: M5 derruba a AC3-(i), M3 não a toca. A régua que ele acrescentou — prosa de produção
+  numa chave **não-legada** — é a única que fica vermelha quando o teto sobe. Sem ela, subir o teto
+  para 10.000 teria passado por um QA que conferisse a AC6 como escrita.
+  As réguas batem sem margem: suíte **190 arquivos / 2.441 passed / 6 expected fail**, `tsc --noEmit`
+  **0** em `ai` e **0** em `web`, lint **0 errors / 23 warnings**, `git diff` **0 linhas** nos quatro
+  arquivos protegidos, `grep` da AC1 **0/0** na população de produção e **0 e 5** na crua com as
+  cinco linhas nomeadas conferindo uma a uma. Os três arquivos do **deploy B da 87-5** estão com
+  `md5` idêntico ao declarado, **antes e depois** de oito mutações minhas. Os sítios 2 e 3 continuam
+  abertos, como manda o escopo. Os dois hashes-ouro da 87-5 **não** são gravação circular: provei nos
+  dois sentidos, e a aritmética do +119 fecha por conta própria (144 + 1 + 11 − 37).
+  **O que não fecha são duas coisas, nenhuma delas defeito de código.**
+  **(1) O truncamento da `citacao` do `agenda_state` é uma guarda ÓRFÃ:** removi o `truncar()` da
+  linha de agenda e a suíte inteira ficou **verde — zero vermelhos em 2.441 testes**. A guarda
+  funciona (medi: 279 chars entram como 120 + `…`) e `CITACAO_MAX = 280` a limita **na escrita** — mas
+  `parseAgendaState` **não** relimita na leitura, e 280 > 120. É a única linha do bloco novo cujo
+  comprimento nenhuma fixture exercita, numa story cujo objeto é justamente impedir prosa longa de
+  entrar no prompt. Todas as outras guardas do módulo têm vermelho dedicado; esta não tem nenhum.
+  **(2) A contagem de vermelhos publicada é de população estreita.** M0 derruba **6** na suíte da
+  raiz, não 4; M1 derruba **14**, não 12; M6 derruba **10**, não 8. A diferença é sistemática e são
+  sempre os mesmos dois testes — os hashes-ouro da 87-5. É **subestimação**, não inflação, e por isso
+  não muda o veredito; mas a AC8 pede `npx vitest run` **da RAIZ** e os números publicados são de
+  dois arquivos, sem a população declarada ao lado. É a mesma classe de erro que o próprio @dev
+  consertou na régua de `grep` da AC1, reaparecida na régua vizinha.
+  Nada disso bloqueia o deploy. As duas se fecham em menos de uma hora, e a primeira é a que eu
+  quero fechada antes de a `87-10` escrever chave nova em cima deste renderizador.
+
+# ────────────────────────────────────────────────────────────────────────────
+# Método
+# ────────────────────────────────────────────────────────────────────────────
+metodo: >
+  Nada foi aceito por relato. Cada régua foi rerodada; cada mutação foi reaplicada por script
+  (`aplicar · rodar a SUÍTE DA RAIZ · ler · reverter · conferir md5`), com backup por cópia e não por
+  `git stash`. Além das 8 mutações da story, apliquei **8 sondas minhas** que a story não pede.
+  As leituras de produção (`dsopqkqjkmhytudaaolv`, Management API) são **somente SELECT**.
+  Árvore conferida por `md5` no início e no fim: **8 de 8 arquivos idênticos**, incluindo os três do
+  deploy B.
+
+# ────────────────────────────────────────────────────────────────────────────
+# Higiene de árvore — a instrução explícita do lead
+# ────────────────────────────────────────────────────────────────────────────
+higiene_de_arvore:
+  regra: "os três arquivos do deploy B da 87-5 não podem ser tocados"
+  medido:
+    - "packages/web/src/app/api/cron/enrich-leads/route.ts  → 572219f7df32552b8188d8e040ff2bce"
+    - "packages/ai/src/flows/haiku-enrichment.ts            → 471a495084c24dda13b5335acf4b36f2"
+    - "packages/web/src/app/api/cron/enrich-leads/route.test.ts → fc25e0552b8f0f0c4269541b4bc6ac50"
+  resultado: CONFERE
+  nota: >
+    Idênticos ao declarado pelo @dev, e idênticos depois de eu rodar 8 mutações + 8 sondas por cima
+    da árvore. `git status` no fim tem exatamente o mesmo conjunto de arquivos do início.
+
+# ────────────────────────────────────────────────────────────────────────────
+# As três derrubadas do @dev — julgadas uma a uma
+# ────────────────────────────────────────────────────────────────────────────
+derrubadas_do_dev:
+
+  D1_regua_de_grep_da_AC1:
+    afirmacao: "a régua da AC1 é inatingível como escrita; população A = 0 e 0, população B = 0 e 5"
+    medido:
+      populacao_A_producao_sem_test:
+        - "grep -F 'JSON.stringify(state.collected_data)' … | grep -v '.test.ts' → 0"
+        - "grep -F 'Data collected so far' … | grep -v '.test.ts'               → 0"
+      populacao_B_crua:
+        - "JSON.stringify(state.collected_data) → 0  (zero mesmo cru)"
+        - "Data collected so far                → 5, e as CINCO são as nomeadas por ele:"
+        - "  pipeline-collected-data.test.ts:237   asserção de ausência (lista MAQUINARIO)"
+        - "  pipeline-collected-data.test.ts:307   o bloco do HEAD capturado, literal"
+        - "  pipeline-collected-data.test.ts:317   o filtro semJsonCru() que produz a régua da AC7"
+        - "  pipeline-collected-data.test.ts:342   'a régua não nasce satisfeita'"
+        - "  pipeline-corretor-no-historico.test.ts:1066  a aritmética do +119"
+    veredito: DECOMPOSIÇÃO HONESTA
+    julgamento: >
+      Não esconde ocorrência real. Li as cinco linhas uma a uma: as cinco são **asserções ou o HEAD
+      capturado**, e as cinco são load-bearing — tirar qualquer uma tira uma régua. O argumento
+      estrutural dele está certo e é geral: **um teste que asserta a ausência de uma string precisa
+      conter a string**, então uma régua de `grep` sem recorte de população é inatingível com testes
+      honestos. A população de produção é 0 e 0 **sem interpretação nenhuma**, que é exatamente o que
+      a AC1 exige de uma régua. O que ele fez não foi afrouxar a régua: foi declarar o denominador
+      dela.
+
+  D2_mutacao_da_AC6_falsificada:
+    afirmacao: >
+      "subir VALOR_MAX_CHARS 120 → 10.000 NÃO derruba a AC3-(i); a fala da Ivone some pelo FILTRO de
+      LEGACY_AGENDA_KEYS, não pelo truncamento — duas guardas disjuntas que a story tratava como uma"
+    reproducao:
+      M3_teto_120_para_10000:
+        vermelhos: 3
+        lista:
+          - "AC6 > os números são 120 e 12                                    (asserção de CONSTANTE)"
+          - "AC6 > valor escalar acima de 120 chars entra TRUNCADO             (comportamental)"
+          - "AC6 > 🔴 prosa de produção numa chave NÃO-legada é truncada      (comportamental, dado real)"
+        ac3_i_caiu: false
+      M5_filtro_de_legado_removido:
+        vermelhos: 3
+        lista:
+          - "AC3 > 🔴 (i) NEGATIVO: nenhum fragmento dos 2.103 chars aparece  ← É ESTE"
+          - "AC3 > o bloco da Ivone cabe em 4 linhas de dado"
+          - "AC6 > estado vazio (ou só com chaves não-renderizáveis) devolve []"
+    veredito: CONFIRMADO — E É O ACHADO MAIS IMPORTANTE DA STORY
+    julgamento: >
+      **A previsão da AC6 é falsa e eu reproduzi a falsificação.** Com o teto em 10.000 a AC3-(i)
+      continua verde; quem a derruba é M5, e M3 não a toca. As duas mutações têm conjuntos de
+      vermelhos **disjuntos** — não há um único teste em comum entre M3 e M5. A conflação estava na
+      story, não na implementação.
+      A correção dele é a correta e é a mais forte disponível: prosa longa numa chave **não-legada**
+      é onde o truncamento é a **única** guarda, e é cenário real, não hipotético (os extras são
+      texto livre do Haiku do cron). Ele usou a mesma prosa de produção, o que torna o vermelho
+      comparável ao dano medido.
+      **Este é o item que o lead marcou como "sem isso, subir o teto passaria por você". Passaria
+      mesmo: eu conferi a AC6 como escrita e ela fica verde.**
+
+  D3_premissas_da_AC9:
+    afirmacao: >
+      "NICOLE_LASTRO_DIARIO não é 0 all-time (são 6) e há CINCO event_type NICOLE% com contagem > 0;
+      mas M1/M4 trazem denominador: 0 nos três últimos relatórios, logo o item 1 da AC9 é INERTE"
+    medido_por_mim_16_08:
+      eventos_NICOLE:
+        - "NICOLE_LASTRO_DIARIO ......... 7   10/08 11:38 → 16/08 11:38   (a story diz 0 all-time)"
+        - "NICOLE_HISTORY_TRUNCATED ..... 6   14/08 13:20 → 15/08 12:28"
+        - "NICOLE_SLOT_UNAUTHORIZED ..... 2   10/08 00:13 → 10/08 00:14   ← baseline CONFIRMADO"
+        - "NICOLE_AFIRMACAO_SEM_LASTRO .. 1   10/08 11:38"
+        - "NICOLE_AGENDA_STATE_EXPIRADO . 1   13/08 18:31"
+      denominador_dos_3_ultimos_relatorios:
+        - "16/08 11:38 → denominador: 0 · total_disparos: 0 · com_lastro: 0 · lastro_pct: 0"
+        - "15/08 11:38 → denominador: 0 · total_disparos: 2 · com_lastro: 0 · lastro_pct: 0"
+        - "14/08 11:38 → denominador: 0 · total_disparos: 2 · com_lastro: 0 · lastro_pct: 0"
+    veredito: CONFIRMADO NAS DUAS METADES
+    julgamento: >
+      São **cinco** `event_type` `NICOLE%` com contagem > 0, e o `NICOLE_LASTRO_DIARIO` está em **7**
+      (subiu 6 → 7 com o cron das 11:38 de hoje, entre a medição dele e a minha). A premissa da story
+      de que "o cron nunca executou" está morta.
+      E a segunda metade é a que importa: **`denominador: 0` nos três últimos**, inclusive nos dois
+      dias em que houve `total_disparos: 2`. Ler *"M1/M4 sem aumento"* sobre denominador zero é verde
+      por construção — é a mesma classe da janela de 24 h sem poder estatístico que este epic já
+      recusou duas vezes. **Assino: o item 1 da AC9 é INERTE e não pode ser publicado como
+      evidência.**
+      **O que sobra sustenta a janela?** Sim, com ressalva. `NICOLE_SLOT_UNAUTHORIZED` tem baseline
+      **sólido e verificado** (2 all-time, os dois em 10/08 00:13–00:14) e é o único evento com
+      semântica direta sobre o objetivo da story — mas ele é **raro**, e 24 h de silêncio nele não
+      distinguem "não regrediu" de "não mediu". O que de fato sustenta a janela é a **amostragem
+      dirigida**: medi **67** conversas com `length(collected_data::text) > 120` em produção, e o @po
+      mediu **51,3 %** dos turnos acima de 120 chars. Com `n ≥ 5` isso é população suficiente, e é a
+      única das três réguas que consegue detectar o gatilho de rollback específico desta story (a
+      Nicole reperguntar dado que já estava no `collected_data`). **A janela fica de pé apoiada na
+      amostragem, não no evento.** Isso precisa estar escrito para Marcos, porque a AC9 lista as três
+      como se pesassem igual.
+
+# ────────────────────────────────────────────────────────────────────────────
+# Bateria de mutações — REPRODUZIDA na suíte da RAIZ (2.441 testes)
+# ────────────────────────────────────────────────────────────────────────────
+mutacoes:
+  protocolo: "aplicar · npx vitest run (RAIZ) · ler · reverter · md5. Backup por cópia."
+  baseline: "190 arquivos · 2.441 passed · 6 expected fail · 0 falhas"
+
+  tabela:
+    M0:
+      forma: "git checkout de pipeline.ts — o despejo cru volta"
+      declarado: 4
+      medido_na_raiz: 6
+      quais:
+        - "AC2 > 🔴 o bloco inteiro, byte a byte"
+        - "AC2 > 🔴 (i) o `system` INTEIRO não contém as seis strings de maquinário"
+        - "AC2 > (ii) CONTROLE POSITIVO — citação e dados continuam no `system`"
+        - "AC7 > 🔴 (b) HEAD menos exatamente a linha do JSON cru"
+        - "87-5 AC10 > turno-ouro (a)   ← não contado pelo @dev"
+        - "87-5 AC10 > turno-ouro (b)   ← não contado pelo @dev"
+      julgamento: >
+        **"4 é pouco para uma story cujo objeto é a subtração?" — não, e a conta explica por quê.**
+        O arquivo de pipeline tem 8 testes. Destes, **6** têm `collected_data` não-vazio e portanto
+        *podem* sentir a subtração. Dos 6, caem **4**. Os 2 que **não** caem são exatamente os dois
+        de `qualificationScore` (AC5-iv) — e eles **têm de não cair**: a AC5 inteira existe para
+        fixar que o score é insensível a esta story. Os outros 2 testes do arquivo (AC7-a e AC7-c)
+        têm `collected_data` vazio e são idênticos ao `HEAD` por desenho.
+        Ou seja: **todo teste que poderia detectar a subtração detecta**. A régua está saturada no
+        arquivo, não frouxa. O número certo na suíte da raiz é **6**, com os 2 hashes da 87-5 por
+        cima — ver o achado A2.
+    M1:
+      forma: "valorEscalar(): o `return null` final vira `return String(valor)`"
+      declarado: 12
+      medido_na_raiz: 14
+    M2:
+      forma: "renderDadosColetados() ganha `delete collectedData.bedrooms`"
+      declarado: 10
+      medido_na_raiz: 10
+      confere: true
+      nota: >
+        Caem AC5-(iii) **e** AC5-(iv), como a AC5-(v) exige. Confirmei a aritmética do score de forma
+        independente: `SCORE_WEIGHTS` = name 10 + property_interest 15 + bedrooms 10 + floor 10 +
+        visit_availability 20 (via `hasAgendaFact`) = **65**; sem `bedrooms`, **55**; sem
+        `agenda_state`, **45**. Os três números batem com o código e com os testes.
+    M3:
+      forma: "VALOR_MAX_CHARS 120 → 10.000"
+      declarado: "3 (2 comportamentais + 1 asserção de constante)"
+      medido_na_raiz: 3
+      confere: true
+      comportamentais_verificados: 2
+      nota: >
+        **A ressalva do @dev está correta e é honesta.** Dos 3, "os números são 120 e 12" é
+        `expect(VALOR_MAX_CHARS).toBe(120)` — declaração, não comportamento. Sobram **2**
+        comportamentais, e ele mesmo escreveu que quem contar 3 conta errado. Inflar contagem com
+        asserção de constante seria a forma educada de mentir sobre cobertura; ele não fez isso, e
+        volunteered a correção antes de eu perguntar.
+    M4:
+      forma: "MAX_LINHAS_DADOS 12 → 500"
+      declarado: "2 (1 comportamental + 1 asserção de constante)"
+      medido_na_raiz: 2
+      confere: true
+      comportamentais_verificados: 1
+    M5:
+      forma: "NAO_RENDERIZAVEIS perde o spread ...LEGACY_AGENDA_KEYS"
+      declarado: 3
+      medido_na_raiz: 3
+      confere: true
+      nota: "conjunto de vermelhos DISJUNTO do de M3 — é o que prova as duas guardas separadas"
+    M6:
+      forma: "o retorno deixa de prefixar CABECALHO_DADOS_COLETADOS"
+      declarado: 8
+      medido_na_raiz: 10
+    M7:
+      forma: "a linha de agenda perde a negação e vira `- Disponibilidade: <citacao>`"
+      declarado: 5
+      medido_na_raiz: 5
+      confere: true
+      nota: >
+        A Armadilha 4 (*"não transformar a citação num fato"*) tem régua própria e ela morde. É a
+        guarda mais importante do bloco novo do ponto de vista do Epic 88.
+
+# ────────────────────────────────────────────────────────────────────────────
+# Sondas minhas — 8 mutações que a story NÃO pede
+# ────────────────────────────────────────────────────────────────────────────
+sondas_do_qa:
+
+  SONDA_A_mock_permissivo:
+    pergunta: "o `createFakeSupabase` aceita qualquer filtro? (já achamos `in:` e `eq:` assim)"
+    forma: "trocar o `conversation_id` da linha de `conversation_state` por outro uuid"
+    resultado: "7 de 8 testes CAEM"
+    veredito: O MOCK DISCRIMINA
+    nota: >
+      O fake aplica o predicado `.eq('conversation_id', …)` de verdade — some o estado, some o bloco,
+      caem os byte-a-byte, os dois de score e os três da AC7. **Não há mock permissivo aqui**, e o
+      @dev seguiu a Armadilha 3 (usar o harness da 75-279, não escrever mock novo).
+      **O único sobrevivente é `(i) o system INTEIRO não contém as seis strings de maquinário`** — a
+      única asserção puramente negativa do arquivo, que fica verde justamente porque o bloco inteiro
+      sumiu. É o modo de falha que o docstring do próprio arquivo descreve. Está mitigado (ela mora
+      num `describe` com dois controles positivos que caem), mas fica registrado: **é a única
+      asserção da story que, sozinha, não distingue "entrou classificado" de "não entrou".**
+
+  SONDA_B_hash_ouro_circular:
+    pergunta: "os 2 hashes-ouro da 87-5 foram recapturados sem prova? (gravação circular)"
+    forma: "`pipeline.ts` E `pipeline-corretor-no-historico.test.ts` AMBOS revertidos ao HEAD"
+    resultado: "39 passed — os hashes ANTIGOS valem no HEAD"
+    veredito: NÃO É CIRCULAR
+
+  SONDA_C_recaptura_nasce_satisfeita:
+    forma: "hashes NOVOS + `pipeline.ts` no HEAD"
+    resultado: "2 vermelhos (os dois turnos-ouro)"
+    veredito: A RECAPTURA NÃO NASCE SATISFEITA
+    aritmetica_conferida_por_mim: >
+      `CABECALHO_DADOS_COLETADOS`.length = **144**; `- Nome: Ana`.length = **11**;
+      144 + 1 (o `\n`) + 11 = **156**. A linha antiga `Data collected so far: {"name":"Ana"}` = **37**.
+      156 − 37 = **+119**. E os dois `length` assertados no arquivo movem exatamente
+      30.256 → 30.375 e 30.082 → 30.201, **ambos +119**, com `dynamicSuffix` diferente nos dois
+      cenários. **Só a linha certa mudou.** O `git diff` do arquivo toca apenas o docstring, 2
+      `sha256` e 2 `length` — nada mais.
+    veredito_final: "B + C + aritmética independente = recaptura PROVADA, não gravada"
+
+  SONDA_D_ordem_dos_rotulos:
+    forma: "trocar a ordem de `name` e `property_interest` em ROTULOS_QUALIFICACAO"
+    resultado: "4 vermelhos"
+    nota: >
+      A ordem é fixada por teste. Conferi que a ordem do módulo é **exatamente** a de
+      `SCORE_WEIGHTS` (`qualification.ts:15-24`) menos `visit_availability` — que é legado e por isso
+      não tem rótulo. São 8 rótulos para 9 pesos, e o docstring explica o nono. Confere.
+
+  SONDA_E_teto_come_a_linha_de_agenda:
+    forma: "o teto deixa de reservar lugar para a linha de agenda"
+    resultado: "1 vermelho"
+    veredito: COBERTO
+
+  SONDA_F_truncamento_da_citacao:
+    forma: "`truncar(state.citacao)` → `state.citacao` na linha de agenda"
+    resultado: "**ZERO vermelhos em 2.441 testes**"
+    veredito: 🔴 GUARDA ÓRFÃ — ver achado A1
+
+  SONDA_G_o_now_do_turno:
+    forma: "o `now` recebido é trocado por um relógio fixo"
+    resultado: "1 vermelho (`o estado de agenda VENCIDO não é citado`)"
+    veredito: >
+      O `[AUTO-DECISION]` de acrescentar o 2º parâmetro **tem** vermelho. A decisão é correta e o
+      motivo dela é verificável no código: `buildSystemPrompt` roda em `pipeline.ts:734` e a leitura
+      com TTL em `:801`. Ver a nota A4.
+
+  SONDA_H_despejo_duplo_em_miniatura:
+    forma: "`visit_explicitly_confirmed` sai de NAO_RENDERIZAVEIS"
+    resultado: "2 vermelhos"
+    veredito: COBERTO
+
+# ────────────────────────────────────────────────────────────────────────────
+# Réguas declaradas — rerodadas
+# ────────────────────────────────────────────────────────────────────────────
+reguas:
+  suite:
+    declarado: "188 → 190 arquivos · 2.416 → 2.441 passed · 6 expected fail"
+    medido: "190 arquivos · 2.441 passed · 6 expected fail (2.447 total)"
+    resultado: CONFERE
+    nota: "os dois arquivos da story sozinhos: 25 testes, 25 passed — igual ao declarado"
+  tsc:
+    medido: "packages/ai → 0 · packages/web → 0"
+    resultado: CONFERE
+    nota: "`npx tsc` na RAIZ não foi rodado como gate, corretamente — é baseline conhecido"
+  lint:
+    medido: "npx turbo lint --force → 0 errors / 23 warnings"
+    resultado: CONFERE
+  ac5_i_diff_zero:
+    medido: >
+      `git diff HEAD` vazio em `qualification.ts`, `agenda-state.ts`, `visit-slot.ts`,
+      `agenda-reconcile.ts` — e também em `lead-memory.ts`, que sequer aparece em `git status`
+    resultado: CONFERE
+  ac1_iii_inventario:
+    medido:
+      - "packages/ai/src/flows/lead-memory.ts:79        ← 87-10 AC6-b, PERMANECE ABERTO"
+      - "packages/ai/src/flows/haiku-enrichment.ts:105  ← 87-10 AC6-b, PERMANECE ABERTO"
+      - "packages/web/.../leads/[id]/summary/route.ts:105 ← o quarto, fora de escopo (@po)"
+    em_packages_ai: 2
+    resultado: CONFERE — nenhuma quarta linha em `packages/ai`, nada a escalar
+
+escopo:
+  sitio_1_pipeline_1913: FECHADO — é o desta story
+  sitio_2_lead_memory_79: ABERTO — arquivo intocado, nem aparece em `git status`
+  sitio_3_haiku_enrichment_105: ABERTO — arquivo do deploy B, `md5` conferido, não tocado
+  veredito: >
+    **Escopo respeitado nos dois sentidos.** Nem fechou o que era da 87-10, nem encostou no deploy B.
+    O deslocamento de `:90` para `:105` em `haiku-enrichment.ts` é do deploy B não commitado, como
+    ele declarou — conferi que o sítio é o mesmo.
+
+t0_remedicao_contra_producao:
+  metodo: "Management API, somente SELECT, 16/08, projeto dsopqkqjkmhytudaaolv"
+  conferido:
+    chaves: "as MESMAS 16, contagem a contagem — property_interest 193, name 181, bedrooms 180, floor 74, visit_availability 56, source 53, view 40, garages 31, has_down_payment 14, cidade_bairro 10, visit_pending_date 9, profissao 8, agenda_state 2, situacao_moradia 2, filhos 1, estado_civil 1"
+    tamanhos: "283 linhas · 259 não-vazias · mediana 46 · média 110 · máximo 2.103 · 67 acima de 120"
+    tipos: "string 628 · number 211 · boolean 14 · object 2 (só `agenda_state`) · array 0"
+    ronaldo: "`collected_data` BYTE A BYTE idêntico à fixture do teste; qualification_step = 'view'; visit_proposed = true"
+    visit_explicitly_confirmed: "0 registros em produção — a exclusão é gratuita, como ele mediu"
+  resultado: CONFERE INTEGRALMENTE
+  nota: >
+    Não achei um único número divergente. A autocrítica dele (as duas perdas silenciosas possíveis)
+    reproduz: a chave `visit_explicitly_confirmed` não existe em produção, e os únicos 2 objetos são
+    `agenda_state`, que tem linha dedicada. A guarda estrutural da AC4 **não perde nada hoje**.
+
+# ────────────────────────────────────────────────────────────────────────────
+# Achados — o que EU encontrei e ninguém pediu
+# ────────────────────────────────────────────────────────────────────────────
+achados:
+
+  - id: A1
+    severidade: MEDIA-BAIXA
+    categoria: tests
+    titulo: "O truncamento da `citacao` do `agenda_state` é uma guarda ÓRFÃ — zero vermelhos"
+    evidencia: >
+      SONDA F: troquei `truncar(state.citacao)` por `state.citacao` em
+      `collected-data.ts:160` e rodei a **suíte inteira**: `2.441 passed | 6 expected fail`,
+      **zero vermelhos**. Nenhuma das 25 asserções da story exercita uma citação com mais de 120
+      chars — a maior das fixtures é `"3ª feira às 17:30"` (17 chars).
+      Confirmei que a guarda **funciona** com uma fixture descartável minha: citação de 279 chars
+      entra como **120 chars + `…`**.
+    por_que_importa: >
+      `CITACAO_MAX = 280` (`agenda-state.ts:130`) limita a citação **na escrita**
+      (`buildAgendaState`, `:149`), mas **`parseAgendaState` NÃO relimita na leitura** — `:190` faz
+      `citacao: o.citacao`, sem `slice`. E 280 > 120. Ou seja: (a) uma citação de 121–280 chars é
+      valor legítimo e o truncamento é o que a impede de entrar inteira no prompt; (b) qualquer
+      registro gravado por outro caminho, ou por um escritor futuro, passa sem limite nenhum.
+      **É a única linha do bloco novo cujo comprimento nenhuma fixture mede** — e é a linha que
+      carrega texto livre do lead, que é exatamente a classe de dano que esta story existe para
+      remover. Todas as outras guardas do módulo (`String(valor)`, filtro de legado, teto de linhas,
+      teto de chars dos extras, cabeçalho, negação da citação, TTL) têm vermelho dedicado. Esta não.
+    exposicao_em_producao: >
+      **Nenhuma hoje.** Os dois únicos `agenda_state` vivos têm citação curta (`"3ª feira às 17:30"`
+      e `"Terça"`). Não há regressão de comportamento — o código está certo. O que falta é a régua.
+    recomendacao: >
+      Uma fixture com `citacao` de ~279 chars e a asserção `- O lead mencionou … "<120 chars>…"`.
+      Custa uma fixture e faz SONDA F ficar vermelha. **Antes da 87-10**, que vai escrever chave nova
+      neste mesmo renderizador.
+    dono: "@dev"
+    bloqueia_merge: false
+
+  - id: A2
+    severidade: BAIXA
+    categoria: tests
+    titulo: "A contagem de vermelhos publicada é de população estreita (dois arquivos), não da RAIZ"
+    evidencia: >
+      Na suíte da raiz: **M0 = 6** (declarado 4), **M1 = 14** (declarado 12), **M6 = 10**
+      (declarado 8). M2, M3, M4, M5 e M7 batem exatamente. A diferença é **sempre os mesmos dois
+      testes** — os turnos-ouro da AC10 da 87-5 — e só aparece nas mutações que mexem no bloco de
+      prompt que aquelas fixtures também produzem. M2/M3/M4/M5 não a produzem porque as fixtures da
+      87-5 usam `{ name: "Ana" }`, que não tem `bedrooms`, não é legada e não passa de 120 chars.
+    julgamento: >
+      **É subestimação, não inflação** — o vermelho real é maior que o publicado, e o padrão é
+      sistemático e explicável, o que é sinal de honestidade e não de manipulação. Por isso não muda
+      o veredito.
+      Mas a AC8 pede `npx vitest run` **da RAIZ**, e os três números publicados são de dois arquivos
+      sem a população declarada ao lado. **É a mesma classe de erro que o próprio @dev consertou na
+      régua de `grep` da AC1** — uma régua cujo denominador não está escrito — reaparecida na régua
+      vizinha, medida no mesmo dia.
+    recomendacao: "republicar M0/M1/M6 como `4 (nos dois arquivos da story) / 6 (na suíte da raiz)`"
+    dono: "@dev"
+    bloqueia_merge: false
+
+  - id: A3
+    severidade: INFORMATIVO
+    categoria: tests
+    titulo: "A única asserção puramente negativa da story sobrevive ao sumiço do estado"
+    evidencia: >
+      SONDA A (conversation_id trocado): dos 8 testes de `pipeline-collected-data.test.ts`, caem 7.
+      O sobrevivente é `🔴 (i) o system INTEIRO não contém nenhuma das seis strings de maquinário`.
+    julgamento: >
+      Não é defeito — o arquivo se protege por composição: essa asserção mora num `describe` com dois
+      controles positivos que caem, e o `toBe` do bloco inteiro cobre a forma. E o docstring do
+      arquivo antecipa exatamente este modo de falha. Fica registrado porque é a única linha da story
+      que, **isolada**, ficaria verde por o bloco ter sumido — e é a que a AC2-(iii) usa como
+      vermelho principal.
+
+  - id: A4
+    severidade: INFORMATIVO
+    categoria: code
+    titulo: "Dois relógios no mesmo turno"
+    evidencia: >
+      `buildSystemPrompt` recebe o `now` de `pipeline.ts:672`; a aplicação do TTL do `agenda_state`
+      em `:801` usa um `nowAgenda = new Date()` próprio. São duas instâncias distintas.
+    julgamento: >
+      **Sem consequência prática** — milissegundos contra um TTL de 48 h, e SONDA G mostra que a
+      passagem do `now` tem vermelho. O `[AUTO-DECISION]` do @dev está certo no mérito (sem o `now`,
+      o prompt citaria um fato que o próprio turno descarta 70 linhas adiante) e a ordem que ele
+      descreve confere no código. Registro apenas para que a próxima story não leia *"o `now` do
+      turno"* como invariante de um relógio só — hoje são dois.
+
+  - id: A5
+    severidade: INFORMATIVO
+    categoria: code
+    titulo: "A guarda do `if` mudou de forma (não é `if` novo, mas não é o mesmo `if`)"
+    evidencia: >
+      `if (state.collected_data && Object.keys(state.collected_data).length > 0)` virou
+      `if (state.collected_data)`.
+    julgamento: >
+      Equivalente em comportamento: com `{}` o renderizador devolve `[]` e o spread não empurra
+      linha nenhuma. Coberto byte a byte pela AC7-(a). O §5 promete *"nenhum `if` novo"* e não há
+      `if` novo — mas há um `if` **alterado**, e a precisão do §5 é o padrão que este epic cobra.
+
+# ────────────────────────────────────────────────────────────────────────────
+# Fila de deploy — fora do meu escopo, dentro do gate
+# ────────────────────────────────────────────────────────────────────────────
+fila_de_deploy:
+  ordem_homologada: "87-12 → 87-5 A → 87-5 B → **87-11** → 87-10, ≥24 h entre cada"
+  situacao_16_08:
+    - "87-5 A em produção desde 2026-08-15T17:25:45Z"
+    - "deploy B da 87-5 NÃO subiu; elegível a partir de 2026-08-16T17:25:45Z"
+    - "esta story entra DEPOIS do deploy B"
+  observacao_do_qa: >
+    **Não autorizo merge antes do deploy B.** E fica escrito para o @po/@devops, porque informa o
+    risco desta fila: a janela da 87-5 A fecha hoje às 17:25 UTC com **0 turnos na população-alvo**
+    — **inconclusiva, não aprovada**. Empilhar o deploy B e, 24 h depois, esta story sobre uma
+    janela que não produziu evidência é decisão de produto, não de QA — mas é decisão, e precisa ser
+    tomada com o rótulo certo na mão. O `qa` não trata "inconclusivo" como "sem regressão"; o
+    calendário não deveria tratar também.
+  dono: "@devops (fila) · @po (o rótulo da janela da 87-5)"
+
+# ────────────────────────────────────────────────────────────────────────────
+# Condições para virar PASS
+# ────────────────────────────────────────────────────────────────────────────
+condicoes:
+  - id: C1
+    de: "@dev"
+    o_que: >
+      Fixture com `citacao` de ~279 chars e asserção de que a linha de agenda sai com 120 chars +
+      `…`. Critério de aceite da própria condição: **SONDA F (remover `truncar` da citação) tem de
+      passar a produzir ≥ 1 vermelho.** Colar o vermelho.
+    prazo: "antes da 87-10 — ela escreve chave nova neste renderizador"
+    bloqueia_merge: false
+  - id: C2
+    de: "@dev"
+    o_que: "republicar M0/M1/M6 com as duas populações declaradas (dois arquivos vs. suíte da raiz)"
+    bloqueia_merge: false
+  - id: C3
+    de: "@qa + Marcos (D7)"
+    o_que: >
+      A janela da AC9 roda **sem o item 1** (`M1`/`M4` são inertes: `denominador: 0`). Fica de pé:
+      (a) `NICOLE_SLOT_UNAUTHORIZED` acima do baseline **2**; (b) amostragem dirigida `n ≥ 5` turnos
+      nas 67 conversas com `collected_data > 120 chars`, lendo a resposta antes e depois;
+      (c) as duas conversas com `agenda_state` vivo (Ronaldo e Rita) — são as únicas em que a linha
+      de citação aparece hoje; (d) gatilho de rollback: **um** caso de repergunta basta.
+      **Piso: `n < 5` ⇒ INCONCLUSIVO, jamais "sem regressão".**
+      **Se `M1`/`M4` forem publicados mesmo assim, entram rotulados NÃO CONCLUSIVOS com
+      `denominador: 0` colado ao lado.**
+    bloqueia_merge: false
+  - id: C4
+    de: "@devops"
+    o_que: "respeitar a fila: nada sobe antes do deploy B da 87-5 (elegível 2026-08-16T17:25:45Z)"
+    bloqueia_merge: true
+
+# ────────────────────────────────────────────────────────────────────────────
+7_checks:
+  code_review: PASS
+  unit_tests: CONCERNS   # A1 — guarda órfã; A2 — população da contagem
+  acceptance_criteria: PASS  # AC1–AC8 verdes; AC6 e AC7 corrigidas por medição, com justificativa escrita
+  no_regressions: PASS   # AC7 byte a byte; AC5 diff zero; hashes da 87-5 provados
+  performance: N/A
+  security: N/A          # a direção é redutora — sai maquinário do prompt
+  documentation: PASS    # Dev Agent Record é auditável; as três derrubadas estão escritas sem eufemismo
+
+recomendacao_final: >
+  **CONCERNS.** Aprovado para seguir na fila, atrás do deploy B da 87-5.
+  A implementação é correta, a subtração é cirúrgica e está provada nos dois sentidos, e o trabalho
+  de medição do @dev é o melhor deste epic até aqui — em especial a falsificação da mutação da AC6,
+  que eu reproduzi e que teria passado por mim se eu conferisse a AC como escrita. As três coisas que
+  ele derrubou da própria story estão as três certas, e ele declarou a asserção-de-constante sem que
+  ninguém perguntasse.
+  Fica CONCERNS por **uma guarda sem vermelho** (o truncamento da citação, zero de 2.441) e por
+  **uma contagem publicada num denominador que não está escrito** — as duas do mesmo feitio que este
+  epic já cobrou quatro vezes, e as duas baratas. Nenhuma delas é regressão, e nenhuma tem exposição
+  em produção hoje.
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ROUND 2 — re-gate FOCADO do PR #428 (16/08)
+# Escopo: SÓ o que mudou depois do R1 (a C1 e a republicação da C2).
+# NÃO reaberto: as três derrubadas do @dev, a C3, a C4.
+# ═══════════════════════════════════════════════════════════════════════════════
+round_2:
+  verdict: CONCERNS  # mantido — e o motivo é NOVO, ver A6
+  arvore_medida:
+    forma: >
+      `git worktree` isolado em `8e655ee8` (detached), `node_modules` por symlink. **1 commit
+      sobre `199a7a84`**, `merge-base` = `199a7a84`. **Nada do #427 nem do #429 entrou na árvore** —
+      provado abaixo pelo `md5` dos três arquivos do deploy B.
+    arquivos_do_pr: 5
+    higiene_final: "`git status` limpo no fim; `md5` de `collected-data.ts` restaurado em 16 de 16 mutações"
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # A régua que me passaram não fecha, e a diferença é EXPLICÁVEL — não é defeito
+  # ───────────────────────────────────────────────────────────────────────────
+  regua_recalibrada:
+    passada_pelo_lead: "190 arquivos · 2.444 passed · 6 expected fail"
+    medida_por_mim_no_PR: "190 arquivos · **2.439** passed · 6 expected fail (2.445 total)"
+    origin_main_199a7a84: "188 arquivos · 2.411 passed · 6 expected fail  ← medido, confere com a régua"
+    conta: >
+      2.411 (main) + 28 = **2.439**. E 28 = **25** (o delta do R1) + **3** (a C1). O delta da story
+      fecha na casa decimal.
+      Os **5** que faltam para 2.444 **não são desta story**: o R1 mediu uma árvore de trabalho que
+      tinha o **deploy B da 87-5 NÃO commitado** por cima (por isso o "antes" do @dev era 2.416 e não
+      2.411). O deploy B virou o **#427**, e o #428 não o carrega.
+      **Prova independente disso:** os três arquivos do deploy B no PR têm `md5` **idêntico ao de
+      `origin/main`** e **diferente** do que o R1 registrou em `higiene_de_arvore`:
+      `894899a5…` (era `572219f7…`) · `dbf17592…` (era `471a4950…`) · `fbca905e…` (era `fc25e055…`).
+      Ou seja: a divergência de 5 testes **é a prova de que o #427 não vazou para cá**, não um furo.
+    veredito: "régua RECALIBRADA — `2.439` é o número correto do #428 sozinho; `2.444` é #428 + #427"
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # 1. Os três testes novos mordem? — as DUAS coisas conferidas
+  # ───────────────────────────────────────────────────────────────────────────
+  c1_a_guarda_orfa_da_citacao:
+    condicao: "SONDA F tem de passar a produzir ≥ 1 vermelho"
+    sonda_F_reaplicada:
+      forma: "`truncar(state.citacao)` → `state.citacao` em `collected-data.ts:160`"
+      no_R1: "0 vermelhos em 2.441"
+      no_R2: "**2 vermelhos** em 2.445"
+      quais:
+        - "AC6 (C1) > 🔴 (a) citação no MÁXIMO que o escritor legítimo produz (280) entra com 120 + `…`"
+        - "AC6 (C1) > 🔴 (b) citação gravada por OUTRO caminho (jsonb cru, 500 chars) também é truncada"
+    a_segunda_coisa_o_terceiro_teste:
+      afirmacao_do_dev: "o (c) é controle de fronteira e **deve** ficar verde sob F — declarado antes de medir"
+      medido: "sob F o (c) fica **VERDE**. A contagem correta é 2, não 3. **Contar 3 seria contar errado.**"
+      mas_ele_e_inerte: >
+        Não. **SONDA M** (minha, nova): troquei `valor.length > VALOR_MAX_CHARS` por `>=` — o conserto
+        grosseiro que o (c) diz existir para impedir. **2 vermelhos, e um deles é o (c).**
+        O controle de fronteira é **load-bearing**, não enfeite: ele é o único teste da suíte que
+        distingue "corta acima de 120" de "corta a partir de 120", e é o que protege as citações
+        vivas de produção (17, 16 e 5 chars) de virarem falas cortadas.
+      sobre_a_ordem_da_declaracao: >
+        **O que eu posso e o que eu não posso assinar.** O PR tem **um commit só**; não há como
+        ordenar temporalmente "declarou" e "mediu" por `git`. O que eu verifiquei é mais forte que a
+        cronologia e é o que importa: a declaração está **escrita no docstring do próprio teste**
+        (`collected-data.test.ts:471-477`), é **substantivamente correta** (medida: verde sob F) e o
+        teste que ela descreve **não é inerte** (medido: vermelho sob M). Uma declaração pós-fato que
+        fosse conveniente teria dito "3 vermelhos"; esta subtrai um do próprio número.
+    veredito: FECHADA — E BEM
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # 2. A fixture é honesta? — e resiste a mexerem no CITACAO_MAX?
+  # ───────────────────────────────────────────────────────────────────────────
+  c1_honestidade_da_fixture:
+    procedencia:
+      medido: >
+        `FALA_DA_IVONE` tem **1.981 chars** e é a fala real — o `SELECT` de hoje devolve
+        `max(length(value #>> '{}')) = 1981` em `visit_availability`. **Bate exatamente.**
+        Ela passa pelo escritor REAL (`buildAgendaState`, `fonte: "mencao"`), não por `"x".repeat(279)`.
+      nota_de_precisao: >
+        O docstring da fixture (e a story, e o meu próprio R1) dizem *"2.103 chars"*. **1.981 é o
+        comprimento da string; 2.103 é o comprimento do JSON serializado** (aspas + escapes). Os dois
+        números são certos para perguntas diferentes, e o texto usa o segundo para descrever a
+        primeira. Nit de documentação, não de fixture — mas é literalmente a classe de erro
+        (*denominador não declarado*) que este gate já cobrou duas vezes. Ver A7.
+    as_assercoes_negativas_discriminam:
+      medido: >
+        `"Portal das Torres"` está no índice **187** e `"preciso de segurança"` no **258** — os dois
+        DENTRO dos 280 que o escritor grava e FORA dos 120 que o renderizador deixa passar. O 258 é a
+        escolha boa: ele prova que o corte é em 120 e **não** em 280.
+        `"Deus queira que eu não precise"` está no **459** — dentro dos 500 do caminho cru (teste b).
+        Nenhuma das negativas é vácua.
+    resiste_a_mudarem_o_CITACAO_MAX:
+      pergunta: "se alguém mexer no 280, a régua fica frouxa em silêncio ou grita?"
+      SONDA_K:
+        forma: "`CITACAO_MAX` 280 → **100** (o escritor passa a cortar ABAIXO do teto de leitura — a direção que TORNARIA a fixture vácua)"
+        resultado: "**3 vermelhos**, dois deles os testes da C1 — (a) e (c)"
+        leitura: "a régua **GRITA**. Não vira verde-por-construção; ela se acusa."
+      SONDA_L:
+        forma: "`CITACAO_MAX` 280 → **500** (o escritor passa a permitir mais)"
+        resultado: "**1 vermelho**, e ele é do teste da própria 87-4 — os da C1 ficam verdes"
+        leitura: "**nenhum falso alarme**. A guarda continua valendo e a relação `escrita > leitura` continua verdadeira."
+      veredito: >
+        **`toBeGreaterThan(VALOR_MAX_CHARS)` é a escolha certa e está PROVADA nos dois sentidos.**
+        `toBe(280)` teria dado vermelho em K **e** em L — ruído na direção inofensiva. O que a
+        asserção fixa é a **relação entre as duas réguas**, que é o que torna a guarda load-bearing;
+        o número da escrita é livre para mudar. Resiste.
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # 3. A C2 foi republicada certo? — conferida por REMEDIÇÃO, não por amostragem
+  # ───────────────────────────────────────────────────────────────────────────
+  c2_republicacao_da_contagem:
+    metodo: >
+      O lead pediu amostragem. **Rodei a bateria INTEIRA** (M0–M7 + F), cada uma na suíte da RAIZ,
+      `aplicar · rodar · ler os nomes · reverter · conferir md5`. É mais barato que escolher amostra
+      e defender a escolha.
+    tabela_conferida:
+      #        publicado P1 / P2      medido por mim (raiz)   confere
+      M0: "4 / 6    →  **6** na raiz, 4 nos dois arquivos   ✓"
+      M1: "12 / 14  →  **14** na raiz, 12 nos dois arquivos ✓"
+      M2: "10 / 10  →  **10**                               ✓"
+      M3: "6 / 6    →  **6**  (era 3 no R1)                 ✓"
+      M4: "2 / 2    →  **2**                                ✓"
+      M5: "3 / 3    →  **3**                                ✓"
+      M6: "8 / 10   →  **10** na raiz, 8 nos dois arquivos  ✓"
+      M7: "8 / 8    →  **8**  (era 5 no R1)                 ✓"
+      F:  "2 / 2    →  **2**  (era 0 no R1)                 ✓"
+    resultado: "**9 de 9 batem, número a número.** Nenhuma casa fora."
+    a_divergencia_e_nominal: >
+      Confirmada e nomeada: só M0, M1 e M6 divergem entre as duas populações, e os `+2` são
+      **sempre** `AC10 > turno-ouro (a)` e `(b)` de `pipeline-corretor-no-historico.test.ts` — eu li
+      as listas de nomes de M0, M1 e M6 uma a uma, não só os totais.
+    a_bateria_INTEIRA_foi_remediada: >
+      Confirmado, e este era o ponto: ele **não** consertou só as três cobradas. **M3 foi de 3 → 6** e
+      **M7 de 5 → 8** por causa dos três testes novos, e ele republicou os dois. Publicar M0/M1/M6
+      corrigidos deixando M3/M7 velhos seria o mesmo defeito com outro nome — e ele escreveu isso
+      com essas palavras antes de eu perguntar.
+    ressalva_de_precisao: >
+      Dos 6 vermelhos de M3, o @dev conta "5 comportamentais + 1 de constante". O **(c)** cai em M3
+      por **aritmética da própria fixture** (`noLimite = FALA_DA_IVONE.slice(0, VALOR_MAX_CHARS)`
+      passa a fatiar 10.000), não porque M3 tenha quebrado a fronteira. Ele **declarou exatamente
+      esse mecanismo** no texto (*"assertam a linha inteira e escrevem a expectativa em função de
+      `VALOR_MAX_CHARS`"*), então não é contagem inflada — é contagem explicada. Fica registrado só
+      para que ninguém leia "5 comportamentais" como "5 guardas independentes".
+    veredito: FECHADA — ALÉM DO COBRADO
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # 4. Nada de produção mudou depois do gate?
+  # ───────────────────────────────────────────────────────────────────────────
+  producao_intocada:
+    md5_declarado: "collected-data.ts → dd55a5e2d9bfae89ce16b7d4dd0ad0d4"
+    md5_medido:    "collected-data.ts → **dd55a5e2d9bfae89ce16b7d4dd0ad0d4**  ✓ · pipeline.ts → e4eb99a82f74e8e6f2c991802dd9a3ee ✓"
+    mas_md5_so_prova_que_bate_com_o_declarado: >
+      Certo — então corroborei por **quatro** caminhos que não dependem da palavra dele:
+      **(a) Âncoras de linha do meu próprio R1.** O R1 citou `collected-data.ts:160` para o
+      `truncar(state.citacao)`, `agenda-state.ts:190` para o `citacao: o.citacao` sem relimite,
+      `pipeline.ts:734` para a chamada do `buildSystemPrompt` e `:801` para o `nowAgenda`.
+      **As quatro batem na linha exata.** Numeração intacta = arquivo intacto.
+      **(b) Comportamento.** M2 = 10, M4 = 2, M5 = 3 são **idênticos ao R1** — e são justamente as
+      mutações que os 3 testes novos **não** tocam. Se o módulo tivesse mudado, esses números se
+      moveriam.
+      **(c) A lista de nomes de M0** é a mesma do R1, teste a teste.
+      **(d) `git diff 199a7a84..8e655ee8`** nos quatro arquivos protegidos da AC5-(i) + `lead-memory.ts`:
+      **0 linhas**. E `agenda-state.ts` tem 0 linhas de diff apesar de o teste novo **importar**
+      `buildAgendaState` — importar não é alterar.
+    diff_de_producao_do_PR: "só `pipeline.ts` (+23/−8) e `collected-data.ts` (+209, arquivo novo). O resto é teste."
+    veredito: "CONFIRMADO — a C1 é **só teste**. O re-gate continua sendo focado."
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Gate permanente do Epic 87
+  # ───────────────────────────────────────────────────────────────────────────
+  prompts_check:
+    comando: "npx tsx scripts/dump-agent-prompts.ts --check"
+    resultado: "✅ `agent_prompts == snapshot` (7 slugs, org 00000000-…-0001)"
+    nota: "obrigatório em todo gate do Epic 87 que toque prompt. Este toca."
+
+  reguas_do_R2:
+    suite: "190 arquivos · 2.439 passed · 6 expected fail — ver `regua_recalibrada`"
+    dois_arquivos_da_story: "28 testes, 28 passed (eram 25 no R1)"
+    tsc: "`packages/ai` → **0** · `packages/web` → **0**"
+    lint: "`npx turbo lint --force` → **0 errors / 23 warnings** (= baseline)"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ACHADO NOVO — e ele é dívida MINHA, não do @dev
+# ═══════════════════════════════════════════════════════════════════════════════
+achados_do_R2:
+
+  - id: A6
+    severidade: MEDIA-BAIXA
+    categoria: tests
+    titulo: "A guarda órfã do truncamento tem uma IRMÃ, e ela continua órfã: o sítio dos ROTULADOS"
+    o_padrao: >
+      `truncar()` tem **TRÊS** sítios de chamada, e **M3 muta a CONSTANTE compartilhada** — ou seja,
+      M3 acende os três de uma vez e **mascara** que cada sítio, isolado, pode não ter vermelho
+      nenhum. É o curto-circuito clássico. No R1 eu isolei **um** dos três (a citação, `:160`),
+      publiquei a guarda órfã e **parei ali**. Os outros dois eu nunca isolei.
+    medido_agora:
+      SONDA_F: "`:160` citação  → **2** vermelhos (era 0; fechado pela C1)"
+      SONDA_I: "`:184` ROTULADOS → 🔴 **ZERO vermelhos em 2.445 testes**"
+      SONDA_J: "`:196` extras    → **2** vermelhos (`profissao` e `cidade_bairro`) — coberto"
+    nao_e_mutante_equivalente: >
+      Provado por execução direta, com a guarda presente e ausente, sobre a mesma fixture:
+      ```
+      guarda presente  → linha "- Nome:" = 129 chars · reticência: sim · "Portal das Torres": não
+      SONDA I aplicada → linha "- Nome:" = 1989 chars · reticência: não · "Portal das Torres": SIM
+      ```
+      **1.989 chars de prosa livre entram inteiros no prompt e nenhum dos 2.445 testes pisca.**
+      É exatamente a classe de dano que esta story existe para remover.
+    e_alcancavel_em_producao: >
+      Hoje **não** — `SELECT` de 16/08: dos 8 rotulados, o maior valor de produção é `name` com **49**
+      chars (`property_interest` 6, `source` 8, `floor` 5, `view` 6, `has_down_payment` 5,
+      `garages` 1, `bedrooms` 1). Zero acima de 120. **Nenhuma exposição hoje** — igual à A1.
+      Mas é alcançável pelo mesmo mecanismo já observado: quem escreve esses campos é o modelo, e a
+      fixture **da própria story** (`ESTADO_DA_IVONE`) tem `name: "Tudo"` — o retrato de que o modelo
+      escreve lixo em `name`. Os 1.981 chars foram escritos pelo mesmo escritor na chave vizinha.
+    de_quem_e: >
+      **Minha.** A A6 existia idêntica no R1 e eu não a vi: achei o primeiro órfão atrás do
+      curto-circuito e publiquei o achado sem enumerar os outros sítios do mesmo helper. O @dev
+      cumpriu a C1 **como escrita**, e cumpriu bem — o critério de aceite era *"a sonda F passar a dar
+      ≥ 1 vermelho"*, e ele entregou 2, com as duas procedências separadas. Não há nada a cobrar dele
+      sobre a A6 além de fechá-la agora.
+    recomendacao: >
+      Uma asserção a mais no `describe` que já existe: `renderDadosColetados({ name: FALA_DA_IVONE })`
+      → a linha `- Nome:` sai com 120 chars + `…`. Custa ~5 linhas e faz a SONDA I ficar vermelha.
+      **Antes da 87-10**, pelo mesmo motivo da C1.
+    dono: "@dev"
+    bloqueia_merge: false
+
+  - id: A7
+    severidade: INFORMATIVO
+    categoria: docs
+    titulo: "`2.103` é o comprimento do JSON, não da fala — o número viaja errado desde o @po"
+    evidencia: >
+      A fala da Ivone tem **1.981 chars** (medido no banco com `#>> '{}'` e na fixture com
+      `String.length` — os dois batem). **2.103** é `length(value::text)`, com aspas e escapes.
+      O número 2.103 aparece como *"chars da fala"* no docstring do módulo, no docstring da fixture,
+      na story, no parecer do @po e **no meu próprio R1**.
+    julgamento: >
+      Sem consequência de código — nenhuma asserção usa 2.103. Registro porque é a mesma classe do
+      A2: **um número publicado sem o denominador que o produziu**, e este atravessou quatro
+      documentos sem ninguém remedir. Corrigir no docstring quando alguém encostar no arquivo.
+
+  - id: A8
+    severidade: INFORMATIVO
+    categoria: tests
+    titulo: "Duas mutações de vermelho ZERO que NÃO são achado — mutantes equivalentes, e por quê"
+    evidencia: >
+      Sondei mais duas guardas do mesmo módulo procurando irmãs da A6. As duas deram **0 vermelhos**,
+      e as duas são **equivalentes**, não frouxidão:
+      **SONDA N** (`Number.isFinite(valor)` → sempre verdadeiro): `collected_data` vem de `jsonb`, e
+      `jsonb` **não representa** `NaN`/`Infinity`. O ramo é inalcançável pelo caminho real; a guarda é
+      defesa contra um chamador não-jsonb futuro.
+      **SONDA O** (`AGENDA_STATE_KEY` sai de `NAO_RENDERIZAVEIS`, sozinho): o `agenda_state` cai no
+      laço dos extras, onde `valorEscalar(objeto)` devolve `null` — a **guarda estrutural absorve**.
+      Comportamento idêntico.
+    julgamento: >
+      Registro para que a próxima rodada não conte estes dois como órfãos e infle o achado. Mas há
+      uma nota real na SONDA O: `AGENDA_STATE_KEY` no `Set` e a guarda estrutural do `valorEscalar`
+      protegem **o mesmo ativo em série** — qualquer uma das duas pode ser removida sozinha sem um
+      único vermelho; só a remoção do **par** vaza o `agenda_state` como `[object Object]`. É defesa
+      em profundidade funcionando, e nenhum teste fixa o par. Não vale régua nova; vale saber.
+
+# ═══════════════════════════════════════════════════════════════════════════════
+condicoes_R2:
+  - id: C1
+    status: "✅ FECHADA — sonda F 0 → 2, com o terceiro teste corretamente declarado verde e provado load-bearing (SONDA M)"
+  - id: C2
+    status: "✅ FECHADA — bateria INTEIRA remedida por mim, 9 de 9 números batem nas duas populações"
+  - id: C3
+    status: "ABERTA — @qa + Marcos, inalterada. Não reaberta neste round."
+  - id: C4
+    status: >
+      🔴 **ABERTA E BLOQUEANTE.** Reconferido em 16/08: o **#427 (deploy B da 87-5) segue `OPEN`,
+      `mergedAt: null`**. **Nada da 87-11 sobe antes dele.** Confirmado também que o #428 **não**
+      carrega o deploy B (`md5` dos três arquivos = `origin/main`), então a ordem da fila é
+      fisicamente respeitável.
+    de: "@devops"
+    bloqueia_merge: true
+  - id: C5
+    de: "@dev"
+    o_que: >
+      Fechar a **A6** — a irmã da guarda órfã, no sítio dos ROTULADOS. Critério de aceite:
+      **SONDA I** (`truncar` removido de `dados.push(\`- ${rotulo}: …\`)`) tem de passar a produzir
+      **≥ 1 vermelho**. Colar o vermelho, como na C1.
+    prazo: "antes da 87-10 — mesmo motivo da C1"
+    bloqueia_merge: false
+
+7_checks_R2:
+  code_review: PASS
+  unit_tests: CONCERNS   # A6 — a guarda órfã irmã, ainda sem vermelho
+  acceptance_criteria: PASS
+  no_regressions: PASS   # 0 linhas nos protegidos; md5 + âncoras de linha + M2/M4/M5 idênticos ao R1
+  performance: N/A
+  security: N/A
+  documentation: PASS    # A7 é nit de número, não de auditabilidade
+
+recomendacao_final_R2: >
+  **CONCERNS mantido — e é preciso dizer com clareza de quem é a dívida.**
+  **As duas condições cobradas estão fechadas, e fechadas melhor do que o cobrado.** A C1 tirou a
+  guarda da citação de 0 para 2 vermelhos com fixture de procedência real (a fala da Ivone pelo
+  escritor real, `1.981` chars conferidos contra o banco), assertou a **relação** e não o número — e
+  eu provei que essa escolha resiste nos dois sentidos (SONDA K grita, SONDA L não dá falso alarme).
+  O terceiro teste é controle de fronteira, fica verde sob F como declarado, e **não é inerte**
+  (SONDA M o derruba). A C2 foi republicada com as duas populações e remedida na bateria inteira:
+  rodei M0–M7 + F na suíte da raiz e **9 de 9 números batem**, incluindo os que ninguém cobrou
+  (M3 3→6, M7 5→8). Nenhuma linha de produção mudou — `md5`, âncoras de linha do meu próprio R1,
+  contagens de M2/M4/M5 e `git diff` zero nos protegidos concordam.
+  **Não sobe a PASS por uma coisa só, e ela é minha:** a guarda órfã que eu achei no R1 tinha uma
+  **irmã**, e eu não a procurei. `truncar()` tem três sítios de chamada e M3 muta a constante
+  compartilhada — o curto-circuito acende os três juntos e esconde que cada um pode estar sozinho.
+  Isolei os três agora: a citação (fechada), os extras (coberta) e **os rotulados, `ZERO vermelhos em
+  2.445`**, com o dano medido em `1.989` chars de prosa entrando inteiros na linha `- Nome:` sem
+  ninguém piscar. Fechar PASS com um órfão vivo na invariante central da story seria exatamente o que
+  este epic cobrou nas quatro rodadas anteriores — e eu não vou cobrar do @dev um padrão que o meu
+  próprio R1 não cumpriu.
+  Sem exposição em produção hoje (os 8 rotulados têm no máximo 49 chars, medido). Sem regressão.
+  A C5 custa cinco linhas. **A C4 continua sendo o único bloqueio de merge: nada sobe antes do #427.**

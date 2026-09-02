@@ -1,0 +1,322 @@
+schema: 1
+story: "900.57"
+story_title: "A Casca da Empresa: `/platform/orgs/[id]` com abas"
+gate: CONCERNS
+reviewer: "Quinn (Test Architect)"
+updated: "2026-08-31T18:20:00Z"
+base: >-
+  Commit `cc8383f0` sobre `b968387e` sobre `1393fa68`, medido na ÁRVORE DE TRABALHO real
+  (que carrega, não commitados, os 6 arquivos da `900-55` — outra frente, que não toquei).
+escopo_revisado: "AC1 a AC7. As réguas da `900-56` estão no gate irmão."
+
+status_reason: >-
+  **O produto está certo, e a parte mais difícil dele está provada de um jeito que eu não
+  esperava conseguir reproduzir.** Reconstruí o A/B do `/dashboard` renderizando o MESMO
+  componente das duas versões (`main@1393fa68` × branch) com a MESMA entrada, fora da árvore:
+  77 atributos `class`, **73 idênticos**. A afirmação restrita do @dev — *"exatamente as mesmas
+  strings, nos 5 tiles e nos 3 badges"* — é **verdadeira**; esses 8 estão entre os 73. E a recusa
+  da interpolação não ficou no argumento: **os 22 tokens de cor da tabela aparecem no CSS gerado
+  pelo `build`**, então o Tailwind v4 de fato varre o `.ts` e a tela não sai sem fundo.
+  **O que segura o gate é a régua, não o código.** A `console-paleta.test.ts` foi vendida como a
+  peça central da story (*"um teste que só chamasse a função ficaria verde com metade dos 18
+  lugares ainda remendados"*) e eu encontrei **três furos da MESMA família que o @dev disse ter
+  fechado**, todos com `tsc --noEmit` **rc=0** e a régua inteira **10/10 verde** — e um deles
+  devolve a tela de integrações do console **inteira** à escala do CRM, que é o defeito integral
+  desta story. Ele consertou as duas INSTÂNCIAS em que tropeçou; a CLASSE ficou aberta em três
+  formas. Nenhum é defeito vivo: o código de hoje está correto. O conserto são ~8 linhas de teste
+  e zero linha de produção.
+
+rodadas:
+  - data: "2026-08-31"
+    rodada: 1
+    base: "cc8383f0, árvore de trabalho compartilhada"
+    gate: CONCERNS
+    concerns: 3
+    observacoes: 3
+    defeitos_vivos: 0
+    regressoes: 0
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 1. AS DUAS RÉGUAS QUE NASCERAM CEGAS — confirmadas mortas
+# ═══════════════════════════════════════════════════════════════════════════
+as_duas_que_ele_pegou:
+  - id: M2
+    fuga_original: '`toContain("classes={classes}")` no arquivo inteiro, satisfeito pelo `<Badge>` com o `<Tile>` apagado'
+    mutacao_que_apliquei: '`<Tile … classes={classes}>` vira `classes={PALETAS.stone}` (compila: importa `PALETAS`)'
+    tsc: "rc=0"
+    resultado: "1 VERMELHO — `o componente consome a tabela — a prop não é decorativa`"
+    veredito: "MATA. O estreitamento para o call site do `<Tile>` funciona."
+  - id: M4
+    fuga_original: '`toContain(''palette="slate"'')` no arquivo inteiro, satisfeito por um comentário de topo'
+    mutacao_que_apliquei: 'remove a linha `palette="slate"` do JSX'
+    tsc: "rc=0"
+    resultado: "1 VERMELHO — `a tela de integrações do console pede a paleta do console`"
+    veredito: "MATA."
+  - id: q4d
+    proposito: "reproduzir a fuga ORIGINAL, para saber se o conserto cobre a forma que a causou"
+    mutacao_que_apliquei: 'remove a prop E ressuscita a citação em comentário de BLOCO (` * … palette="slate" …`)'
+    tsc: "rc=0"
+    resultado: "1 VERMELHO"
+    veredito: "MATA — o filtro de linhas iniciadas por `*` e `//` cobre a forma exata que apodreceu."
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 2. A TERCEIRA DA FAMÍLIA — e ela veio em três
+# ═══════════════════════════════════════════════════════════════════════════
+a_terceira_da_familia:
+  como_procurei: >-
+    Enumerei toda asserção da régua que roda sobre TEXTO-FONTE e perguntei, para cada uma: que
+    outra coisa no arquivo pode satisfazê-la? Comentário, string, call site vizinho. Três das
+    quatro tinham resposta.
+  furos:
+    - id: q8
+      severidade: ALTA
+      asercao: 'expect(fonte).toContain("classesDaPaleta(palette)")'
+      forma_do_furo: COMENTÁRIO
+      mutacao: >-
+        `const classes = classesDaPaleta(palette)` vira `const classes = PALETAS.stone`, com um
+        comentário logo acima citando `classesDaPaleta(palette)` em prosa.
+      tsc: "rc=0"
+      resultado_da_regua: "**10/10 VERDE**"
+      raio_de_explosao: >-
+        A prop `palette` passa a ser **inteiramente decorativa**. A tela de integrações do console
+        volta INTEIRA à escala do CRM — os 5 tiles, os 3 badges, os campos, a caixa de trilha. É o
+        defeito que a story existe para corrigir, em tamanho natural. E a varredura de `stone-`
+        não vê nada, porque `PALETAS.stone` é um identificador: não contém o literal `stone-`.
+      por_que_escapa: >-
+        É a MESMA fuga que ele consertou em `palette="slate"` — `toContain` sobre o arquivo
+        inteiro — mas na outra asserção, que ficou como estava.
+    - id: M3
+      severidade: MEDIA
+      asercao: 'const chamadaDoBadge = fonte.slice(fonte.indexOf("<Badge")); expect(chamadaDoBadge).toContain("classes={classes}")'
+      forma_do_furo: CALL SITE VIZINHO
+      mutacao: '`<Badge status={estado.status} classes={classes} />` vira `classes={PALETAS.stone}`'
+      tsc: "rc=0"
+      resultado_da_regua: "**10/10 VERDE**"
+      medicao_da_causa: >-
+        `indexOf("<Badge")` = offset **6285**; `indexOf("<Tile")` = offset **11984**. O `.slice()`
+        vai do `<Badge>` até o **fim do arquivo** e portanto engole o call site do `<Tile>`.
+        Contei: o pedaço a partir de `<Badge` contém **2** ocorrências de `classes={classes}`; o
+        pedaço a partir de `<Tile`, **1**. Quando o `<Badge>` perde a prop, quem satisfaz a
+        asserção do Badge é a linha do `<Tile>`.
+      consequencia_formal: >-
+        O conjunto de morte da asserção do Badge é **SUPERSET** do da asserção do Tile — ela só
+        acende quando os DOIS perdem a prop. O comentário do teste afirma *"Medir os DOIS call
+        sites separadamente é o que mata essa mutação"*: um está medido, o outro é colinear.
+        Ele fechou a direção Tile→Badge e abriu a imagem espelhada Badge→Tile.
+      raio_de_explosao: >-
+        Menor: só o badge NEUTRO (verde e vermelho não dependem da paleta). O console voltaria a
+        pintar "Não conectado" com `bg-stone-500/15 text-stone-300`, a cor exata do CRM.
+    - id: q4c
+      severidade: MEDIA
+      asercao: 'linhas que não começam com `*` nem `//`, filtradas por `palette="slate"`, toHaveLength(1)'
+      forma_do_furo: "COMENTÁRIO — de outra forma sintática"
+      mutacao: 'remove a prop e deixa `{/* palette="slate" */}` no JSX'
+      tsc: "rc=0"
+      resultado_da_regua: "**10/10 VERDE**"
+      isolamento: >-
+        Medi as duas formas separadas. Comentário de BLOCO (`* …`) → **VERMELHO** (q4d).
+        Comentário JSX (`{/* … */}`) → **VERDE** (q4c). O filtro cobre `*` e `//` e não cobre
+        `{`, que é a forma idiomática de comentário dentro de JSX num `.tsx`.
+      raio_de_explosao: "Igual ao q8 — a página cai no default `stone` e o console inteiro fica com a cara do CRM."
+  o_padrao: >-
+    Três furos, uma causa: o conserto mirou a **forma** que tinha mordido (o comentário de bloco;
+    o `toContain` daquela asserção) e não a **classe** ("asserção sobre texto-fonte que qualquer
+    vizinho pode satisfazer"). É a mesma lição de `feedback_varredura_herda_o_predicado_nao_a_classe`.
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 3. A PROVA DE NÃO-REGRESSÃO DO CRM — reproduzida, e o que ela realmente diz
+# ═══════════════════════════════════════════════════════════════════════════
+nao_regressao_do_dashboard:
+  como_reproduzi: >-
+    `git show 1393fa68:…/integrations-panel.tsx` para fora da árvore, e um harness de vitest com
+    config própria (também fora da árvore) aliasando `@web`, `react`, `react-dom/server` e um
+    stub de `next/navigation`. Renderizei `renderToStaticMarkup` do componente de `main` e do
+    componente da branch com **a MESMA entrada** — 5 tiles cobrindo os 3 tons de badge (ok /
+    erro / neutro), com e sem `whatsapp_config` ativo — e comparei os atributos `class` posição
+    a posição. Nada disso encostou na árvore do repositório.
+  resultado: "77 atributos `class`; **73 idênticos**, **4 diferentes**."
+  as_4_diferencas: >-
+    São os 4 `<input type="password">` dos tiles graváveis (`meta_ads`, `meta_capi`, `sienge`,
+    `telegram`):
+      main   → `mt-1 w-full rounded border border-stone-700 bg-stone-950 px-2 py-1 font-mono text-sm text-stone-100`
+      branch → `mt-1 w-full rounded border border-stone-700 bg-stone-950 px-2 py-1 text-sm text-stone-100 font-mono`
+    **Mesmo multiconjunto de tokens**, só a posição de `font-mono` mudou — consequência direta de
+    `` className={`${classes.campo} font-mono`} ``, que concatena em vez de intercalar.
+  impacto_visual: >-
+    **Zero.** `font-mono` (font-family) e `text-sm` (font-size/line-height) não conflitam, e a
+    ordem da cascata vem da folha de estilo, não da ordem no atributo `class`. Confirmei que
+    `font-mono` existe no CSS gerado pelo build.
+  veredito: >-
+    A afirmação **medida** do @dev ("os 5 tiles e os 3 badges têm exatamente as mesmas strings")
+    é **VERDADEIRA** — verifiquei que os 8 estão entre os 73 idênticos. A afirmação do **Change
+    Log** ("a paleta do `/dashboard` foi provada inalterada por comparação de markup renderizado")
+    é mais larga do que a medição sustenta: o markup **não** é byte a byte igual; é
+    **visualmente equivalente com 4 atributos de ordem trocada**. A diferença entre "sem
+    diferença" e "diferença sem efeito" é a diferença entre ter medido tudo e ter medido a
+    amostra certa. Ele mediu a amostra certa; escreveu a frase larga.
+  controle_positivo: >-
+    Com `palette="slate"` o markup MUDA (o comparador não é cego), e
+    `markupSlate.replaceAll("slate-","stone-")` reproduz o markup de `main` **exceto** pelas
+    mesmas 4 posições — isto é, a troca de paleta é exatamente uma substituição de escala e mais
+    nada.
+  o_que_a_prova_do_dev_nao_alcancava: >-
+    Ele comparou "as classes de fato renderizadas nos 5 tiles e nos badges" numa tela buscada com
+    sessão real. Isso é 8 dos 77 atributos. Os 4 que diferem estão nos campos de senha, fora da
+    amostra. O harness de render que montei cobre os 77 em 200ms e **não precisa de sessão nem de
+    banco** — o que também derruba a premissa "não há infra de teste de render neste projeto"
+    para componentes de cliente puros.
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 4. A RÉGUA DE SEGURANÇA QUE ELE NÃO CONTORNOU
+# ═══════════════════════════════════════════════════════════════════════════
+nao_consumo:
+  as_paginas_entraram_na_lista: "NÃO"
+  como_confirmei:
+    - "`nao-consumo.test.ts` **intocado** na branch (`git diff 1393fa68..HEAD` vazio para o arquivo)."
+    - >-
+      `AUTORIZADOS` tem as mesmas 8 chaves de antes. **Nenhuma** delas é `app/platform/page.tsx`
+      nem `app/platform/orgs/[id]/page.tsx`.
+    - >-
+      As 10 fontes novas/alteradas do console têm **0** ocorrências de `secret_ref`,
+      `decrypted_secrets` e `reveal_last4`.
+    - >-
+      **Controle positivo (q11):** acrescentei uma menção a `secret_ref` num comentário de
+      `app/platform/page.tsx`. `tsc` rc=0 e a régua ficou **VERMELHA** —
+      *"o conjunto de arquivos que tocam a credencial é exatamente o autorizado"*. Ou seja: a
+      régua **continua mordendo** as páginas novas, que é precisamente o que se perde ao entrar
+      na lista.
+    - "Zero `access_token` em `app/platform/**` — a segunda régua da QA-900-51-2 também passa."
+  veredito: >-
+    O argumento dele está certo e o preço foi pago no lugar certo: reescrever comentário custa um
+    parágrafo; entrar na lista custa a régua no dia em que a página realmente ler o cofre.
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 5. CONCERNS
+# ═══════════════════════════════════════════════════════════════════════════
+concerns:
+  - id: QA-900-57-1
+    severidade: alta
+    bloqueante: "recomendado consertar ANTES do merge — custo ~8 linhas, zero código de produção"
+    titulo: "Três furos da mesma família na régua central da AC4 (q8, M3, q4c)"
+    achado: "ver a seção `a_terceira_da_familia` — os três medidos, `tsc` rc=0, régua 10/10 verde nos três"
+    por_que_recomendo_antes_do_merge: >-
+      A régua É a entrega da AC4 tanto quanto a prop. A própria story afirma que *"um teste que
+      só chamasse a função de paleta ficaria verde com metade dos 18 lugares ainda remendados —
+      que é o defeito da story, só que menor"*. Com o q8 aberto, o defeito volta **inteiro**, e
+      volta verde. Mergear assim é entregar a proteção quebrada no dia 1 — e a proteção é a única
+      coisa que impede o próximo PR de desfazer isso em silêncio.
+    o_que_mudar:
+      - >-
+        **Uma função só, e usá-la nas quatro asserções de texto-fonte.** Ex.:
+        `linhasDeCodigo(fonte)` = `fonte.split("\n").map(l => l.trim()).filter(l =>
+        !l.startsWith("*") && !l.startsWith("//") && !l.startsWith("/*") && !l.startsWith("{/*"))`.
+        Aplicar em `classesDaPaleta(palette)`, nos dois call sites e em `palette="slate"`. Isso
+        fecha q8 e q4c.
+      - >-
+        **Delimitar o call site de verdade, em vez de `slice` até o fim do arquivo.** Ex.:
+        recortar do `<Badge` até o primeiro `/>` (`fonte.slice(i, fonte.indexOf("/>", i))`), e o
+        mesmo para `<Tile`. Isso fecha o M3 e torna os dois conjuntos de morte **disjuntos**.
+      - >-
+        **E, para não repetir o padrão:** os três consertos precisam de um `it` que os exerça —
+        um controle positivo por furo, envenenando a fonte real (a régua já tem esse idioma, no
+        `it` "o detector está VIVO contra o arquivo real"). Sem isso o conserto vira prosa, e
+        prosa não é herdada pelo próximo PR.
+  - id: QA-900-57-2
+    severidade: baixa
+    bloqueante: false
+    titulo: "A frase do Change Log é mais larga que a medição — o markup do `/dashboard` não é byte a byte igual"
+    achado: "4 dos 77 atributos `class` diferem por ordem de token (ver `nao_regressao_do_dashboard`). Sem efeito visual."
+    o_que_mudar: >-
+      Corrigir a frase do Change Log para o que foi medido ("os 5 tiles e os 3 badges têm classes
+      idênticas; os campos de senha diferem só na ordem de `font-mono`, sem efeito visual"), ou —
+      melhor — trocar `` `${classes.campo} font-mono` `` por um papel próprio na tabela
+      (`campoMono`), o que restaura a igualdade byte a byte e mantém a tabela como única dona das
+      classes do campo. Custo: 2 chaves na interface, 2 valores.
+  - id: QA-900-57-3
+    severidade: baixa
+    bloqueante: false
+    titulo: "`LinhaDaTrilhaDaPlataforma` e `rotuloDoAtor` não têm carrasco nenhum"
+    achado: >-
+      O componente extraído pela AC5 — o que a `900-59` vai reaproveitar — é exercitado **só por
+      `type-check`**. Dentro dele, `rotuloDoAtor` tem lógica de verdade: lê
+      `metadata.actor_label`, checa o tipo, checa string vazia e cai em `"sem rótulo"`. Nenhum
+      desses quatro caminhos é tocado. Confirmei que a justificativa do @dev está CORRETA —
+      `platform_audit_log` tem **0 linhas em produção E no ambiente de teste** (medido por
+      agregado), e a tabela é append-only por trigger + `REVOKE`, então inserir para tirar um
+      print seria sujeira permanente.
+    o_que_mudar: >-
+      A justificativa "não há infra de render para RSC" **não se aplica**: `linha-da-trilha.tsx`
+      é render puro de um objeto simples, sem `async`, sem hook, sem acesso a banco. Um harness
+      como o que usei para o A/B da paleta cobre os 4 caminhos de `rotuloDoAtor` em ~10 linhas,
+      sem sessão e sem banco. Alternativa ainda mais barata e suficiente: extrair `rotuloDoAtor`
+      como função pura exportada e testá-la em vitest — `actor_label` string, ausente, vazia, e
+      de tipo errado (número/objeto).
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 6. OBSERVAÇÕES
+# ═══════════════════════════════════════════════════════════════════════════
+observacoes:
+  - id: OBS-1
+    titulo: "A recusa da interpolação está PROVADA, não só argumentada"
+    detalhe: >-
+      O docblock de `paleta.ts` afirma que uma classe montada em runtime não existiria no CSS
+      gerado. Verifiquei o outro lado, que era o risco real: com a tabela num `.ts` fora do
+      componente, o Tailwind v4 (detecção automática de fonte, sem `tailwind.config`, só
+      `@import "tailwindcss"`) **encontra as classes** — os **22 tokens de cor** da tabela
+      (`stone` e `slate`) estão todos no CSS emitido pelo `build`, mais `font-mono`, `text-sm`,
+      `bg-slate-950` e `bg-stone-950`. Se essa varredura ignorasse `.ts`, as duas telas sairiam
+      sem fundo e nenhum teste desta base reprovaria. Não ignora.
+  - id: OBS-2
+    titulo: "A população da régua 'as DUAS telas montam os tiles pela MESMA função' cresceu de 2 para 4"
+    detalhe: >-
+      `nao-consumo.test.ts` vigia `montarTilesDoPainel(` em duas páginas. Depois desta leva há
+      **quatro** superfícies montando tiles: as duas de integrações, o Resumo da empresa (`900-57`)
+      e a Visão geral (`900-56`). As duas novas usam a função compartilhada — conferi — mas não
+      estão na lista, então nada impede a próxima de fazer montagem própria. Não é regressão;
+      é uma lista que ficou menor que a população que ela existe para cobrir.
+  - id: OBS-3
+    titulo: "As consequências não previstas da AC1 sobre a AC3 estão certas"
+    detalhe: >-
+      Remover o `← Empresas` e o `<h1>` com o nome da empresa de `integracoes/page.tsx` é
+      obrigatório depois da casca — os dois passariam a aparecer duas vezes. O import de `Link`
+      ficou órfão e foi removido junto (`lint --force` rc=0 confirma). E o guarda
+      `if (!org) return …` continua na página com o motivo certo escrito: o TypeScript não sabe
+      do `notFound()` do layout, e a consulta daqui pede uma coluna a mais.
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 7. RÉGUAS RECONFERIDAS POR MIM
+# ═══════════════════════════════════════════════════════════════════════════
+reguas:
+  vitest_arvore_real: "299 arquivos / 3966 passed / 6 xfail / rc=0"
+  vitest_baseline_derivada: "297 / 3934 passed / 6 xfail — delta +2 arquivos, +32 testes, xfail inalterado"
+  turbo_lint_force: "rc=0 — 0 erros, 30 warnings, nenhum em arquivo desta story"
+  turbo_type_check_force: "rc=0 — 8/8"
+  build_web: "rc=0; 6 rotas novas da casca registradas; 2 warnings pré-existentes e alheios"
+  css_gerado: "22/22 tokens de cor da tabela presentes no CSS do build"
+  platform_query_scan: "VIVO contra os arquivos novos — `.from(\"leads\")` cru em `orgs/[id]/page.tsx` ⇒ 1 VERMELHO (tsc rc=0)"
+  paleta_scan_app_platform: "VIVO — `text-stone-400` na aba Plano ⇒ 1 VERMELHO (tsc rc=0)"
+  nao_consumo: "VIVO nas páginas novas — controle positivo q11 ⇒ 1 VERMELHO (tsc rc=0)"
+  dashboard_platform_boundary: "passa — a prop é de apresentação e o componente não importa o caminho de leitura de plataforma"
+  producao_agregados: >-
+    Só leitura, Management API: `platform_audit_log`=**0 linhas** (justifica AC5/AC2.6 não
+    provadas na tela); `org_integrations`=6, **todas `disconnected`**; `whatsapp_config`=1
+    **`active` com `phone_number_id`** — a QA-900-51-2 está VIVA em produção, o que torna a
+    montagem compartilhada do Resumo necessária e não preventiva.
+  banco_de_teste_revertido: >-
+    CONFIRMADO. `org_integrations` 18/18 `disconnected`; `whatsapp_config` 3/3 `inactive` com
+    `phone_number_id` nulo em todas — exatamente como o @dev declarou ter deixado.
+
+acs:
+  AC1: { status: ATENDIDA, nota: "casca + `notFound()` + 6 abas, todas `slate-*`; aba ativa por comparação EXATA (`startsWith` marcaria o Resumo em todas)" }
+  AC2: { status: ATENDIDA, nota: "6 blocos; 3 com dado real, 2 declarando a lacuna sem número, 1 trilha; sem botão Editar" }
+  AC3: { status: ATENDIDA, nota: "mesma URL, agora dentro da casca; conteúdo funcional preservado" }
+  AC4: { status: "ATENDIDA — com a régua furada (QA-900-57-1)", nota: "18 lugares → 14 papéis; default `stone` provado por mutação (M1: tsc rc=0, 1 vermelho); 2 consumidores, confirmado" }
+  AC5: { status: ATENDIDA, nota: "componente extraído e reaproveitado nos dois lugares; sem carrasco (QA-900-57-3)" }
+  AC6: { status: ATENDIDA, nota: "3 abas-esqueleto, zero consulta, zero número" }
+  AC7: { status: ATENDIDA, nota: "`notFound()` no layout cobre as 6 abas de uma vez" }
+
+recomendacao:
+  merge: "LIBERADO tecnicamente — mas peço QA-900-57-1 antes, porque a régua é a entrega"
+  antes_do_merge: "QA-900-57-1 (os três furos + um controle positivo por furo)"
+  depois: "QA-900-57-2 e QA-900-57-3"
+  proximo_agente: "@dev"
