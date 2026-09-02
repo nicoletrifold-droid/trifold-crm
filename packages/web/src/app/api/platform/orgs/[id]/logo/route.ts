@@ -50,12 +50,16 @@
  *     PROIBIDA: apagar o objeto antes e falhar na RPC deixaria `logo_url` apontando para um `404`
  *     público.
  *
- * ⚠️ **A purga da AC4 roda DEPOIS do upload, e não antes** — apesar de a AC dizer "antes de
- * gravar". Medido contra a própria invariante da AC: purgar antes e falhar no upload apaga o
- * arquivo que `logo_url` ainda referencia, produzindo exatamente o `404` público que a AC nomeia
- * como proibido. Depois do upload, o pior caso é dois objetos no bucket (o defeito que a AC
- * fecha, degradado) e nunca um `logo_url` quebrado. O carrasco da AC ("subir PNG, depois JPEG →
- * `list` devolve exatamente 1") é satisfeito pelas duas ordens; só uma delas é segura.
+ * ⚠️ **A purga da AC4 roda DEPOIS da RPC**, apesar de a AC dizer "antes de gravar". Medido contra
+ * a própria invariante da AC, em DUAS rodadas:
+ *   1. Purgar ANTES do upload e falhar no upload apaga o objeto que `logo_url` ainda referencia →
+ *      404 público.
+ *   2. Purgar ENTRE o upload e a RPC tem o MESMO desfecho por outra porta: todo não-200 da RPC
+ *      (`409` de conflito, `500`, `503`) deixa `logo_url` inalterado apontando para um objeto que
+ *      a purga já apagou. Este furo sobreviveu à primeira correção e só apareceu ao planejar a
+ *      medição contra o Storage REAL — nenhum dos dois carrascos o pegava.
+ * Depois da RPC, `logo_url` já aponta para o objeto novo antes de qualquer remoção. O pior caso
+ * passa a ser um órfão público (reportado em `arquivoRemovido`), nunca um `logo_url` quebrado.
  *
  * ## AC11 da `900-62`, herdada: nenhum `console.*`
  *
@@ -68,9 +72,11 @@
 import { NextResponse } from "next/server"
 import { getPlatformAdmin } from "@web/lib/tenancy/platform-guard"
 import { createAdminClient } from "@web/lib/supabase/admin"
+import { createHash } from "node:crypto"
 import {
   caminhoDoLogo,
   objetosAPurgar,
+  urlVersionadaDoLogo,
   validarArquivoDeLogo,
 } from "@web/lib/tenancy/console-logo-empresa"
 
@@ -289,32 +295,21 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     )
   }
 
-  // 2º a purga da AC4 — DEPOIS do upload, nunca antes. Ver o ⚠️ no bloco do topo.
-  //
-  // Falhar aqui aborta ANTES da RPC de propósito: seguir em frente gravaria `logo_url` no arquivo
-  // novo e deixaria o antigo publicamente legível para sempre, sem trilha e sem cron de limpeza —
-  // que é exatamente o defeito que a AC4 existe para fechar. Abortando, `logo_url` continua
-  // apontando para um objeto que continua existindo; o estado permanece coerente e o operador lê
-  // que não deu certo.
-  if (!(await purgarPrefixo(db, orgId, destino))) {
-    return NextResponse.json(
-      {
-        error: "LIMPEZA_FALHOU",
-        message:
-          "O arquivo foi enviado, mas não foi possível remover a versão anterior do " +
-          "armazenamento — o cadastro NÃO foi alterado. Tente de novo.",
-      },
-      { status: 500 },
-    )
-  }
-
+  // A URL é VERSIONADA PELO CONTEÚDO. Sem isso, trocar um PNG por outro PNG produz a mesma string,
+  // a RPC classifica como no-op, `updated_at` não anda e a TELA CONTINUA MOSTRANDO O LOGO ANTIGO —
+  // medido contra o Storage real. Hash e não relógio: reenviar o arquivo idêntico segue sendo um
+  // no-op honesto, sem linha de trilha.
   const { data: url } = db.storage.from(BUCKET_DE_LOGOS).getPublicUrl(destino)
+  const urlGravada = urlVersionadaDoLogo(
+    url.publicUrl,
+    createHash("sha256").update(conteudo).digest("hex").slice(0, 16),
+  )
 
   // 3º a RPC. Ela é a única porta de escrita de `organizations.logo_url` (migration `254`).
   const { data, error } = await db.rpc("org_logo_update_as_platform", {
     p_org_id: orgId,
     p_actor_user_id: platformAdmin.userId,
-    p_logo_url: url.publicUrl,
+    p_logo_url: urlGravada,
     p_expected_updated_at: expectedUpdatedAt,
     p_reason: lerMotivo(formulario.get("reason")),
   })
@@ -325,12 +320,21 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   )
   if (resposta) return resposta
 
+  // 3º a purga da AC4 — DEPOIS da RPC ter passado. Ver "A ORDEM DAS ESCRITAS" no topo.
+  //
+  // Enquanto ela rodava ENTRE o upload e a RPC, todo desfecho não-200 da RPC (`409` de conflito,
+  // `500`, `503`) deixava `logo_url` — inalterado — apontando para um objeto que a purga acabara
+  // de apagar: o 404 público que a AC4 nomeia como proibido, reintroduzido por outra porta.
+  // Depois da RPC, `logo_url` já aponta para o objeto NOVO antes de qualquer remoção acontecer.
+  const arquivoRemovido = await purgarPrefixo(db, orgId, destino)
+
   // O retorno é a verdade do que ficou gravado — não repetimos aqui o que pedimos. `updatedAt` é
   // o valor já bombado pelo trigger `set_updated_at`, e é ele que a próxima escrita usa de trava.
   return NextResponse.json({
     orgId: linha!.id,
     logoUrl: linha!.logo_url,
     updatedAt: linha!.updated_at,
+    arquivoRemovido,
   })
 }
 

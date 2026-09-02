@@ -317,14 +317,34 @@ describe("AC4 — a ORDEM das duas escritas, medida por sequência e não por co
     expect(efeitos()).toEqual([`upload:${ORG_DA_ROTA}/logo.png`, "rpc"])
   })
 
-  it("a purga roda DEPOIS do upload — purgar antes deixaria `logo_url` num 404 público", async () => {
+  it("a purga roda DEPOIS da RPC — upload, RPC, purga, nessa ordem", async () => {
     balde.set(`${ORG_DA_ROTA}/logo.jpg`, "image/jpeg")
     await enviar({ file: arquivo("image/png") })
     expect(efeitos()).toEqual([
       `upload:${ORG_DA_ROTA}/logo.png`,
-      `remove:${ORG_DA_ROTA}/logo.jpg`,
       "rpc",
+      `remove:${ORG_DA_ROTA}/logo.jpg`,
     ])
+  })
+
+  it("🔴 RPC não-200 NÃO pode ter apagado o objeto antigo — o furo da 1ª correção", async () => {
+    // Enquanto a purga rodava ENTRE o upload e a RPC, um `409` de conflito deixava `logo_url`
+    // (inalterado, apontando para `logo.jpg`) sobre um objeto que a purga acabara de apagar: o
+    // MESMO 404 público que a AC4 proíbe, por outra porta. Nem o carrasco do órfão nem o teste de
+    // ordem pegavam — os dois só olham o caminho feliz.
+    balde.set(`${ORG_DA_ROTA}/logo.jpg`, "image/jpeg")
+    respostaDaRpc = { data: retornoDaRpc({ conflito: true }), error: null }
+    const res = await enviar({ file: arquivo("image/png") })
+    expect(res.status).toBe(409)
+    expect(balde.has(`${ORG_DA_ROTA}/logo.jpg`), "o objeto que logo_url ainda referencia").toBe(true)
+    expect(efeitos()).toEqual([`upload:${ORG_DA_ROTA}/logo.png`, "rpc"])
+  })
+
+  it("🔴 o mesmo para um erro da RPC (500)", async () => {
+    balde.set(`${ORG_DA_ROTA}/logo.jpg`, "image/jpeg")
+    respostaDaRpc = { data: null, error: { message: "connection reset" } }
+    expect((await enviar({ file: arquivo("image/png") })).status).toBe(500)
+    expect(balde.has(`${ORG_DA_ROTA}/logo.jpg`)).toBe(true)
   })
 
   it("remoção: RPC PRIMEIRO, Storage DEPOIS — a inversa é PROIBIDA", async () => {
@@ -372,23 +392,26 @@ describe("falha de escrita NUNCA vira 'salvo'", () => {
     expect(json.message).not.toContain("254")
   })
 
-  it("a LISTAGEM da purga falhou → 500 e RPC NUNCA chamada (não ler ≠ não haver lixo)", async () => {
+  it("a LISTAGEM da purga falhou → 200 com `arquivoRemovido: false` (não ler ≠ não haver lixo)", async () => {
     falhaDeList = { message: "list falhou" }
     const res = await enviar()
-    expect(res.status).toBe(500)
-    expect((await res.json()).error).toBe("LIMPEZA_FALHOU")
-    expect(rpcMock).not.toHaveBeenCalled()
+    expect(res.status).toBe(200)
+    expect((await res.json()).arquivoRemovido).toBe(false)
   })
 
-  it("a REMOÇÃO da purga falhou → 500 e RPC NUNCA chamada — o antigo continua público", async () => {
+  it("a REMOÇÃO da purga falhou → 200 com `arquivoRemovido: false`, e o antigo continua lá", async () => {
     balde.set(`${ORG_DA_ROTA}/logo.jpg`, "image/jpeg")
     falhaDeRemove = { message: "remove falhou" }
     const res = await enviar({ file: arquivo("image/png") })
-    expect(res.status).toBe(500)
-    expect(rpcMock).not.toHaveBeenCalled()
-    // O cadastro NÃO foi alterado, então o objeto antigo continua sendo o apontado: estado
-    // coerente. Seguir em frente teria gravado o novo e deixado o antigo órfão para sempre.
+    expect(res.status).toBe(200)
+    expect((await res.json()).arquivoRemovido).toBe(false)
+    // O cadastro JÁ aponta para o novo (a RPC passou); o antigo virou órfão público — degradado e
+    // REPORTADO, que é o pior caso aceitável. Abortar aqui devolveria o 404 público.
     expect(balde.has(`${ORG_DA_ROTA}/logo.jpg`)).toBe(true)
+  })
+
+  it("POST feliz reporta `arquivoRemovido: true` (controle: não é `false` constante)", async () => {
+    expect((await (await enviar()).json()).arquivoRemovido).toBe(true)
   })
 
   it("Task 7.3c — RPC falha DEPOIS de um upload bem-sucedido → 500, sem afirmar sucesso", async () => {
@@ -478,9 +501,33 @@ describe("AC5 — os desfechos que a RPC devolve como DADO, não como exceção"
     expect(json.updatedAt).toBe(TRAVA_NOVA)
   })
 
-  it("a URL que vai para a RPC é a PÚBLICA do caminho gravado", async () => {
+  it("a URL que vai para a RPC é a PÚBLICA do caminho gravado, VERSIONADA pelo conteúdo", async () => {
     await enviar({ file: arquivo("image/jpeg") })
-    expect(rpcMock.mock.calls[0]![1].p_logo_url).toBe(`${URL_PUBLICA}/${ORG_DA_ROTA}/logo.jpg`)
+    const enviada = rpcMock.mock.calls[0]![1].p_logo_url as string
+    expect(enviada.startsWith(`${URL_PUBLICA}/${ORG_DA_ROTA}/logo.jpg?v=`)).toBe(true)
+  })
+
+  it("🔴 PNG por PNG com bytes DIFERENTES manda URL DIFERENTE — senão a tela mostra o antigo", async () => {
+    // MEDIDO CONTRA O STORAGE REAL: com a URL crua, trocar um PNG por outro PNG produz a MESMA
+    // string, a RPC classifica como no-op (`IS NOT DISTINCT FROM`), `updated_at` não anda, o `?v=`
+    // da pré-visualização não anda — e o operador troca o logo vendo o antigo na tela, com 200.
+    await enviar({ file: arquivo("image/png", 10) })
+    const primeira = rpcMock.mock.calls[0]![1].p_logo_url
+    rpcMock.mockClear()
+    await enviar({ file: arquivo("image/png", 11) })
+    const segunda = rpcMock.mock.calls[0]![1].p_logo_url
+    expect(String(primeira).split("?")[0]).toBe(String(segunda).split("?")[0])
+    expect(primeira).not.toBe(segunda)
+  })
+
+  it("reenviar o arquivo IDÊNTICO manda a MESMA URL — o no-op continua honesto", async () => {
+    // Controle do anterior: se a versão fosse `Date.now()`, todo reenvio viraria uma linha de
+    // trilha para uma troca que não houve. Hash de conteúdo mantém "nada mudou" = nada mudou.
+    await enviar({ file: arquivo("image/png", 10) })
+    const primeira = rpcMock.mock.calls[0]![1].p_logo_url
+    rpcMock.mockClear()
+    await enviar({ file: arquivo("image/png", 10) })
+    expect(rpcMock.mock.calls[0]![1].p_logo_url).toBe(primeira)
   })
 
   it("DELETE manda `p_logo_url: null` — é NULL que significa remoção na RPC", async () => {

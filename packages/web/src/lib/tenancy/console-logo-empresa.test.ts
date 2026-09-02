@@ -21,6 +21,7 @@ import {
   decidirDesfechoDoLogo,
   objetosAPurgar,
   urlDePreVisualizacao,
+  urlVersionadaDoLogo,
   validarArquivoDeLogo,
 } from "./console-logo-empresa"
 
@@ -254,5 +255,25 @@ describe("AC8 — urlDePreVisualizacao", () => {
 
   it("string vazia também não vira URL", () => {
     expect(urlDePreVisualizacao("", "A")).toBeNull()
+  })
+})
+
+describe("AC4/AC5 — urlVersionadaDoLogo", () => {
+  const BASE = "https://x.supabase.co/storage/v1/object/public/org-logos/o/logo.png"
+
+  it("pendura a versão do CONTEÚDO na URL gravada", () => {
+    expect(urlVersionadaDoLogo(BASE, "abc123")).toBe(`${BASE}?v=abc123`)
+  })
+
+  it("versões diferentes produzem URLs diferentes — é isso que tira a troca do no-op", () => {
+    expect(urlVersionadaDoLogo(BASE, "a")).not.toBe(urlVersionadaDoLogo(BASE, "b"))
+  })
+
+  it("a MESMA versão produz a MESMA URL — reenviar o idêntico segue sendo no-op", () => {
+    expect(urlVersionadaDoLogo(BASE, "a")).toBe(urlVersionadaDoLogo(BASE, "a"))
+  })
+
+  it("URL que já tem query ganha `&`", () => {
+    expect(urlVersionadaDoLogo(`${BASE}?t=1`, "a")).toBe(`${BASE}?t=1&v=a`)
   })
 })

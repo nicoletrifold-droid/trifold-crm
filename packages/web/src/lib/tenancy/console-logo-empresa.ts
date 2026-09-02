@@ -239,11 +239,10 @@ export function decidirDesfechoDoLogo(
 /**
  * AC4 — o aviso de que o cadastro foi limpo mas o ARQUIVO continua no balde.
  *
- * A ordem da remoção é RPC → Storage (a inversa deixaria `logo_url` apontando para um `404`
- * público). Quando o `remove()` falha depois de a RPC ter passado, o desfecho é honesto mas
- * assimétrico: para o operador o logo saiu (nenhuma tela aponta para ele), e ao mesmo tempo um
- * arquivo publicamente legível continua no bucket. Dizer "removido" e calar sobre isso seria a
- * tela afirmando mais do que aconteceu.
+ * Vale para os DOIS verbos: em ambos a purga roda DEPOIS da RPC (a inversa deixaria `logo_url`
+ * apontando para um `404` público). Quando o `remove()` falha com a RPC já passada, o desfecho é
+ * honesto mas assimétrico: para o operador o cadastro está certo, e ao mesmo tempo um arquivo
+ * publicamente legível continua no bucket. Dizer só "pronto" seria afirmar mais do que aconteceu.
  *
  * `null` quando não há o que avisar — inclusive quando o campo não veio na resposta, porque
  * "não sei" não autoriza afirmar que ficou lixo para trás.
@@ -251,8 +250,8 @@ export function decidirDesfechoDoLogo(
 export function avisoDeArquivoNaoRemovido(corpo: CorpoDaRespostaDoLogo): string | null {
   if (corpo.arquivoRemovido !== false) return null
   return (
-    "O cadastro do logo foi limpo, mas o arquivo não pôde ser apagado do armazenamento — ele " +
-    "continua acessível por URL direta. Avise quem cuida da infraestrutura."
+    "Um arquivo antigo do logo não pôde ser apagado do armazenamento — ele continua acessível " +
+    "por URL direta. Avise quem cuida da infraestrutura."
   )
 }
 
@@ -277,4 +276,28 @@ export function urlDePreVisualizacao(logoUrl: string | null, updatedAt: string):
   if (!logoUrl) return null
   const separador = logoUrl.includes("?") ? "&" : "?"
   return `${logoUrl}${separador}v=${encodeURIComponent(updatedAt)}`
+}
+
+/**
+ * AC4/AC5 — a URL que vai para `organizations.logo_url`, versionada pelo CONTEÚDO.
+ *
+ * ## O defeito que isto fecha, medido contra o Storage REAL
+ *
+ * O caminho é `{org_id}/logo.{ext}`. Substituir um PNG por OUTRO PNG grava bytes novos no MESMO
+ * caminho, e `getPublicUrl` devolve a MESMA string. A RPC compara `logo_url` para decidir no-op
+ * (`IS NOT DISTINCT FROM`) — então a troca virava **no-op**: sem `UPDATE`, sem linha de trilha,
+ * `updated_at` parado. E com `updated_at` parado a marca de `urlDePreVisualizacao` também não
+ * mexe: **o operador troca o logo, o balde recebe o arquivo novo, e a tela continua mostrando o
+ * antigo.** Medido: `updated_at` não mudou e o `?v=` não mudou, com o upload bem-sucedido.
+ *
+ * A versão sai do **hash do conteúdo**, e não de `Date.now()`, por dois motivos: é determinística
+ * (testável) e mantém o no-op HONESTO — reenviar o arquivo idêntico continua sendo "nada mudou",
+ * sem linha de trilha, que é o que a AC5 quer. Só a troca de verdade move a coluna.
+ *
+ * O `900-64` lê esta coluna: uma URL com query continua sendo uma URL, e o `?v=` estável é o que
+ * vai permitir cachear a marca do cliente com folga em vez de a cada requisição.
+ */
+export function urlVersionadaDoLogo(urlPublica: string, versao: string): string {
+  const separador = urlPublica.includes("?") ? "&" : "?"
+  return `${urlPublica}${separador}v=${encodeURIComponent(versao)}`
 }
