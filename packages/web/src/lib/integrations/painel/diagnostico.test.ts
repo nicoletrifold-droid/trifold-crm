@@ -26,7 +26,7 @@ import { describe, it, expect } from "vitest"
 import fs from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
-import { codigoDe, linhasDeCodigo } from "@web/lib/tenancy/fonte-scan"
+import { codigoDe, linhasDeCodigo, ocorrenciasNoCodigo } from "@web/lib/tenancy/fonte-scan"
 import { dataDeChecagem, detalheDaPendencia, linhaDeDiagnostico, motivoDoErro } from "./diagnostico"
 
 const AQUI = path.dirname(fileURLToPath(import.meta.url))
@@ -221,12 +221,26 @@ describe("AC5 — as 2 colunas entram na projeção, SOMANDO às que já estavam
 
 describe("AC6 — o componente CONSOME a função, e o resultado chega ao JSX", () => {
   it("o tile chama `linhaDeDiagnostico` e desenha o retorno, nessa ORDEM", () => {
-    const codigo = codigoDe(fonteDaTela(PAINEL))
+    const fonte = fonteDaTela(PAINEL)
+    const codigo = codigoDe(fonte)
     const chamada = codigo.indexOf("linhaDeDiagnostico({")
     const render = codigo.indexOf("{diagnostico}")
     expect(chamada, "a chamada existe no código").toBeGreaterThan(-1)
     expect(render, "o retorno é desenhado DEPOIS da chamada").toBeGreaterThan(chamada)
-    expect(codigo).toContain("{diagnostico && (")
+
+    // PRESENÇA e ORDEM da chamada não prendem o ALCANCE do render. Medido: mover o bloco
+    // `{diagnostico && (…)}` inteiro, sem trocar UMA letra, para dentro do ramo
+    // `{somenteLeitura ? (` — o ramo que só desenha para o WhatsApp, cujo `ultimoErro`
+    // `montarTilesDoPainel` força a `null` — deixa `tsc` em rc=0 e a suíte inteira VERDE, com o
+    // diagnóstico sumindo dos 5 providers que escrevem. Esta âncora de ordem é o carrasco disso.
+    // Ocorrência ÚNICA nos dois lados ANTES de comparar posições: `indexOf` que não acha devolve
+    // `-1`, e `-1` é menor que qualquer índice — sem a guarda, a comparação passaria por ACIDENTE.
+    expect(ocorrenciasNoCodigo(fonte, "{diagnostico && ("), "o bloco do diagnóstico").toBe(1)
+    expect(ocorrenciasNoCodigo(fonte, "{somenteLeitura ? ("), "o ramo do WhatsApp").toBe(1)
+    expect(
+      codigo.indexOf("{diagnostico && ("),
+      "o diagnóstico é desenhado ANTES do ramo somenteLeitura",
+    ).toBeLessThan(codigo.indexOf("{somenteLeitura ? ("))
   })
 
   it("os três argumentos vêm do ESTADO do tile — linha a linha, exatas", () => {
