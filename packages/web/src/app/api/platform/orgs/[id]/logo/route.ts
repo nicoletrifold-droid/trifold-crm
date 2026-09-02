@@ -44,11 +44,26 @@
  * escolhida para que a falha caia sempre no lado inofensivo:
  *
  *   • **Upload:** Storage **primeiro**, RPC **depois**. Se a RPC falhar → `500`, `logo_url`
- *     inalterado, e o objeto novo fica no bucket sem ninguém apontando para ele — inofensivo, e o
- *     próximo upload bem-sucedido o remove pela purga da AC4.
+ *     inalterado, e o objeto novo fica no bucket sem ninguém apontando para ele. Isso é aceito
+ *     **só onde a empresa existe** (`409`, `500`, `503`): ali um próximo upload bem-sucedido o
+ *     remove pela purga da AC4, e apagá-lo aqui seria pior — `logo_url` pode já apontar para o
+ *     MESMO caminho (PNG sobre PNG), e a remoção recriaria o 404 público que a AC4 proíbe.
  *   • **Remoção:** RPC **primeiro** (`logo_url = NULL`), Storage **depois**. A ordem inversa é
  *     PROIBIDA: apagar o objeto antes e falhar na RPC deixaria `logo_url` apontando para um `404`
  *     público.
+ *
+ * ⚠️ **Onde não existe empresa, não existe "próximo upload".** Dois desfechos do `POST` são
+ * terminais nesse sentido, e neles o objeto que ESTE pedido criou é removido antes da resposta:
+ *   1. `[id]` que não é UUID — barrado **antes de tocar o Storage**, então não chega a nascer;
+ *   2. `404 ORG_NOT_FOUND` (a RPC devolveu zero linhas) — removido explicitamente logo abaixo.
+ * Nos dois, `logo_url` provadamente não pode apontar para `destino`: não há linha em
+ * `organizations`. Sem isso, `POST /api/platform/orgs/nao-e-uuid/logo` deixava
+ * `nao-e-uuid/logo.png` publicamente legível no bucket **para sempre** — este bucket não tem cron
+ * de limpeza, e o dano é exatamente o que a AC4 nomeia.
+ *
+ * 🔴 A remoção é **só do `destino`**, e nunca do prefixo inteiro: zero linhas é um fato sobre a
+ * tabela, não sobre o balde, e purgar o prefixo transformaria um erro de leitura da RPC em
+ * destruição do logo vivo de outra empresa.
  *
  * ⚠️ **A purga da AC4 roda DEPOIS da RPC**, apesar de a AC dizer "antes de gravar". Medido contra
  * a própria invariante da AC, em DUAS rodadas:
@@ -72,6 +87,7 @@
 import { NextResponse } from "next/server"
 import { getPlatformAdmin } from "@web/lib/tenancy/platform-guard"
 import { createAdminClient } from "@web/lib/supabase/admin"
+import { isUuid } from "@web/lib/uuid"
 import { createHash } from "node:crypto"
 import {
   caminhoDoLogo,
@@ -132,11 +148,15 @@ type ClienteAdmin = ReturnType<typeof createAdminClient>
  * Devolve `null` quando a RPC passou; nesse caso `linha` traz o que ficou GRAVADO. Compartilhar
  * isto não é economia de linha: são os dois verbos precisando concordar sobre o que é `409`, o
  * que é `404` e o que é `503`, e duas cópias divergiriam no primeiro conserto de um lado só.
+ *
+ * `orgInexistente` é o discriminante que o `POST` usa para decidir se remove o objeto que acabou
+ * de escrever. É um CAMPO, e não `resposta.status === 404`, porque o gesto "apagar do balde
+ * público" não pode depender de um número que outro desfecho pode passar a usar amanhã.
  */
 function respostaDeFalhaDaRpc(
   error: { code?: string; message?: string } | null,
   data: unknown,
-): { resposta: NextResponse | null; linha: LinhaDaRpc | null } {
+): { resposta: NextResponse | null; linha: LinhaDaRpc | null; orgInexistente: boolean } {
   // Falha de escrita NÃO pode virar "salvo".
   //
   // O desfecho genérico NÃO afirma "nada foi alterado" (OBS-2 do gate da `900-62`): um erro de
@@ -158,6 +178,7 @@ function respostaDeFalhaDaRpc(
         { status: naoPublicada ? 503 : (STATUS_POR_CODIGO_SQL[codigo] ?? 500) },
       ),
       linha: null,
+      orgInexistente: false,
     }
   }
 
@@ -168,6 +189,7 @@ function respostaDeFalhaDaRpc(
     return {
       resposta: NextResponse.json({ error: "ORG_NOT_FOUND" }, { status: 404 }),
       linha: null,
+      orgInexistente: true,
     }
   }
 
@@ -183,10 +205,11 @@ function respostaDeFalhaDaRpc(
         { status: 409 },
       ),
       linha: null,
+      orgInexistente: false,
     }
   }
 
-  return { resposta: null, linha }
+  return { resposta: null, linha, orgInexistente: false }
 }
 
 /**
@@ -248,6 +271,22 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!platformAdmin) return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 })
 
   const { id: orgId } = await params
+  // A FORMA do `[id]` é conferida ANTES de qualquer contato com o Storage. Ver o bloco do topo:
+  // o upload acontece antes da RPC por desenho, e a existência da empresa só é verificada DENTRO
+  // da RPC — então, sem esta linha, `POST /api/platform/orgs/nao-e-uuid/logo` gravava
+  // `nao-e-uuid/logo.png` no bucket PÚBLICO de uma empresa que não existe, e nada nunca o
+  // removia. Aqui é `400`, e não `404`: `404` é a afirmação "esta empresa não existe", que a rota
+  // já usa para o id BEM-FORMADO sem linha em `organizations`; um id malformado é defeito de
+  // chamada, e sobrecarregar o mesmo número faria a tela dizer duas coisas com um número só.
+  if (!isUuid(orgId)) {
+    return NextResponse.json(
+      {
+        error: "ORG_ID_INVALIDO",
+        message: "O endereço desta tela não aponta para uma empresa válida.",
+      },
+      { status: 400 },
+    )
+  }
 
   const formulario = await req.formData().catch(() => null)
   if (!formulario) {
@@ -314,11 +353,22 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     p_reason: lerMotivo(formulario.get("reason")),
   })
 
-  const { resposta, linha } = respostaDeFalhaDaRpc(
+  const { resposta, linha, orgInexistente } = respostaDeFalhaDaRpc(
     error as { code?: string; message?: string } | null,
     data,
   )
-  if (resposta) return resposta
+  if (resposta) {
+    // Zero linhas em `organizations` ⇒ NENHUM `logo_url` pode apontar para `destino`, e nenhum
+    // upload futuro vai purgá-lo (não há empresa para receber um). É o único desfecho de falha em
+    // que remover é seguro — no `409` e no `500` a empresa EXISTE e `logo_url` pode já apontar
+    // para o MESMO caminho, e remover ali recriaria o 404 público que a AC4 proíbe.
+    //
+    // O erro do `remove()` é deliberadamente ignorado: esta resposta é `{error: "ORG_NOT_FOUND"}`
+    // e não afirma nada sobre o balde. Reportar exigiria um campo que só existe no `200`, e
+    // "não consegui apagar" não muda o que o operador tem a fazer com um id que não é empresa.
+    if (orgInexistente) await db.storage.from(BUCKET_DE_LOGOS).remove([destino])
+    return resposta
+  }
 
   // 3º a purga da AC4 — DEPOIS da RPC ter passado. Ver "A ORDEM DAS ESCRITAS" no topo.
   //

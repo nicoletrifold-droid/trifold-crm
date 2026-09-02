@@ -296,7 +296,7 @@ describe("AC4 — o órfão publicamente legível", () => {
   it("o prefixo de OUTRA empresa não é tocado", async () => {
     balde.set(`${ORG_DO_CORPO}/logo.webp`, "image/webp")
     await enviar({ file: arquivo("image/png") })
-    expect(balde.has(`${ORG_DO_CORPO}/logo.webp`)).toBe(true)
+    expect([...balde.keys()]).toEqual([`${ORG_DO_CORPO}/logo.webp`, `${ORG_DA_ROTA}/logo.png`])
   })
 
   it("o `.emptyFolderPlaceholder` do Storage não conta como objeto do logo", async () => {
@@ -336,7 +336,10 @@ describe("AC4 — a ORDEM das duas escritas, medida por sequência e não por co
     respostaDaRpc = { data: retornoDaRpc({ conflito: true }), error: null }
     const res = await enviar({ file: arquivo("image/png") })
     expect(res.status).toBe(409)
-    expect(balde.has(`${ORG_DA_ROTA}/logo.jpg`), "o objeto que logo_url ainda referencia").toBe(true)
+    // Lista FECHADA: o antigo sobreviveu (o furo da 1ª correção) E o novo não foi apagado (o
+    // conserto largo-demais). `has()` só via o primeiro lado.
+    expect([...balde.keys()], "o objeto que logo_url ainda referencia, e o que este pedido criou")
+      .toEqual([`${ORG_DA_ROTA}/logo.jpg`, `${ORG_DA_ROTA}/logo.png`])
     expect(efeitos()).toEqual([`upload:${ORG_DA_ROTA}/logo.png`, "rpc"])
   })
 
@@ -344,7 +347,7 @@ describe("AC4 — a ORDEM das duas escritas, medida por sequência e não por co
     balde.set(`${ORG_DA_ROTA}/logo.jpg`, "image/jpeg")
     respostaDaRpc = { data: null, error: { message: "connection reset" } }
     expect((await enviar({ file: arquivo("image/png") })).status).toBe(500)
-    expect(balde.has(`${ORG_DA_ROTA}/logo.jpg`)).toBe(true)
+    expect([...balde.keys()]).toEqual([`${ORG_DA_ROTA}/logo.jpg`, `${ORG_DA_ROTA}/logo.png`])
   })
 
   it("remoção: RPC PRIMEIRO, Storage DEPOIS — a inversa é PROIBIDA", async () => {
@@ -354,6 +357,77 @@ describe("AC4 — a ORDEM das duas escritas, medida por sequência e não por co
     expect(res.status).toBe(200)
     expect(efeitos()).toEqual(["rpc", `remove:${ORG_DA_ROTA}/logo.png`])
     expect(balde.size).toBe(0)
+  })
+})
+
+describe("REL-001 — o que sobrou do que ESTE pedido criou (e não só do estado ANTIGO)", () => {
+  // A classe que escapou de DUAS rodadas de correção: os caminhos de erro eram exercitados, mas
+  // toda asserção herdou do caminho feliz a pergunta "o que sobrou do estado ANTIGO?". Nenhuma
+  // perguntava "o que sobrou do que ESTE pedido escreveu?" — invariante de um lado só. Por isso
+  // aqui, e daqui para baixo, o balde é medido por LISTA FECHADA (`[...balde.keys()]`) e nunca
+  // por `has()`: `has()` é cego para o que sobrou ALÉM do esperado.
+
+  it("🔴 `[id]` que não é UUID → 400 ANTES de tocar o Storage: nada nasce no balde público", async () => {
+    // Antes do conserto: o upload roda antes da RPC por desenho, e a existência da empresa só é
+    // verificada DENTRO da RPC — então isto gravava `nao-e-uuid/logo.png` num bucket PÚBLICO,
+    // sem empresa, fora de qualquer trilha, e sem nenhum upload futuro que o purgasse.
+    const res = await enviar({}, "nao-e-uuid")
+    expect(res.status).toBe(400)
+    expect((await res.json()).error).toBe("ORG_ID_INVALIDO")
+    expect([...balde.keys()]).toEqual([])
+    expect(efeitos()).toEqual([])
+    expect(rpcMock).not.toHaveBeenCalled()
+  })
+
+  it("controle da guarda: um UUID de verdade PASSA — ela não pode recusar tudo", async () => {
+    // Sem isto, `if (true) return 400` deixaria o teste acima verde e a feature morta.
+    expect((await enviar({}, ORG_DA_ROTA)).status).toBe(200)
+    expect([...balde.keys()]).toEqual([`${ORG_DA_ROTA}/logo.png`])
+  })
+
+  it("🔴 `404 ORG_NOT_FOUND` → o objeto que ESTE pedido escreveu sai do balde antes da resposta", async () => {
+    // Zero linhas em `organizations` significa que NENHUM `logo_url` aponta para `destino` — e
+    // que não haverá "próximo upload" para purgá-lo, porque não há empresa. O docblock afirmava
+    // o contrário; esta é a asserção que o transforma em verdade.
+    respostaDaRpc = { data: [], error: null }
+    const res = await enviar()
+    expect(res.status).toBe(404)
+    expect((await res.json()).error).toBe("ORG_NOT_FOUND")
+    expect([...balde.keys()]).toEqual([])
+    expect(efeitos()).toEqual([
+      `upload:${ORG_DA_ROTA}/logo.png`,
+      "rpc",
+      `remove:${ORG_DA_ROTA}/logo.png`,
+    ])
+  })
+
+  it("🔴 no `404` some SÓ o destino — o prefixo inteiro NÃO é purgado", async () => {
+    // O conserto largo-demais. "Zero linhas" é fato sobre a TABELA, não sobre o balde: se um dia
+    // a RPC devolver zero linhas por outro motivo, purgar o prefixo apagaria um objeto vivo que
+    // `logo_url` referencia — o 404 público que a AC4 proíbe, de novo por outra porta.
+    balde.set(`${ORG_DA_ROTA}/logo.jpg`, "image/jpeg")
+    respostaDaRpc = { data: [], error: null }
+    expect((await enviar({ file: arquivo("image/png") })).status).toBe(404)
+    expect([...balde.keys()]).toEqual([`${ORG_DA_ROTA}/logo.jpg`])
+  })
+
+  it("🔴 CONTROLE NEGATIVO — no `409` o objeto NOVO **não** é apagado", async () => {
+    // O conserto óbvio-e-errado é "purgar em toda falha". Aqui a empresa EXISTE e `logo_url` pode
+    // já apontar para o MESMO caminho (PNG sobre PNG): apagar recriaria exatamente o 404 público
+    // que a 2ª rodada fechou. Sem este controle, aquele conserto ficaria verde.
+    balde.set(`${ORG_DA_ROTA}/logo.jpg`, "image/jpeg")
+    respostaDaRpc = { data: retornoDaRpc({ conflito: true }), error: null }
+    expect((await enviar({ file: arquivo("image/png") })).status).toBe(409)
+    expect([...balde.keys()]).toEqual([`${ORG_DA_ROTA}/logo.jpg`, `${ORG_DA_ROTA}/logo.png`])
+    expect(efeitos()).toEqual([`upload:${ORG_DA_ROTA}/logo.png`, "rpc"])
+  })
+
+  it("🔴 CONTROLE NEGATIVO — no `500` da RPC idem: a empresa existe, o órfão FICA", async () => {
+    balde.set(`${ORG_DA_ROTA}/logo.jpg`, "image/jpeg")
+    respostaDaRpc = { data: null, error: { message: "connection reset" } }
+    expect((await enviar({ file: arquivo("image/png") })).status).toBe(500)
+    expect([...balde.keys()]).toEqual([`${ORG_DA_ROTA}/logo.jpg`, `${ORG_DA_ROTA}/logo.png`])
+    expect(efeitos()).toEqual([`upload:${ORG_DA_ROTA}/logo.png`, "rpc"])
   })
 })
 
@@ -407,7 +481,7 @@ describe("falha de escrita NUNCA vira 'salvo'", () => {
     expect((await res.json()).arquivoRemovido).toBe(false)
     // O cadastro JÁ aponta para o novo (a RPC passou); o antigo virou órfão público — degradado e
     // REPORTADO, que é o pior caso aceitável. Abortar aqui devolveria o 404 público.
-    expect(balde.has(`${ORG_DA_ROTA}/logo.jpg`)).toBe(true)
+    expect([...balde.keys()]).toEqual([`${ORG_DA_ROTA}/logo.jpg`, `${ORG_DA_ROTA}/logo.png`])
   })
 
   it("POST feliz reporta `arquivoRemovido: true` (controle: não é `false` constante)", async () => {
@@ -422,9 +496,10 @@ describe("falha de escrita NUNCA vira 'salvo'", () => {
     // A ausência é a asserção: um corpo com `logoUrl` seria a rota afirmando o que não gravou.
     expect(json).not.toHaveProperty("logoUrl")
     expect(json.message).toContain("connection reset")
-    // O objeto novo fica no balde sem ninguém apontando para ele — inofensivo e declarado (AC4),
-    // e o próximo upload bem-sucedido o remove pela purga.
-    expect(balde.size).toBe(1)
+    // A empresa EXISTE (a RPC falhou por transporte, não por ausência de linha): o objeto novo
+    // fica no balde sem ninguém apontando para ele, e o próximo upload bem-sucedido o remove pela
+    // purga da AC4. Removê-lo aqui é que seria o defeito — `logo_url` pode apontar para ele.
+    expect([...balde.keys()]).toEqual([`${ORG_DA_ROTA}/logo.png`])
   })
 
   it("Task 7.3d — `P0024` (trava nula, segunda rede do banco) → 400", async () => {
@@ -468,7 +543,7 @@ describe("falha de escrita NUNCA vira 'salvo'", () => {
     const res = await remover()
     expect(res.status).toBe(500)
     expect(efeitos()).toEqual(["rpc"])
-    expect(balde.has(`${ORG_DA_ROTA}/logo.png`)).toBe(true)
+    expect([...balde.keys()]).toEqual([`${ORG_DA_ROTA}/logo.png`])
   })
 })
 
@@ -623,7 +698,7 @@ describe("AC4 — o DELETE não afirma mais do que aconteceu", () => {
     const res = await remover()
     expect(res.status).toBe(200)
     expect((await res.json()).arquivoRemovido).toBe(false)
-    expect(balde.has(`${ORG_DA_ROTA}/logo.png`)).toBe(true)
+    expect([...balde.keys()]).toEqual([`${ORG_DA_ROTA}/logo.png`])
   })
 
   it("sucesso → `arquivoRemovido: true` (controle: o campo não é `false` constante)", async () => {
