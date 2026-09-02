@@ -77,8 +77,15 @@ const allowlist = JSON.parse(readFileSync(CAMINHO_JSON, "utf-8"))
  * conflito de merge). Chama a RPC `org_details_update_as_platform` (migration 252). O `UPDATE`
  * mora na RPC porque a trava otimista por `updated_at`, a detecção de no-op (AC4) e a linha de
  * trilha precisam da MESMA transação — lida em duas viagens, a trava não trava.
+ *
+ * Re-medido pela Story 900-63 (**244 → 245**): +1 em `plataforma`,
+ * `app/api/platform/orgs/[id]/logo/route.ts` — o `POST`/`DELETE` que guarda e remove o logo de
+ * uma empresa. Aqui o client cru é exigido por DOIS efeitos, e não um: o bucket `org-logos` não
+ * tem policy de escrita para `anon`/`authenticated` (só `service_role` grava nele) **e** a RPC
+ * `org_logo_update_as_platform` (migration 254) é `GRANT EXECUTE … TO service_role`. A
+ * autorização acontece na rota (`getPlatformAdmin()`), não no SQL.
  */
-const TOTAL_ESPERADO = 244
+const TOTAL_ESPERADO = 245
 
 const REGRA = "aios/no-unscoped-admin-client"
 
