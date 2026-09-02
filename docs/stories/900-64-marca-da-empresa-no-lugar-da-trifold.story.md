@@ -47,10 +47,20 @@ enviou um logo.
 
 ---
 
-## 🔴 Decisão obrigatória desta story: quais das 3 superfícies entram, e por quê
+## 🔴 Decisão obrigatória desta story: quais das superfícies LEVANTADAS entram, e por quê
 
-A `900-63` mediu 3 superfícies que hoje mostram a marca da Trifold de forma fixa. As 3 foram
-reconferidas nesta sessão (linhas atuais, não herdadas do draft anterior):
+> ⚠️ **[@dev 2026-09-02, ressalva QA-900-64-2 do gate] O levantamento abaixo NÃO é exaustivo.**
+> A `900-63` mediu 3 superfícies, esta story decidiu sobre essas 3, e a decisão sobre cada uma
+> segue válida — mas a LISTA sobre a qual a decisão opera é parcial. O censo refeito com predicado
+> largo (a palavra da marca em `packages/web/src` **e** em `packages/web/public`, não só o caminho
+> do asset) encontrou **383 ocorrências em 186 arquivos**, das quais **85 em 45 arquivos** são
+> marca fixa em superfície que um cliente da plataforma vê. O censo completo, com a triagem das
+> quatro classes e a nova ordem de prioridade, está registrado no **épico 900**, não aqui — ele é
+> maior do que esta story e não pode viver dentro dela. Nada disso muda o escopo entregue; muda o
+> que se pode DIZER sobre o quanto falta.
+
+As 3 superfícies levantadas foram reconferidas nesta sessão (linhas atuais, não herdadas do draft
+anterior):
 
 | # | Superfície | Linhas medidas hoje | Entra nesta story? |
 |---|---|---|---|
@@ -169,6 +179,9 @@ num relatório de validação:**
 Esta story **não conserta isso** e não pode ser descrita como se consertasse. Nem o @dev na
 conclusão, nem o @qa no gate, nem qualquer resumo de release podem dizer "a marca da empresa
 aparece no lugar da Trifold" sem o qualificador **"na barra lateral do CRM e do app do corretor"**.
+E o qualificador é **maior** do que "só faltam login e e-mail": faltam pelo menos 45 arquivos, entre
+eles o nome do PWA que o corretor instala, o título da aba do navegador na MESMA tela da barra
+rebrandeada e a barra lateral do portal do CLIENTE FINAL — censo no épico 900 (QA-900-64-2).
 Mesma regra normativa que a AC0 da `900-63` já fixou para "o logo fica guardado".
 
 **Story futura à qual esta lacuna pertence — ainda sem número, a rascunhar pelo @sm:**
@@ -565,6 +578,7 @@ comportamento de hoje não muda para nenhuma org sem logo.
 | 2026-09-01 | 0.1 | Draft inicial. Metade 2 de 2 do pedido de logo (a `900-63` é a metade 1, "guardar"; esta é "exibir"). Das 3 superfícies medidas pela `900-63` (`sidebar-nav.tsx`, `login/page.tsx`, `lib/email-layout/*`), só o sidebar entra: a org já é conhecida na sessão nos dois layouts que o renderizam (`dashboard/layout.tsx`, `broker/layout.tsx`), sem resolução de tenant nova. **Login fica fora**, declarado como decisão de arquitetura (nenhuma rota `[slug]`/subdomínio existe; a org só é conhecida DEPOIS do login) — nomeada como story futura, sem número. **E-mail fica fora**, com achado novo mais grave do que o herdado da `900-63`: as 8 chamadas reais de `renderBaseLayout`/`renderPasswordActionEmail` no repositório hoje passam `orgName` **literal e hardcoded** ("Trifold", "Trifold CRM", "Portal de Obras" — nenhuma deriva a org real), e em `password-action.ts` o texto "Trifold" está escrito dentro do assunto/corpo do e-mail, não só no parâmetro — tornar o e-mail multi-tenant é projeto do tamanho do login, também nomeado como story futura sem número. Escopo do sidebar: 2 props novas opcionais em `SidebarNavProps`, um helper puro `resolveSidebarBrand` (extraído especificamente porque o harness de teste do componente, medido em `sidebar-nav.test.ts`, usa `renderToStaticMarkup` sem jsdom e não executa `onError`), fallback declarado para logo ausente E para imagem que falha ao carregar (nunca espaço vazio). Confirmado sem migration (coluna já existe), sem RLS nova (`org_select_own` é policy de linha, cobre `logo_url` pela mesma regra de `settings`), sem mudança em `next.config.ts` (`*.supabase.co/storage/v1/object/**` já coberto), sem allowlist de admin-client (leituras via `createClient()` de sessão, não `createAdminClient()`), e fora do alcance das guardas do console de plataforma (`platformQuery`/`platform-query-scan.ts`) — arquivos tocados por esta story estão fora de `app/platform/**`. Efeito visível declarado como dependente da `900-63` estar em produção com ao menos uma org com logo enviado (hoje: 0 de 1). | @sm (River) |
 | 2026-09-01 | 0.2 | **Validação @po — GO (8/10) com 6 correções aplicadas no próprio arquivo, e Status Draft → Ready.** As três decisões do @sm foram reconferidas contra o código e **as três procedem**: (1) *login fora* — nenhuma das 96 rotas dinâmicas de `app/**` é slug de tenant, não existe `middleware.ts`, e o `useSearchParams` do `login/page.tsx` só lê `reset`/`error`; (2) *e-mail fora* — as chamadas passam literal, confirmado uma a uma, e `password-action.ts:26-27,29-30` tem "Trifold" no assunto e no corpo; (3) *sidebar entra* — `dashboard/layout.tsx:111`/`broker/layout.tsx:36` já têm `user.orgId` e já leem `.from("organizations")` sob RLS de sessão (`:265`/`:66`), então somar dois campos é barato. Também reconferidos: `logo_url` em `001_base_schema.sql:62`; `org_select_own` em `004_rls_policies.sql:72` é `FOR SELECT USING (id = public.user_org_id())`, de linha, sem restrição de coluna; `remotePatterns` em `next.config.ts:51-56`; `platform-query-scan.ts` limitado a `app/platform/**` e `app/api/platform/**` (e agora com DOIS detectores, 900-42a); `SidebarNav` tem exatamente 2 consumidores; `vitest.config.ts` coleta só `*.test.ts` (a armadilha da `900-60` não se repete aqui); `docs/audits/admin-client-allowlist.json` existe e não precisa de entrada; a linha `84` de `app/platform/orgs/[id]/page.tsx` (projeção do `platformQuery`, disputada com `900-62`/`900-63`) **não é tocada** por esta story e a regra "somar, nunca substituir" segue valendo intacta; e **0 de 1** org em produção tem `logo_url` (medido pelo @po por agregado somente-leitura via Management API — a alegação de zero regressão procede). **As 6 correções:** (a) **AC13 nova** — o mock de `next/image` em `sidebar-nav.test.ts:47-49` só repassa `src`/`alt`, então a asserção da Task 5.2 sobre as classes `brightness-0`/`invert` **nasceria verde desligada**, mesma família do defeito que o @qa derrubou na `900-60`; agora o mock precisa repassar `className` e há contraprova obrigatória (5.3). (b) **AC12 nova** — AC6/AC7 (os layouts passando as props) **não tinham carrasco nenhum**: sem eles, helper e componente ficam verdes e a story sai invisível mesmo com a `900-63` em produção; o mecanismo (`callSiteDe`/`ocorrenciasNoCodigo`) já existe no mesmo arquivo de teste, usado para `atalhoDoConsole`, e agora é exigido para os DOIS layouts (o arquivo hoje só conhece o do dashboard). (c) **Geometria medida e AC11 corrigida** — a v0.1 dizia "o slot já é quadrado o bastante"; medido, o contêiner é `h-20` (80 px) e `public/logo-trifold.webp` é **800×96**; com `img { height: auto }` do preflight do Tailwind v4, um logo de cliente **quadrado** renderiza 143×143 e estoura o cabeçalho — a trava de caixa em CSS entrou na AC3/AC5 como requisito. (d) **AC5 ampliada** — o filtro `dark:brightness-0 dark:invert` da linha `292` (mobile) escapava da regra da AC3 e deixaria o logo colorido do cliente preto e invertido no tema escuro do celular. (e) **Recontagem do e-mail: 8 → 10 chamadas, 4 → 6 via `password-action.ts`** — o grep da v0.1 (`renderBaseLayout(\|orgName:`) não casa `renderPasswordActionEmail({` e perdia `api/brokers/route.ts:143` e `:302`, que é o caminho pelo qual todo corretor de uma empresa nova recebe o primeiro e-mail do sistema; a **lacuna comercial** ("uma empresa nova manda para os próprios corretores e clientes e-mails assinados Trifold") passou a estar escrita na story, com os 6 pontos nomeados e a story futura à qual pertence. (f) **Três justificativas imprecisas corrigidas** — `.single()` não "lança" no `supabase-js` (devolve `PGRST116`/406); host fora de `remotePatterns` não dá "erro visível", dá 400 no `/_next/image` → `onError` → fallback silencioso para a Trifold; e a AC4 **não tem carrasco** para a fiação `onError → setImgFailed` (o mock descarta `onError`), agora declarada como lacuna nomeada com conferência manual em 6.3. Título e ordem também ajustados: o H1 passou a carregar o qualificador "METADE 2 de 2 — na barra lateral (login e e-mail continuam dizendo Trifold)", espelhando a regra que a `900-63` já aplica ao próprio título, e a Dev Note separa **ordem de merge (livre)** de **ordem de valor (`900-63` → `900-64`, dura)**. | @po (Pax) |
 | 2026-09-02 | 0.3 | **Implementada pelo @dev (Dex) — Status Ready → Ready for Review.** Branch `story/900-64-marca-da-empresa`, empilhada sobre `story/900-63-logo-da-empresa` (head `fc2fe0ae`, PR #562). Entrega: helper puro `resolveSidebarBrand` em `sidebar-nav-brand.ts` (arquivo `.ts`, nao `.tsx` — o `include` do vitest so coleta `*.test.ts`), 2 props opcionais e 4 constantes de classe em `sidebar-nav.tsx` (desktop e mobile tem filtros e caixas diferentes), `onError` nas duas superficies, rotulo de texto do mobile condicionado, e a leitura incondicional de `name, logo_url` com `.maybeSingle()` nos DOIS layouts. **Reguas:** baseline do CI run `33652012162` (head `fc2fe0ae`, success) = 319 arquivos / 4484 / 6; depois desta story, local 320 / 4495 / 6 (+1 arquivo, +25 testes). O numero LOCAL do baseline (319 / 4470 / 6) diverge do CI por causa dos 6 arquivos de outra frente na arvore de trabalho, que nao entram em commit. `type-check` rc=0, `lint --force` 0 erros, `type-check --force` 8/8, `build` 5/5. **9 mutantes**, todos com `tsc --noEmit` rc=0 antes do vermelho e restauro por `cp` + `shasum -c`: className do desktop (2 vermelhos), className do mobile (2), rotulo do mobile (1), dashboard sem `orgLogoUrl` (2, so os do CRM), broker sem `orgName` (2, so os do corretor — conjuntos DISJUNTOS nos dois sentidos), argumento trocado por `user.name` (2), helper ignorando `imgFailed` (1), classe do cliente aplicada sempre (1), e a projecao sem `logo_url` (registrada como vermelho NAO-limpo: `tsc` rc=2 / TS2339, o merito e do compilador). **O controle negativo da AC13:** com o mock ANTIGO e o mesmo mutante da className, a suite fica **36/36 VERDE** — a medicao exata do que a extensao do mock comprou. **Na tela** (ambiente de teste, login pelo formulario): logo PNG 512x512 quadrado e colorido enviado pela tela da 900-63; o `next/image` aceitou a URL remota (AC9 provada viva, sem 400); o logo renderizou **48x48 dentro de um cabecalho de 223x80, sem estourar** (sem a trava iria a 143x143); saiu **colorido** no desktop claro, no desktop escuro e no topo do mobile escuro; o rotulo de texto sumiu (contagem 0); e forcando `/_next/image` a 404 o elemento **trocou sozinho** para o asset da Trifold e o rotulo reapareceu — a conferencia manual da AC4, que continua **sem carrasco automatizado**. **Nao provado na tela:** a barra do app do corretor (o ambiente nao tem conta `role: broker` e criar uma seria escrita fora da autorizacao) — a ligacao daquele layout esta provada pela regua estatica da AC12, pelo `tsc` e pelo `build`. **Fixture devolvida:** 3 orgs, `logo_url` NULL nas tres, balde vazio (remocao pela tela), Empresa A com contato/fiscal e 2 integracoes em `error`; `reset:testdb` nao executado; producao nao tocada. **Achados abertos, nao consertados de proposito:** (a) nitidez do logo do cliente no topo do mobile — `width={24}` gera srcset de 24w/48w e a trava permite ate 128 px de largura; a AC3 mediu geometria, nao resolucao, e expandir escopo sem AC nao se faz; (b) a janela de 1 h do CDN apos REMOVER um logo nao afeta esta story, porque quem decide e `logo_url`, que vai a NULL na hora. **Ressalva contra mim mesmo:** para diagnosticar a falha de login imprimi os rotulos e o comprimento dos valores do arquivo de credenciais — zero caractere de valor saiu, mas o arquivo proibe imprimir a propria estrutura, e o caminho certo era ler `EMAIL_PLATFORM_ADMIN` de dentro do script desde o inicio. **O qualificador continua obrigatorio:** login e e-mails transacionais seguem dizendo Trifold para toda empresa. | @dev (Dex) |
+| 2026-09-02 | 0.4 | **Ressalvas do gate fechadas pelo @dev (Dex) — as 3, nenhuma bloqueante, nenhum arquivo de producao tocado.** **QA-900-64-1 (regua da fiacao `onError`):** reproduzi primeiro o achado — apagar as duas linhas `onError={() => setImgFailed(true)}` e uma delecao de 2 linhas (`git diff --numstat` = 0/2), `tsc --noEmit` rc=0, e a suite ficava **36/36 VERDE**. Escrevi o `describe` "(AC4 via AC12)" com DUAS asercoes, e nao uma: **contagem e invariante sob MOVER**. Medido: mover as duas linhas do `<Image>` para o `<div>` que o envolve (`tsc` rc=0, contagem continua 2) deixa a regua do gate (`ocorrenciasNoCodigo(...).toBe(2)`) **VERDE** e recria o defeito identico — quem reprova e a segunda asercao, que prende cada fiacao a imagem da SUA superficie pela linha de `className` que so aquela imagem tem. Mutantes: **delecao** → `tsc` rc=0 · **2 vermelhos**; **realocacao** → `tsc` rc=0 · **1 vermelho** (a de contagem VERDE, medida). O docblock diz o que a regua NAO cobre: a EXECUCAO da fiacao segue sem carrasco (o mock descarta `onError`), e ninguem pode declarar a AC4 coberta. **QA-900-64-2 (censo subcontado):** refiz por **enumeracao da classe e triagem**, com predicado largo (a palavra da marca em `packages/web/src` **e** em `packages/web/public`, nao so o caminho do asset): **383 ocorrencias em 186 arquivos**, das quais 101 sao comentario, 171 nome interno, 26 superficie da propria plataforma (correto) e **85 em 45 arquivos sao marca fixa em superficie do cliente** — 83 em 43 descontando 2 legitimas por decisao. O censo, as 4 classes, o comando reprodutivel e a nova ordem de prioridade foram registrados no **epico 900, §15**, nao aqui: ele e maior que esta story. A story passou a dizer **levantamento nao exaustivo** nos 3 pontos onde afirmava "3 superficies", e o qualificador agora aponta para o censo. Nao implementei nenhuma das novas — e escopo sem AC. **QA-900-64-3 (nitidez):** o @qa esta certo e corrigi o ENQUADRAMENTO, nao o codigo: eu tratei a forma que expoe o defeito como excecao, e **wordmark e a forma mais comum de logo**; 1200x200 renderiza **128x21** no topo do mobile contra os 48 px servidos (`w=32 1x, w=48 2x`) = **2,7x em DPR 1, 5,3x em DPR 2**. Segue sem AC e sem conserto, agora como requisito explicito de resolucao para a story futura, com a nota de que o mock precisa repassar `width`/`height` senao a regua nova nasce verde desligada. **Reguas:** `pnpm test` na raiz **320 arquivos / 4497 passed / 6 xfail (4503)**, rc=0 — delta de **+2 testes** e **0 arquivos** sobre o baseline do gate (320 / 4495 / 6), que e exatamente o tamanho do que escrevi. `pnpm type-check --force` 8/8 rc=0. `pnpm lint --force` 8/8, **0 erros / 30 warnings**, os mesmos 30 pre-existentes, **nenhum** em arquivo desta story. `pnpm build` **nao reexecutado** (rede instavel, e a v0.4 nao toca arquivo que entra no bundle — `.test.ts` fica fora do build e o `type-check` o cobre). Higiene: backup por `cp` + `shasum -a 256 -c` antes e depois de cada mutante, **nenhum `git checkout`**, nenhum `git stash` (9 alheios na arvore); 2/2 hashes conferidos OK ao final. **Ambiente:** fixture **nao tocada** (nenhuma prova desta rodada precisou de sessao, banco ou balde); `reset:testdb`, `db:apply` e `db:status` **nao executados**; producao **nao tocada, nem para leitura**; arquivo de credenciais **nao lido**. | @dev (Dex) |
 
 ## Dev Agent Record
 
@@ -580,6 +594,8 @@ A marca da empresa aparece no lugar da Trifold **na barra lateral do CRM e do ap
 para toda empresa** — as duas lacunas seguem abertas, nomeadas nas seções homônimas da story, e a
 do e-mail é a de maior alcance externo (6 dos 10 pontos de chamada passam por
 `password-action.ts:26-30`, que tem a palavra escrita no assunto e no corpo).
+**E não são só duas:** o censo largo (QA-900-64-2, registrado no épico 900) achou **85 ocorrências
+de marca fixa em 45 arquivos** de superfície voltada ao cliente. Login e e-mail são 3 deles.
 
 ### Baseline e resultado — medidos, e por que o número local diverge do CI
 
@@ -659,6 +675,15 @@ sozinho para `src=/_next/image?url=%2Flogo-trifold.webp`, `alt="Trifold"`,
 estado** (`src`/`alt`/`class`/rótulo voltaram para a marca da Trifold); a renderização do asset em
 si é o caminho já exercitado pelo estado sem logo. **Ninguém pode declarar a AC4 coberta.**
 
+⚠️ **[@dev 2026-09-02, ressalva QA-900-64-1] Isso continua verdade para a EXECUÇÃO — e mesmo assim
+faltava uma régua, que agora existe.** O @qa mediu o que a lacuna deixava passar: apagar as duas
+linhas `onError` é uma deleção de 2 linhas, `tsc --noEmit` rc=0, e a suíte **inteira** ficava verde.
+Reproduzi: com a suíte de então, o mutante saiu **36/36 VERDE**. A AC12 existe exatamente para o que
+o render não alcança, e a máquina (`ocorrenciasNoCodigo`/`codigoDe`, `FONTE_DA_BARRA`) já estava
+importada três `describe` acima. O novo `describe` "(AC4 via AC12)" cobre a **deleção** e a
+**realocação** da fiação — não a execução dela. O texto do docblock diz as duas coisas, senão a
+régua nova viraria a alegação de cobertura que a AC4 proíbe.
+
 ### O que foi visto na tela, com o logo trocado
 
 Logo enviado **pela tela da 900-63** (`/platform/orgs/00000000-…-0001`, botão "Enviar logo"),
@@ -731,12 +756,25 @@ Ver o achado aberto abaixo; expandir escopo sem AC não se faz, e reportar o ach
 ### Achados abertos — não consertados aqui, de propósito
 
 🟡 **Nitidez do logo do cliente no topo do mobile.** O `<Image width={24} height={24}>` faz o
-`next/image` gerar `srcset` de 24w/48w. Com a trava `max-w-32`, um logo largo pode ocupar até
-128 px de largura — em tela 3x isso pediria ~384 px, e o recurso servido tem 48. O logo do teste
-(quadrado, teto de 32 px de altura) não expôs o problema, e nenhuma AC fala em resolução: a AC3
-mediu **geometria** (o layout quebra), não **nitidez**. Não expandi o escopo. Conserto de uma linha
-numa story futura: condicionar `width`/`height` a `brand.isCustom` — e, se for feito, a régua tem de
-crescer junto (o mock precisaria repassar `width`/`height`).
+`next/image` emitir `w=32 1x, w=48 2x` (srcSet real capturado pelo @qa), enquanto a trava `max-w-32`
+permite **128 px CSS de largura**. Não expandi o escopo, e continuo achando que era a decisão certa:
+nenhuma AC fala em resolução — a AC3 mediu **geometria** (o layout quebra), não **nitidez**.
+
+⚠️ **[@dev 2026-09-02, ressalva QA-900-64-3] O ENQUADRAMENTO que escrevi acima estava errado, e o
+@qa corrigiu.** Eu tratei a forma que expõe o defeito como exceção ("o logo do teste, quadrado, não
+expôs o problema"). Ela não é exceção: **wordmark é a forma mais comum de logo de empresa**, e uma
+wordmark de cliente (1200×200) renderiza exatamente **128×21** no topo do mobile — **2,7× de
+ampliação em DPR 1 e 5,3× em DPR 2**. Borrão visível no caso **comum**, não no exótico; foi só
+porque o logo de teste era **quadrado** (teto de 32 px de altura, coberto pelos 48 px servidos) que
+a conferência na tela não viu. O desktop está bem (183 px máximos contra 256/384 servidos). Ou
+seja: o achado está **subestimado no texto**, não no diagnóstico — o defeito é o mesmo, o alcance é
+maior.
+
+Conserto de uma linha numa story futura, como **requisito explícito de resolução** e não como
+polimento: condicionar `width`/`height` a `brand.isCustom` (mobile: `width={128}`) — e, se for
+feito, a régua tem de crescer junto: o mock de `next/image` precisa passar a repassar
+`width`/`height`, senão a régua nova nasce **verde desligada** pelo mesmo motivo que a AC13
+corrigiu para `className`.
 
 🟡 **A janela de 1 hora do CDN, herdada da medição do @devops.** Depois de REMOVER um logo, a mesma
 URL pública ainda responde `200` por até 1 h (`cache-control: public, max-age=3600`). Isso **não**
@@ -768,12 +806,112 @@ não precisa de entrada (AC10). `next.config.ts:49-56` não foi tocado (AC9).
   AC4, AC5).
 - `packages/web/src/components/layout/sidebar-nav.test.ts` — mock de `next/image` estendido para
   repassar `className` (AC13); 15 testes novos: caracterização sem logo, comportamento com logo, e
-  o carrasco estático dos DOIS layouts (AC12).
+  o carrasco estático dos DOIS layouts (AC12). **[v0.4]** mais 2, no `describe` "(AC4 via AC12)":
+  a régua de deleção e a de realocação da fiação `onError` (QA-900-64-1).
 - `packages/web/src/app/dashboard/layout.tsx` — leitura incondicional `name, logo_url` +
   `.maybeSingle()` e as 2 props no call site (AC6).
 - `packages/web/src/app/broker/layout.tsx` — idem (AC7).
+- `docs/stories/epics/epic-900-saas-multi-tenant.md` — **[v0.4]** §15, censo largo da marca fixa
+  "Trifold" (QA-900-64-2) e a nova ordem de prioridade das stories futuras.
 
-Sem migration, sem RLS, sem rota, sem mudança de configuração.
+Sem migration, sem RLS, sem rota, sem mudança de configuração. **Nenhum arquivo de produção foi
+tocado na v0.4** — as ressalvas do gate fecharam com uma régua e com documentação.
 
 ## QA Results
-_(Preenchido pelo @qa.)_
+
+**Gate: CONCERNS** (não-bloqueante) · **Revisor:** Quinn (Test Architect) · **Data:** 2026-09-02
+**Arquivo:** `docs/qa/gates/900.64-marca-da-empresa-no-lugar-da-trifold.yml`
+
+### O qualificador, repetido aqui porque é obrigatório — e ele é MAIOR do que a story diz
+
+A marca da empresa aparece no lugar da Trifold **na barra lateral do CRM e do app do corretor**, e
+em mais lugar nenhum. **O login continua dizendo "Trifold CRM" e os e-mails transacionais continuam
+assinados "Trifold" para toda empresa** — 10 pontos de chamada com `orgName` literal, 6 deles por
+`password-action.ts:26-30`, que tem a palavra dentro do assunto E do corpo, incluindo
+`api/brokers/route.ts:143`, o caminho pelo qual todo corretor de uma empresa nova recebe o primeiro
+e-mail do sistema. É a lacuna de maior alcance externo e nenhum resumo pode omiti-la.
+
+⚠️ **E a enumeração acima está SUBCONTADA** — ver QA-900-64-2.
+
+### O que reproduzi (nada aceito por declaração)
+
+| Alegação do @dev | Método | Resultado |
+|---|---|---|
+| Controle negativo da AC13 | mutante 1 + mock ANTIGO restaurado + asserções degradadas ao que era escrevível sob ele | **36/36 VERDE** — confirmado. Com o mock estendido: `tsc` rc=0 · 2 vermelhos |
+| Kill sets dos dois layouts | mutante 4 (dashboard sem `orgLogoUrl`) e mutante 5 (broker sem `orgName`) | **DISJUNTOS nos dois sentidos** — 2 vermelhos só do CRM / 2 só do corretor, `tsc` rc=0 nos dois |
+| `.select("name")` não creditado | mutante na projeção do broker | `tsc` **falha** (TS2339). O @dev **estava certo**: mutante que não compila não mede a suíte |
+| Geometria na tela | Chromium headless + CSS **real** do build + markup do componente real | 512×512 → **48×48** em cabeçalho **223×80**, `estoura: false`; sem a trava → **143×143**, `estoura: true`; wordmark 800×96 → **143×17** |
+| Cor nas três superfícies | `getComputedStyle().filter` | cliente `none` no desktop claro, desktop escuro **e** topo do mobile escuro; Trifold mantém `brightness(0)`/`invert(1)` |
+
+**Reforço que a story não fez:** a AC3 é universal ("nenhuma proporção pode ultrapassar a altura do
+contêiner") e foi medida em UMA forma. Medi quatro (quadrado, wordmark, wordmark extremo, retrato)
+× dois viewports: `estoura: false` nas **oito**.
+
+**Réguas:** `pnpm test` na RAIZ → **320 · 4495 | 6 xfail**, rc=0. Delta fechado por contagem, com o
+baseline local reconstruído por medição (não herdado): `sidebar-nav.test.ts` 11 → 26 (medido rodando
+o arquivo de `fc2fe0ae`), `sidebar-nav-brand.test.ts` +10 → `4470 + 15 + 10 = 4495` ✓ e `319 + 1 =
+320` ✓. `lint --force` 8/8, 0 erros, nenhum warning nos 4 arquivos da story. `type-check --force`
+8/8. Mutações com `cp` + `shasum -a 256 -c`; **6/6 hashes OK ao final** e os 6 arquivos alheios
+intactos. Fixture e produção **não tocadas** — nenhuma prova deste gate precisou de sessão.
+
+### Julgamentos que a story pediu
+
+- **Barra do corretor sem prova na tela → ACEITO.** Criar conta `role: broker` seria escrita fora da
+  autorização, e a alternativa não foi acreditar: a ligação tem kill set próprio (mutante 5), e o
+  COMPONENTE renderizando a marca do cliente eu provei por fora, com o CSS real. É o mesmo
+  `SidebarNav` com as mesmas props.
+- **Nitidez no mobile → CERTO em não expandir escopo, mas o achado subestima o defeito.** Ver
+  QA-900-64-3.
+- **Janela de 1 h do CDN → CONFIRMADO, não afeta.** Quem decide é `logo_url`, que vai a NULL na
+  hora; os dois layouts não têm `dynamic`/`revalidate`/`unstable_cache` e leem cookie, logo são
+  dinâmicos por request. Trocar é seguro por construção (`?v=<sha>`).
+
+### Concerns (nenhuma bloqueia o merge)
+
+**QA-900-64-1 (medium) — a fiação da AC4 não tem carrasco NENHUM, e uma régua de 2 linhas estava
+disponível.** Medido: apagar `onError={() => setImgFailed(true)}` das **duas** imagens é uma deleção
+de 2 linhas, `tsc` rc=0, e a suíte **inteira** (320 / 4495 / 6) fica **verde**. A story declarou a
+lacuna com honestidade — e isso vale para a prova comportamental. Mas a própria AC12 existe para
+esta situação, e a máquina (`ocorrenciasNoCodigo`, `FONTE_DA_BARRA`) já está importada três
+`describe` acima. **Conserto:** `expect(ocorrenciasNoCodigo(fs.readFileSync(FONTE_DA_BARRA,"utf8"),
+"onError={() => setImgFailed(true)}")).toBe(2)` — a string ocorre 2× no código (242, 334) e 0× em
+comentário. Cobre a DELEÇÃO, não a fiação; o docblock precisa dizer as duas coisas.
+
+**QA-900-64-2 (medium) — o censo de "3 superfícies" está subcontado, e o qualificador é derivado
+dele.** Além das 3 censadas há pelo menos 9 arquivos de produção com a marca fixa. Os que mais doem:
+`public/manifest.json:3-4` (o PWA que o corretor instala chama-se **"Trifold"**, e é
+`app/broker/instalar/page.tsx` — dentro do app do corretor — que manda instalar);
+`app/layout.tsx:22,28` (`title: "Trifold CRM"`, a aba do navegador, na **mesma tela** da barra
+rebrandeada); `app/cliente/[obra_id]/_components/sidebar.tsx:83` (uma **segunda barra lateral**, do
+portal do cliente, vista pelo cliente FINAL da empresa — alcance externo, o mesmo argumento que a
+story usa para priorizar o e-mail); e `app/reset-senha/page.tsx:38` (a página de destino exatamente
+dos e-mails que a story nomeia como maior lacuna). **Conserto:** refazer o censo no epic 900 com
+predicado largo (a palavra da marca, não só o caminho do asset, e incluindo `manifest.json` e o
+`metadata` de `app/layout.tsx`), corrigir a frase "3 superfícies" para "levantamento não exaustivo"
+e reabsorver a ordem de prioridade das stories futuras.
+
+**QA-900-64-3 (low) — nitidez no topo do mobile: severidade subestimada.** `<Image width={24}>` faz o
+next/image emitir `w=32 1x, w=48 2x` (srcSet real capturado), enquanto `max-w-32` permite **128 px
+CSS**. Uma wordmark de cliente (1200×200) renderiza **128×21** — 2,7× de ampliação em DPR 1 e 5,3×
+em DPR 2. Não é caso exótico: wordmark é a forma mais comum; foi só porque o logo de teste era
+quadrado que a conferência na tela não viu. Desktop está bem. **Se for consertado**, o mock precisa
+passar a repassar `width`/`height` — senão a régua nova nasce verde desligada pelo mesmo motivo que
+a AC13 corrigiu para `className`.
+
+### A 12ª armadilha desta onda
+
+**"O censo que fundamenta o qualificador é uma alegação."** A story construiu com rigor exemplar a
+régua de EXCLUSÃO (por que login sai, por que e-mail sai) para os 3 itens do censo — e não mediu a
+EXAUSTIVIDADE do censo. É a irmã de "exclusão justificada na AC é alegação", um degrau acima: lá o
+motivo é refutável; aqui o motivo é impecável e o que falha é a LISTA sobre a qual ele opera. Uma
+exclusão bem argumentada dá a sensação de censo completo, o @dev implementou fiel, o @po validou
+fiel, e o furo fica sem dono porque ninguém errou dentro do escopo declarado. **Como procurar da
+próxima:** refaça a varredura com predicado MAIS LARGO que o da story e inclua o que não é `.tsx`.
+
+### Veredito
+
+**CONCERNS — não bloqueia o merge.** As 13 ACs estão implementadas e as três provas centrais
+resistiram à reprodução independente. As três concerns são, em ordem: uma régua barata que faltou,
+um censo subcontado que afeta o que se pode ANUNCIAR (não o que foi entregue), e um achado aberto
+cuja severidade precisa subir na story futura. A ordem de valor `900-63` → `900-64` continua dura, e
+a `900-64` não pode ser citada sem o qualificador.
