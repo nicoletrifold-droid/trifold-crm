@@ -1621,10 +1621,10 @@
     ]
   },
   "producao": {
-    "gerado_em": "2026-08-30T14:32:01.865Z",
+    "gerado_em": "2026-09-01T14:02:44.344Z",
     "projeto_ref": "dsopqkqjkmhytudaaolv",
     "totais": {
-      "aplicada": 270,
+      "aplicada": 273,
       "PENDENTE": 0,
       "ALTERADA-APÓS-APLICAR": 0,
       "ÓRFÃ-no-banco": 0
@@ -3248,6 +3248,24 @@
         "arquivo": "247_org_integrations_check_whatsapp_grafias.sql",
         "estado": "aplicada",
         "sha256": "1d31c3ebeb9561cc5cf6602b4cb796fe2b8a516c9a2b5adb6be3b589d2d636fa",
+        "via": "apply"
+      },
+      {
+        "arquivo": "248_painel_integracoes_self_service.sql",
+        "estado": "aplicada",
+        "sha256": "b113b85e8f086e5279949421770002709c9bfe249f5c0db5fba0aac4fca2dc3c",
+        "via": "apply"
+      },
+      {
+        "arquivo": "249_storage_policies_name_qualificado.sql",
+        "estado": "aplicada",
+        "sha256": "5d04bff6a13e0e0601289b9757b17dee37510da71e580ad3bf8ff7ee37306689",
+        "via": "apply"
+      },
+      {
+        "arquivo": "250_kanban_stages_default_unico.sql",
+        "estado": "aplicada",
+        "sha256": "b9722f4439541f4e150c00541e9910e86a46e6118d85b3128357b48443d4ea60",
         "via": "apply"
       }
     ]

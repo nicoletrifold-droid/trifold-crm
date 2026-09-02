@@ -1,0 +1,167 @@
+storyId: "90-6"
+title: "URLs limpas (/sobre-nos, /empreendimentos, /corporativas, /blog) + redirect 301"
+epic: 90
+verdict: CONCERNS
+readiness: 8/10
+reviewer: "@qa (Quinn)"
+date: 2026-08-28
+branch: feat/86-12-pixel-capi-landing-yarden   # branch de OUTRA story; mudanças da 90-6 estão na working tree, não commitadas
+commit: 5a115358                                # HEAD no momento do gate (não contém a 90-6)
+note_metadata: "@devops deve criar feat/90-6-urls-limpas a partir de main (main == HEAD para landing-pages/, verificado)"
+
+checks:
+  code_review: PASS          # substituição literal 1:1 de href/ctaHref; vercel.json estendido, headers intocados
+  unit_tests: N/A            # projeto sem runner nem CI; decisão IDS do @dev de não criar harness é defensável (ver concern QA-5)
+  acceptance_criteria: PASS  # AC1-AC6 reproduzidas pelo @qa, independentemente do relato do @dev — porém em vercel dev, não em produção
+  regressions: PASS          # /vindresidence, /yarden, /Logo.dc.html, /Artigo.dc.html?slug=, /support.js, /assets/* intactos
+  performance: PASS          # redirects resolvidos no edge; nenhum hop encadeado (todos 1 hop)
+  security: PASS             # 0 redirects com wildcard/captura => sem risco de open redirect; CSP e headers byte-idênticos
+  documentation: PASS        # README.md atualizado, inclusive com a razão funcional da forma canônica sem barra
+
+# ---------------------------------------------------------------------------
+# Evidência produzida pelo @qa (re-execução própria, não leitura do Dev Record)
+# ---------------------------------------------------------------------------
+qa_own_evidence:
+  ambiente: "vercel dev 54.6.1, localhost:3998, pasta real do projeto"
+
+  matriz_curl:
+    AC1_urls_limpas: "/ /sobre-nos /empreendimentos /corporativas /blog => 200, 0 hops"
+    AC1_conteudo: "<title> conferido em cada uma: Sobre Nós / Empreendimentos / Corporativas / Blog / Home"
+    AC2_trailing_slash: "/sobre-nos/ /empreendimentos/ /corporativas/ /blog/ => 301, 1 hop, para forma sem barra"
+    AC3_urls_antigas: "/Sobre%20N%C3%B3s.dc.html /Empreendimentos.dc.html /B2B.dc.html /Blog.dc.html => 301, 1 hop"
+    AC5_home: "/Home.dc.html => 301 Location: / (sem fragmento), 1 hop"
+    regra_11: "/sobre-nos.dc.html => 301 Location: /sobre-nos (direto, 1 hop — não 2 hops via .dc.html)"
+    sem_loop: "rewrite / -> /Home.dc.html + redirect /Home.dc.html -> / NÃO entram em loop (medido, 200 em /)"
+
+  AC5_playwright: "10/10 PASS (Chromium 1440x900 + iPhone 13). Inclui o CASO NEGATIVO que motivou a 3ª rodada do @po:
+    /Home.dc.html SEM fragmento termina em '/' com scrollY=0 (não arrasta o visitante para #contato).
+    Com fragmento: /Home.dc.html#contato => URL final /#contato, scrollY=3557 (desktop) / 4707 (mobile), 1 hop."
+
+  AC4_AC6_crawl: "32 URLs internas distintas coletadas do DOM pós-render nas 6 páginas + /Artigo.dc.html?slug=.
+    32/32 respondem 200 em 0 hops. Zero 404, zero redirect encadeado."
+
+  AC4_balanco_grep: "Substituição 1:1 exata em todos os 6 arquivos, sem sobra e sem excesso:
+    Home.dc.html 25 -> / 25 | Home.dc.html#contato 17 -> /#contato 17 | B2B.dc.html 16 -> /corporativas 16 |
+    Sobre Nós.dc.html 15 -> /sobre-nos 15 | Empreendimentos.dc.html 15 -> /empreendimentos 15 | Blog.dc.html 14 -> /blog 14.
+    Total 102 (100 href + 2 ctaHref) — bate exatamente com o File List do @dev.
+    0 ocorrências das URLs antigas em qualquer *.dc.html."
+
+  integridade_vercel_json: "headers idênticos ao HEAD (true); redirects/rewrites de vind/yarden idênticos (true);
+    rewrite '/' -> '/Home.dc.html' idêntico (true); +10 redirects, +4 rewrites. JSON válido."
+
+  drift_producao_vs_git: "sha256 de Home/B2B/Blog/Empreendimentos/Sobre Nós/Artigo.dc.html e support.js:
+    produção no ar == baseline git HEAD em TODOS. Ou seja, o `git diff` é uma representação fiel do que
+    mudará em produção — não há deriva silenciosa na pasta de deploy manual."
+
+issues:
+  - id: QA-1
+    severity: medium
+    category: requirements
+    description: >
+      AC1/AC3/AC5 são escritas contra https://trifold.eng.br. Produção HOJE responde 404 em /sobre-nos e
+      200 em /B2B.dc.html — as ACs, na letra, ainda NÃO estão satisfeitas no ambiente que elas nomeiam.
+      Nenhuma evidência desta story vem de produção. Limitação estrutural (sem CI, deploy manual), não defeito.
+    recommendation: >
+      @devops re-executar a matriz curl -IL e o teste de fragmento no navegador contra
+      https://trifold.eng.br logo após o `vercel deploy --prod`. Só então a story vira Done.
+
+  - id: QA-2
+    severity: medium
+    category: requirements
+    description: >
+      SEGUNDA divergência vercel dev x produção, encontrada pelo @qa (a primeira, Design System.dc.html,
+      já estava documentada pelo @dev e foi reproduzida nos dois lados: 404 local, 200 em produção).
+      NOVA: vercel dev DESCARTA a query string no 301 — /B2B.dc.html?utm_source=meta devolve
+      `Location: /corporativas` sem query. Contraprova em produção real, na regra pré-existente e
+      intocada do Vind: /vindresidence?fbclid=TESTE123&utm_source=qa devolve
+      `Location: /vindresidence/?fbclid=TESTE123&utm_source=qa` — a produção PRESERVA.
+      Conclusão: aqui a evidência local SUBESTIMA a corretude de produção. A divergência corre nos dois
+      sentidos, o que reforça que a suíte local não pode ser o gate.
+    recommendation: >
+      Pós-deploy, confirmar em produção: `curl -sI 'https://trifold.eng.br/B2B.dc.html?utm_source=qa&fbclid=X'`
+      deve trazer a query no Location. Se NÃO trouxer, é bug real de atribuição (utm/fbclid/gclid perdidos em
+      URLs antigas que hoje respondem 200) e volta para o @dev.
+
+  - id: QA-3
+    severity: medium
+    category: code
+    description: >
+      Acoplamento de deploy com a Story 86-12. O vercel.json deployado em produção é ANTERIOR à 86-12
+      (medido: https://trifold.eng.br/yarden => 404, enquanto main/HEAD já tem as 10 linhas de yarden e a CSP
+      escopada). Como o deploy é upload de pasta e não git-based, um `vercel deploy --prod` para publicar a
+      90-6 publica JUNTO o roteamento e a CSP da 86-12.
+    recommendation: >
+      @devops decidir conscientemente e incluir /yarden/ e /vindresidence/ no smoke test pós-deploy.
+      Não é bloqueio: a 86-12 já tem gate PASS próprio (commit 916b6926).
+
+  - id: QA-4
+    severity: low
+    category: docs
+    description: >
+      6 stories downstream do épico 90 ainda referenciam o arquivo pelo nome antigo `Sobre Nós.dc.html`
+      (90-1:126,215 · 90-2:40 · 90-3:51,97,126 · 90-3a:31,42,76,80 · 90-4:48 · 90-7:43,72).
+      A 90-3a é a mais perigosa: a linha 76 instrui literalmente "edição é feita no arquivo com o nome
+      atual (`Sobre Nós.dc.html`)" — um @dev seguindo ao pé da letra criaria um arquivo novo em vez de editar.
+      Verificado que a referência "linha 68" segue válida: o <h2> alvo continua na linha 68 de sobre-nos.dc.html.
+    recommendation: >
+      @sm/@po atualizar as 6 stories para `sobre-nos.dc.html` antes de a 90-1 começar.
+      Fora da autoridade do @qa e do @dev editar essas seções.
+
+  - id: QA-5
+    severity: low
+    category: tests
+    description: >
+      Nenhuma suíte permanente. A decisão IDS do @dev (scripts efêmeros no scratchpad, projeto sem runner)
+      é defensável isoladamente, mas restam 7 stories no épico mexendo exatamente nestas rotas, e o
+      roteamento agora tem 12 redirects + 9 rewrites com interações não óbvias (rewrite x redirect).
+    recommendation: >
+      Backlog do épico 90: commitar um script mínimo de smoke (curl -IL sobre a matriz de URLs) que possa ser
+      apontado para produção após cada deploy manual. Não bloqueia a 90-6.
+
+  - id: QA-6
+    severity: low
+    category: docs
+    description: >
+      Resíduo pré-existente da 86-12 no README: o item 3 descreve o negative-lookahead como
+      `/((?!vindresidence).*)`, mas o vercel.json real usa `/((?!vindresidence|yarden).*)`.
+      Não introduzido pela 90-6.
+    recommendation: "Corrigir junto com qualquer edição futura do README. Cosmético."
+
+  - id: QA-7
+    severity: low
+    category: code
+    description: >
+      Fragilidade estrutural a carregar para o resto do épico: todas as páginas referenciam `assets/…` e
+      `./support.js` de forma RELATIVA. As URLs limpas só funcionam porque são de 1 segmento (o diretório
+      base de /sobre-nos é /). Qualquer URL limpa multi-segmento futura (ex.: /blog/{slug} do item Tier 4
+      do Artigo) quebraria todos os assets de uma vez. O README já documenta o caso do trailing slash;
+      o caso multi-segmento não.
+    recommendation: "Registrar no backlog do épico; pré-requisito de qualquer story que dê URL própria ao Artigo."
+
+waiver:
+  active: false
+
+verdict_rationale: >
+  CONCERNS, não PASS e não FAIL.
+  Não é FAIL porque nenhum defeito foi encontrado: as 6 ACs têm evidência real e eu reproduzi TODAS
+  independentemente (matriz curl, 10 asserções Playwright incluindo o caso negativo do fragmento, crawl de
+  32 links, balanço de grep 1:1 em 102 substituições). A implementação é de alta qualidade — a 11ª regra
+  fecha corretamente e em 1 hop o buraco aberto pelo próprio rename, não há open redirect, os headers estão
+  byte-idênticos e não há deriva entre a pasta local e a produção.
+  Não é PASS porque as ACs são escritas contra produção e produção ainda não recebeu nada; e porque o gate
+  encontrou uma SEGUNDA divergência medida entre vercel dev e produção (QA-2), o que impede tratar a
+  evidência local como equivalente à de produção em qualquer direção.
+  Nada volta para o @dev. Liberada para @devops.
+
+next_agent: "@devops"
+recommended_status: "InReview (não Done — há AC de produção em aberto; @devops promove após validar no ar)"
+
+files_reviewed:
+  - landing-pages/trifold-design-system/vercel.json
+  - landing-pages/trifold-design-system/Home.dc.html
+  - landing-pages/trifold-design-system/sobre-nos.dc.html   # renomeado de "Sobre Nós.dc.html" (git R100)
+  - landing-pages/trifold-design-system/Empreendimentos.dc.html
+  - landing-pages/trifold-design-system/B2B.dc.html
+  - landing-pages/trifold-design-system/Blog.dc.html
+  - landing-pages/trifold-design-system/Artigo.dc.html
+  - landing-pages/trifold-design-system/README.md

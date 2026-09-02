@@ -110,6 +110,22 @@ export const PADROES_DE_ENCERRAMENTO: RegExp[] = [
   /foi um prazer (te )?atender/,
   /um abraço/,
   /nos falamos/,
+  // Acrescentado em 01/09/2026 — a Nicole se despede assim com frequência e o Sinal C
+  // não a via. Régua rerrodada ANTES do merge (90 dias, 1.910 mensagens `assistant`,
+  // 501 conversas): +5 mensagens, +2 conversas com encerramento (31 → 33), e o
+  // Sinal C passa de **1 para 2 conversas bloqueadas** em 90 dias. Custo aceito.
+  //
+  // ⚠️ Os outros quatro candidatos medidos na mesma rodada foram REJEITADOS pelo custo,
+  // e ficam registrados aqui para não serem re-propostos sem medir de novo:
+  //   `boa sorte`                    → 1 → 3 bloqueadas
+  //   `estarei aqui|estou por aqui`  → 1 → 2, mas o pico da janela sobe de 8 p/ 9
+  //   `me chama quando|me avisa quando|é só me chamar` → 1 → 4  (56 msgs, 51 conversas)
+  //   `quando quiser (retomar|conversar|falar)`        → 1 → 3  (só 3 msgs, mas caem
+  //                                                    todas em conversas já no limite)
+  // Os cinco juntos levariam a 89 conversas com encerramento e **7 bloqueadas** — sete
+  // handoffs forçados em 90 dias, quase todos em lead humana. O mecanismo do Sinal C
+  // não muda; o que muda o resultado é o tamanho desta lista.
+  /fico no aguardo|fico aguardando|ficamos no aguardo/,
 ]
 
 /**

@@ -3,7 +3,7 @@ epic: 86
 title: Conversions API (CAPI) e Rastreamento Meta — Evento "Visitou"
 status: Draft
 created_at: 2026-08-04
-updated_at: 2026-08-28
+updated_at: 2026-09-02
 created_by: River (@sm)
 priority: High
 sub_epics:
@@ -189,6 +189,25 @@ Enviar ao Meta dois eventos que a campanha precisa:
 > "verificado em produção", não "mergeado". Consequência para o epic: o
 > multi-landing (`resolveLandingConfig`) já está em produção e disponível para
 > stories futuras de landing, mesmo com a landing do Yarden ainda offline.
+>
+> **Atualização de 2026-09-02 (@devops, no merge do PR #553 da 86-12).** O
+> **conteúdo e design definitivos** da landing do Yarden estão agora em `main`
+> (squash `86ea676a`), substituindo o placeholder estrutural que o #512 havia
+> mergeado: página completa a partir do mockup "Yarden LP v1.png", 3 formulários,
+> 13 assets e os 4 links para o PDF da política de privacidade. **Nada disso muda
+> o status da 86-12, que continua `InReview`, nem o `stories_done`, que segue
+> `[86-9, 86-11]`** — a leitura de 2026-08-28 acima permanece **inteiramente
+> válida**, porque este PR não tocou em infraestrutura: o projeto Vercel `yarden`
+> **ainda não existe** (T12), a CSP/rewrites do `trifold-design-system` (AC9)
+> seguem sem `vercel deploy --prod`, `trifold.eng.br/yarden/` **continua fora do
+> ar** e o **AC13 segue não validado** (T13). A distinção "mergeado ≠ em
+> produção" que este epic já registrava fica, se possível, mais afiada: a página
+> definitiva existe no repo e não existe para nenhum visitante. Consequência
+> prática para o epic: a 86-12 é hoje a única story de landing cujo código está
+> integralmente em `main` sem um `Done` correspondente, e a lacuna é
+> **exclusivamente de provisionamento manual de projeto Vercel**, não de
+> desenvolvimento — T12/T13 são de @devops e dependem de autorização explícita do
+> stakeholder, que até aqui cobriu apenas os merges.
 
 ## Decisões de Produto — adendo de 2026-08-26 (Travadas)
 
@@ -229,3 +248,4 @@ Enviar ao Meta dois eventos que a campanha precisa:
 | 2026-08-26 | 0.3 | Acrescentada 86-12 (`Draft`) — Pixel + CAPI na landing nova do Yarden (`/yarden/`), irmã arquitetural da 86-11 (Vind Residence), motivada pela constatação de que a landing WordPress antiga do Yarden (`/y/`) está 404 em produção. A 86-12 introduz um AC novo (discriminador multi-landing em `landing-page-tracking.ts`, ADAPT) porque os módulos server-side reusados da 86-11 hardcodavam identificadores "Vind Residence" — achado não previsto na auditoria original. Duas decisões de negócio deixadas abertas na story para @po validar com o usuário: dataset/Pixel ID do Yarden e a ausência de conteúdo definitivo da página. 86-10 permanece reservada e não redigida. | @sm (River) |
 | 2026-08-26 | 0.4 | Validação @po da 86-12 (GO 9.5/10, `Draft` → `Ready`). Duas decisões de negócio do stakeholder promovidas a **Decisões de Produto travadas** do epic (adendo, itens 4 e 5): (4) landings novas reusam o dataset `1337310707164669` e se segmentam por `content_category`, nunca por dataset próprio; (5) convenção de nome de projeto Vercel = nome do empreendimento (`yarden` → `yarden.vercel.app`). Frontmatter reconciliado com a realidade: `stories_done: [86-9, 86-11]` (estava vazio), `stories_added: [86-9, 86-10, 86-11, 86-12]`, `stories_superseded: [86-5, 86-6, 86-7]`, e `stories_planned` deixou de listar as três substituídas. 86-11 registrada como `Done` (estava como `Ready`). | @po (Pax) |
 | 2026-08-28 | 0.5 | **86-12 mergeada em `main` (PR #512, squash `0c2b4eb8`) e deliberadamente NÃO promovida a `Done`.** `stories_done` segue `[86-9, 86-11]` — nesta convenção `Done` é "verificado em produção", e o merge cobre apenas a fatia `packages/web` da story (o discriminador multi-landing `LANDING_CONFIGS`/`resolveLandingConfig`), que é a única a viver no projeto Vercel git-linkado e portanto a única que sobe sozinha. O projeto Vercel `yarden` **não existe** (T12 aberta) e a CSP/rewrites do `trifold-design-system` (AC9) exigem `vercel deploy --prod` manual — logo `trifold.eng.br/yarden/` está offline e o AC13 não foi validado (T13 aberta). Registrado no bloco de "Correção de curso" o porquê da distinção merge≠Done neste epic: as landings são **projetos Vercel separados e sem git link**, então o merge de uma story de landing nunca é evidência de que a landing está no ar — armadilha que vale para toda story futura de landing deste epic. Ganho já efetivo para o epic: o multi-landing está em produção, então a próxima landing custa uma entrada no `Record` + um proxy clonado. Nenhuma decisão de produto alterada. | @devops (Gage) |
+| 2026-09-02 | 0.6 | **Conteúdo definitivo da landing do Yarden mergeado em `main` (86-12, PR #553, squash `86ea676a`, `mergedAt: 2026-09-02T12:10:16Z`) — e a 86-12 segue NÃO `Done` pela segunda vez.** `stories_done` permanece `[86-9, 86-11]`, `status` da story permanece `InReview`. O #553 substitui o placeholder estrutural que o #512 trouxe: página completa do mockup "Yarden LP v1.png", 3 formulários, 13 assets e os 4 links (3 checkboxes + rodapé) para `assets/politica-de-privacidade.pdf`, que fecha o `86.12-QA-002` **no código**. `reviewDecision: APPROVED` (CodeRabbit), 7 checks `SUCCESS`, `mergeStateStatus: CLEAN` — re-lidos imediatamente antes do merge, e a review incremental do CodeRabbit sobre o commit final (`66632608`) não trouxe achado nenhum. **Por que não é `Done`:** este PR **não provisionou infraestrutura** — o projeto Vercel `yarden` continua inexistente (T12), a CSP/rewrites do `trifold-design-system` (AC9) seguem sem `vercel deploy --prod`, `trifold.eng.br/yarden/` **está fora do ar** e o **AC13 não foi validado** (T13). A convenção do epic — `Done` = "verificado em produção", não "mergeado" — se aplica com mais força aqui do que em 2026-08-28: agora a página **definitiva** existe no repo e não existe para nenhum visitante, inclusive o PDF de política, que está versionado e não servido. T12/T13 são de @devops e aguardam autorização explícita do stakeholder (lucas@trifold.eng.br), que até aqui cobriu somente os merges. Adendo textual correspondente na seção de stories ("Atualização de 2026-09-02"); `stories_planned`/`stories_added`/`stories_superseded` inalterados. | @devops (Gage) |

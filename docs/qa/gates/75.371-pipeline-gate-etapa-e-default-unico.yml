@@ -1,0 +1,494 @@
+schema: 1
+story: "75-371"
+story_title: "Pipeline: quem vê o botão é quem pode criar, e etapa padrão volta a ser única"
+gate: PASS
+status_reason: >-
+  Segunda rodada, sobre a mesma árvore não commitada. **Os 4 bloqueios e os 2 `low` estão
+  fechados, e fechados com o vermelho reproduzido — parte por mim, parte por medição em banco
+  que eu não conseguia fazer na rodada 1.**
+  QA-1: o `pipeline-gate.contract.test.ts` não afirma "a tela usa uma chave", ele EXTRAI a
+  capability da fonte da tela e a das fontes das duas rotas e COMPARA as listas. Testei quatro
+  formas de burlar: revert puro morre com **3 failed**, OR com outra capability morre com
+  **2 failed**, abandonar `can()` e ler a matriz na mão morre com **2 failed**. É um carrasco
+  de verdade, na direção certa (divergência tela↔API), não uma régua de existência de import.
+  QA-2: a guarda `TG_OP = 'INSERT' AND EXISTS(org_id, slug)` é legítima e eu conferi a premissa
+  na fonte, não no comentário — `UNIQUE(org_id, slug)` é **incondicional**
+  (`001_base_schema.sql:104`), então "linha já existe" só pode terminar em descarte ou 23505, e
+  não há terceiro caso onde a guarda deixaria de ceder o posto indevidamente. Auditei os DOIS
+  caminhos vivos de `ON CONFLICT DO UPDATE` da tabela e os dois estão certos, por motivos
+  diferentes — a afirmação do comentário não é hand-waving.
+  QA-3/4/5/6: mutei cada um e cada um acende vermelho.
+  **O que o @dev mediu vale mais que o meu raciocínio da rodada 1**: sem a guarda,
+  `count(is_default) = 0`; com ela, `1`. Auditei o método dos scripts (é mutação de banco de
+  verdade — o script ASSERTA que a guarda foi removida antes de aplicar) e ele se sustenta.
+  Passa com **quatro resíduos `low` medidos** e nenhum bloqueio. O que mais me incomoda não
+  estava na minha lista anterior: com o trigger transferindo o posto de verdade, a TABELA passa
+  a mostrar **duas linhas com "Padrão: Sim"** até um reload, porque `handleStageUpdate` só
+  remenda a linha editada. Não corrompe nada e não trava ninguém, mas é a tela desta story
+  exibindo dois padrões — e vai voltar como reporte de bug parecidíssimo com o que acabamos de
+  matar. Uma linha resolve. Recomendo antes do deploy; não seguro o gate por isso.
+
+reviewer: "Quinn (Test Architect)"
+updated: "2026-09-01T14:45:00Z"
+base: >-
+  commit **4ebd1f9b** em `fix/75-371-pipeline-etapa-gate-e-default-unico` (a árvore FOI commitada
+  durante o re-gate — a instrução que recebi dizia "nada commitado", e estava vencida). Todas as
+  minhas medições são sobre exatamente este conteúdo.
+
+rodadas:
+  - rodada: 1
+    gate: CONCERNS
+    resumo: >-
+      4 bloqueios + 3 `low`. O achado central: reverter o conserto principal deixava
+      299 arquivos / 3.930 testes VERDES — a AC1 não tinha uma linha de teste. Mais dois
+      defeitos de banco levantados analiticamente (sem psql/docker nesta máquina): o
+      `ON CONFLICT DO NOTHING` do `provision_org` zerando o padrão da org, e o datafix
+      podendo eleger etapa inativa.
+  - rodada: 2
+    gate: PASS
+    resumo: >-
+      Tudo fechado. Os dois achados de banco saíram de analíticos para MEDIDOS, com mutação
+      em nível de banco. 4 tentativas de burlar o contract test: 3 morrem. Resíduos: 4 `low`,
+      um deles novo e meu (tabela mostrando dois padrões).
+
+o_que_eu_rodei_nesta_rodada:
+  - cmd: "npx vitest run (suíte inteira)"
+    resultado: "300 arquivos passed · **3.941 passed + 6 expected fail** · 53s · exit 0 (era 299/3.930)"
+  - cmd: "npx vitest run (os 3 arquivos da story)"
+    resultado: "20 testes verdes (era 9)"
+  - cmd: "npx tsc --noEmit -p packages/web/tsconfig.json"
+    resultado: "exit 0"
+  - cmd: "npm run lint"
+    resultado: "0 errors, 30 warnings — MESMO número da rodada 1, nenhuma nos arquivos tocados"
+  - cmd: "10 mutações (4 bypass do contract test + 6 nas correções)"
+    resultado: "detalhadas abaixo; árvore restaurada e conferida com `diff` após cada uma"
+  - cmd: "auditoria de método dos scripts de prova em prod"
+    resultado: >-
+      Li `prova-sem-guarda.ts`, `prova-migration-250-v2.ts` e `scripts/lib/management-api.ts`.
+      NÃO reexecutei contra produção — reexecutar uma transação de escrita em prod que eu não
+      escrevi, só para reconfirmar medição já documentada, adiciona risco sem adicionar
+      informação. O valor do QA aqui é auditar o MÉTODO, e o método se sustenta (ver
+      `auditoria_da_prova_em_banco`).
+
+# ─────────────────────────────────────────────────────────────────────────────
+# (a) O contract test do QA-1 pega a divergência, ou dá para burlar?
+# ─────────────────────────────────────────────────────────────────────────────
+bypass_do_contract_test:
+  veredito: >-
+    Pega a divergência de verdade. O que ele NÃO pega é uma violação NOVA de outro formato —
+    limitação inerente a teste de texto-fonte, compartilhada com o
+    `configuracoes-gate.contract.test.ts` que serviu de precedente. Nenhum caminho de REVERT
+    sobrevive.
+  tentativas:
+    - id: B1
+      o_que: "revert puro: `canAccess(user.id, user.orgId, \"configuracoes.pipeline\")`"
+      medido: "**3 failed** | 3 passed — MORRE"
+    - id: B3
+      o_que: >-
+        mantém `can()` e alarga com OR para outra capability permissiva
+        (`configuracoes.pipeline_followup`), sem usar `canAccess`
+      medido: >-
+        **2 failed** | 4 passed — MORRE. A comparação de LISTAS é o que pega: a tela passa a
+        declarar 2 capabilities e a rota exige 1.
+    - id: B4
+      o_que: "abandona `can()` e lê a matriz na mão via `getUserPermissions(...)[\"configuracoes\"]`"
+      medido: "**2 failed** | 4 passed — MORRE"
+    - id: B5
+      o_que: "`(await can(...)) || PODE.includes(user.role)` com `PODE` = lista de perfis"
+      medido: >-
+        **1 failed** | 5 passed — morre, MAS pelo motivo errado: quem pegou foi a asserção de
+        FORMATO `/const canEdit = await can\(/` (eu escrevi parênteses em volta do await), não a
+        asserção anti-nome-de-perfil. Diagnostiquei o teste que acendeu: "o botão de criar e a
+        tabela saem do MESMO booleano do gate".
+    - id: B6
+      o_que: >-
+        o mesmo alargamento de B5 SEM mexer no formato:
+        `const canEdit = await can(user.id, user.orgId, "configuracoes.pipeline_editar") || PODE.includes(user.role)`
+      medido: >-
+        **6 passed — SOBREVIVE.** A tela volta a oferecer o botão para `gerente-comercial` e a
+        API continua devolvendo 403: o beco sem saída do Joabe, de volta, com a suíte verde.
+      severidade: low
+      por_que_low: >-
+        Não é caminho de revert — é código novo que alguém precisa escrever. E o teste 5 JÁ
+        tenta cobrir essa classe (`not.toMatch(/roles\.includes\(/)`); errou por um nome de
+        identificador. Registrado como resíduo R1 com correção de uma linha.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# (b) A guarda do TG_OP tem outro caminho de escape?
+# ─────────────────────────────────────────────────────────────────────────────
+escapes_da_guarda_do_trigger:
+  veredito: "Não encontrei escape vivo. Varri os cinco caminhos e a premissa da guarda."
+  premissa_conferida_na_fonte: >-
+    `UNIQUE(org_id, slug)` em `001_base_schema.sql:104` é **incondicional** (não é parcial em
+    `is_active`). Isso é o que torna a guarda correta em vez de perigosa: com a linha já
+    existente, o INSERT só pode ser descartado (`DO NOTHING`) ou estourar 23505 — não existe
+    caso em que ele vira inserção e o posto precisaria ter sido cedido. E é por isso que o
+    `EXISTS` **não filtrar `is_active` está certo**: a constraint também não filtra, então
+    etapa padrão soft-deletada com slug 'novo' continua bloqueando o INSERT, e a guarda
+    acompanha. Se a UNIQUE fosse parcial, a guarda seria um furo — não é.
+  caminhos:
+  - caminho: "`ON CONFLICT (org_id, slug) DO NOTHING` — `provision_org` (240/246)"
+    veredito: "FECHADO. É o cenário do QA-2, medido em prod: com guarda 1, sem guarda 0."
+  - caminho: "`ON CONFLICT (org_id, slug) DO UPDATE` — `supabase/seed.sql:37`"
+    veredito: >-
+      SEGURO, e por um motivo que vale registrar: o `DO UPDATE SET` lista name/type/position/color
+      e **não** `is_default`. Então BEFORE INSERT dispara, a guarda retorna cedo, e
+      `BEFORE UPDATE OF is_default` **não** dispara (a cláusula `OF` só acende se a coluna estiver
+      no SET). Nada a transferir, nada perdido. Sem a guarda, este mesmo caminho zerava o padrão
+      e não devolvia — o conserto do QA-2 protege o seed também, não só o `provision_org`.
+  - caminho: "upsert do supabase-js — `scripts/run-seed.ts:64` (`onConflict: \"org_id,slug\"`)"
+    veredito: >-
+      SEGURO por caminho DIFERENTE do anterior: o PostgREST monta o `DO UPDATE SET` com TODAS as
+      colunas enviadas, e `is_default` está entre elas. Logo `BEFORE UPDATE OF is_default`
+      dispara, `NEW.is_default` é true para 'novo', os irmãos são zerados e a linha assume.
+      É exatamente o que o comentário da migration afirma ("entra pelo ramo de UPDATE deste
+      mesmo trigger") — conferido nas duas variantes, não presumido.
+  - caminho: "`MERGE`"
+    veredito: >-
+      Sem uso no repositório (grep em `supabase/` e `scripts/`). Analiticamente entra pelos ramos
+      normais: `WHEN NOT MATCHED THEN INSERT` → TG_OP 'INSERT' com slug ausente → guarda não
+      acende → transfere; `WHEN MATCHED THEN UPDATE SET is_default` → ramo de UPDATE. Sem furo.
+  - caminho: "service role / RLS"
+    veredito: >-
+      Sem furo nas duas pontas. Service role ignora RLS e o `EXISTS` vê tudo. Como
+      `authenticated`, o `EXISTS` é filtrado por `stages_select_own_org` (mig 004,
+      `FOR SELECT USING (org_id = user_org_id())`, permissiva e OR'd com a de capability) — e o
+      `WITH CHECK` implícito da `stages_manage_admin` obriga `org_id = user_org_id()` no INSERT.
+      Ou seja: o irmão da mesma org é SEMPRE visível para quem consegue inserir. Não há estado em
+      que o `EXISTS` volte vazio e a constraint enxergue a linha.
+  - caminho: "INSERT com slug NOVO mas org já provisionada"
+    veredito: >-
+      Guarda não acende (correto — é inserção de verdade) e o trigger transfere o posto.
+      Resíduo teórico R5: se alguém tivesse RENOMEADO o slug da etapa padrão, reexecutar
+      `provision_org` injetaria uma 'Novo' fantasma que rouba o posto. O slug NÃO é editável pela
+      UI (o modal manda só name/type/color/is_default) e em prod o padrão é slug=`novo`, que
+      casa. Além disso é comportamento pré-existente do `provision_org` (qualquer slug renomeado
+      recria a etapa) e a 250 estritamente MELHORA o caso — antes gerava DOIS padrões.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# (c) As guardas novas criaram beco novo?
+# ─────────────────────────────────────────────────────────────────────────────
+becos_novos:
+  veredito: "Nenhum beco sem saída. Achei um sintoma de UI, que virou o resíduo R3."
+  cenarios:
+  - cenario: "trocar legitimamente qual etapa é a padrão"
+    resultado: >-
+      OK. Marcar OUTRA etapa como padrão manda `is_default: true` — a guarda do PATCH só acende
+      em `=== false` — e o trigger transfere. É o caminho que a própria mensagem do 409 indica.
+  - cenario: "renomear / recolorir a etapa que É a padrão"
+    resultado: >-
+      OK, e este era o beco mais provável. O modal manda `is_default: true` (espelha
+      `stage.is_default`), então `fields.is_default === false` é falso e a guarda nem consulta o
+      banco. Renomear o padrão continua funcionando.
+  - cenario: "desativar (excluir) a etapa padrão de propósito"
+    resultado: >-
+      OK. Caminho: eleger outra como padrão (trigger transfere) → excluir a antiga (agora não é
+      padrão, passa). Mensagem do 409 diz exatamente isso.
+  - cenario: "org com UMA única etapa, que é a padrão"
+    resultado: >-
+      OK, não trava: criar etapa nova marcando padrão (trigger transfere) e depois excluir a
+      antiga. Não existe estado sem saída.
+  - cenario: "org com ZERO padrões (legado)"
+    resultado: "OK — a guarda do PATCH só acende no `false`; marcar qualquer etapa como padrão passa."
+  - cenario: "duas abas / UI velha"
+    resultado: >-
+      OK. Se a etapa já não é mais a padrão no banco, a guarda lê `is_default = false` e libera —
+      a tela se autocorrige em vez de travar num 409 mentiroso.
+  - cenario: "id inexistente ou de outra org, ou etapa já inativa"
+    resultado: >-
+      404 preservado nos dois handlers: a leitura da guarda volta `null` (sem erro), a guarda não
+      opina, e o `.eq('is_active', true)` do UPDATE / do `softDelete` produz o 404 de sempre.
+      Coberto por teste.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# (d) Tema e layout do erro novo na tabela
+# ─────────────────────────────────────────────────────────────────────────────
+tema_e_layout:
+  tema: >-
+    OK. `text-red-600 dark:text-red-300` — o MESMO par dos dois modais
+    (`create-stage-modal.tsx:156`, `edit-stage-modal.tsx:163`) e coerente com a convenção do
+    projeto (`/dashboard` precisa de `dark:`). Nada de cor definida só dentro de um bloco de
+    tema.
+  layout: >-
+    Não quebra. O `<p>` é bloco dentro do `<td>` (HTML válido) e a tabela vive dentro de
+    `ScrollableX`, então coluna mais larga vira scroll horizontal, não estouro de página.
+    `max-w-xs` limita a 20rem. Dois nits cosméticos no resíduo R4.
+
+mutacoes_conferidas:
+  - id: M3
+    mutacao: "reverter `page.tsx` para o gate antigo (a que ficava VERDE na rodada 1)"
+    medido: "**3 failed** | 3 passed — o buraco da rodada 1 está tapado"
+  - id: M-A
+    mutacao: "`stages-table.tsx` volta a engolir a falha (`if (res.ok)`) e o import sai"
+    medido: "**1 failed** | 19 passed — MATA"
+  - id: M-A2
+    mutacao: "MANTÉM o import e a chamada, mas remove o `{erro && (...)}` do JSX"
+    medido: >-
+      **11 passed — SOBREVIVE.** A régua mede que a tradução é CHAMADA, não que o resultado é
+      RENDERIZADO. Resíduo R2.
+  - id: M-B
+    mutacao: "guarda de DELETE volta a falhar ABERTA (descarta o `error` da leitura)"
+    medido: "**1 failed** | 8 passed — MATA"
+  - id: M-C
+    mutacao: "remove a guarda de PATCH (desmarcar o padrão volta a passar)"
+    medido: "**1 failed** | 8 passed — MATA"
+  - id: B1/B3/B4/B5/B6
+    mutacao: "5 formas de burlar o contract test"
+    medido: "B1 3 failed · B3 2 failed · B4 2 failed · B5 1 failed (por formato) · **B6 sobrevive**"
+  - nota: >-
+      Toda mutação foi desfeita e conferida com `diff` contra backup. Estado final da árvore:
+      5 M + 7 ?? idêntico ao recebido, mais o YAML deste gate.
+
+auditoria_da_prova_em_banco:
+  veredito: "Método válido. É mutação de banco de verdade, não teatro."
+  o_que_conferi:
+    - >-
+      `prova-sem-guarda.ts` remove APENAS o bloco da guarda (do `IF TG_OP` até o `END IF;`) e
+      **asserta que removeu** (`if (migration.includes("TG_OP")) throw`) antes de aplicar. Sem
+      essa asserção a prova poderia estar medindo a migration intacta — é o cuidado que
+      distingue mutação de banco de um `console.log` otimista.
+    - >-
+      O cenário replicado é fiel ao `provision_org`:
+      `INSERT ... ('Novo','novo', is_default=true) ON CONFLICT (org_id, slug) DO NOTHING`, na org
+      que tem o padrão. Em prod o padrão É slug=`novo`, então o conflito realmente dispara.
+    - >-
+      `runSqlBruto` (`scripts/lib/management-api.ts:60`) manda o texto INTEIRO num único `query`
+      para `POST /v1/projects/{ref}/database/query` — o `BEGIN … ROLLBACK` é honrado como uma
+      transação só. O controle que fecha a conta é a leitura INDEPENDENTE depois do ROLLBACK
+      (17 etapas, 1 padrão, "Aguardando atendimento"), e ela foi feita.
+    - >-
+      `prova-migration-250-v2.ts` cobre A (ON CONFLICT descarta), B (clique do Joabe) e C
+      (idempotência do datafix), tudo dentro de `BEGIN … ROLLBACK`, com os vereditos numa TEMP
+      TABLE lida no fim.
+  ressalva_registrada: >-
+    Esses scripts vivem no scratchpad, fora do repositório: **não são rede de regressão** e nada
+    os reexecuta. A invariante do banco fica protegida pela própria migration (índice + trigger)
+    mais uma medição pontual. É aceitável — o trigger É a guarda —, mas fique dito que não há
+    carrasco automatizado para o lado SQL, e que reverter a guarda do `TG_OP` ou o
+    `ORDER BY is_active DESC` não acende nenhum vermelho em `npx vitese run`.
+
+resíduos:
+  - id: R1
+    severidade: low
+    origem: "medido nesta rodada (bypass B6)"
+    titulo: "O contract test não pega alargamento por lista de perfis em variável"
+    arquivo: "packages/web/src/app/dashboard/configuracoes/pipeline/pipeline-gate.contract.test.ts:71-78"
+    cenario: >-
+      `const PODE = [...]; const canEdit = await can(...) || PODE.includes(user.role)` passa
+      pelas 6 asserções (medido: 6 passed) e devolve o beco sem saída do Joabe. O teste 5 tenta
+      cobrir exatamente isso e erra por um nome de identificador (`roles.includes(` vs
+      `PODE.includes(`).
+    correcao_sugerida: >-
+      Parar de caçar o formato e caçar o VOCABULÁRIO: importar `KNOWN_ROLES` de
+      `@web/lib/capabilities` e asseverar que nenhum desses nomes aparece como literal em
+      `page.tsx`. Uma linha, sem constante duplicada (respeita
+      `feedback-consultar-fonte-nao-duplicar-constante`).
+  - id: R2
+    severidade: low
+    origem: "medido nesta rodada (mutação M-A2)"
+    titulo: "A régua do QA-4 mede a CHAMADA da tradução, não a RENDERIZAÇÃO"
+    arquivo: "packages/web/src/app/dashboard/configuracoes/pipeline/pipeline-gate.contract.test.ts:84"
+    cenario: >-
+      Remover o `{erro && (<p>…</p>)}` mantendo o import e o `setErro` deixa 11 testes verdes — o
+      usuário volta a não ver nada e nada reprova. É a metade visível do conserto que fica
+      descoberta.
+    correcao_sugerida: "acrescentar `expect(src).toMatch(/\\{erro && \\(/)` à mesma asserção."
+  - id: R3
+    severidade: low
+    origem: "achado NOVO desta rodada"
+    titulo: "Depois de transferir o padrão, a tabela mostra DUAS linhas com \"Padrão: Sim\""
+    arquivo: "packages/web/src/app/dashboard/configuracoes/pipeline/_components/stages-table.tsx:246"
+    cenario: >-
+      `handleStageUpdate` faz `prev.map(s => s.id === updated.id ? {...s, ...updated} : s)` — só
+      remenda a linha editada. Admin abre "Editar" na etapa B, marca "Etapa padrão", salva: o
+      banco transfere o posto (trigger da 250) e B passa a mostrar "Sim", **mas a linha A continua
+      mostrando "Sim"**, porque nada avisou o estado client. Não há `useEffect` sincronizando
+      `initialStages` nem `key` forçando remount (`page.tsx:43`), então nem um
+      `router.refresh()` corrigiria — é o gotcha já registrado do projeto
+      (`feedback-router-refresh-nao-mexe-em-state-client`).
+      **É sintoma NOVO desta story**: antes da 250, marcar B realmente deixava A padrão também,
+      então as duas "Sim" eram verdade (era o bug). Agora o banco tem um padrão e a tela mostra
+      dois — na tela cuja story é "etapa padrão volta a ser única".
+      Não corrompe dado, não trava fluxo, e se corrige no reload. O risco real é de PROCESSO:
+      vai voltar como reporte "o CRM tem duas etapas padrão", indistinguível do bug que acabamos
+      de matar.
+    correcao_sugerida: >-
+      Em `handleStageUpdate`, quando `updated.is_default` for true, zerar `is_default` nas outras
+      linhas do estado — espelhar no client o que o trigger fez no banco. Uma linha.
+    recomendacao: "fazer antes do deploy; não bloqueia o gate"
+    status: FECHADO
+    fechado_em: "2026-09-01 (rodada 3, commit 8523e892)"
+    como: >-
+      `handleStageUpdate` passou a delegar para `aplicarAtualizacaoDeEtapa` (função pura, 4
+      testes) — quando a etapa editada vira a padrão, as demais perdem `is_default` no estado
+      local, espelhando a transferência que o trigger da migration 250 faz no banco. Mutação
+      que mede: remover a transferência da função pura → 2 testes falham.
+
+  - id: R4
+    severidade: low
+    origem: "achado NOVO desta rodada (item (d))"
+    titulo: "Dois nits cosméticos no erro novo da célula de ações"
+    arquivo: "packages/web/src/app/dashboard/configuracoes/pipeline/_components/stages-table.tsx:171-175"
+    cenario: >-
+      (i) `max-w-xs text-right` sem `ml-auto`: o bloco de 20rem fica encostado à ESQUERDA da
+      célula (que é `text-right`) enquanto o texto se alinha à direita dentro dele — a mensagem
+      não fica alinhada com os botões. `ml-auto` resolve.
+      (ii) `erro` só é limpo no início do próximo `handleDelete`: depois de um 409, o texto
+      vermelho fica na linha indefinidamente — inclusive depois de o admin eleger outra padrão e
+      a exclusão já ser possível. Limpar ao cancelar o "Confirmar?" resolve.
+  - id: R6
+    severidade: medium
+    origem: "achado NOVO do re-gate, medido em produção"
+    titulo: "Duas etapas de TESTE ficaram em produção, ativas e visíveis para os usuários"
+    cenario: >-
+      A leitura de prod mostra 18 etapas, não 17. As duas novas são **"Follow-up"** (slug
+      `follow-up`, pos 18, criada 01/09 10:23) e **"Joabe"** (slug `joabe`, pos 19, criada 01/09
+      11:00:21 — 25 segundos depois do commit). Ambas `is_active = true`. "Joabe" não é etapa de
+      funil e "Follow-up" é exatamente o nome do print do bug: são sobras de verificação manual.
+      Etapa ativa aparece no Kanban do Pipeline e em todo filtro por etapa — quem trabalha no CRM
+      está vendo as duas agora.
+    correcao: >-
+      Excluir as duas pela própria tela (o soft delete passa: nenhuma é a padrão, então a guarda
+      nova do 409 não barra — e isso, de passagem, exercita o caminho feliz do DELETE em prod).
+      Confirmar com o Marcos antes, no caso improvável de alguma ser intencional.
+  - id: R5
+    severidade: low
+    origem: "rodada 1; agora PARCIALMENTE medido em produção"
+    titulo: "QA-7 — o ramo de TRANSFERÊNCIA do trigger nunca rodou sob RLS de `authenticated`"
+    cenario: >-
+      A prova em prod é por service role (RLS desligada). Analisei de novo e o risco segue baixo:
+      a mesma policy, org e capability que autorizam o INSERT autorizam o UPDATE nos irmãos, e a
+      `stages_select_own_org` garante a leitura do `EXISTS`. Mas segue sendo raciocínio.
+    cenario_atualizado: >-
+      O BEFORE INSERT já rodou em prod por via real (as duas etapas criadas hoje), sem 500 e sem
+      quebrar nada. O que segue inédito fora do service role é o `IF NEW.is_default THEN UPDATE`
+      nos irmãos — que é justamente o ramo onde a RLS poderia filtrar em silêncio.
+    recomendacao: >-
+      **Agora é dívida em produção, não pendência pré-deploy** (a 250 já está lá). Logado como
+      admin real: marcar outra etapa como padrão **com o checkbox** e conferir que o posto
+      transferiu e que a antiga virou "-". 30 segundos. Aproveitar para ver o R3 ao vivo — é
+      exatamente nesse clique que a tabela deve mostrar dois "Sim".
+
+ac_traceability:
+  AC1: "FECHADA — implementada e agora com carrasco que compara tela↔API (B1 morre com 3 failed)"
+  AC2: "FECHADA — testada; mutação mata"
+  AC3: "FECHADA — furo do `ON CONFLICT` tapado e MEDIDO em banco (sem guarda: 0 padrões; com: 1)"
+  AC4: "FECHADA nas duas metades — 409 na API (testado) E mensagem na tela (M-A mata)"
+  AC5: "FECHADA — `ORDER BY is_active DESC` primeiro; idempotência do datafix medida (cenário C)"
+  AC6: "OK — `lib/leads/default-stage.ts` intocado"
+  AC7: >-
+    FECHADA no que era exequível. "Gate da tela pela capability": entregue e mais forte que o
+    pedido (compara com a API em vez de afirmar a chave). "Unicidade exercitada no nível da
+    rota": segue inexequível em vitest — a invariante mora no trigger; o substituto é a prova em
+    banco com mutação, cujo método eu auditei. Fica registrado que o lado SQL não tem rede de
+    CI (ressalva em `auditoria_da_prova_em_banco`).
+
+recomendacao:
+  veredito: PASS
+  bloqueia_devops: false
+  antes_do_deploy_recomendado:
+    - "Nenhum. R1, R2, R3 e R4 foram fechados na rodada 3 (commits 8523e892 e seguinte)."
+  follow_up_barato:
+    - "FECHADO — R1 e R2: duas asserções no contract test, cada uma com mutação que mata."
+    - "FECHADO — R4: `ml-auto` no erro e `setErro(null)` ao cancelar o Confirmar."
+  ja_em_producao_agir_agora:
+    - >-
+      **R6 — remover as etapas de teste "Follow-up" e "Joabe" de produção.** É o único achado
+      com impacto visível para usuário AGORA.
+    - >-
+      **R5 — smoke test do ramo de transferência**, marcando o checkbox. A 250 já está viva em
+      prod; isto virou dívida, não pendência.
+    - >-
+      **Corrigir a story:** "Pendências para @devops" ainda diz que a 250 não foi aplicada.
+      É falso desde 14:02:44Z de hoje.
+  pendencia_de_deploy:
+    - >-
+      A migration 250 **JÁ FOI APLICADA em produção** (audit `migrations-aplicadas.json`,
+      14:02:44Z), na versão corrigida — conferido por sha256 E pelo corpo da função no banco.
+      Aplicada ANTES do gate fechar; ver `fatos_de_processo`.
+    - "Sem `.env.teste` nesta máquina: o ambiente de teste continua não exercitado."
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DESCOBERTO NO RE-GATE, FORA DO QUE ME FOI PEDIDO
+# ─────────────────────────────────────────────────────────────────────────────
+fatos_de_processo:
+  titulo: "A migration 250 JÁ ESTÁ EM PRODUÇÃO, e foi aplicada com o gate ainda em CONCERNS"
+  como_descobri: >-
+    `git status` acusou `docs/audits/migrations-aplicadas.json` modificado — arquivo que eu não
+    toquei. O diff mostra produção saindo de **270 para 273** migrations aplicadas, com 248, 249
+    e **250** entrando como `aplicada` via `apply`, auditoria regerada em 2026-09-01T14:02:44Z.
+    O commit `4ebd1f9b` é de 10:59:56 -0300 (13:59:56Z) — ou seja, aplicou-se em prod ~2 min
+    depois do commit, enquanto o único veredito de QA existente era o **CONCERNS** da rodada 1.
+  linha_do_tempo:
+    - "rodada 1 do gate → CONCERNS (4 bloqueios)"
+    - "@dev corrige os 6 achados"
+    - "commit 4ebd1f9b (13:59:56Z)"
+    - "`db:apply` em PRODUÇÃO — 248, 249 e 250 (14:02:44Z)"
+    - "só então o re-gate foi pedido"
+  o_que_isto_viola: >-
+    REGRA ZERO do `CLAUDE.md`: "Deploy sem quality gate @qa = VIOLAÇÃO". Aplicar migration em
+    produção é ação de deploy, e deploy é autoridade EXCLUSIVA do @devops
+    (`.claude/rules/agent-authority.md`). Registro como fato, não como reprovação: o gate julga a
+    MUDANÇA, e a mudança está boa. Mas a ordem foi invertida e isso precisa estar escrito.
+  a_boa_noticia_e_medida: >-
+    **A versão que entrou em prod é a CORRIGIDA.** Confirmei em dois níveis independentes:
+    (1) o `sha256` registrado como aplicado
+    (`b9722f4439541f4e150c00541e9910e86a46e6118d85b3128357b48443d4ea60`) é byte a byte igual ao
+    arquivo em disco, que tem a guarda do QA-2 e o `ORDER BY is_active DESC` do QA-3;
+    (2) consultei o CORPO da função viva em produção (`pg_proc.prosrc`) e a guarda está lá.
+    Não é o arquivo que diz — é o banco.
+  risco_colateral: >-
+    O mesmo `db:apply` levou 248 e 249 junto. Fora do escopo desta story, mas quem revisou a 250
+    não necessariamente revisou aquelas duas.
+  acao_necessaria: >-
+    Corrigir a seção "Pendências para @devops" da story, que ainda afirma "a migration 250 não
+    foi aplicada em banco nenhum — só provada e revertida". **Isso agora é falso** e é a primeira
+    coisa que a próxima pessoa vai ler.
+
+verificacao_de_producao_pos_deploy:
+  metodo: >-
+    Como o deploy já havia acontecido, conferir o estado real de prod passou a ser dever meu.
+    LEITURA PURA (SELECT em catálogo + contagens), sem transação e sem escrita — `TRIFOLD_ALLOW_PROD`
+    existe para escrita, e nada aqui escreve. Script: `qa-verifica-prod-250.ts`.
+  medido:
+    indice_parcial_existe: 1
+    trigger_existe: 1
+    guarda_do_QA2_viva_no_corpo_da_funcao: 1
+    eh_security_definer: 0
+    total_defaults: 1
+    defaults_em_etapa_inativa: 0
+    orgs_sem_padrao: 0
+    quem_e_o_padrao: "Aguardando atendimento (pos 0)"
+    total_etapas: 18
+    total_orgs: 1
+  veredito: >-
+    **Produção sadia e a invariante vale nas três direções que importam**: exatamente um padrão,
+    nenhum padrão em etapa inativa, nenhuma org sem padrão. `prosecdef = 0` confirma que o
+    trigger roda com direitos do INVOCADOR como projetado — nada de escalada de privilégio.
+  o_que_isto_fecha_do_R5: >-
+    PARCIALMENTE. Prod tem 18 etapas, não as 17 da medição da story: duas foram criadas HOJE
+    ("Follow-up" às 10:23 e "Joabe" às 11:00 BRT, esta última 25s depois do commit). Ou seja, o
+    caminho BEFORE INSERT do trigger já rodou em produção por via real, sem 500 e sem quebrar a
+    invariante. **Mas as duas nasceram com `is_default = false`** — então o ramo que interessa ao
+    R5 (`IF NEW.is_default THEN UPDATE` nos irmãos) ainda NUNCA rodou em produção fora do service
+    role. O R5 continua aberto, agora com o alvo afiado: o smoke test tem de MARCAR o checkbox.
+
+armadilhas_do_meu_proprio_instrumento:
+  - >-
+    A B5 morreu e eu quase contei como vitória do teste. Morreu por um parêntese — a asserção de
+    FORMATO — e não pela asserção anti-nome-de-perfil que existia para isso. Só descobri porque
+    fui ver QUAL teste acendeu. Daí saiu a B6, que sobrevive. Mutação que morre pelo motivo
+    errado é falso verde disfarçado de vermelho.
+  - >-
+    Na rodada 1 registrei os dois achados de banco como analíticos por não ter psql/docker.
+    Estava certo em não afirmar medição — mas o @dev os mediu e um deles (QA-2) veio exatamente
+    como eu descrevi, com `count = 0`. A conclusão que levo: analítico bem fundamentado vale como
+    achado, não como prova, e quem tem o instrumento tem a obrigação de fechar a conta.
+  - >-
+    Quase entreguei este re-gate sem olhar `git status`. O que denunciou o deploy foi um arquivo
+    de auditoria modificado que eu não tinha tocado — não a instrução que recebi, que afirmava
+    "nada commitado". Estado do repositório é evidência; a descrição do estado, não.
+  - >-
+    Não reexecutei os scripts de PROVA (que escrevem em transação) em produção, de propósito.
+    Auditei o método em vez do resultado — é onde um falso verde se esconde, e o script tem justamente a asserção que
+    impede o caso mais perigoso (medir a migration intacta achando que removeu a guarda).
