@@ -230,31 +230,38 @@ describe("AC4 — avisoDeArquivoNaoRemovido", () => {
   })
 })
 
-describe("AC8 — urlDePreVisualizacao", () => {
+describe("AC8 — urlDePreVisualizacao (DOC-002: UMA marca de versão, não duas)", () => {
   const URL_BASE = "https://x.supabase.co/storage/v1/object/public/org-logos/o/logo.png"
+  /** O que a ROTA grava em `logo_url`: já versionado pelo sha256 do conteúdo. */
+  const URL_GRAVADA = `${URL_BASE}?v=93497ee4808a75d0`
 
-  it("pendura a marca de versão — sem ela o operador vê o logo ANTIGO por até uma hora", () => {
-    // O caminho é fixo por extensão: trocar PNG por PNG produz a MESMA URL, e o Storage serve
-    // objeto público com `max-age=3600`.
-    expect(urlDePreVisualizacao(URL_BASE, "2026-09-02T13:30:00.999999+00:00")).toBe(
-      `${URL_BASE}?v=2026-09-02T13%3A30%3A00.999999%2B00%3A00`,
-    )
+  it("🔴 a URL gravada passa INTEIRA — nenhuma segunda marca é pendurada", () => {
+    // A 1ª versão devolvia `…?v=<sha>&v=<updated_at>`. Funcionava por acidente e era errado nos
+    // dois sentidos: `updated_at` anda a cada UPDATE da linha (a `900-62` edita nome/slug/fiscal
+    // na MESMA linha, o que invalidaria o cache de um arquivo que não mudou um byte), e `v`
+    // repetido é ambíguo para quem lê — `URLSearchParams.get("v")` devolve o PRIMEIRO.
+    expect(urlDePreVisualizacao(URL_GRAVADA)).toBe(URL_GRAVADA)
   })
 
-  it("a marca MUDA quando `updated_at` muda — senão não seria marca de versão", () => {
-    expect(urlDePreVisualizacao(URL_BASE, "A")).not.toBe(urlDePreVisualizacao(URL_BASE, "B"))
+  it("🔴 e a chave `v` aparece UMA vez só — a asserção que o `&v=` de antes reprova", () => {
+    const previa = urlDePreVisualizacao(URL_GRAVADA)
+    expect(previa).not.toBeNull()
+    expect([...new URL(previa!).searchParams.keys()]).toEqual(["v"])
+    expect(new URL(previa!).searchParams.get("v")).toBe("93497ee4808a75d0")
   })
 
-  it("URL que já tem query ganha `&`, e não um segundo `?`", () => {
-    expect(urlDePreVisualizacao(`${URL_BASE}?token=x`, "A")).toBe(`${URL_BASE}?token=x&v=A`)
+  it("URL SEM query nenhuma também passa igual — não se inventa versão que o banco não gravou", () => {
+    // `logo_url` sem `?v=` só existiria se algo fora desta rota tivesse escrito a coluna. Inventar
+    // uma marca aqui esconderia esse fato em vez de deixá-lo visível.
+    expect(urlDePreVisualizacao(URL_BASE)).toBe(URL_BASE)
   })
 
   it("`null` entra, `null` sai — não se inventa pré-visualização do que não existe", () => {
-    expect(urlDePreVisualizacao(null, "A")).toBeNull()
+    expect(urlDePreVisualizacao(null)).toBeNull()
   })
 
-  it("string vazia também não vira URL", () => {
-    expect(urlDePreVisualizacao("", "A")).toBeNull()
+  it("string vazia vira `null`: `<img src=\"\">` requisita a PÁGINA ATUAL como se fosse imagem", () => {
+    expect(urlDePreVisualizacao("")).toBeNull()
   })
 })
 

@@ -256,26 +256,34 @@ export function avisoDeArquivoNaoRemovido(corpo: CorpoDaRespostaDoLogo): string 
 }
 
 /**
- * AC8 — a URL que o `<img>` do card usa, com a marca de versão pendurada.
+ * AC8 — a URL que o `<img>` do card usa. **Não pendura marca de versão**, e isso é a decisão.
  *
- * ## Por que não é `logo_url` cru, apesar de a AC escrever `<img src={org.logo_url}>`
+ * ## A marca já vem na coluna, e uma SEGUNDA marca seria pior que nenhuma
  *
- * O caminho no Storage é `{org_id}/logo.{ext}` — **fixo por extensão**. Trocar um PNG por outro
- * PNG produz a MESMA URL pública, e o Storage do Supabase serve objeto público com
- * `cache-control: max-age=3600`. Sem marca de versão, o operador que acabou de substituir o logo
- * continuaria vendo o antigo por até uma hora, com `200` na tela e a trilha registrando a troca:
- * a tela afirmando um estado que ela não está mostrando.
+ * O caminho no Storage é `{org_id}/logo.{ext}` — fixo por extensão —, e o Storage serve objeto
+ * público com `cache-control: max-age=3600`: sem marca de versão o operador veria o logo ANTIGO
+ * por até uma hora. Quem resolve isso é `urlVersionadaDoLogo()`, logo abaixo: o que a rota GRAVA
+ * em `logo_url` já é `…/logo.png?v=<sha256 do conteúdo>`. Esta função recebe aquela string.
  *
- * `updated_at` é a marca certa porque é exatamente o que o trigger `set_updated_at` bomba na
- * MESMA transação do `UPDATE` que gravou a URL nova.
+ * A primeira versão daqui pendurava um segundo `?v=`, com `updated_at`, e o resultado gravado ×
+ * exibido era `…?v=<sha>&v=<updated_at>` (concern DOC-002 do gate). Funcionava por acidente — o
+ * `<img>` só precisa de uma string diferente — e era duas vezes errado:
+ *   1. **`updated_at` é a marca ERRADA para uma imagem.** Ele anda a cada `UPDATE` da linha, e a
+ *      `900-62` edita nome/slug/contato/fiscal na MESMA linha: renomear a empresa invalidaria o
+ *      cache de um arquivo que não mudou um byte. O `sha` anda quando — e só quando — a imagem
+ *      muda, que é a definição da marca de versão de um objeto imutável por conteúdo.
+ *   2. **`v` repetido é ambíguo para quem lê.** `URLSearchParams.get("v")` devolve o PRIMEIRO, e
+ *      a `900-64` vai consumir esta coluna.
  *
- * `null` entra e `null` sai: não existe pré-visualização de logo que não existe, e inventar uma
- * URL aqui produziria um `<img>` quebrado no lugar do placeholder neutro.
+ * ## O que sobrou aqui, e por que ainda é uma função
+ *
+ * `null` **e a string vazia** saem como `null`. Não é zelo: `<img src="">` faz o navegador
+ * requisitar a PÁGINA ATUAL como se fosse imagem — um `GET` extra da rota do console para render
+ * de um logo que não existe. O placeholder neutro é o desfecho certo, e esta é a única decisão
+ * que a pré-visualização ainda toma.
  */
-export function urlDePreVisualizacao(logoUrl: string | null, updatedAt: string): string | null {
-  if (!logoUrl) return null
-  const separador = logoUrl.includes("?") ? "&" : "?"
-  return `${logoUrl}${separador}v=${encodeURIComponent(updatedAt)}`
+export function urlDePreVisualizacao(logoUrl: string | null): string | null {
+  return logoUrl ? logoUrl : null
 }
 
 /**

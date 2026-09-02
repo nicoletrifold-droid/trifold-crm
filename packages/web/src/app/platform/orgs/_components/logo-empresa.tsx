@@ -19,7 +19,7 @@
  *     servidor; é a validação do servidor, importada.
  *   • `decidirDesfechoDoLogo()` — falha NÃO some com o erro, sucesso recarrega.
  *   • `avisoDeArquivoNaoRemovido()` — o `DELETE` que limpou o cadastro mas não apagou o arquivo.
- *   • `urlDePreVisualizacao()` — a marca de versão que impede a tela de mostrar o logo ANTIGO.
+ *   • `urlDePreVisualizacao()` — a URL do `<img>`, e o `""` que NÃO pode virar `src`.
  *   • `AVISO_DE_QUE_ISTO_SO_GUARDA` — a AC9.
  * O que sobra aqui é a OBEDIÊNCIA a essas decisões, mais o desenho. Há régua estática em
  * `platform-query-scan.test.ts` prendendo o CONSUMO de cada uma: função pura bem testada com
@@ -60,7 +60,7 @@ export function LogoDaEmpresa({ orgId, logoUrl, expectedUpdatedAt }: Props) {
   const [aviso, setAviso] = useState<string | null>(null)
   const seletor = useRef<HTMLInputElement>(null)
 
-  const previa = urlDePreVisualizacao(logoUrl, expectedUpdatedAt)
+  const previa = urlDePreVisualizacao(logoUrl)
 
   /** O trecho comum aos dois verbos: envia, decide o desfecho, e NUNCA afirma o que não voltou. */
   async function agir(pedido: () => Promise<Response>) {
@@ -129,8 +129,8 @@ export function LogoDaEmpresa({ orgId, logoUrl, expectedUpdatedAt }: Props) {
           {previa ? (
             // `next/image` exigiria cadastrar o host do Storage em `remotePatterns`; a URL aqui é
             // pública e de baixa frequência, e o `<img>` é o que as outras telas deste console
-            // usam. O `?v=` de `urlDePreVisualizacao` é o que impede o navegador de servir o logo
-            // ANTIGO do cache quando a extensão não mudou.
+            // usam. O que impede o navegador de servir o logo ANTIGO do cache quando a extensão
+            // não mudou é o `?v=<sha do conteúdo>` que a ROTA já gravou dentro de `logo_url`.
             // eslint-disable-next-line @next/next/no-img-element
             <img src={previa} alt="Logo da empresa" className="max-h-16 max-w-16 object-contain" />
           ) : (
