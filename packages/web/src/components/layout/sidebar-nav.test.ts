@@ -51,8 +51,9 @@ vi.mock("next/link", () => ({
 // desligada. A contraprova está registrada no Dev Agent Record da story.
 //
 // `onError` continua sendo descartado, e isso é uma LACUNA NOMEADA (AC4): `renderToStaticMarkup`
-// não executa handler de evento, então nem repassá-lo produziria carrasco. A fiação
-// `onError → setImgFailed → resolveSidebarBrand` não está coberta por ninguém neste arquivo.
+// não executa handler de evento, então nem repassá-lo produziria carrasco. A EXECUÇÃO da fiação
+// `onError → setImgFailed → resolveSidebarBrand` segue sem carrasco neste arquivo; o que ganhou
+// régua é a DELEÇÃO e a REALOCAÇÃO das duas linhas — ver o último `describe`, "(AC4 via AC12)".
 vi.mock("next/image", () => ({
   default: ({ src, alt, className }: { src: string; alt: string; className?: string }) =>
     createElement("img", { src, alt, className }),
@@ -370,5 +371,46 @@ describe("Story 900-64 (AC12) — as DUAS ligações de layout", () => {
     // `codigoDe` trima cada linha: a quebra é o que separa esta leitura da de `settings`, que
     // usa `.single()` no MESMO arquivo com o mesmo `.eq`.
     expect(codigo).toContain('.eq("id", user.orgId)\n.maybeSingle()')
+  })
+})
+
+describe("Story 900-64 (AC4 via AC12) — a fiação `onError` das DUAS imagens", () => {
+  /**
+   * O que esta régua cobre, e o que ela NÃO cobre — a distinção é a razão de ela existir.
+   *
+   * NÃO cobre a fiação em EXECUÇÃO. O mock de `next/image` descarta `onError` e
+   * `renderToStaticMarkup` não dispara handler de evento: nada neste arquivo prova que
+   * `onError → setImgFailed → resolveSidebarBrand` devolve o fallback. A AC4 segue com a lacuna
+   * comportamental que a story declarou, e ninguém pode declarar a fiação coberta.
+   *
+   * COBRE a DELEÇÃO e a REALOCAÇÃO dessa fiação, que até aqui passavam em silêncio. Medido no
+   * gate 900.64 e reproduzido: apagar as duas linhas `onError` é uma deleção de 2 linhas que
+   * compila (`tsc --noEmit` rc=0 — `setImgFailed` continua ligado no `useState`) e deixava a
+   * suíte INTEIRA verde. Um logo de cliente que falhasse ao carregar mostraria imagem quebrada
+   * em vez da marca da Trifold, e nenhuma régua do repositório reprovaria.
+   *
+   * Duas asserções, e não uma, porque CONTAGEM É INVARIANTE SOB MOVER: as duas linhas realocadas
+   * para outro elemento mantêm o `2` e recriam o defeito idêntico. A segunda prende cada fiação à
+   * imagem da SUA superfície pela linha de `className` que só aquela imagem tem — `codigoDe` junta
+   * as linhas de código já trimadas com quebra, o mesmo recorte por adjacência que a leitura de
+   * `.maybeSingle()` usa acima.
+   *
+   * Reordenar os atributos da imagem deixa a segunda asserção VERMELHA sem que haja defeito. É
+   * sobra, não falta: falso alarme é visível e se conserta na hora; falso verde é exatamente o que
+   * esta régua nasceu para eliminar.
+   */
+  const FIACAO = "onError={() => setImgFailed(true)}"
+
+  it("a fiação existe DUAS vezes no código — some por inteiro se apagarem as duas linhas", () => {
+    const fonte = fs.readFileSync(FONTE_DA_BARRA, "utf8")
+    expect(ocorrenciasNoCodigo(fonte, FIACAO)).toBe(2) // desktop e mobile; nenhuma em comentário
+  })
+
+  it("cada fiação está presa à imagem da SUA superfície — desktop e mobile", () => {
+    const codigo = codigoDe(fs.readFileSync(FONTE_DA_BARRA, "utf8"))
+    for (const superficie of ["DESKTOP", "MOBILE"] as const) {
+      const classe = `className={brand.isCustom ? CLASSES_LOGO_CLIENTE_${superficie} : CLASSES_LOGO_TRIFOLD_${superficie}}`
+      expect(codigo, superficie).toContain(`${classe}\n${FIACAO}`)
+    }
   })
 })
