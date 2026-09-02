@@ -1,8 +1,12 @@
 # Landing Page — Yarden
 
 Landing standalone (HTML/CSS/JS puro, sem build) do empreendimento Yarden.
-Projeto Vercel `yarden`, servido em produção sob `https://trifold.eng.br/yarden/`
-via rewrite do projeto `trifold-design-system`.
+Destino **planejado**: projeto Vercel `yarden`, servido sob
+`https://trifold.eng.br/yarden/` via rewrite do projeto `trifold-design-system`.
+
+> **Ainda não está no ar.** O projeto Vercel e o deploy real são as tarefas
+> T12/T13 da Story 86-12, pendentes — hoje `https://trifold.eng.br/yarden/`
+> não serve esta landing. Tudo abaixo descreve a configuração pretendida.
 
 > **Status do conteúdo:** definitivo. Copy, cores e imagens vêm do mockup
 > "Yarden LP v1" fornecido pelo stakeholder (Story 86-12 AC12 — conteúdo é

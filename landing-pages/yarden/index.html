@@ -324,6 +324,12 @@
     /* checkbox: mesma marcação nos dois formulários */
     .check{display:flex;gap:.7em;align-items:flex-start;font-size:.95em;line-height:1.35;cursor:pointer}
     .check input{flex:0 0 auto;width:1.1em;height:1.1em;margin-top:.15em;accent-color:var(--marrom)}
+    /* O link da política herda a cor do texto do checkbox porque esse texto muda
+       de cor por seção (`--preto` no hero, `--marrom` na seção "saber mais");
+       cor fixa destoaria em um dos dois. Só o sublinhado marca que é link.
+       Clicar no <a> não marca o checkbox: por spec, o label não repassa a
+       ativação para o controle quando o clique cai em conteúdo interativo. */
+    .check a{color:inherit;text-decoration:underline}
 
     .form-msg{display:none;margin-top:.9em;font-size:.9em;line-height:1.4}
     .form-msg.ok,.form-msg.err{display:block}
@@ -406,10 +412,10 @@
     .rodape .logo-trifold{height:18px;width:auto;display:block}
     .rodape .logo-yarden{height:24px;width:auto;display:block}
     .rodape .direitos{font-size:clamp(11px,.89vw,13px);line-height:1.4;text-align:center;max-width:24ch}
-    /* Não há URL de política de privacidade fornecida (defeito `86.12-QA-002`:
-       melhor sem link que com `href="#"` morto). O sublinhado do mockup fica,
-       o link não — vira <a> no commit em que a URL chegar. */
-    .rodape .politica{text-decoration:underline}
+    /* A URL da política chegou (PDF do stakeholder em `assets/`), então o
+       sublinhado do mockup virou link de fato — fecha o defeito `86.12-QA-002`.
+       `color:inherit` mantém o #eeeeee do rodapé sobre o fundo navy. */
+    .rodape .politica{text-decoration:underline;color:inherit}
 
     /* ================= WHATSAPP FLUTUANTE ================= */
     /* Mesmo componente da landing do Vind Residence (classe, SVG, cor, posição).
@@ -518,7 +524,7 @@
               </div>
               <label class="check">
                 <input type="checkbox" required />
-                <span>Políticas de privacidade</span>
+                <span><a href="assets/politica-de-privacidade.pdf" target="_blank" rel="noopener">Políticas de privacidade</a></span>
               </label>
               <button type="submit" class="btn-cta">Cadastre-se agora!</button>
               <!-- role/aria-live: o resultado do envio só muda via textContent, sem
@@ -550,7 +556,7 @@
           </div>
           <label class="check">
             <input type="checkbox" required />
-            <span>Políticas de privacidade</span>
+            <span><a href="assets/politica-de-privacidade.pdf" target="_blank" rel="noopener">Políticas de privacidade</a></span>
           </label>
           <button type="submit" class="btn-cta">Cadastre-se agora!</button>
           <div class="form-msg" id="formMsgMobile" role="status" aria-live="polite"></div>
@@ -624,7 +630,7 @@
             </div>
             <label class="check">
               <input type="checkbox" required />
-              <span>Políticas de privacidade</span>
+              <span><a href="assets/politica-de-privacidade.pdf" target="_blank" rel="noopener">Políticas de privacidade</a></span>
             </label>
             <button type="submit" class="btn-cta">Enviar agora mesmo</button>
             <div class="form-msg" id="formMsgSaber" role="status" aria-live="polite"></div>
@@ -648,7 +654,7 @@
       <img class="logo-trifold" src="assets/logo-trifold-branco.svg" alt="Trifold" width="225" height="24" />
       <img class="logo-yarden" src="assets/logo-yarden-creme.svg" alt="Yarden" width="298" height="62" />
       <p class="direitos">
-        Todos os direitos reservados &copy;<span class="politica">Política de Privacidade.</span>
+        Todos os direitos reservados &copy;<a class="politica" href="assets/politica-de-privacidade.pdf" target="_blank" rel="noopener">Política de Privacidade.</a>
       </p>
     </div>
   </footer>
