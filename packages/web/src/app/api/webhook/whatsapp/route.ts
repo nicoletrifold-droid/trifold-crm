@@ -52,6 +52,19 @@ import {
 export const maxDuration = 60
 
 /**
+ * Teto do INSERT de arquivamento em `webhook_logs` (tipos não suportados).
+ *
+ * É o único `await` a Supabase que roda no caminho síncrono DEPOIS que a bolha já está
+ * gravada e ANTES de a resposta sair — ver o bloco `tipoNaoSuportado`. Sem teto, um Supabase
+ * LENTO pendura a lambda até `maxDuration` e o custo não é o arquivo: é o HTTP 200, e com ele
+ * o push ao corretor, o Live Coach e a Nicole, que só rodam DEPOIS da resposta.
+ *
+ * 5s é curto o bastante para caber com folga antes da reentrega da Meta e longo o bastante
+ * para um Supabase apenas lento (o normal é < 1s) ainda conseguir arquivar.
+ */
+const ARQUIVO_PAYLOAD_TIMEOUT_MS = 5000
+
+/**
  * Story 900-24 · Task 3.1 — o caminho LEGADO, extraído sem mudar uma vírgula do SQL.
  *
  * É literalmente a query que estava inline em `:394-398` antes desta story: `status='active'`,
@@ -957,6 +970,15 @@ export async function POST(request: NextRequest) {
     // a bolha nunca ser escrita. O mecanismo criado para prevenir 01/09 recriaria 01/09.
     // Nesta ordem, um hang custa o ARQUIVO, nunca a bolha — que é a prioridade declarada.
     //
+    // A ordem sozinha, porém, NÃO era suficiente, e é isso que o `.abortSignal()` fecha: este
+    // `await` continua no caminho síncrono, ANTES dos `after()` de push (63-12), Live Coach
+    // (90-1) e da Nicole, e antes do 200. Um hang aqui não custaria "só o arquivo" — custaria
+    // os três, porque `after()` só executa DEPOIS que a resposta é enviada; mover o bloco para
+    // baixo dos `after()` não resolveria nada, pelo mesmo motivo. E o pior vem na sequência: a
+    // Meta reentrega, a reentrega bate no early-return de 23505 logo acima, e a mensagem fica
+    // sem Nicole PARA SEMPRE. Com o teto, a falha é o arquivo — ela cai no `if (error)` abaixo
+    // como qualquer outra, e o turno segue.
+    //
     // Vem também depois do early-return de 23505: reentrega da Meta não duplica o arquivo.
     //
     // As duas formas de falha são engolidas (`console.error`): o PostgREST devolve
@@ -974,6 +996,7 @@ export async function POST(request: NextRequest) {
             signature_valid: true,
             processed: true,
           })
+          .abortSignal(AbortSignal.timeout(ARQUIVO_PAYLOAD_TIMEOUT_MS))
         if (erroArquivo) {
           console.error(
             "[webhook] falha ao arquivar payload não suportado (ignorado):",

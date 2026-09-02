@@ -290,6 +290,16 @@ let selectsPorTabela: Array<{ table: string; cols: string | null }> = []
 let insertsPorTabela: string[] = []
 
 /**
+ * CodeRabbit #556 — o `AbortSignal` que cada chamada recebeu, na ordem.
+ *
+ * O arquivamento em `webhook_logs` é o único `await` a Supabase no caminho síncrono depois da
+ * bolha e antes do 200. Sem teto, um Supabase LENTO derruba com ele o push, o Live Coach, a
+ * Nicole e a própria resposta — e a reentrega da Meta cai no early-return de 23505. O fake
+ * precisava saber ao menos EXPRESSAR o teto para que um teste pudesse exigi-lo.
+ */
+let sinaisPorChamada: Array<{ table: string; signal: AbortSignal }> = []
+
+/**
  * Story 87-20 · CR-87-20-3 — **injeção de ERRO DE LEITURA.**
  *
  * O fake só sabia produzir dois estados: "achei" e "não achei" (`data: []`). O
@@ -356,6 +366,8 @@ function buildSupabaseMock() {
       onConflict?: string
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       pendingResult?: any
+      /** CodeRabbit #556 — teto de tempo da chamada (`.abortSignal()`). */
+      signal?: AbortSignal
     }
 
     const state: QueryState = { filters: [], action: "select" }
@@ -464,6 +476,12 @@ function buildSupabaseMock() {
         state.limit = n
         return builder
       },
+      /** CodeRabbit #556 — `.abortSignal()` do postgrest-js: registra E é honrado em `execute`. */
+      abortSignal(signal: AbortSignal) {
+        state.signal = signal
+        sinaisPorChamada.push({ table: String(table), signal })
+        return builder
+      },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       single(): Promise<any> {
         return execute().then((res) => {
@@ -508,6 +526,21 @@ function buildSupabaseMock() {
        * `identifyClientByContact` (Story 76-2) consulta tabelas de relacionamento que
        * o fake nunca declarou.
        */
+      /**
+       * CodeRabbit #556 — signal já abortado devolve ERRO, não exceção.
+       *
+       * É o que o postgrest-js faz (`{ data: null, error: { message: "FetchError: The user
+       * aborted a request." } }`): quem trata timeout tem de tratar o ramo `if (error)`, não
+       * o `catch`. O fake produzindo exceção aqui deixaria passar verde um código que só
+       * cobre metade.
+       */
+      if (state.signal?.aborted) {
+        return Promise.resolve({
+          data: null,
+          error: { message: "FetchError: The user aborted a request." },
+        })
+      }
+
       if (!db[table]) {
         ;(db as unknown as Record<string, unknown[]>)[table as string] = []
       }
@@ -2343,8 +2376,9 @@ function buildContatoSimples(from: string, wamid: string) {
 //
 // O INSERT em `webhook_logs` saiu do `after()` porque a Vercel já provou descartar callbacks de
 // `after()` em silêncio (documentado em `webhooks/landing-page/route.ts`) — arquivar a prova no
-// caminho que perde prova esvazia a garantia. Aguardar tem um preço: agora o arquivo está ANTES
-// do INSERT da mensagem no mesmo caminho síncrono, e uma falha nele poderia derrubar a bolha.
+// caminho que perde prova esvazia a garantia. Aguardar tem um preço: o arquivo divide o caminho
+// SÍNCRONO com o INSERT da mensagem (hoje depois dele, gate `@qa` M-1), e uma falha nele poderia
+// derrubar a bolha. O preço do TEMPO é outro bloco — ver "teto do INSERT de arquivamento".
 //
 // Carrascos, um por metade da proteção (o gate `@qa` L-1 mediu que a frase única de antes era
 // falsa: remover o `if (error)` não derrubava nada, porque o PostgREST não lança):
@@ -2795,5 +2829,119 @@ describe("WhatsApp webhook — M-1: ordem entre a bolha e o arquivo", () => {
     await POST(signedRequest(buildContatoSimples("+5544999689446", "wamid.ORDEM-2"), APP_SECRET))
 
     expect(bolhasNoMomentoDoArquivo).toBe(1)
+  })
+})
+
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// CodeRabbit #556 — o arquivo tem TETO, e é o teto que protege o resto do turno
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+//
+// A ordem (bolha → arquivo) salva a bolha, e só ela. O `await` do arquivo continua no caminho
+// SÍNCRONO, antes dos `after()` de push/coach/Nicole e antes do 200 — e `after()` só executa
+// depois que a resposta sai. Sem teto, um Supabase LENTO leva junto os três e a resposta; a
+// Meta reentrega, a reentrega bate no early-return de 23505 e a mensagem fica sem Nicole PARA
+// SEMPRE. Mover o bloco para baixo dos `after()` não mudaria nada — agendar não é executar.
+//
+// Carrascos:
+//   • tirar o `.abortSignal(...)`      → os DOIS reprovam (nenhum signal chega ao fake, e o
+//                                        arquivo passa a ser gravado no teste do abort);
+//   • mexer no valor do teto           → os dois reprovam (o primeiro no
+//                                        `toHaveBeenCalledWith(5000)`, o segundo porque o
+//                                        mock só substitui o teto do arquivo);
+//   • trocar o `if (error)` por nada   → o segundo reprova (o abort do postgrest-js vem em
+//                                        `error`, não em exceção — é o mesmo ramo do L-1).
+describe("WhatsApp webhook — teto do INSERT de arquivamento", () => {
+  const APP_SECRET = "test-secret"
+
+  beforeEach(() => {
+    db = freshDb()
+    nextId = 0
+    insertsPorTabela = []
+    sinaisPorChamada = []
+    logEventMock.mockClear()
+    fetchMock.mockClear()
+    fetchMock.mockImplementation((async () => ({ ok: true, json: async () => ({}) })) as never)
+    coachMock.mockClear()
+    coachMock.mockResolvedValue(undefined)
+    pushCorretorMock.mockClear()
+    pipelineMock.mockClear()
+    pipelineMock.mockImplementation(async () => ({
+      response: "Mocked Nicole reply",
+      qualificationScore: 0,
+    }))
+    afterPromises = []
+    falharLeitura = null
+    falharInsert = null
+    process.env.META_APP_SECRET = APP_SECRET
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "http://localhost"
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "test-key"
+    process.env.META_WHATSAPP_VERIFY_TOKEN = "verify"
+    process.env.NICOLE_ANTI_RAJADA_MS = "0"
+  })
+
+  afterEach(() => {
+    delete process.env.NICOLE_ANTI_RAJADA_MS
+  })
+
+  it("o INSERT em `webhook_logs` vai com `AbortSignal` de 5s — hang deixou de ser possível", async () => {
+    const { POST } = await import("../route")
+    const espiaoTimeout = vi.spyOn(AbortSignal, "timeout")
+
+    try {
+      const res = await POST(
+        signedRequest(buildContatoSimples("+5544999689446", "wamid.TETO-1"), APP_SECRET)
+      )
+      expect(res.status).toBe(200)
+
+      // O teto chegou ao cliente: é a chamada do arquivo que carrega o signal, não outra.
+      const doArquivo = sinaisPorChamada.filter((s) => s.table === "webhook_logs")
+      expect(doArquivo).toHaveLength(1)
+      expect(doArquivo[0]!.signal).toBeInstanceOf(AbortSignal)
+
+      // E o valor é o declarado — sem isto, "tem teto" passaria verde com teto de 10 minutos.
+      expect(espiaoTimeout).toHaveBeenCalledWith(5000)
+    } finally {
+      espiaoTimeout.mockRestore()
+    }
+  })
+
+  it("teto estourado custa o ARQUIVO e só ele — bolha, push, Nicole e o 200 seguem", async () => {
+    const { POST } = await import("../route")
+
+    // Substitui APENAS o teto do arquivo (5s) por um signal já abortado; os demais usos de
+    // `AbortSignal.timeout` na rota (download de mídia, 10s) continuam reais, senão o teste
+    // estaria medindo o efeito colateral do próprio mock.
+    const timeoutReal = AbortSignal.timeout.bind(AbortSignal)
+    const espiaoTimeout = vi
+      .spyOn(AbortSignal, "timeout")
+      .mockImplementation((ms: number) => (ms === 5000 ? AbortSignal.abort() : timeoutReal(ms)))
+    const espiaoConsole = vi.spyOn(console, "error").mockImplementation(() => {})
+
+    try {
+      const res = await POST(
+        signedRequest(buildContatoSimples("+5544999689446", "wamid.TETO-2"), APP_SECRET)
+      )
+      await drenarAfter()
+
+      // O preço declarado: o arquivo, e nada além dele.
+      expect(res.status).toBe(200)
+      expect(db.webhook_logs).toHaveLength(0)
+
+      const userMsg = db.messages.find((m) => m.role === "user")
+      expect(userMsg).toBeTruthy()
+      expect(userMsg!.content).toBe("[Contato recebido] Maria Silva — +55 41 99999-9999")
+
+      // Estes três são o que o hang levava junto e o teto devolve.
+      expect(pushCorretorMock).toHaveBeenCalled()
+      expect(pipelineMock).toHaveBeenCalled()
+      const gritou = espiaoConsole.mock.calls.some((c) =>
+        c.map(String).join(" ").includes("aborted")
+      )
+      expect(gritou).toBe(true)
+    } finally {
+      espiaoConsole.mockRestore()
+      espiaoTimeout.mockRestore()
+    }
   })
 })
