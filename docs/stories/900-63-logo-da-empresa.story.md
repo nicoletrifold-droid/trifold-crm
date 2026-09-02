@@ -507,6 +507,7 @@ leva (`250`→`251`, depois `251`→`252`).
 | 2026-09-01 | 0.2 | **Validação @po (Pax) — GO 8/10, correções aplicadas dentro da autoridade do PO (AC/escopo/título).** (1) **Requisito explícito do dono do produto:** a story passa a declarar em voz alta que sozinha NÃO entrega o que foi pedido (o pedido é *trocar a marca*, não guardar arquivo). Título renomeado para "METADE 1 de 2"; seção nova + **AC0** normativa; a metade que falta está **nomeada como `900-64` — A marca da empresa aparece no lugar da Trifold** (número livre, verificado), com ordem declarada `900-63` → `900-64`. Medido que `900-64` merece ser story própria: das 3 superfícies de marca (`sidebar-nav.tsx`, `login/page.tsx`, `lib/email-layout/components/*`), a do **login** exige resolução de tenant que **não existe** neste repositório. **Pendência para o lead: @sm precisa rascunhar a `900-64`.** (2) **AC6 REESCRITA — a suspeita sobre `platform-query-scan.ts` foi MEDIDA e é FALSA.** A regex captura o nome de tabela com `[a-zA-Z_]\w*`, e `\w` **não inclui hífen**: `storage.from("org-logos")` **não acende** (idem `marketing-artes`, `campaign-assets`); `orglogos`/`org_logos`/`lancamentos` acendem. Pior: o "conserto" proposto (excluir o receiver `storage`) **cegaria** a régua para `const storage = ...; storage.from("organizations")` — medido — e o controle positivo proposto não pegaria isso. Some-se a AC8 da `900-42a`, que proíbe afrouxar a guarda. **A régua não se toca**; entram um teste de caracterização e o controle positivo que a "correção" teria quebrado. (3) **AC5:** trava otimista com `<>` falha ABERTA quando `p_expected_updated_at` é `NULL` (medido) → `IS DISTINCT FROM` + `P0024`; e o no-op com `=` compara `NULL = NULL` → remover logo de org sem logo gravaria uma linha de trilha permanente para uma remoção que não removeu nada → `IS NOT DISTINCT FROM`. (4) **AC4:** o caminho `{org_id}/logo.{ext}` **não** é "um arquivo por empresa" — trocar PNG por JPEG deixa o antigo órfão e **publicamente legível**, sem trilha e sem cron de limpeza; regra de remoção do prefixo + carrasco (`list` devolve exatamente 1). E a ordem das duas escritas foi fixada para que falha nunca vire "salvo": upload = Storage→RPC; remoção = RPC→Storage (a inversa deixaria `logo_url` apontando para um 404 público). (5) **AC11 NOVA:** `logo_url` e `updated_at` não estão na projeção de `orgs/[id]/page.tsx:84` — sem eles o painel mostraria placeholder mesmo após upload bem-sucedido, **com o texto da AC9 camuflando o defeito**; régua de âncora fail-closed, e regra de coordenação com a AC13 da `900-62` (somar na mesma linha, nunca substituir). (6) Critério do corte ajustado: "equivalente em esforço" não é critério; os válidos são superfície de risco, reversibilidade e estado de entrega. Status Draft → Ready. | @po (Pax) |
 | 2026-09-02 | 0.3 | **Implementada pelo @dev (Dex).** Branch nova a partir de `origin/main` (`f3992973`), sem empilhar. Migration `254` (número reconfirmado contra `refs/heads` + `refs/remotes` + `git log --all` + árvore + 15 PRs abertos). Duas correções à letra das ACs, ambas medidas e documentadas: (1) a purga da AC4 roda DEPOIS do upload — purgar "antes de gravar" e falhar no upload produz exatamente o `404` público que a própria AC4 proíbe; há teste de ORDEM, porque o carrasco de contagem é satisfeito pelas duas ordens; (2) a pré-visualização usa `?v={updated_at}` e não `logo_url` cru — o caminho é fixo por extensão, então PNG→PNG produz a MESMA URL e o Storage serve com `max-age=3600`: sem a marca, a tela mostraria o logo ANTIGO por até uma hora. Rede nova achada NA TELA e não em hipótese: bucket ausente devolvia `500` com `"Bucket not found"` cru; virou `503` nomeando a migration `254`, com controle negativo. Defeito achado pelo próprio teste: `"constructor" in EXTENSAO_POR_MIME` é `true` pela cadeia de protótipos → `Object.hasOwn`. AC6 cumprida por NÃO tocar em `platform-query-scan.ts` (byte a byte igual à `main`). 13 mutações com `tsc` rc=0 antes de cada vermelho, restauro por `cp` + `shasum -c`. Tela validada no banco de teste nos caminhos de RECUSA (local e servidor). 🔴 **Nada do lado do banco foi provado** — o banco de teste está 7 migrations atrás e aplicar a `254` é escrita não autorizada; a Task 6 (trilha) segue não medida. 🔴 **Incidente:** a senha do ambiente de teste vazou na saída de ferramenta por regex de redação errada (3ª vez nesta onda) — recomendada rotação. | @dev (Dex) |
 | 2026-09-02 | 0.4 | **2ª rodada — o bloqueio do banco caiu e a medição real achou DOIS defeitos meus.** (a) A purga rodava entre o upload e a RPC: todo não-200 da RPC (`409`, `500`, `503`) deixava `logo_url` inalterado apontando para um objeto que a purga acabara de apagar — **o mesmo 404 público da AC4, por outra porta**, e nem o carrasco do órfão nem o teste de ordem pegavam, porque os dois só olham o caminho feliz. Ordem final: **upload → RPC → purga**; falha da purga deixou de abortar (abortar devolvia o 404) e passa a reportar `arquivoRemovido`. (b) Trocar PNG por PNG produzia a MESMA URL pública, a RPC classificava como **no-op**, `updated_at` não andava e o `?v={updated_at}` também não: o operador trocava o logo e **a tela seguia mostrando o antigo**, com 200 — `urlDePreVisualizacao` sozinha não resolvia, ao contrário do que a v0.3 afirmou. `logo_url` passa a ser gravada versionada pelo CONTEÚDO (`?v=sha256(bytes)`), e por ser hash e não relógio o reenvio do arquivo idêntico segue sendo no-op sem trilha. Provados contra o banco e o Storage reais, pelo botão e com login por formulário: upload ponta a ponta, URL pública servindo os bytes idênticos, purga PNG→JPEG com `list` devolvendo exatamente 1, `P0024`, no-op sem trilha (9/9 linhas), as duas ações da Task 6, e a troca PNG→PNG mudando a imagem na hora. Declarado o que ficou: sem furar o cache, a URL de um objeto já apagado ainda responde 200 — é a **TTL do CDN**, fora do alcance da rota, e assunto da `900-64`. Balde deixado **vazio**, `logo_url` null nas 3 orgs, fixture de avaliação intacta por hash. | @dev (Dex) |
+| 2026-09-02 | 0.5 | **3ª rodada — as ressalvas do gate (CONCERNS, não bloqueante).** **REL-001/TEST-001:** nos desfechos terminais do `POST` o objeto que ESTE pedido escrevia ficava no balde PÚBLICO — e no `404`, e num `[id]` que nem é UUID, nenhum upload futuro o removeria, ao contrário do que o docblock afirmava (não há empresa, logo não há próximo upload, e o bucket não tem cron). Medido antes: `POST /api/platform/orgs/nao-e-uuid/logo` deixava literalmente `nao-e-uuid/logo.png` no balde. Conserto: a FORMA do `[id]` é conferida antes de tocar o Storage (`400 ORG_ID_INVALIDO`, e não `404`, que é a afirmação sobre a EMPRESA), e no `ORG_NOT_FOUND` o destino é removido antes da resposta — 🔴 **e só ali**: no `409` e no `500` a empresa existe e `logo_url` pode apontar para o MESMO caminho, então purgar recriaria o 404 público que a 2ª rodada fechou. Condicionado a um CAMPO (`orgInexistente`), não a `status === 404`, e removendo só o `destino`, nunca o prefixo. Carrascos: balde por **lista fechada** (`[...balde.keys()]`, que falha nos dois sentidos) no lugar de `has()` em 7 asserções, mais 2 **controles negativos** afirmando que no `409`/`500` o objeto novo NÃO é apagado — sem eles o conserto óbvio-e-errado (purgar em toda falha) ficaria verde, medido: aquele mutante deixa 5 vermelhos. **DOC-002:** a pré-visualização empilhava `?v=<sha>&v=<updated_at>`; `updated_at` é marca errada para imagem (anda a cada UPDATE da linha — a `900-62` edita a mesma linha) e `v` repetido é ambíguo para a `900-64`. Ficou só o sha, que é o que a rota GRAVA. **DOC-001:** números por arquivo re-medidos (39/62/44) e as linhas de trilha da sessão são **9**, não 5. **Régua:** 319 arquivos · **4470 passed · 6 xfail**, delta por contagem (4464 + 6); `type-check` 8/8 rc=0; `lint` 0 erros / 30 warnings. Armadilha registrada: `pnpm --filter web test` sai rc=0 **sem rodar nada**. | @dev (Dex) |
 
 ## Dev Agent Record
 
@@ -526,27 +527,46 @@ teste, **4369 passed | 6 expected fail (4375)**, `type-check` + `lint` + `test` 
 Branch nova a partir de `origin/main` (`f3992973`), sem empilhar.
 
 ### Depois
-**319 arquivos · 4464 passed | 6 expected fail (4470)** (2ª rodada) · `type-check` rc=0 · `lint` 0 erros /
-30 warnings (os mesmos 30 do baseline — os 4 arquivos novos têm **zero**) · `build` verde.
-⚠️ A árvore tem 6 arquivos modificados de **outra frente** (`webhook/whatsapp`, `meta/process-lead`,
+**319 arquivos · 4470 passed | 6 expected fail (4476)** (3ª rodada, `vitest run` na RAIZ) ·
+`type-check --force` 8/8 rc=0 · `lint --force` 0 erros / 30 warnings (os mesmos 30 do baseline —
+os 4 arquivos novos têm **zero**).
+⚠️ A árvore tem arquivos modificados de **outra frente** (`webhook/whatsapp`, `meta/process-lead`,
 `tenancy/webhook-org`) que não entraram em commit nenhum; parte do delta de contagem é deles.
 
-Por arquivo meu: `console-logo-empresa.test.ts` **35**, `logo/route.test.ts` **51**,
-`platform-query-scan.test.ts` **30 → 44**.
+⚠️ **Armadilha de régua (registrada pelo @qa e confirmada aqui):** `pnpm --filter web test` sai
+**rc=0 sem rodar teste nenhum** — não existe script `test` em `packages/web/package.json`. Verde
+por AUSÊNCIA. A régua que vale é `pnpm test` (ou `npx vitest run`) na **RAIZ**.
+
+**Por arquivo meu — RE-MEDIDO por `--reporter=json`, fechando a DOC-001.** A linha anterior
+declarava `console-logo-empresa.test.ts` **35** e `logo/route.test.ts` **51**; o medido na 2ª
+rodada era **39** e **56** (os números tinham sido escritos antes dos testes que a própria 2ª
+rodada acrescentou, e não foram re-medidos). Estado atual:
+
+| arquivo | 2ª rodada (medido) | 3ª rodada | por quê |
+|---|---|---|---|
+| `console-logo-empresa.test.ts` | 39 | **39** | 5 testes de `urlDePreVisualizacao` trocados por 5 (DOC-002) |
+| `logo/route.test.ts` | 56 | **62** | +6: o bloco REL-001 |
+| `platform-query-scan.test.ts` | 44 | **44** | intocado |
+
+Delta da suíte por CONTAGEM, não por subtração: 4464 + 6 = **4470** ✓; 319 arquivos = 319 ✓
+(nenhum arquivo de teste novo); xfail 6 = 6 ✓.
 
 ### As decisões que a implementação teve de tomar
 
 **A purga da AC4 roda DEPOIS do upload, e não "antes de gravar".** A AC escreve "antes de
 gravar"; medido contra a própria invariante dela, purgar antes e falhar no upload apaga o objeto
-que `logo_url` ainda referencia — exatamente o `404` público que a AC nomeia como proibido. Na
-ordem implementada (upload → purga → RPC) o pior caso é dois objetos no balde, nunca um
-`logo_url` quebrado. O carrasco da AC ("PNG, depois JPEG → `list` devolve exatamente 1") é
-satisfeito pelas duas ordens; só uma é segura, e há teste de ORDEM (sequência, não contagem).
+que `logo_url` ainda referencia — exatamente o `404` público que a AC nomeia como proibido. O
+carrasco da AC ("PNG, depois JPEG → `list` devolve exatamente 1") é satisfeito pelas duas ordens;
+só uma é segura, e há teste de ORDEM (sequência, não contagem).
+⚠️ Esta seção descreve a **1ª correção**, e ela estava errada por outro motivo: a ordem final é
+**upload → RPC → purga**, e a falha da purga **não aborta** — ver "DOIS DEFEITOS MEUS", abaixo,
+que é o texto que vale. Mantido aqui porque a decisão da AC ("antes de gravar" não pode ser
+literal) continua sendo a mesma; só o lugar exato da purga mudou.
 
-**Falha da purga ABORTA antes da RPC.** Seguir em frente gravaria `logo_url` no arquivo novo e
-deixaria o antigo publicamente legível para sempre, sem trilha e sem cron — o defeito que a AC4
-existe para fechar. Abortando, o cadastro continua apontando para um objeto que continua
-existindo. `list` que falha conta como falha: não conseguir LER o balde não é "não havia lixo lá".
+**Falha da purga NÃO aborta — reporta `arquivoRemovido`.** A 1ª versão abortava, e abortar era o
+defeito: com a RPC já passada, abortar deixava a resposta afirmando falha sobre uma escrita que
+aconteceu. `list` que falha conta como falha do REPORTE, não como "não havia lixo lá": não
+conseguir LER o balde não é ter lido "vazio".
 
 **Task 7.4 — `DELETE` sem logo é no-op `200`, não `404`.** `404` é uma afirmação sobre a EMPRESA,
 e ela existe; a rota já usa `404` para esse fato. A ausência de linha de trilha nesse caso é da
@@ -557,11 +577,18 @@ limpo e um arquivo público continua no balde. Dizer só "removido" seria afirma
 aconteceu; a UI mostra um aviso âmbar. Campo AUSENTE não vira aviso — "não sei" não autoriza
 afirmar que ficou lixo.
 
-**`urlDePreVisualizacao` — a AC escreve `<img src={org.logo_url}>`, e isso mostraria o logo
-ANTIGO.** O caminho é fixo por extensão, então trocar PNG por PNG produz a MESMA URL, e o Storage
-serve objeto público com `max-age=3600`. Sem marca de versão o operador veria o logo velho por até
-uma hora, com `200` na tela e a trilha registrando a troca. `?v={updated_at}` — a marca que o
-trigger `set_updated_at` bomba na mesma transação.
+**`urlDePreVisualizacao` — UMA marca de versão, e ela mora na COLUNA (DOC-002 fechada).** A AC
+escreve `<img src={org.logo_url}>`, e `logo_url` cru mostraria o logo ANTIGO: o caminho é fixo por
+extensão, trocar PNG por PNG produz a MESMA URL e o Storage serve objeto público com
+`max-age=3600`. A 2ª rodada resolveu isso do lado certo — a rota GRAVA `…/logo.png?v=<sha256 dos
+bytes>` — e a pré-visualização continuou pendurando um SEGUNDO `?v=`, com `updated_at`: o exibido
+virava `…?v=<sha>&v=<updated_at>`. Funcionava por acidente e era errado duas vezes: (1)
+`updated_at` anda a cada `UPDATE` da LINHA, e a `900-62` edita nome/slug/contato/fiscal na mesma
+linha — renomear a empresa invalidaria o cache de um arquivo que não mudou um byte; (2) `v`
+repetido é ambíguo para quem lê (`URLSearchParams.get("v")` devolve o PRIMEIRO), e a `900-64` vai
+consumir esta coluna. `urlDePreVisualizacao` passa a receber só `logoUrl` e devolvê-la INTEIRA. A
+função continua existindo por uma decisão que sobrou e é real: `""` sai como `null`, porque
+`<img src="">` faz o navegador requisitar a PÁGINA ATUAL como se fosse imagem.
 
 **Rede nova, achada NA TELA: bucket ausente → `503` que nomeia a migration.** Rodando contra o
 banco de teste sem a `254`, o Storage devolve `"Bucket not found"` e a rota respondia `500` com a
@@ -637,7 +664,9 @@ e `telegram:error` no lugar).
 
 **Remoção pelo botão:** `logo_url` volta a `NULL`, prefixo **vazio**, placeholder de volta, botão
 "Remover" some. **Estado final: balde `org-logos` completamente VAZIO, `logo_url = null` nas 3
-orgs.** Zero erro no console do navegador. As **5 linhas** de trilha criadas nesta sessão ficam —
+orgs.** Zero erro no console do navegador. As **9 linhas** de trilha criadas nesta sessão ficam (7
+`organization.logo_updated` + 2 `organization.logo_removed`; o registro dizia "5", contado de
+cabeça e não do banco — DOC-001) —
 `platform_audit_log` é append-only por desenho.
 
 ### 🔴 DOIS DEFEITOS MEUS que só a medição real achou
@@ -658,6 +687,50 @@ e a tela seguia com o antigo — com `200`. `urlDePreVisualizacao` sozinha **nã
 contrário do que a 1ª rodada afirmou. Conserto: `logo_url` passa a ser gravada **versionada pelo
 conteúdo** (`?v=<sha256(bytes)[0..16]>`). Hash e não relógio: reenviar o arquivo **idêntico**
 continua sendo no-op honesto, sem linha de trilha.
+
+### 3ª rodada — REL-001 fechada: "o que sobrou do que ESTE pedido criou"
+
+O gate (CONCERNS, não bloqueante) achou a classe que sobreviveu às DUAS correções anteriores, e a
+generalização vale mais que o defeito: **os caminhos de erro ERAM exercitados** — o que faltava é
+que toda asserção de caminho de erro tinha herdado do caminho feliz a pergunta *"o que sobrou do
+estado ANTIGO?"*, e nenhuma perguntava *"o que sobrou do que ESTE pedido acabou de criar?"*.
+Invariante de um lado só. `expect(balde.has(antigo)).toBe(true)` é cego para tudo que sobrou ALÉM
+do esperado; `expect([...balde.keys()]).toEqual([…])` é fechado e falha nos dois sentidos.
+
+**O balde nos quatro desfechos terminais do `POST`, medido no harness:**
+
+| desfecho | antes | depois |
+|---|---|---|
+| `POST …/orgs/nao-e-uuid/logo` | `["nao-e-uuid/logo.png"]` | `[]` — `400 ORG_ID_INVALIDO` antes de tocar o Storage |
+| `404 ORG_NOT_FOUND` | `["{orgId}/logo.png"]` | `[]` — o destino sai do balde antes da resposta |
+| `409 CONFLITO_DE_CONCORRENCIA` | dois objetos | **dois objetos, de propósito** |
+| `500` da RPC | o objeto novo fica | **fica, de propósito** |
+
+🔴 **O degrau em que era fácil escorregar, e que o gate nomeou:** no `409` e no `500` a empresa
+**existe** e `logo_url` pode já apontar para o MESMO caminho (PNG sobre PNG, `upsert`). Purgar ali
+recriaria exatamente o 404 público que a 2ª rodada fechou. Por isso o gesto é condicionado a um
+**campo** (`orgInexistente`, devolvido por `respostaDeFalhaDaRpc`) e não a `resposta.status === 404`:
+apagar do balde público não pode depender de um número que outro desfecho passe a usar amanhã. E a
+remoção é **só do `destino`**, nunca do prefixo: "zero linhas" é fato sobre a TABELA, e purgar o
+prefixo transformaria um erro de leitura da RPC em destruição de logo vivo.
+
+**Vermelho→verde desta rodada** (`tsc --noEmit` rc=0 antes de cada um; restauro por `cp` +
+`shasum -c`, sem `git checkout --`, sem `git stash`):
+
+- **M-A — a rota inteira revertida para `HEAD`** (sem guarda de uuid, sem remoção no 404): **3
+  vermelhos**, exatamente os 3 testes do conserto. Os 2 controles negativos (`409`/`500`)
+  continuam VERDES nos dois lados — é o que os torna controles: eles afirmam o que **não** muda.
+- **M-B — o conserto óbvio-e-errado: purgar em TODA falha** (`if (orgInexistente)` removido):
+  `tsc` rc=0, **5 vermelhos** — os 2 controles negativos novos, os 2 testes 🔴 da 2ª rodada
+  (agora com lista fechada) e a Task 7.3c. Sem os controles, este mutante ficaria verde.
+- **M-C — `urlDePreVisualizacao` volta a pendurar uma 2ª marca**: `tsc` rc=0, **3 vermelhos**.
+- **Sonda do estado ANTES**, para não declarar de memória o que o gate mediu: a asserção do id
+  inválido foi temporariamente movida para ANTES da checagem de status, e o balde pré-conserto
+  devolveu literalmente `['nao-e-uuid/logo.png']`. Arquivo restaurado por `cp` + `shasum -c`.
+
+**Escopo do que NÃO foi feito, e por quê:** a guarda de forma do `[id]` entrou **só no `POST`**.
+No `DELETE` a ordem é RPC→Storage, então um id malformado morre na RPC sem ter tocado o balde — não
+há órfão a fechar, e ampliar a guarda seria mudança sem defeito que a motive.
 
 ### 🔴 O que CONTINUA sem prova
 - **Produção: nada foi tocado**, nem leitura. A `254` não foi aplicada lá.
@@ -713,4 +786,56 @@ restaurado com `git checkout --` logo em seguida — é arquivo do índice, não
 **NÃO modificado, de propósito:** `packages/web/src/lib/tenancy/platform-query-scan.ts` (AC6).
 
 ## QA Results
-_(Preenchido pelo @qa.)_
+
+### Review Date: 2026-09-02 — @qa (Quinn, Test Architect) · 1ª rodada
+
+### 🔴 AC0 — o rótulo, também no gate
+**METADE 1 de 2 — "o logo fica GUARDADO".** `organizations.logo_url` continua sem leitor no CRM do
+cliente. Este gate **não** pode ser citado como "logo entregue"; quem entrega o pedido do dono do
+produto é a `900-64`, que ainda não existe. Conferido que o qualificador está na UI, na rota, na
+migration (inclusive no `COMMENT ON FUNCTION`), na página e neste gate.
+
+### Réguas
+- **`pnpm test` na RAIZ** — 319 arquivos · **4464 passed | 6 expected fail (4470)**, rc=0.
+  Baseline: CI run `33637807839` (`headSha f3992973`) = 317 · 4369 · 6.
+- **Delta por CONTAGEM:** story +109 (route **56**, console-logo **39**, scan **+14**, medindo a
+  versão de `origin/main` do arquivo do scanner e restaurando por `shasum -c`); frente alheia
+  não-commitada **−14** (whatsapp 67→45, process-lead 22→25, webhook-org 48→53).
+  `4369 + 109 − 14 = 4464` ✓ · `317 + 2 = 319` ✓ · xfail `6 = 6` ✓.
+- `type-check --force` rc=0 · `lint --force` **0 erros / 30 warnings** (os mesmos 30) · `build` rc=0.
+- ⚠️ **Armadilha nova, registrada:** `pnpm --filter web test` sai **rc=0 sem rodar teste nenhum**
+  (não existe script `test` em `packages/web/package.json`). É o irmão VERDE da armadilha 13.
+
+### Reproduzido, não aceito declarado
+- **AC6:** `platform-query-scan.ts` **byte a byte** igual à `main` (`sha256` idêntico dos dois lados).
+- **Mutação da ordem (revertendo a 2ª correção INTEIRA):** `tsc` rc=0 antes, **5 vermelhos** —
+  confere com o declarado. Decomposta, **só a ordem** dá **3 vermelhos**, e são eles que possuem o
+  defeito (a); os dois de `arquivoRemovido` pertencem ao "não abortar".
+- **Mutação da AC11** (`logo_url` fora da projeção): `tsc` rc=0, **2 vermelhos**.
+- **Banco de teste, tudo dentro de `DO $$ … RAISE` (rollback total):** no-op sem trilha
+  (`trilha_delta=0`, `updated_at` parado) **com controle positivo na mesma função** (`+1`,
+  `organization.logo_updated`); **reenviar idêntico continua no-op** — a propriedade sobreviveu ao
+  versionamento por `sha256`; `P0024` na trava nula; zero linhas para org inexistente; conflito sem
+  trilha; as **duas ações** com `antes/depois/reason/actor_label`.
+- **Storage real:** purga PNG→JPEG com `list` devolvendo **exatamente 1**; bytes idênticos por
+  `sha256`; **2ª rede do bucket** viva (`image/gif` → 415, 2 MB+1 → 413); **ANON não escreve**
+  (403 por RLS). Prefixo de sonda apagado.
+- **Fixture preservada:** 3 orgs, `logo_url` NULL nas 3, `updated_at` inalterados, `platform_audit_log`
+  25/25, balde `org-logos` **vazio**. Nenhum `db:apply`/`db:status`; `migrations-aplicadas.json`
+  intocado; nenhum `git stash` (9 alheios intactos).
+
+### Concerns (ver o gate para o texto completo) — REL-001/TEST-001/DOC-001/DOC-002 fechadas na 3ª rodada
+- **REL-001 (medium)** — nos desfechos terminais do POST, o objeto que **este** pedido escreveu
+  fica no balde público. Medido: `404` → `["{orgId}/logo.png"]`; `500` → idem; `409` → dois objetos;
+  e `POST /api/platform/orgs/nao-e-uuid/logo` grava `nao-e-uuid/logo.png` **antes** de qualquer
+  verificação de que aquilo é uma empresa. O docblock afirma que "o próximo upload bem-sucedido o
+  remove" — verdade no 409/500, **falso** no 404 e no id inválido.
+- **TEST-001 (medium)** — a **décima** armadilha: os caminhos de erro *são* exercitados, mas toda
+  asserção herdou do caminho feliz a pergunta "o que sobrou do estado ANTIGO?" e nenhuma pergunta
+  "o que sobrou do estado que ESTE pedido criou?". Invariante de um lado só.
+- **DOC-001 / DOC-002 (low)** — números por arquivo desatualizados (35/51 declarados × 39/56
+  medidos; "5 linhas de trilha" × 9 no banco) e a marca de versão dupla (`?v=<sha>&v=<updated_at>`).
+
+### Gate Status
+
+Gate: CONCERNS → docs/qa/gates/900.63-logo-da-empresa.yml
