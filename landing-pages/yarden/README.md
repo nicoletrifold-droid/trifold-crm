@@ -23,7 +23,7 @@ Esta é uma landing nova, não uma migração.
 ```
 yarden/
 ├── index.html               # página completa (CSS + JS inline)
-├── assets/                  # 12 arquivos: 4 imagens (jpg + webp cada) + 2 logos SVG
+├── assets/                  # 13 arquivos: 5 imagens (jpg + webp cada) + 2 logos SVG + 1 PDF
 ├── api/lead.js              # proxy do lead → POST /api/webhooks/landing-page do CRM
 ├── api/track.js             # proxy dos eventos de topo de funil → .../landing-page/track
 ├── api-proxy.test.ts        # testes dos dois proxies (fora de api/ de propósito)
