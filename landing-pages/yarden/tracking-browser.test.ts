@@ -18,12 +18,35 @@
  * O arquivo mora fora de `api/` de propósito e está no `.vercelignore`.
  */
 import { describe, it, expect } from "vitest"
-import { readFileSync } from "fs"
+import { readdirSync, readFileSync } from "fs"
 import { fileURLToPath } from "url"
 import path from "path"
 
 const DIR = path.dirname(fileURLToPath(import.meta.url))
 const HTML = readFileSync(path.join(DIR, "index.html"), "utf8")
+
+/** Nomes de arquivo realmente presentes em `assets/` (dotfiles fora). */
+const ARQUIVOS_DE_ASSET = readdirSync(path.join(DIR, "assets")).filter((n) => !n.startsWith("."))
+
+/**
+ * Toda referência a `assets/...` feita por atributo do HTML, normalizada para o
+ * nome do arquivo.
+ *
+ * Lê `srcset` além de `src`/`href`: as imagens do hero e das seções são
+ * `<picture>` com `<source srcset>`, e é justamente ali que um caminho quebrado
+ * passa despercebido — o `<img>` de fallback continua carregando.
+ */
+const REFERENCIAS_DE_ASSET = (() => {
+  const refs = new Set<string>()
+  for (const attr of HTML.matchAll(/(?:src|srcset|href|content)="([^"]*)"/g)) {
+    // `srcset` aceita vários candidatos ("a.webp 2x, b.webp 1x") — todos contam.
+    for (const candidato of attr[1]!.split(",")) {
+      const url = candidato.trim().split(/\s+/)[0]!
+      if (url.startsWith("assets/")) refs.add(url.slice("assets/".length))
+    }
+  }
+  return [...refs]
+})()
 
 const PIXEL_ID = "1337310707164669"
 const ORIGEM_PROXY = "https://yarden.vercel.app"
@@ -119,10 +142,31 @@ describe("index.html — contrato estático (AC1, AC10, AC12)", () => {
     }
   })
 
-  it("não referencia assets que ainda não existem (conteúdo é dependência externa)", () => {
-    // Um `<img src="assets/...">` clonado da outra landing daria 404 em
-    // produção — e o AC12 proíbe inventar conteúdo, não só copy.
-    expect(HTML).not.toMatch(/(?:src|href)="assets\//)
+  it("não referencia asset que não existe no disco (404 em produção)", () => {
+    // Este runtime não tem build: não há bundler para resolver caminho nenhum, e
+    // ninguém percebe um `assets/hero.webp` errado até a página estar no ar
+    // servindo 404 sob o hero. O par HTML↔diretório é conferido aqui.
+    //
+    // O piso existe para o teste não passar por vacuidade: enquanto a página era
+    // placeholder ela não tinha imagem alguma, e voltar a esse estado (um merge
+    // que restaure o placeholder) tem que falhar, não passar em silêncio.
+    expect(REFERENCIAS_DE_ASSET.length).toBeGreaterThanOrEqual(12)
+
+    const inexistentes = REFERENCIAS_DE_ASSET.filter((n) => !ARQUIVOS_DE_ASSET.includes(n))
+    expect(inexistentes).toEqual([])
+  })
+
+  it("nenhum asset é sobra de clone do Vind Residence (AC12)", () => {
+    // O modo de falha original: clonar a pasta da outra landing junto com o HTML.
+    // Um arquivo com o nome do outro empreendimento é o sintoma direto; um
+    // arquivo que NINGUÉM referencia é o sintoma indireto — sobra de clone
+    // publicada em produção sem nunca aparecer na página.
+    for (const nome of [...ARQUIVOS_DE_ASSET, ...REFERENCIAS_DE_ASSET]) {
+      expect(nome.toLowerCase()).not.toMatch(/vind[-]?residence/)
+    }
+
+    const orfaos = ARQUIVOS_DE_ASSET.filter((n) => !REFERENCIAS_DE_ASSET.includes(n))
+    expect(orfaos).toEqual([])
   })
 })
 
