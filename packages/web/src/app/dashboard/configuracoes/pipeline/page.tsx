@@ -1,6 +1,6 @@
 import { createClient } from "@web/lib/supabase/server"
 import { getServerUser } from "@web/lib/auth"
-import { canAccess } from "@web/lib/permissions"
+import { can } from "@web/lib/permissions"
 import { CreateStageModal } from "./_components/create-stage-modal"
 import { StagesTable } from "./_components/stages-table"
 
@@ -8,9 +8,11 @@ export default async function PipelineConfigPage() {
   const user = await getServerUser()
   const supabase = await createClient()
 
-  // Edição da configuração de pipeline — modelado como acesso ao sub-módulo
-  // "configuracoes.pipeline" (herda de "configuracoes" quando sem exceção).
-  const isAdmin = await canAccess(user.id, user.orgId, "configuracoes.pipeline")
+  // 75-371 — o gate da TELA é a MESMA chave que a API e a RLS exigem para
+  // escrever (`configuracoes.pipeline_editar`). Antes a tela perguntava só pelo
+  // acesso ao sub-módulo "configuracoes.pipeline", que herda de "configuracoes":
+  // quem só enxerga Configurações via o botão e levava 403 no "Criar etapa".
+  const canEdit = await can(user.id, user.orgId, "configuracoes.pipeline_editar")
 
   const { data: stages } = await supabase
     .from("kanban_stages")
@@ -34,11 +36,11 @@ export default async function PipelineConfigPage() {
           <p className="text-sm text-gray-500 dark:text-stone-400">
             {stages?.length ?? 0} etapas
           </p>
-          {isAdmin && <CreateStageModal />}
+          {canEdit && <CreateStageModal />}
         </div>
       </div>
 
-      <StagesTable initialStages={stages ?? []} isAdmin={isAdmin} />
+      <StagesTable initialStages={stages ?? []} canEdit={canEdit} />
     </div>
   )
 }

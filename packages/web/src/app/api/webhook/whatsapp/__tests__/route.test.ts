@@ -157,6 +157,17 @@ vi.mock("@web/lib/coach/generate-suggestion", () => ({
   generateCoachSuggestion: (...args: unknown[]) => coachMock(...(args as [])),
 }))
 
+/**
+ * Story 63-12 — push ao corretor. Mockado para que o teste possa AFIRMAR sobre a chamada:
+ * o helper real decide sozinho (corretor assumiu? existe corretor?) e engole tudo, então
+ * observar o efeito colateral não distinguiria "a rota não chamou" de "o helper desistiu".
+ * O eixo aqui é a decisão da ROTA.
+ */
+const pushCorretorMock = vi.fn(async () => {})
+vi.mock("@web/lib/broker/notify-on-reply", () => ({
+  notifyBrokerOnReply: (...args: unknown[]) => pushCorretorMock(...(args as [])),
+}))
+
 // ---- In-memory Supabase mock ---------------------------------------------
 
 interface MessageRow {
@@ -268,6 +279,27 @@ import { normalizePhoneBR } from "@trifold/shared"
 let selectsPorTabela: Array<{ table: string; cols: string | null }> = []
 
 /**
+ * Gate `@qa` M-1 — a ORDEM em que as tabelas recebem INSERT, na sequência real.
+ *
+ * O defeito que isto tranca não é observável por valor final: com o arquivo em `webhook_logs`
+ * ANTES do INSERT em `messages`, um Supabase LENTO (não fora do ar) pendura o arquivo até a
+ * lambda morrer no `maxDuration = 60` e a BOLHA nunca é escrita — `try/catch` e `if (error)`
+ * não cobrem hang, e `lib/supabase/admin.ts` não tem `AbortSignal`. Um teste de estado final
+ * fica verde nas duas ordens; só a sequência distingue.
+ */
+let insertsPorTabela: string[] = []
+
+/**
+ * CodeRabbit #556 — o `AbortSignal` que cada chamada recebeu, na ordem.
+ *
+ * O arquivamento em `webhook_logs` é o único `await` a Supabase no caminho síncrono depois da
+ * bolha e antes do 200. Sem teto, um Supabase LENTO derruba com ele o push, o Live Coach, a
+ * Nicole e a própria resposta — e a reentrega da Meta cai no early-return de 23505. O fake
+ * precisava saber ao menos EXPRESSAR o teto para que um teste pudesse exigi-lo.
+ */
+let sinaisPorChamada: Array<{ table: string; signal: AbortSignal }> = []
+
+/**
  * Story 87-20 · CR-87-20-3 — **injeção de ERRO DE LEITURA.**
  *
  * O fake só sabia produzir dois estados: "achei" e "não achei" (`data: []`). O
@@ -283,6 +315,18 @@ let selectsPorTabela: Array<{ table: string; cols: string | null }> = []
  */
 let falharLeitura:
   | ((table: string, cols: string | null) => string | null)
+  | null = null
+
+/**
+ * Injeção de falha de ESCRITA (INSERT), irmã de `falharLeitura`.
+ *
+ * Dois modos porque o cliente falha de duas formas distintas, e o código de produção precisa
+ * sobreviver às DUAS: o PostgREST devolve `{data:null, error}` (violação de CHECK/RLS) sem
+ * lançar, enquanto rede/cliente/timeout LANÇA. Um `try/catch` sozinho só cobre a segunda; um
+ * `if (error)` sozinho só cobre a primeira. O fake sabia produzir nenhuma das duas.
+ */
+let falharInsert:
+  | ((table: string) => { lanca: boolean; motivo: string } | null)
   | null = null
 
 /** Colunas de uma projeção simples, ou `null` (`*`, embed, `->>`, agregados). */
@@ -322,6 +366,8 @@ function buildSupabaseMock() {
       onConflict?: string
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       pendingResult?: any
+      /** CodeRabbit #556 — teto de tempo da chamada (`.abortSignal()`). */
+      signal?: AbortSignal
     }
 
     const state: QueryState = { filters: [], action: "select" }
@@ -430,6 +476,12 @@ function buildSupabaseMock() {
         state.limit = n
         return builder
       },
+      /** CodeRabbit #556 — `.abortSignal()` do postgrest-js: registra E é honrado em `execute`. */
+      abortSignal(signal: AbortSignal) {
+        state.signal = signal
+        sinaisPorChamada.push({ table: String(table), signal })
+        return builder
+      },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       single(): Promise<any> {
         return execute().then((res) => {
@@ -474,6 +526,21 @@ function buildSupabaseMock() {
        * `identifyClientByContact` (Story 76-2) consulta tabelas de relacionamento que
        * o fake nunca declarou.
        */
+      /**
+       * CodeRabbit #556 — signal já abortado devolve ERRO, não exceção.
+       *
+       * É o que o postgrest-js faz (`{ data: null, error: { message: "FetchError: The user
+       * aborted a request." } }`): quem trata timeout tem de tratar o ramo `if (error)`, não
+       * o `catch`. O fake produzindo exceção aqui deixaria passar verde um código que só
+       * cobre metade.
+       */
+      if (state.signal?.aborted) {
+        return Promise.resolve({
+          data: null,
+          error: { message: "FetchError: The user aborted a request." },
+        })
+      }
+
       if (!db[table]) {
         ;(db as unknown as Record<string, unknown[]>)[table as string] = []
       }
@@ -491,6 +558,12 @@ function buildSupabaseMock() {
       }
 
       if (state.action === "insert" || state.action === "upsert") {
+        insertsPorTabela.push(String(table))
+        const falha = falharInsert?.(String(table)) ?? null
+        if (falha) {
+          if (falha.lanca) throw new Error(falha.motivo)
+          return Promise.resolve({ data: null, error: { message: falha.motivo } })
+        }
         const items = Array.isArray(state.payload)
           ? state.payload
           : [state.payload]
@@ -1857,5 +1930,1018 @@ describe("Story 87-20 — trava de loop bot-a-bot no webhook", () => {
         expect(JSON.stringify(grito!.metadata)).toContain(ERRO_DE_LEITURA)
       })
     })
+  })
+})
+
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Cartão de contato (vCard) inbound — bug de produção de 01/09/2026
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+//
+// Medido na conversa `fd2f5f39-2d73-483a-b499-1ad35c3ddff9`: o lead mandou o telefone da
+// namorada como cartão de contato (`type: "contacts"`) e a linha NUNCA existiu em `messages`.
+// Não é bolha vazia — é ausência total: o `else` final do bloco de montagem devolvia
+// `{status:"ok"}` antes de qualquer INSERT. O corretor teve de pedir o número por escrito.
+//
+// O carrasco destes testes é o próprio `else`: enquanto `contacts` não tiver branch,
+// `db.messages` fica VAZIO e as três asserções abaixo ficam vermelhas.
+describe("WhatsApp webhook — cartão de contato (vCard) inbound", () => {
+  const APP_SECRET = "test-secret"
+
+  beforeEach(() => {
+    db = freshDb()
+    nextId = 0
+    logEventMock.mockClear()
+    fetchMock.mockClear()
+    coachMock.mockClear()
+    coachMock.mockResolvedValue(undefined)
+    process.env.META_APP_SECRET = APP_SECRET
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "http://localhost"
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "test-key"
+    process.env.META_WHATSAPP_VERIFY_TOKEN = "verify"
+  })
+
+  /** Payload real da Cloud API: `messages[0].contacts` é um ARRAY de cartões. */
+  function buildContactsPayload(opts: {
+    from: string
+    wamid: string
+    contacts: unknown
+  }) {
+    return {
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                messages: [
+                  {
+                    from: opts.from,
+                    id: opts.wamid,
+                    type: "contacts",
+                    contacts: opts.contacts,
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    }
+  }
+
+  it("1 contato com 1 telefone: a mensagem EXISTE, com nome e número no texto", async () => {
+    const { POST } = await import("../route")
+
+    const res = await POST(
+      signedRequest(
+        buildContactsPayload({
+          from: "+5544999689446",
+          wamid: "wamid.VCARD-1",
+          contacts: [
+            {
+              name: { formatted_name: "Maria Silva", first_name: "Maria" },
+              phones: [{ phone: "+55 41 99999-9999", wa_id: "5541999999999" }],
+            },
+          ],
+        }),
+        APP_SECRET
+      )
+    )
+    expect(res.status).toBe(200)
+
+    // A AC é esta: a linha existe. Vem primeiro porque, sob o defeito, é ela que fica
+    // vermelha — asserção de texto sobre `undefined` apontaria para outro sintoma.
+    const userMsg = db.messages.find((m) => m.role === "user")
+    expect(userMsg).toBeTruthy()
+    expect(userMsg!.role).toBe("user")
+    expect(userMsg!.content).toBe("[Contato recebido] Maria Silva — +55 41 99999-9999")
+
+    // O número tem de sobreviver a uma edição do texto: fica estruturado no metadata.
+    expect(userMsg!.metadata.contacts).toEqual([
+      { nome: "Maria Silva", telefones: ["+55 41 99999-9999"] },
+    ])
+    expect(userMsg!.metadata.whatsapp_message_id).toBe("wamid.VCARD-1")
+    // Não é mídia: as colunas de mídia continuam limpas.
+    expect(userMsg!.media_type).toBeNull()
+  })
+
+  it("contato com múltiplos telefones: todos aparecem, separados por vírgula", async () => {
+    const { POST } = await import("../route")
+
+    const res = await POST(
+      signedRequest(
+        buildContactsPayload({
+          from: "+5544999689446",
+          wamid: "wamid.VCARD-2",
+          contacts: [
+            {
+              name: { first_name: "João", last_name: "Souza" },
+              phones: [
+                { phone: "+55 41 98888-8888", type: "CELL" },
+                // Sem `phone`: cai no `wa_id`, que é o que a Meta manda quando o
+                // cartão veio de um contato já salvo no WhatsApp.
+                { wa_id: "5541977777777", type: "WORK" },
+              ],
+            },
+          ],
+        }),
+        APP_SECRET
+      )
+    )
+    expect(res.status).toBe(200)
+
+    const userMsg = db.messages.find((m) => m.role === "user")
+    expect(userMsg).toBeTruthy()
+    expect(userMsg!.content).toBe(
+      "[Contato recebido] João Souza — +55 41 98888-8888, 5541977777777"
+    )
+    expect(userMsg!.metadata.contacts).toEqual([
+      { nome: "João Souza", telefones: ["+55 41 98888-8888", "5541977777777"] },
+    ])
+  })
+
+  it("`contacts: []` — a mensagem AINDA existe, com texto honesto, e o webhook GRITA", async () => {
+    const { POST } = await import("../route")
+
+    const res = await POST(
+      signedRequest(
+        buildContactsPayload({
+          from: "+5544999689446",
+          wamid: "wamid.VCARD-VAZIO",
+          contacts: [],
+        }),
+        APP_SECRET
+      )
+    )
+    expect(res.status).toBe(200)
+
+    // Nunca sumir em silêncio: sem dado legível, a bolha diz o que houve.
+    const userMsg = db.messages.find((m) => m.role === "user")
+    expect(userMsg).toBeTruthy()
+    expect(userMsg!.content).toBe(
+      "[Contato recebido — não foi possível ler os dados]"
+    )
+
+    const grito = logEventMock.mock.calls.find(
+      (c) => (c[0] as { event_type?: string })?.event_type === "contacts_payload_vazio"
+    )
+    expect(grito).toBeDefined()
+    expect((grito![0] as { level: string }).level).toBe("warn")
+  })
+})
+
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Tipos não suportados: nenhum some em silêncio
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+//
+// Mesma raiz do cartão de contato: o `else` final do bloco de montagem devolvia
+// `{status:"ok"}` para TUDO que não fosse text/audio/voice/image/document. Localização,
+// vídeo, figurinha, reação e qualquer tipo novo da Meta sumiam antes do INSERT.
+//
+// Carrascos aqui: (a) sob o defeito, `db.messages` fica vazio nos três primeiros testes;
+// (b) sob o defeito, `db.webhook_logs` fica vazio no teste de arquivamento; (c) o teste de
+// reação depende do par controle/reação — o controle prova que `pipelineMock` É chamado no
+// caminho normal, então a ausência na reação não é asserção vazia.
+describe("WhatsApp webhook — tipos não suportados nunca somem em silêncio", () => {
+  const APP_SECRET = "test-secret"
+
+  beforeEach(() => {
+    db = freshDb()
+    nextId = 0
+    logEventMock.mockClear()
+    fetchMock.mockClear()
+    fetchMock.mockImplementation((async () => ({ ok: true, json: async () => ({}) })) as never)
+    coachMock.mockClear()
+    coachMock.mockResolvedValue(undefined)
+    pipelineMock.mockClear()
+    pipelineMock.mockImplementation(async () => ({
+      response: "Mocked Nicole reply",
+      qualificationScore: 0,
+    }))
+    // Callbacks retidos por describes anteriores não podem entrar na conta deste.
+    afterPromises = []
+    falharLeitura = null
+    process.env.META_APP_SECRET = APP_SECRET
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "http://localhost"
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "test-key"
+    process.env.META_WHATSAPP_VERIFY_TOKEN = "verify"
+    // Mesma razão do bloco 87-20: a janela anti-rajada (75-359) é um `setTimeout` de ~1s
+    // ANTES do pipeline. Zerá-la é o que permite ao teste de CONTROLE alcançar a Nicole.
+    process.env.NICOLE_ANTI_RAJADA_MS = "0"
+  })
+
+  afterEach(() => {
+    delete process.env.NICOLE_ANTI_RAJADA_MS
+  })
+
+  /** Monta um payload com um `msg` arbitrário (o tipo é o eixo do teste). */
+  function buildTipoPayload(opts: {
+    from: string
+    wamid: string
+    type: string
+    extra?: Record<string, unknown>
+  }) {
+    return {
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                messages: [
+                  {
+                    from: opts.from,
+                    id: opts.wamid,
+                    type: opts.type,
+                    ...(opts.extra ?? {}),
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    }
+  }
+
+  it("location: bolha com nome, endereço e link do Google Maps", async () => {
+    const { POST } = await import("../route")
+
+    const res = await POST(
+      signedRequest(
+        buildTipoPayload({
+          from: "+5544999689446",
+          wamid: "wamid.LOC-1",
+          type: "location",
+          extra: {
+            location: {
+              latitude: -25.4284,
+              longitude: -49.2733,
+              name: "Obra Torre Alfa",
+              address: "Rua XV de Novembro, 100",
+            },
+          },
+        }),
+        APP_SECRET
+      )
+    )
+    expect(res.status).toBe(200)
+
+    const userMsg = db.messages.find((m) => m.role === "user")
+    expect(userMsg).toBeTruthy()
+    expect(userMsg!.content).toBe(
+      "[Localização recebida] Obra Torre Alfa — Rua XV de Novembro, 100 https://maps.google.com/?q=-25.4284,-49.2733"
+    )
+    // O link é o que faz a bolha ser acionável: sem ele o corretor não abre mapa nenhum.
+    expect(userMsg!.content).toContain("https://maps.google.com/?q=-25.4284,-49.2733")
+    expect(userMsg!.metadata.location).toEqual({
+      latitude: -25.4284,
+      longitude: -49.2733,
+      name: "Obra Torre Alfa",
+      address: "Rua XV de Novembro, 100",
+    })
+  })
+
+  it("CONTROLE — texto normal ACIONA a Nicole (senão a asserção da reação seria vazia)", async () => {
+    const { POST } = await import("../route")
+
+    await POST(
+      signedRequest(
+        buildPayload({ from: "+5544999689446", wamid: "wamid.CTRL-IA", text: "quanto custa?" }),
+        APP_SECRET
+      )
+    )
+    await drenarAfter()
+
+    expect(pipelineMock).toHaveBeenCalled()
+  })
+
+  it("reaction: a bolha é gravada e a Nicole NÃO é acionada", async () => {
+    const { POST } = await import("../route")
+
+    const res = await POST(
+      signedRequest(
+        buildTipoPayload({
+          from: "+5544999689446",
+          wamid: "wamid.REACT-1",
+          type: "reaction",
+          extra: { reaction: { emoji: "❤️", message_id: "wamid.ORIGINAL" } },
+        }),
+        APP_SECRET
+      )
+    )
+    expect(res.status).toBe(200)
+    await drenarAfter()
+
+    const userMsg = db.messages.find((m) => m.role === "user")
+    expect(userMsg).toBeTruthy()
+    expect(userMsg!.content).toBe("[O lead reagiu com ❤️]")
+    expect(userMsg!.metadata.reaction).toEqual({
+      emoji: "❤️",
+      message_id: "wamid.ORIGINAL",
+      removida: false,
+    })
+
+    // O que importa: responder a um ❤️ é pior que o silêncio.
+    expect(pipelineMock).not.toHaveBeenCalled()
+  })
+
+  it("tipo desconhecido: bolha genérica nomeando o tipo, e a Nicole NÃO é acionada", async () => {
+    const { POST } = await import("../route")
+
+    const res = await POST(
+      signedRequest(
+        buildTipoPayload({
+          from: "+5544999689446",
+          wamid: "wamid.ORDER-1",
+          type: "order",
+          extra: { order: { catalog_id: "CAT-1" } },
+        }),
+        APP_SECRET
+      )
+    )
+    expect(res.status).toBe(200)
+    await drenarAfter()
+
+    const userMsg = db.messages.find((m) => m.role === "user")
+    expect(userMsg).toBeTruthy()
+    expect(userMsg!.content).toBe(
+      "[O lead enviou algo que o CRM ainda não exibe: order]"
+    )
+    expect(pipelineMock).not.toHaveBeenCalled()
+  })
+
+  it("sticker e video: bolha própria, sem colunas de mídia (não há download)", async () => {
+    const { POST } = await import("../route")
+
+    await POST(
+      signedRequest(
+        buildTipoPayload({ from: "+5544999689446", wamid: "wamid.STK", type: "sticker" }),
+        APP_SECRET
+      )
+    )
+    await POST(
+      signedRequest(
+        buildTipoPayload({ from: "+5544999689446", wamid: "wamid.VID", type: "video" }),
+        APP_SECRET
+      )
+    )
+
+    const conteudos = db.messages.filter((m) => m.role === "user").map((m) => m.content)
+    expect(conteudos).toContain("[Figurinha recebida]")
+    expect(conteudos).toContain("[Vídeo recebido — o CRM ainda não exibe vídeos]")
+    expect(db.messages.filter((m) => m.role === "user").every((m) => m.media_type === null)).toBe(
+      true
+    )
+  })
+
+  it("o payload CRU já está em `webhook_logs` quando a rota RESPONDE (aguardado, não `after()`)", async () => {
+    const { POST } = await import("../route")
+
+    await POST(
+      signedRequest(
+        buildContatoSimples("+5544999689446", "wamid.LOG-1"),
+        APP_SECRET
+      )
+    )
+
+    // ⚠️ NENHUM `drenarAfter()` aqui, de propósito — é o que distingue "aguardado" de
+    // "agendado". Com o dreno, mover o INSERT para dentro de `after()` continuaria verde e a
+    // frase "AGUARDADO de propósito" no comentário da rota seria prosa, não invariante
+    // (gate `@qa` M-2). Sem o dreno, essa mutação fica vermelha aqui.
+    expect(db.webhook_logs).toHaveLength(1)
+
+    const log = db.webhook_logs.find(
+      (l) => (l as { event_type?: string }).event_type === "tipo_nao_suportado:contacts"
+    ) as Record<string, unknown> | undefined
+
+    expect(log).toBeDefined()
+    expect(log!.source).toBe("whatsapp")
+    expect(log!.org_id).toBe("org-1")
+    // A bolha FOI gravada: não é falha de processamento.
+    expect(log!.processed).toBe(true)
+    // O objeto `msg` inteiro — é isto que teria salvado o telefone de 01/09.
+    expect(JSON.stringify(log!.payload)).toContain("+55 41 99999-9999")
+    expect((log!.payload as { id?: string }).id).toBe("wamid.LOG-1")
+  })
+
+  it("texto puro NÃO vai para `webhook_logs` (o arquivo é só dos tipos não suportados)", async () => {
+    const { POST } = await import("../route")
+
+    await POST(
+      signedRequest(
+        buildPayload({ from: "+5544999689446", wamid: "wamid.LOG-TXT", text: "oi" }),
+        APP_SECRET
+      )
+    )
+    await drenarAfter()
+
+    expect(db.webhook_logs).toHaveLength(0)
+  })
+})
+
+/** Cartão de contato mínimo — reaproveitado pelo teste de `webhook_logs`. */
+function buildContatoSimples(from: string, wamid: string) {
+  return {
+    entry: [
+      {
+        changes: [
+          {
+            value: {
+              messages: [
+                {
+                  from,
+                  id: wamid,
+                  type: "contacts",
+                  contacts: [
+                    {
+                      name: { formatted_name: "Maria Silva" },
+                      phones: [{ phone: "+55 41 99999-9999" }],
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ],
+  }
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// O arquivo de payload é AGUARDADO — e é inofensivo quando falha
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+//
+// O INSERT em `webhook_logs` saiu do `after()` porque a Vercel já provou descartar callbacks de
+// `after()` em silêncio (documentado em `webhooks/landing-page/route.ts`) — arquivar a prova no
+// caminho que perde prova esvazia a garantia. Aguardar tem um preço: o arquivo divide o caminho
+// SÍNCRONO com o INSERT da mensagem (hoje depois dele, gate `@qa` M-1), e uma falha nele poderia
+// derrubar a bolha. O preço do TEMPO é outro bloco — ver "teto do INSERT de arquivamento".
+//
+// Carrascos, um por metade da proteção (o gate `@qa` L-1 mediu que a frase única de antes era
+// falsa: remover o `if (error)` não derrubava nada, porque o PostgREST não lança):
+//   • tirar o `try/catch`  → o teste do modo "LANÇA" fica vermelho (sem bolha, sem 200);
+//   • tirar o `if (error)` → o teste do modo "error do PostgREST" fica vermelho, porque ele
+//     asserta o `console.error` COM a mensagem do banco. Sem essa asserção, a falha silenciosa
+//     seria trocada por outra falha silenciosa e ninguém saberia.
+describe("WhatsApp webhook — falha ao arquivar payload não derruba a mensagem", () => {
+  const APP_SECRET = "test-secret"
+
+  beforeEach(() => {
+    db = freshDb()
+    nextId = 0
+    logEventMock.mockClear()
+    fetchMock.mockClear()
+    fetchMock.mockImplementation((async () => ({ ok: true, json: async () => ({}) })) as never)
+    coachMock.mockClear()
+    coachMock.mockResolvedValue(undefined)
+    pushCorretorMock.mockClear()
+    pipelineMock.mockClear()
+    pipelineMock.mockImplementation(async () => ({
+      response: "Mocked Nicole reply",
+      qualificationScore: 0,
+    }))
+    afterPromises = []
+    falharLeitura = null
+    falharInsert = null
+    process.env.META_APP_SECRET = APP_SECRET
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "http://localhost"
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "test-key"
+    process.env.META_WHATSAPP_VERIFY_TOKEN = "verify"
+    process.env.NICOLE_ANTI_RAJADA_MS = "0"
+  })
+
+  afterEach(() => {
+    // Não pode vazar para nenhum outro bloco: derrubaria todo INSERT da suíte.
+    falharInsert = null
+    delete process.env.NICOLE_ANTI_RAJADA_MS
+  })
+
+  it("INSERT do arquivo LANÇA: a mensagem é gravada e a resposta é 200", async () => {
+    const { POST } = await import("../route")
+    // Só `webhook_logs` falha — se derrubasse `messages` também, o teste mediria outra coisa.
+    falharInsert = (table) =>
+      table === "webhook_logs" ? { lanca: true, motivo: "conexão caiu" } : null
+
+    const res = await POST(
+      signedRequest(buildContatoSimples("+5544999689446", "wamid.LOG-THROW"), APP_SECRET)
+    )
+
+    expect(res.status).toBe(200)
+    expect(db.webhook_logs).toHaveLength(0) // o arquivo realmente não foi gravado
+    const userMsg = db.messages.find((m) => m.role === "user")
+    expect(userMsg).toBeTruthy()
+    expect(userMsg!.content).toBe("[Contato recebido] Maria Silva — +55 41 99999-9999")
+  })
+
+  it("INSERT do arquivo devolve `error` do PostgREST: bolha intacta E o motivo do banco no console", async () => {
+    const { POST } = await import("../route")
+    const MOTIVO = 'new row violates check constraint "webhook_logs_source_check"'
+    // O outro modo de falha: violação de CHECK/RLS não LANÇA, vem no objeto. É por isso que o
+    // `try/catch` sozinho não basta — sem o `if (error)` da rota, este caminho é MUDO.
+    falharInsert = (table) => (table === "webhook_logs" ? { lanca: false, motivo: MOTIVO } : null)
+    const espiaoConsole = vi.spyOn(console, "error").mockImplementation(() => {})
+
+    try {
+      const res = await POST(
+        signedRequest(buildContatoSimples("+5544999689446", "wamid.LOG-ERR"), APP_SECRET)
+      )
+
+      expect(res.status).toBe(200)
+      expect(db.webhook_logs).toHaveLength(0)
+      expect(db.messages.find((m) => m.role === "user")).toBeTruthy()
+
+      // O carrasco do `if (erroArquivo)`: sem ele, nada é impresso e esta asserção reprova.
+      const gritou = espiaoConsole.mock.calls.some((c) => c.map(String).join(" ").includes(MOTIVO))
+      expect(gritou).toBe(true)
+    } finally {
+      espiaoConsole.mockRestore()
+    }
+  })
+})
+
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Push ao corretor: reação cala, tipo desconhecido grita
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+//
+// `notificaCorretor` é uma flag SEPARADA de `acionaNicole`, e estes testes são o que impede
+// alguém de "simplificar" unificando as duas: sob a unificação, o teste do tipo desconhecido
+// fica vermelho (o corretor deixaria de ser avisado justo no caso em que o CRM não sabe exibir
+// o conteúdo).
+describe("WhatsApp webhook — push ao corretor por tipo de mensagem", () => {
+  const APP_SECRET = "test-secret"
+
+  beforeEach(() => {
+    db = freshDb()
+    nextId = 0
+    logEventMock.mockClear()
+    fetchMock.mockClear()
+    fetchMock.mockImplementation((async () => ({ ok: true, json: async () => ({}) })) as never)
+    coachMock.mockClear()
+    coachMock.mockResolvedValue(undefined)
+    pushCorretorMock.mockClear()
+    pipelineMock.mockClear()
+    pipelineMock.mockImplementation(async () => ({
+      response: "Mocked Nicole reply",
+      qualificationScore: 0,
+    }))
+    afterPromises = []
+    falharLeitura = null
+    falharInsert = null
+    process.env.META_APP_SECRET = APP_SECRET
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "http://localhost"
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "test-key"
+    process.env.META_WHATSAPP_VERIFY_TOKEN = "verify"
+    process.env.NICOLE_ANTI_RAJADA_MS = "0"
+  })
+
+  afterEach(() => {
+    delete process.env.NICOLE_ANTI_RAJADA_MS
+  })
+
+  /** Mesmo payload arbitrário por tipo usado no bloco de tipos não suportados. */
+  function porTipo(wamid: string, type: string, extra?: Record<string, unknown>) {
+    return {
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                messages: [
+                  { from: "+5544999689446", id: wamid, type, ...(extra ?? {}) },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    }
+  }
+
+  it("CONTROLE — texto normal CHAMA o push (senão os `not.toHaveBeenCalled` abaixo seriam vazios)", async () => {
+    const { POST } = await import("../route")
+
+    await POST(
+      signedRequest(
+        buildPayload({ from: "+5544999689446", wamid: "wamid.PUSH-CTRL", text: "oi" }),
+        APP_SECRET
+      )
+    )
+    await drenarAfter()
+
+    expect(pushCorretorMock).toHaveBeenCalled()
+  })
+
+  it("reaction: NÃO notifica o corretor — um ❤️ é ruído no celular dele", async () => {
+    const { POST } = await import("../route")
+
+    const res = await POST(
+      signedRequest(
+        porTipo("wamid.PUSH-REACT", "reaction", {
+          reaction: { emoji: "❤️", message_id: "wamid.ORIGINAL" },
+        }),
+        APP_SECRET
+      )
+    )
+    expect(res.status).toBe(200)
+    await drenarAfter()
+
+    // A bolha existe (a reação não some) — só o push é suprimido.
+    expect(db.messages.find((m) => m.role === "user")).toBeTruthy()
+    expect(pushCorretorMock).not.toHaveBeenCalled()
+  })
+
+  it("tipo desconhecido: NOTIFICA o corretor — é o caso em que só ele pode ir ver no WhatsApp", async () => {
+    const { POST } = await import("../route")
+
+    const res = await POST(
+      signedRequest(
+        porTipo("wamid.PUSH-ORDER", "order", { order: { catalog_id: "CAT-1" } }),
+        APP_SECRET
+      )
+    )
+    expect(res.status).toBe(200)
+    await drenarAfter()
+
+    // A divergência com `acionaNicole` mora aqui: sem IA, MAS com push.
+    expect(pipelineMock).not.toHaveBeenCalled()
+    expect(pushCorretorMock).toHaveBeenCalled()
+  })
+})
+
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Gate `@qa` H-1 — quem aciona a Nicole, tipo a tipo (nada por omissão)
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+//
+// H-1 nasceu de uma OMISSÃO, não de um erro de código: `video` e `sticker` herdavam
+// `acionaNicole = true` e nenhum teste dizia nada sobre isso. O `text` desses branches DESCREVE
+// UMA LIMITAÇÃO DO CRM ("o CRM ainda não exibe vídeos") e chegava ao pipeline como se fosse fala
+// do lead — a Nicole respondia ao cliente sobre o nosso sistema.
+//
+// Por isso este bloco cobre os QUATRO tipos, inclusive os dois que não mudaram: a regra passa a
+// ser afirmada, não presumida. Cada `it` tem um par (um SIM e um NÃO no mesmo eixo), então
+// nenhum `not.toHaveBeenCalled()` aqui é asserção vazia.
+describe("WhatsApp webhook — H-1: quais tipos acionam a Nicole", () => {
+  const APP_SECRET = "test-secret"
+
+  beforeEach(() => {
+    db = freshDb()
+    nextId = 0
+    logEventMock.mockClear()
+    fetchMock.mockClear()
+    fetchMock.mockImplementation((async () => ({ ok: true, json: async () => ({}) })) as never)
+    coachMock.mockClear()
+    coachMock.mockResolvedValue(undefined)
+    pushCorretorMock.mockClear()
+    pipelineMock.mockClear()
+    pipelineMock.mockImplementation(async () => ({
+      response: "Mocked Nicole reply",
+      qualificationScore: 0,
+    }))
+    afterPromises = []
+    falharLeitura = null
+    falharInsert = null
+    process.env.META_APP_SECRET = APP_SECRET
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "http://localhost"
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "test-key"
+    process.env.META_WHATSAPP_VERIFY_TOKEN = "verify"
+    process.env.NICOLE_ANTI_RAJADA_MS = "0"
+  })
+
+  afterEach(() => {
+    delete process.env.NICOLE_ANTI_RAJADA_MS
+  })
+
+  async function entregarTipo(wamid: string, type: string, extra?: Record<string, unknown>) {
+    const { POST } = await import("../route")
+    const res = await POST(signedRequest(buildTipoBruto(wamid, type, extra), APP_SECRET))
+    await drenarAfter()
+    return res
+  }
+
+  it("contacts ACIONA a Nicole — o cartão é dado útil, ela tem o que fazer", async () => {
+    await entregarTipo("wamid.H1-CONTACTS", "contacts", {
+      contacts: [
+        { name: { formatted_name: "Maria Silva" }, phones: [{ phone: "+55 41 99999-9999" }] },
+      ],
+    })
+    expect(pipelineMock).toHaveBeenCalled()
+  })
+
+  it("location ACIONA a Nicole — o lead mandou onde está, isso é conteúdo", async () => {
+    await entregarTipo("wamid.H1-LOC", "location", {
+      location: { latitude: -25.4284, longitude: -49.2733 },
+    })
+    expect(pipelineMock).toHaveBeenCalled()
+  })
+
+  it("video NÃO aciona a Nicole — o texto da bolha descreve uma limitação NOSSA", async () => {
+    await entregarTipo("wamid.H1-VID", "video", { video: { id: "VID-1" } })
+
+    // A bolha existe (o vídeo não some) e o corretor é avisado…
+    const userMsg = db.messages.find((m) => m.role === "user")
+    expect(userMsg!.content).toBe("[Vídeo recebido — o CRM ainda não exibe vídeos]")
+    expect(pushCorretorMock).toHaveBeenCalled()
+
+    // …mas esse texto NUNCA vai ao pipeline: senão a Nicole responde ao lead sobre o CRM.
+    expect(pipelineMock).not.toHaveBeenCalled()
+    const textosAoPipeline = (pipelineMock.mock.calls as unknown as unknown[][])
+      .map((c) => JSON.stringify(c[0]))
+      .join(" ")
+    expect(textosAoPipeline).not.toContain("o CRM ainda não exibe")
+  })
+
+  it("sticker NÃO aciona a Nicole — 😂 é a mesma classe de ❤️", async () => {
+    await entregarTipo("wamid.H1-STK", "sticker", { sticker: { id: "STK-1" } })
+
+    expect(db.messages.find((m) => m.role === "user")!.content).toBe("[Figurinha recebida]")
+    expect(pushCorretorMock).toHaveBeenCalled()
+    expect(pipelineMock).not.toHaveBeenCalled()
+  })
+
+  it("L-3 — video e sticker gravam `tipo_nao_suportado` (contar vídeos não pode ser grep no texto)", async () => {
+    await entregarTipo("wamid.L3-VID", "video", { video: { id: "VID-2" } })
+    await entregarTipo("wamid.L3-STK", "sticker", { sticker: { id: "STK-2" } })
+
+    const marcadores = db.messages
+      .filter((m) => m.role === "user")
+      .map((m) => m.metadata.tipo_nao_suportado)
+    expect(marcadores).toContain("video")
+    expect(marcadores).toContain("sticker")
+  })
+
+  it("CONTROLE — texto puro NÃO grava `tipo_nao_suportado` (o marcador discrimina de fato)", async () => {
+    const { POST } = await import("../route")
+    await POST(
+      signedRequest(
+        buildPayload({ from: "+5544999689446", wamid: "wamid.L3-TXT", text: "oi" }),
+        APP_SECRET
+      )
+    )
+    expect(db.messages.find((m) => m.role === "user")!.metadata.tipo_nao_suportado).toBeUndefined()
+  })
+
+  it("L-2 — reação REMOVIDA (`emoji: \"\"`) não mente dizendo que o lead reagiu", async () => {
+    await entregarTipo("wamid.L2-UNDO", "reaction", {
+      reaction: { emoji: "", message_id: "wamid.ORIGINAL" },
+    })
+
+    const userMsg = db.messages.find((m) => m.role === "user")
+    expect(userMsg!.content).toBe("[O lead removeu a reação]")
+    // O metadata também distingue: reagir e desfazer não podem ser a mesma linha.
+    expect(userMsg!.metadata.reaction).toEqual({
+      emoji: null,
+      message_id: "wamid.ORIGINAL",
+      removida: true,
+    })
+    expect(pipelineMock).not.toHaveBeenCalled()
+    expect(pushCorretorMock).not.toHaveBeenCalled()
+  })
+
+  it("L-4 — `system` vira bolha, mas sem IA e SEM push (não é o lead falando)", async () => {
+    await entregarTipo("wamid.L4-SYS", "system", {
+      system: {
+        body: "Maria mudou o número de telefone",
+        type: "user_changed_number",
+        new_wa_id: "5541988887777",
+      },
+    })
+
+    const userMsg = db.messages.find((m) => m.role === "user")
+    expect(userMsg).toBeTruthy()
+    expect(userMsg!.content).toBe("[Aviso do WhatsApp] Maria mudou o número de telefone")
+    expect(userMsg!.metadata.system).toEqual({
+      body: "Maria mudou o número de telefone",
+      type: "user_changed_number",
+      new_wa_id: "5541988887777",
+    })
+
+    expect(pipelineMock).not.toHaveBeenCalled()
+    // A divergência com o tipo desconhecido mora aqui: `order` notifica, `system` não.
+    // Não há nada no WhatsApp para o corretor ir ver — o push seria falso alarme.
+    expect(pushCorretorMock).not.toHaveBeenCalled()
+  })
+
+  it("PAR de contraste — `order` no MESMO cenário notifica o corretor, `system` não", async () => {
+    await entregarTipo("wamid.PAR-ORDER", "order", { order: { catalog_id: "CAT-1" } })
+    expect(pushCorretorMock).toHaveBeenCalledTimes(1)
+
+    pushCorretorMock.mockClear()
+    await entregarTipo("wamid.PAR-SYS", "system", { system: { type: "user_changed_number" } })
+    expect(pushCorretorMock).not.toHaveBeenCalled()
+  })
+})
+
+/** Payload com um `msg` de tipo arbitrário — compartilhado pelos blocos de tipo. */
+function buildTipoBruto(wamid: string, type: string, extra?: Record<string, unknown>) {
+  return {
+    entry: [
+      {
+        changes: [
+          {
+            value: {
+              messages: [
+                { from: "+5544999689446", id: wamid, type, ...(extra ?? {}) },
+              ],
+            },
+          },
+        ],
+      },
+    ],
+  }
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Gate `@qa` M-1 — a bolha é escrita ANTES do arquivo
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+//
+// O `try/catch` e o `if (error)` cobrem "o arquivo falhou". Nenhum dos dois cobre "o arquivo
+// PENDUROU": sem `AbortSignal` em `lib/supabase/admin.ts`, um Supabase lento segura o INSERT até
+// a lambda morrer aos 60s. Com o arquivo antes da bolha, isso significava mensagem perdida — o
+// defeito de 01/09 reintroduzido pelo mecanismo criado para preveni-lo.
+//
+// A defesa é a ORDEM, e ordem não aparece em estado final: os dois arranjos terminam com as
+// mesmas linhas no banco. Por isso o carrasco aqui é a SEQUÊNCIA de INSERTs.
+describe("WhatsApp webhook — M-1: ordem entre a bolha e o arquivo", () => {
+  const APP_SECRET = "test-secret"
+
+  beforeEach(() => {
+    db = freshDb()
+    nextId = 0
+    insertsPorTabela = []
+    logEventMock.mockClear()
+    fetchMock.mockClear()
+    fetchMock.mockImplementation((async () => ({ ok: true, json: async () => ({}) })) as never)
+    coachMock.mockClear()
+    coachMock.mockResolvedValue(undefined)
+    pushCorretorMock.mockClear()
+    pipelineMock.mockClear()
+    pipelineMock.mockImplementation(async () => ({
+      response: "Mocked Nicole reply",
+      qualificationScore: 0,
+    }))
+    afterPromises = []
+    falharLeitura = null
+    falharInsert = null
+    process.env.META_APP_SECRET = APP_SECRET
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "http://localhost"
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "test-key"
+    process.env.META_WHATSAPP_VERIFY_TOKEN = "verify"
+    process.env.NICOLE_ANTI_RAJADA_MS = "0"
+  })
+
+  afterEach(() => {
+    delete process.env.NICOLE_ANTI_RAJADA_MS
+  })
+
+  it("`messages` recebe INSERT ANTES de `webhook_logs` — um hang custa o arquivo, nunca a bolha", async () => {
+    const { POST } = await import("../route")
+
+    const res = await POST(
+      signedRequest(buildContatoSimples("+5544999689446", "wamid.ORDEM-1"), APP_SECRET)
+    )
+    expect(res.status).toBe(200)
+
+    const posBolha = insertsPorTabela.indexOf("messages")
+    const posArquivo = insertsPorTabela.indexOf("webhook_logs")
+    expect(posBolha).toBeGreaterThanOrEqual(0)
+    expect(posArquivo).toBeGreaterThanOrEqual(0)
+    expect(posBolha).toBeLessThan(posArquivo)
+  })
+
+  it("e o arquivo enxerga a bolha já gravada — não é só ordem de chamada, é de EFEITO", async () => {
+    const { POST } = await import("../route")
+
+    // Espia no momento exato do INSERT do arquivo: a linha da mensagem já tem de existir.
+    let bolhasNoMomentoDoArquivo = -1
+    falharInsert = (table) => {
+      if (table === "webhook_logs") {
+        bolhasNoMomentoDoArquivo = db.messages.filter((m) => m.role === "user").length
+      }
+      return null
+    }
+
+    await POST(signedRequest(buildContatoSimples("+5544999689446", "wamid.ORDEM-2"), APP_SECRET))
+
+    expect(bolhasNoMomentoDoArquivo).toBe(1)
+  })
+})
+
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// CodeRabbit #556 — o arquivo tem TETO, e é o teto que protege o resto do turno
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+//
+// A ordem (bolha → arquivo) salva a bolha, e só ela. O `await` do arquivo continua no caminho
+// SÍNCRONO, antes dos `after()` de push/coach/Nicole e antes do 200 — e `after()` só executa
+// depois que a resposta sai. Sem teto, um Supabase LENTO leva junto os três e a resposta; a
+// Meta reentrega, a reentrega bate no early-return de 23505 e a mensagem fica sem Nicole PARA
+// SEMPRE. Mover o bloco para baixo dos `after()` não mudaria nada — agendar não é executar.
+//
+// Carrascos:
+//   • tirar o `.abortSignal(...)`      → os DOIS reprovam (nenhum signal chega ao fake, e o
+//                                        arquivo passa a ser gravado no teste do abort);
+//   • mexer no valor do teto           → os dois reprovam (o primeiro no
+//                                        `toHaveBeenCalledWith(5000)`, o segundo porque o
+//                                        mock só substitui o teto do arquivo);
+//   • trocar o `if (error)` por nada   → o segundo reprova (o abort do postgrest-js vem em
+//                                        `error`, não em exceção — é o mesmo ramo do L-1).
+describe("WhatsApp webhook — teto do INSERT de arquivamento", () => {
+  const APP_SECRET = "test-secret"
+
+  beforeEach(() => {
+    db = freshDb()
+    nextId = 0
+    insertsPorTabela = []
+    sinaisPorChamada = []
+    logEventMock.mockClear()
+    fetchMock.mockClear()
+    fetchMock.mockImplementation((async () => ({ ok: true, json: async () => ({}) })) as never)
+    coachMock.mockClear()
+    coachMock.mockResolvedValue(undefined)
+    pushCorretorMock.mockClear()
+    pipelineMock.mockClear()
+    pipelineMock.mockImplementation(async () => ({
+      response: "Mocked Nicole reply",
+      qualificationScore: 0,
+    }))
+    afterPromises = []
+    falharLeitura = null
+    falharInsert = null
+    process.env.META_APP_SECRET = APP_SECRET
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "http://localhost"
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "test-key"
+    process.env.META_WHATSAPP_VERIFY_TOKEN = "verify"
+    process.env.NICOLE_ANTI_RAJADA_MS = "0"
+  })
+
+  afterEach(() => {
+    delete process.env.NICOLE_ANTI_RAJADA_MS
+  })
+
+  it("o INSERT em `webhook_logs` vai com `AbortSignal` de 5s — hang deixou de ser possível", async () => {
+    const { POST } = await import("../route")
+    const espiaoTimeout = vi.spyOn(AbortSignal, "timeout")
+
+    try {
+      const res = await POST(
+        signedRequest(buildContatoSimples("+5544999689446", "wamid.TETO-1"), APP_SECRET)
+      )
+      expect(res.status).toBe(200)
+
+      // O teto chegou ao cliente: é a chamada do arquivo que carrega o signal, não outra.
+      const doArquivo = sinaisPorChamada.filter((s) => s.table === "webhook_logs")
+      expect(doArquivo).toHaveLength(1)
+      expect(doArquivo[0]!.signal).toBeInstanceOf(AbortSignal)
+
+      // E o valor é o declarado — sem isto, "tem teto" passaria verde com teto de 10 minutos.
+      expect(espiaoTimeout).toHaveBeenCalledWith(5000)
+    } finally {
+      espiaoTimeout.mockRestore()
+    }
+  })
+
+  it("teto estourado custa o ARQUIVO e só ele — bolha, push, Nicole e o 200 seguem", async () => {
+    const { POST } = await import("../route")
+
+    // Substitui APENAS o teto do arquivo (5s) por um signal já abortado; os demais usos de
+    // `AbortSignal.timeout` na rota (download de mídia, 10s) continuam reais, senão o teste
+    // estaria medindo o efeito colateral do próprio mock.
+    const timeoutReal = AbortSignal.timeout.bind(AbortSignal)
+    const espiaoTimeout = vi
+      .spyOn(AbortSignal, "timeout")
+      .mockImplementation((ms: number) => (ms === 5000 ? AbortSignal.abort() : timeoutReal(ms)))
+    const espiaoConsole = vi.spyOn(console, "error").mockImplementation(() => {})
+
+    try {
+      const res = await POST(
+        signedRequest(buildContatoSimples("+5544999689446", "wamid.TETO-2"), APP_SECRET)
+      )
+      await drenarAfter()
+
+      // O preço declarado: o arquivo, e nada além dele.
+      expect(res.status).toBe(200)
+      expect(db.webhook_logs).toHaveLength(0)
+
+      const userMsg = db.messages.find((m) => m.role === "user")
+      expect(userMsg).toBeTruthy()
+      expect(userMsg!.content).toBe("[Contato recebido] Maria Silva — +55 41 99999-9999")
+
+      // Estes três são o que o hang levava junto e o teto devolve.
+      expect(pushCorretorMock).toHaveBeenCalled()
+      expect(pipelineMock).toHaveBeenCalled()
+      const gritou = espiaoConsole.mock.calls.some((c) =>
+        c.map(String).join(" ").includes("aborted")
+      )
+      expect(gritou).toBe(true)
+    } finally {
+      espiaoConsole.mockRestore()
+      espiaoTimeout.mockRestore()
+    }
   })
 })

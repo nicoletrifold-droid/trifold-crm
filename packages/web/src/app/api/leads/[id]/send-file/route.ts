@@ -86,10 +86,15 @@ export async function POST(
 
   const channel = resolveChannel(lead.phone)
 
-  // Conversation: buscar ou criar
+  // Conversation: buscar ou criar.
+  //
+  // `is_ai_active` é projetado porque esta rota faz handoff igual à `send-message`
+  // (ver o bloco no fim do arquivo). Sem a coluna no `select`, o campo é `undefined`,
+  // o `if` nunca entra e o handoff vira no-op silencioso — que era exatamente o
+  // defeito: áudio do corretor entrava e a Nicole seguia respondendo.
   let { data: conversation } = await db
     .from("conversations")
-    .select("id, last_message_at")
+    .select("id, last_message_at, is_ai_active")
     .eq("lead_id", leadId)
     .eq("status", "active")
     .order("created_at", { ascending: false })
@@ -99,7 +104,7 @@ export async function POST(
     const { data: created } = await db
       .from("conversations")
       .insert({ org_id: appUser.org_id, lead_id: leadId, channel, status: "active" })
-      .select("id, last_message_at")
+      .select("id, last_message_at, is_ai_active")
       .single()
     conversation = created
   }
@@ -269,6 +274,12 @@ export async function POST(
         file_name: file.name,
         sent_via_whatsapp: sent,
         source: "broker_upload",
+        // Story 75-165 — QUEM enviou. As três telas que rotulam a bolha
+        // (`dashboard/conversas/[id]`, `dashboard/chat/[id]`, `broker/leads/[id]`)
+        // resolvem o nome por `metadata.sent_by` e caem no literal "Equipe" quando ele
+        // falta. `send-message` já gravava; esta rota não — então TODO áudio e arquivo
+        // do corretor aparecia como "Equipe", sem nome, no histórico.
+        sent_by: appUser.id,
       },
     })
     .select("id")
@@ -284,6 +295,37 @@ export async function POST(
       { success: false, error: "MESSAGE_INSERT_FAILED", message: insertErr?.message, sent },
       { status: 500 }
     )
+  }
+
+  // --- Handoff explícito ao corretor responder (Story 63-13, AC1) ---
+  //
+  // POR QUE ESTAVA FALTANDO AQUI: a 63-13 instrumentou `send-message` (texto) e esta
+  // rota (mídia) ficou de fora. Medido em produção em 01/09/2026, conversa
+  // `121ae078-86ed-4504-9b85-72252fd0213a`: o corretor mandou áudio às 15:16, a Nicole
+  // continuou respondendo às 15:20 e 15:21 e só parou às 15:22 — pela trava de loop
+  // (Story 87-20), não pelo handoff. Um corretor que só manda áudio nunca desligava a IA.
+  //
+  // Mesma mecânica da `send-message`, deliberadamente: ADMIN client (o corretor
+  // não-admin pode não ter policy de UPDATE em `conversations` sob RLS — com o client
+  // de sessão o handoff falharia em silêncio, que é o bug-alvo), guard por
+  // `is_ai_active` (idempotente: múltiplos áudios seguidos → um UPDATE só), escopo
+  // por-conversa, e best-effort (a mídia já foi enviada e gravada; se o UPDATE falhar,
+  // loga e segue — o próximo envio reencontra `is_ai_active=true` e tenta de novo).
+  if (conversation.is_ai_active) {
+    const { error: handoffErr } = await admin
+      .from("conversations")
+      .update({
+        is_ai_active: false,
+        handoff_at: new Date().toISOString(),
+        handoff_reason: "broker_reply",
+      })
+      .eq("id", conversation.id)
+
+    if (handoffErr) {
+      console.error(
+        `[send-file] handoff is_ai_active=false falhou (lead=${leadId}, conv=${conversation.id}): ${handoffErr.message}`
+      )
+    }
   }
 
   return NextResponse.json({ success: true, sent, error: sendError, messageId: insertedMsg.id })

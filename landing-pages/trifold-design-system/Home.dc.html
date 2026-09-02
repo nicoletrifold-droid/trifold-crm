@@ -31,10 +31,10 @@
     <a href="#" aria-label="Ir para a Home" style="display:flex;align-items:center"><dc-import name="Logo" tone="dark" size="{{ 26 }}" hint-size="220px,30px"></dc-import></a>
     <div style="{{ navLinksStyle }}">
       <a href="#" style="color:#fff;border-bottom:1px solid #F27A5E;padding-bottom:3px;white-space:nowrap">HOME</a>
-      <a href="Sobre Nós.dc.html" style="color:#C9C9C9;white-space:nowrap;transition:color .2s ease" style-hover="color:#fff">SOBRE NÓS</a>
-      <a href="Empreendimentos.dc.html" style="color:#C9C9C9;white-space:nowrap;transition:color .2s ease" style-hover="color:#fff">EMPREENDIMENTOS</a>
-      <a href="B2B.dc.html" style="color:#C9C9C9;white-space:nowrap;transition:color .2s ease" style-hover="color:#fff">CORPORATIVAS</a>
-      <a href="Blog.dc.html" style="color:#C9C9C9;white-space:nowrap;transition:color .2s ease" style-hover="color:#fff">BLOG</a>
+      <a href="/sobre-nos" style="color:#C9C9C9;white-space:nowrap;transition:color .2s ease" style-hover="color:#fff">SOBRE NÓS</a>
+      <a href="/empreendimentos" style="color:#C9C9C9;white-space:nowrap;transition:color .2s ease" style-hover="color:#fff">EMPREENDIMENTOS</a>
+      <a href="/corporativas" style="color:#C9C9C9;white-space:nowrap;transition:color .2s ease" style-hover="color:#fff">CORPORATIVAS</a>
+      <a href="/blog" style="color:#C9C9C9;white-space:nowrap;transition:color .2s ease" style-hover="color:#fff">BLOG</a>
       <a href="#contato" style="padding:11px 22px;background:#F27A5E;color:#000;border-radius:2px;font-weight:600;letter-spacing:0.02em;white-space:nowrap" style-hover="filter:brightness(1.08);transform:scale(1.02)">CONTATO</a>
     </div>
     <button onClick="{{ toggleMenu }}" style="{{ hamburgerBtnStyle }}" aria-label="Abrir menu">
@@ -53,10 +53,10 @@
       </div>
       <div style="display:flex;flex-direction:column;gap:8px;font-size:24px;font-weight:500">
         <a href="#" onClick="{{ toggleMenu }}" style="padding:14px 4px;border-bottom:1px solid rgba(255,255,255,0.08);color:#F27A5E">Home</a>
-        <a href="Sobre Nós.dc.html" style="padding:14px 4px;border-bottom:1px solid rgba(255,255,255,0.08)">Sobre nós</a>
-        <a href="Empreendimentos.dc.html" style="padding:14px 4px;border-bottom:1px solid rgba(255,255,255,0.08)">Empreendimentos</a>
-        <a href="B2B.dc.html" style="padding:14px 4px;border-bottom:1px solid rgba(255,255,255,0.08)">Corporativas</a>
-        <a href="Blog.dc.html" style="padding:14px 4px;border-bottom:1px solid rgba(255,255,255,0.08)">Blog</a>
+        <a href="/sobre-nos" style="padding:14px 4px;border-bottom:1px solid rgba(255,255,255,0.08)">Sobre nós</a>
+        <a href="/empreendimentos" style="padding:14px 4px;border-bottom:1px solid rgba(255,255,255,0.08)">Empreendimentos</a>
+        <a href="/corporativas" style="padding:14px 4px;border-bottom:1px solid rgba(255,255,255,0.08)">Corporativas</a>
+        <a href="/blog" style="padding:14px 4px;border-bottom:1px solid rgba(255,255,255,0.08)">Blog</a>
       </div>
       <a href="#contato" onClick="{{ toggleMenu }}" style="display:inline-flex;align-items:center;justify-content:center;margin-top:32px;padding:16px 24px;background:#F27A5E;color:#000;border-radius:2px;font-weight:600;font-size:15px">Contato</a>
     </div>
@@ -227,7 +227,7 @@
           <dc-import name="Logo" tone="dark" size="{{ 30 }}" hint-size="280px,34px"></dc-import>
         </div>
         <div style="display:flex;flex-wrap:nowrap;gap:26px;font-size:13px;letter-spacing:0.04em;color:#9A9A9A">
-          <a href="#" style="transition:color .2s ease" style-hover="color:#fff">HOME</a><a href="Sobre Nós.dc.html" style="transition:color .2s ease" style-hover="color:#fff">SOBRE</a><a href="Empreendimentos.dc.html" style="transition:color .2s ease" style-hover="color:#fff">EMPREENDIMENTOS</a><a href="B2B.dc.html" style="transition:color .2s ease" style-hover="color:#fff">CORPORATIVAS</a><a href="Blog.dc.html" style="transition:color .2s ease" style-hover="color:#fff">BLOG</a>
+          <a href="#" style="transition:color .2s ease" style-hover="color:#fff">HOME</a><a href="/sobre-nos" style="transition:color .2s ease" style-hover="color:#fff">SOBRE</a><a href="/empreendimentos" style="transition:color .2s ease" style-hover="color:#fff">EMPREENDIMENTOS</a><a href="/corporativas" style="transition:color .2s ease" style-hover="color:#fff">CORPORATIVAS</a><a href="/blog" style="transition:color .2s ease" style-hover="color:#fff">BLOG</a>
         </div>
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:20px;justify-content:space-between;align-items:center;padding-top:28px;font-family:'Space Mono',monospace;font-size:11px;color:#8A8A8A">
@@ -338,7 +338,7 @@ class Component extends DCLogic {
     const rawSlides = [
       { name:'Vind Residence', eyebrow:'Últimas unidades', tagline:'Exclusivo. Compacto. Boutique.', loc:'Jardim Novo Horizonte · Maringá', bgImage:'url(assets/banner-vind.webp)', bgPosition:'center', logoSrc:'assets/logo-vind-branco.svg', logoRatio:122.25/49.54, ctaHref:'https://trifold.eng.br/vindresidence/', ctaLabel:'Saiba mais' },
       { name:'Yarden', eyebrow:'Lançamento', tagline:'Sofisticação e uma natureza que inspira.', loc:'Gleba Itororó · Maringá', bgImage:'url(assets/banner-yarden.webp)', bgPosition:'center', logoSrc:'assets/logo-yarden-branco.svg', logoRatio:298/62, ctaHref:'#empreendimentos', ctaLabel:'Saiba mais' },
-      { name:'Obras Corporativas', eyebrow:'Obras Corporativas', heading:'Confie sua obra com quem sabe fazer.', tagline:'De hospitais à cemitérios, soluções com um time próprio e experiente de engenharia.', bgImage:'url(assets/banner-corporativas.webp)', bgPosition: isMobile ? '66% center' : 'center', ctaHref:'B2B.dc.html', ctaLabel:'Acesse nosso portfólio' },
+      { name:'Obras Corporativas', eyebrow:'Obras Corporativas', heading:'Confie sua obra com quem sabe fazer.', tagline:'De hospitais à cemitérios, soluções com um time próprio e experiente de engenharia.', bgImage:'url(assets/banner-corporativas.webp)', bgPosition: isMobile ? '66% center' : 'center', ctaHref:'/corporativas', ctaLabel:'Acesse nosso portfólio' },
     ];
     this._n = rawSlides.length;
     const logoHeightByName = { 'Vind Residence': isMobile ? 54 : 76, 'Yarden': isMobile ? 38 : 52 };
