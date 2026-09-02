@@ -231,9 +231,9 @@
       --erro:#b23b3b;
 
       --fonte:'Montserrat', -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
-      /* "EM BREVE" é serifado no mockup. A face exata não está no IDV do
-         empreendimento e são 8 glifos decorativos — não vale uma segunda
-         requisição de webfont, então usa a serifada do sistema. */
+      /* O rótulo acima do wordmark é serifado no mockup. A face exata não está
+         no IDV do empreendimento e são poucos glifos decorativos — não vale uma
+         segunda requisição de webfont, então usa a serifada do sistema. */
       --fonte-serif:Georgia, 'Times New Roman', serif;
 
       --max:1464px;             /* largura do mockup a 1x (2928 / 2) */
@@ -270,7 +270,10 @@
     }
     .hero-overlay{position:absolute;inset:0}
 
-    /* marca "EM BREVE | yarden" — x 402..1241, y 710..930 no mockup */
+    /* marca "{rótulo} | yarden" — x 402..1241, y 710..930 no mockup.
+       O mockup escreve "EM BREVE"; o rótulo publicado é "LANÇAMENTO" por
+       decisão do stakeholder (o empreendimento saiu do pré-lançamento).
+       Geometria e estilo seguem o mockup — só o texto divergiu. */
     .hero-brand{
       position:absolute;left:13.7%;top:38.6%;width:28.7%;
       display:flex;align-items:stretch;gap:4.2%;
@@ -496,7 +499,7 @@
           <div class="hero-brand">
             <span class="hero-brand-rule" aria-hidden="true"></span>
             <div class="hero-brand-txt">
-              <span class="hero-eyebrow">EM BREVE</span>
+              <span class="hero-eyebrow">LANÇAMENTO</span>
               <img class="hero-wordmark" src="assets/logo-yarden-creme.svg"
                    alt="Yarden" width="298" height="62" />
             </div>
@@ -591,8 +594,8 @@
       <picture>
         <source type="image/webp" srcset="assets/mapa-gleba-itororo.webp" />
         <img src="assets/mapa-gleba-itororo.jpg"
-             alt="Vista aérea de Maringá com a localização do Yarden na Gleba Itororó e pontos de referência: Catedral, Parque do Ingá, Av. JK, Bosque II e Av. Itororó"
-             width="900" height="637" loading="lazy" decoding="async" />
+             alt="Vista aérea de Maringá com o render do Yarden na Rua Carlos Meneghetti, 168, Gleba Itororó, e pontos de referência: Catedral, Parque do Ingá, Av. JK, Bosque II e Av. Itororó"
+             width="900" height="636" loading="lazy" decoding="async" />
       </picture>
       <div>
         <h2 class="titulo-secao">Invista no novo centro urbano de Maringá.</h2>
