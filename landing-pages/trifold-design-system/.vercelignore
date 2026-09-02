@@ -3,3 +3,15 @@
 
 # Agent memory / local tooling — must never be published
 .claude
+
+# ─── Story 90-1 ──────────────────────────────────────────────────────────────
+# O deploy correto sai de `dist/` (via ./deploy.sh), onde nada disto existe.
+# Estas linhas são rede de segurança para o caso de alguém rodar
+# `vercel deploy --prod` da pasta-fonte por hábito — sem elas, o site publicaria
+# o próprio build-output, os scripts de build e os screenshots de baseline.
+dist
+scripts
+deploy.sh
+.seo-metrics
+README.md
+.gitignore

@@ -1,0 +1,424 @@
+storyId: "90-1"
+title: "Pré-renderizar o HTML institucional (Home, Sobre Nós, Empreendimentos, B2B, Blog) — snapshot aditivo"
+epic: 90
+verdict: PASS
+readiness: 10/10
+verdict_history: "CONCERNS 9/10 (2026-09-02, 1ª rodada) → PASS 10/10 (2026-09-02, re-verificação focada do QA-1)"
+reviewer: "@qa (Quinn)"
+date: 2026-09-02
+branch: feat/86-12-yarden-conteudo-definitivo   # branch de OUTRA story; a 90-1 (e a 90-6) estão na working tree, não commitadas
+commit: b4e7c8d3                                 # HEAD no momento do gate (não contém nada da 90-1)
+note_metadata: >
+  Metadados lidos do git no momento do gate, não do contexto da sessão.
+  @devops: a working tree carrega 90-6 (não commitada) + 90-1 juntas — commit por pathspec,
+  não `git commit -a`. Nada da 90-1 foi commitado, nada foi deployado.
+
+blocking: false
+blocking_reason: "n/a — QA-1 corrigido pelo @dev e re-verificado por mim (ver reverificacao_qa1). Liberada para @devops."
+
+checks:
+  code_review: PASS          # 9 arquivos novos, ESM puro, comentados no nível do "por quê"; guardas de parseDcText corretas
+  unit_tests: N/A            # story não pede unit test; a verificação é o harness Playwright (80 checagens) — re-executado e mutado por mim
+  acceptance_criteria: PASS  # AC0, AC1, AC2, AC3, AC4, AC5, AC6a, AC6b, AC7, AC8 — todas reproduzidas independentemente
+  regressions: PASS          # 0% de diff de pixel em 10/10 combinações; console err/warn/4xx inalterado; support.js/vercel.json intocados
+  performance: PASS          # CLS medido por mim: soma 0.2944, pior 0.0583 (< 0.1 do "bom") — mas é CLS novo onde antes era 0 em 8/10 combos
+  security: PASS             # AC7 fecha o vazamento de PII por remoção física; contraprova por mutação reproduziu o vazamento e o teste pegou
+  documentation: PASS        # README substituído por ./deploy.sh; File List bate 1:1 com disco e git
+
+# ---------------------------------------------------------------------------
+# Evidência produzida pelo @qa (re-execução própria, não leitura do Dev Record)
+# ---------------------------------------------------------------------------
+qa_own_evidence:
+  ambiente: "servidor estático local (scripts/dc-site.mjs) + Chromium do @playwright/test 1.60.0; dist/ remontado por mim via ./deploy.sh --dry-run"
+
+  AC0_fonte_intocada: >
+    grep 'dc-prerender' nos 5 .dc.html-fonte => 0 em todos.
+    `git diff -M -U0` dos arquivos modificados (B2B/Blog/Empreendimentos/sobre-nos/Artigo) contém
+    EXCLUSIVAMENTE reescrita de href da Story 90-6 (Home.dc.html não aparece no diff: intocado).
+    `git check-ignore -v` confirma dist/ (.gitignore:54) e .seo-metrics/ (.gitignore:58) ignorados.
+    support.js: 0 linhas de diff e `cmp -s support.js dist/support.js` idêntico (AC3).
+
+  AC1_mecanismo: >
+    5/5 páginas: 1 sentinela start + 1 end + 1 `id="dc-prerender"`; bloco ANTES do `<x-dc>` (medido por índice);
+    `<x-dc>` byte a byte igual ao fonte (cobrado pelo próprio gate via extractXdc, e mutado por mim — ver contraprovas);
+    0 `{{`, 0 `<sc-*`, 0 `<dc-import>`, 0 `<x-dc` e 0 `id="dc-root"` dentro do bloco;
+    `<style id="dc-prerender-hide-template">` presente e pareado; observer em `document.body` + checagem síncrona de corrida.
+    GET HTTP simples (método da auditoria) devolve texto real em 5/5: 2112 / 2011 / 956 / 5951 / 2794 chars.
+
+  AC1_reentrancia_do_runtime: >
+    Achado meu, não relatado: li `boot()` (support.js:158) e `updateHtml()` (support.js:1463) para descartar o
+    risco de o bloco VOLTAR depois do mount. `updateHtml` só recompila o template no registry (`r.tpl`) e faz
+    `registry.bump` — NÃO reescreve o documento. Com o bloco antes do `<x-dc>` e as guardas de `injectPrerender`
+    (aborta se o snapshot contiver `<x-dc`, `</x-dc>`, `id="dc-root"` ou `#dc-prerender` aninhado), o
+    `fetch(location.href)` → `parseDcText` readota exatamente o template do `<x-dc>`. Sem reentrância.
+
+  AC2_diff_de_pixel: >
+    Comparador AUDITADO e MUTADO, não aceito de palavra: `compare-metrics.mjs` decodifica as PNGs em
+    OffscreenCanvas e compara por canal (tolerância 12). Contraprova: troquei o `home.mobile.png` do "depois"
+    pelo screenshot do Blog => 76.634% de diferença reportada. Nos pares verdadeiros: 0% em 10/10, dimensões
+    idênticas, err/warn/4xx inalterados em todas as combinações. O 0% não é vacuidade do comparador.
+
+  AC4_falha_de_mount: "5/5 páginas com `assets/vendor/react*.js` abortado na rede: #dc-prerender permanece presente, visível, 948–5898 chars; #dc-root nunca criado."
+
+  AC5_fallback: >
+    Reproduzido por mim com `DC_PRERENDER_FAIL_IDS=home,blog`: build segue, loga alto, 3/5 pré-renderizadas.
+    `cmp -s` confirma Home.dc.html e Blog.dc.html em dist IDÊNTICOS ao fonte (fallback é "não sobrescrever",
+    não um passo de restauração que pode falhar). Gate pré-deploy APROVA o dist com 2 páginas em fallback.
+    check-live.mjs cruza com .seo-metrics/build-report.json e distingue fallback esperado (⚠, aceito) de
+    fallback inesperado (✖) — buraco real que o @dev fechou e que eu confirmei nos dois sentidos.
+
+  AC6a_sem_duplicacao: >
+    5/5: captura 1 (support.js atrasado 1,5s) = #dc-prerender com conteúdo e #dc-root AUSENTE do DOM;
+    captura 2 = #dc-root com conteúdo e #dc-prerender REMOVIDO do DOM (não escondido).
+    Janela de coexistência 0.1–0.4ms, sempre nessa ordem.
+
+  AC6b_CLS_remedido_por_mim: >
+    NÃO aceitei a tabela do @dev: reconstruí a variante "bloco DEPOIS de </x-dc>" a partir do próprio dist
+    (recorte por sentinela + reinserção após o último `</x-dc>`) e medi as duas com PerformanceObserver
+    ({type:'layout-shift'}, hadRecentInput=false), 5 páginas × 2 viewports × pior de 2 execuções:
+      bloco ANTES (entregue):  soma 0.2944 | pior 0.0583 (/sobre-nos mobile) | nenhuma combinação > 0.061
+      bloco DEPOIS (variante): soma 2.9137 | pior 1.0435 (/empreendimentos mobile); 3 páginas ≈ 1.0
+      razão 9.90x (o @dev reportou 12.3x com 3 execuções)
+    A justificativa do @dev para inverter a posição é CORRETA e MENSURÁVEL, não racionalização. Meus números
+    de "antes" reproduzem os dele (pior 0.0583 nos dois).
+
+  AC7_PII_contraprova: >
+    Estático (5/5 páginas): 0 `<form>`, `<button>`, `<input>`, `<textarea>`, `<select>`, `<iframe>`, `<object>`,
+    `<embed>`, `<dialog>`, `<script>` dentro do `<div id="dc-prerender">`; 0 atributo `on*`; 0 `tabindex`;
+    0 `contenteditable`. (O único `<script>` na região das sentinelas é o observador, IRMÃO do div, fora dele.)
+    Ao vivo (Home e Blog, vendor do React abortado => janela de risco aberta indefinidamente): 0 controles no
+    bloco; `requestSubmit()` forçado em todo `<form>` do documento não navega; digitar + Enter sem foco não
+    gera query string nem requisição com `nome=|email=|telefone=|mensagem=`; 60x Tab só passam por A e BODY.
+    CONTRAPROVA (a parte que importa): injetei um `<form><input name=nome><textarea name=mensagem><button>`
+    dentro do #dc-prerender da Home e reexecutei. O vazamento MATERIALIZOU — a URL virou `/?nome=&mensagem=`,
+    1 requisição suspeita registrada — e o harness reprovou em 7 checagens (73/80), e o gate pré-deploy abortou
+    com "VIOLAÇÃO DA AC7". O risco descrito na AC7 é real e o teste que o cobre não é vacuoso.
+
+  AC7_ancoras_decisao_do_dev: >
+    Desvio do @dev (manter `<a href>` no bloco) AVALIADO E RATIFICADO — não volta para o @dev. Base factual:
+    (1) o bloco não tem NENHUM elemento que colete entrada — sem dado digitado, não há o que uma âncora carregue;
+        href é congelado em build-time.
+    (2) enumerei as 105 âncoras dos 5 blocos (20 Home / 14 sobre-nos / 16 empreendimentos / 15 corporativas /
+        40 blog): esquemas só https, root-relativo, fragmento e relativo. ZERO `mailto:`, `tel:`, `javascript:`.
+    (3) query strings: 1 `wa.me/5544991089698?text=<mensagem de marketing hardcoded>` por página (sem PII) +
+        27 `Artigo.dc.html?slug=fN|pN` no Blog (slugs estáticos). Nenhuma carrega ou coleta dado do usuário.
+    (4) 1 `target="_blank"` por página, todos com `rel="noopener"` — sem reverse tabnabbing.
+    (5) DECISIVO: a AC1 exige explicitamente "CTAs" dentro do #dc-prerender, e nesse site os CTAs SÃO âncoras
+        (`<a href="/#contato">Solicitar orçamento</a>`); os `<button>` removidos eram controles de carrossel/menu.
+        A leitura literal de "qualquer elemento interativo" colocaria a AC7 em contradição direta com a AC1.
+    Conclusão: a interpretação do @dev é a única que satisfaz AC1 e AC7 ao mesmo tempo, e ele a transformou em
+    invariante testada ("âncoras preservadas no bloco"), não em omissão. Ver QA-7 (redação a herdar).
+
+  AC8_contagem_de_headings: >
+    Reproduzido: h1(documento) == h1(<x-dc>) + h1(#dc-prerender) e h1(#dc-prerender) == h1(<x-dc>) em 5/5.
+    Tabela (critério para 90-3a/90-3b): / = 0/0/0 | /sobre-nos = 0/0/0 | /empreendimentos = 2/1/1 |
+    /corporativas = 2/1/1 | /blog = 2/1/1. Nota: em / e /sobre-nos a asserção é vacuosa hoje (não há h1) —
+    a 90-3b é que vai criar o primeiro, e a partir daí a contagem TEM de ser `#dc-prerender h1`.
+
+  harness_reexecutado: "80/80 checagens de scripts/verify-prerender.mjs passando na minha execução (não no relato do @dev)."
+
+  contraprovas_por_mutacao: >
+    5 mutações aplicadas sobre uma cópia do dist, para provar que o gate pré-deploy não é decorativo:
+      MUT1 `<form>/<input>/<textarea>/<button>` no bloco  => ABORTA (4 problemas, "VIOLAÇÃO DA AC7") + harness 73/80
+      MUT2 observador removido                            => ABORTA ("em fallback mas COM o <style>x-dc{display:none}")
+      MUT3 `<x-dc>` alterado no dist                      => ABORTA ("o <x-dc> servido DIFERE do fonte")
+      MUT4 `<style>x-dc{display:none}` removido do head   => ABORTA ("tem #dc-prerender mas falta o <style>")
+      MUT5 observador E style removidos JUNTOS            => APROVA  (limite real do gate — ver QA-2)
+
+  sintaxe_e_gates_aplicaveis: "node --check ok nos 8 .mjs; bash -n ok no deploy.sh; ./deploy.sh --dry-run passa os passos 1-3 e para antes de publicar."
+
+  deriva_producao_vs_working_tree: >
+    sha256 do que produção serve HOJE vs a árvore local, em TODOS os artefatos que o dist/ publica:
+    / /sobre-nos /empreendimentos /corporativas /blog (documento inteiro E `<x-dc>` recortado), mais
+    Artigo.dc.html, "Design System.dc.html", Logo.dc.html e support.js => IGUAL em 100%.
+    Consequência prática para o @devops: o deploy da 90-1 adiciona EXATAMENTE o bloco pré-renderizado e nada
+    mais — não há mudança de carona escondida na pasta de deploy manual.
+
+  check_live_contra_producao: "Executado contra https://trifold.eng.br: reprova nas 5 URLs com a mensagem certa ('o build pré-renderizou esta página, mas produção está servindo o fonte'). Correto — o deploy ainda não aconteceu."
+
+issues:
+  - id: QA-1
+    status: RESOLVIDO (re-verificado pelo @qa em 2026-09-02 — ver reverificacao_qa1)
+    severity: high
+    blocking: false
+    category: deployment
+    owner: "@dev"
+    description: >
+      O passo 4 do `deploy.sh` (`cd dist && vercel deploy --prod --yes --scope trifold-s-projects`) NÃO publica
+      no projeto certo: `dist/` não tem `.vercel/project.json` (a allowlist do `build-dist.mjs` não copia
+      `.vercel`, e `assemble()` faz `fsp.rm(outRoot)` no início de cada build, então um `vercel link` manual
+      dentro de dist/ é apagado no build seguinte).
+    evidencia: >
+      Provado sem deployar nada: `vercel env ls` dentro de `landing-pages/trifold-design-system/` resolve
+      "Environment Variables found for trifold-s-projects/trifold-design-system"; o MESMO comando dentro de
+      `dist/` devolve "Error: Your codebase isn't linked to a project on Vercel. Run `vercel link ...`".
+      CLI 54.6.1. Portanto o passo 4 ou aborta, ou (com `--yes`, que "skip all prompts" usando os defaults do
+      setup) cria um projeto NOVO com o nome da pasta (`dist`) e publica lá — em nenhum dos dois casos o
+      trifold.eng.br é atualizado.
+    impacto: >
+      Não corrompe produção (produção fica byte-idêntica ao que já serve, medido) e o passo 5 grita
+      corretamente, mas o único caminho de deploy que a story criou não funciona — e o README agora PROÍBE o
+      caminho antigo ("Não rode `vercel deploy` da pasta-fonte"). É exatamente o passo que `--dry-run` não
+      exercita, e é por isso que "testado fim a fim em dry-run" não pegou.
+    remediation: >
+      Passar a vinculação explicitamente. Qualquer uma resolve, é 1 linha:
+      (a) `vercel deploy --prod --yes --scope "$SCOPE" --project trifold-design-system` (a CLI 54 aceita
+          `--project <NAME_OR_ID>`);
+      (b) exportar `VERCEL_ORG_ID`/`VERCEL_PROJECT_ID` lidos de `../.vercel/project.json` antes do comando;
+      (c) copiar `.vercel/project.json` para dentro do `dist/` no `assemble()` — o upload já o exclui pela
+          linha `.vercel` do `.vercelignore`.
+      Recomendo (b) ou (c): tiram o nome do projeto de dentro do script e não podem divergir do link real.
+      Depois da correção, quem valida de fato é o @devops rodando `./deploy.sh` — o passo 5 (`check-live.mjs`)
+      já cobre a verificação e hoje reprova corretamente.
+
+  - id: QA-2
+    status: RESOLVIDO (re-verificado — o mutante original do @qa, com sentinelas intactas, agora reprova)
+    severity: low
+    blocking: false
+    category: testability
+    owner: "@dev (oportunístico)"
+    description: >
+      O gate pré-deploy classifica "página em fallback do AC5" pela AUSÊNCIA do `<script>` observador
+      (`extractPrerenderBlock` devolve `null` quando não acha `<script>` depois do `<div id="dc-prerender">`).
+      Sondado (MUT5): removendo o observador E o `<style>` do head JUNTOS, uma página com `#dc-prerender` vivo
+      e sem ninguém para removê-lo PASSA no gate — duplicação permanente publicável.
+    impacto: >
+      Teórico hoje: o build não produz esse estado (`injectPrerender` emite os dois sempre, ou nada).
+      É defesa em profundidade, não bug ativo.
+    remediation: >
+      Decidir "fallback" pela ausência de `id="dc-prerender"`/sentinelas, e tratar "bloco presente sem
+      observador" como problema duro em vez de cair no ramo de fallback.
+
+  - id: QA-3
+    status: RESOLVIDO (Dev Agent Record reescrito: explicita que os 64 testes são de yarden/vind e que turbo só cobre packages/web)
+    severity: low
+    blocking: false
+    category: documentation
+    owner: "@dev"
+    description: >
+      As Completion Notes citam "`npx vitest run landing-pages`: 64/64" e "`pnpm lint` / `pnpm type-check`
+      verdes" na lista de evidências. Verifiquei: os 64 testes são pré-existentes de OUTRAS landings
+      (`landing-pages/yarden/tracking-browser.test.ts`, `landing-pages/yarden/api-proxy.test.ts`,
+      `landing-pages/vind-residence/api-proxy.test.ts`) e não tocam nada desta story; e `turbo lint`/
+      `type-check` só cobrem `packages/web` (único eslint config do repo é `packages/web/eslint.config.mjs`).
+      Esta story adicionou zero teste unitário.
+    impacto: "Nenhum no produto. Risco de leitura: os números parecem cobertura desta story e não são."
+    remediation: >
+      Reescrever como "não aplicável a esta story" — o @dev já diz isso duas linhas depois, honestamente
+      ("o turbo não cobre landing-pages/*; o gate aplicável é `node --check` + `bash -n`"). A evidência real
+      desta story é o harness de 80 checagens, que eu re-executei e mutei.
+
+  - id: QA-4
+    severity: low
+    blocking: false
+    category: requirements
+    owner: "@sm / Story 90-2"
+    description: >
+      Consequência de SEO nova e não registrada: o bloco do Blog expõe 27 links estáticos para
+      `Artigo.dc.html?slug=…` a crawlers sem JS. Antes eles viviam dentro de `<sc-for>` e eram invisíveis.
+      Essas URLs respondem 200 (não há redirect para `Artigo.dc.html` no `vercel.json`), então nada quebra —
+      mas a limitação de roteamento do `Artigo.dc.html` está registrada como Tier 4 pela própria story.
+    remediation: "A Story 90-2 (sitemap/robots) precisa decidir explicitamente: incluir no sitemap ou `Disallow`. Não decidir é deixar o Google escolher."
+
+  - id: QA-5
+    severity: info
+    blocking: false
+    category: observation
+    description: >
+      O screenshot full-page de `/` em viewport mobile tem 470px de largura para uma viewport de 390px —
+      overflow horizontal pré-existente na Home mobile, idêntico antes e depois (0% de diff). Não é regressão
+      desta story; registrado porque aparece em qualquer medição futura sensível a viewport.
+
+  - id: QA-6
+    severity: info
+    blocking: false
+    category: observation
+    description: >
+      Em `/sobre-nos` a sanitização da AC7 remove também 1 `<iframe>` (mapa) do bloco. É consequência esperada
+      de `REMOVED_TAGS` e tem efeito colateral bom (não carrega iframe de terceiro na janela pré-mount).
+      Sem regressão pós-mount (0% de diff de pixel).
+
+  - id: QA-7
+    severity: low
+    blocking: false
+    category: requirements
+    owner: "@sm"
+    description: >
+      A AC7 diz "qualquer elemento interativo" mas justifica e testa apenas o submit nativo de formulário —
+      e a AC1 exige "CTAs" dentro do bloco, que neste site são âncoras. A contradição foi resolvida pelo @dev
+      no sentido certo (ver qa_own_evidence.AC7_ancoras_decisao_do_dev), mas a redação deveria ser corrigida
+      para as stories que herdam o critério.
+    remediation: >
+      Enunciar a regra como "nenhum elemento que possa COLETAR ou CARREGAR entrada do usuário
+      (form/input/textarea/select/button), removido fisicamente; âncoras são preservadas de propósito e a
+      preservação é invariante testada".
+
+  - id: QA-8
+    severity: info
+    blocking: false
+    category: testability
+    owner: "@dev (cosmético)"
+    description: >
+      A mensagem do guarda novo em `check-dist.mjs` afirma "NÃO tem as sentinelas" mesmo quando o caso real é
+      "sentinelas presentes, `<script>` observador ausente" (o meu mutante original). O VEREDITO está certo —
+      reprova nos dois casos, medido — mas o diagnóstico induz a procurar a sentinela errada na hora de depurar.
+    remediation: "Distinguir as duas causas na mensagem: sentinelas ausentes vs bloco presente sem observador."
+
+  - id: QA-9
+    severity: low
+    blocking: false
+    category: documentation
+    owner: "@dev ou @devops antes do commit"
+    description: >
+      A linha `| 2026-09-02 | 1.1 | ... |` do Change Log foi acrescentada no FIM do arquivo da story, depois da
+      seção `## QA Results` — o que parte a tabela do Change Log em duas e deixa a linha 1.1 órfã, fora da
+      tabela, renderizando quebrado.
+    remediation: "Mover a linha 1.1 para junto das outras, logo abaixo da linha 1.0 (a seção QA Results é a última do documento)."
+
+  - id: QA-10
+    severity: info
+    blocking: false
+    category: efficiency
+    description: >
+      `copyProjectLink()` roda no FIM do `assemble()`, então uma invocação direta de
+      `node scripts/build-dist.mjs` sem vínculo copia os ~77 MB antes de falhar. O `deploy.sh` já barra no
+      passo 1, então isso só afeta quem chama o script direto. Sem impacto em produção.
+
+# ---------------------------------------------------------------------------
+# Re-verificação focada — 2026-09-02, após a correção do @dev (escopo: QA-1, QA-2, QA-3)
+# ---------------------------------------------------------------------------
+reverificacao_qa1:
+  escopo: "Só o QA-1 e os 2 nits. AC0/AC1/AC2/AC3/AC4/AC5/AC6a/AC6b/AC7/AC8 NÃO foram reabertos — validados na 1ª rodada."
+
+  o_que_mudou_no_disco: >
+    Alterados: deploy.sh, scripts/build-dist.mjs, scripts/check-dist.mjs, scripts/verify-prerender.mjs e a story.
+    `prerender.mjs` NÃO foi tocado (mtime 08:47, anterior à correção) — a lógica de serialização/sanitização
+    que sustenta a AC7 está intacta, então nada do que eu já havia validado precisou ser reaberto.
+    `git diff` dos 5 `.dc.html`-fonte + `support.js` + `vercel.json`: continua contendo SÓ a reescrita de href
+    da Story 90-6. Sem escopo novo.
+
+  fix_correto_no_mecanismo: >
+    `copyProjectLink()` copia `.vercel/project.json` + `README.txt` para o `dist/` no fim do `assemble()`,
+    deixando `cache/` de fora. O passo 4 do `deploy.sh` NÃO mudou (`cd dist && vercel deploy --prod --yes
+    --scope ...`) — correto, porque agora o `dist/` carrega o vínculo. A causa-raiz que eu apontei (o
+    `fsp.rm(outRoot)` do assemble apagar um `vercel link` manual) é fechada por construção: o vínculo é
+    RE-copiado a cada build, não depende de ninguém lembrar.
+
+  prova_de_sobrevivencia_ao_rebuild: >
+    `./deploy.sh --dry-run` completo (rm -rf dist + assembly + prerender + gate) => EXIT 0.
+    Passo 1 agora imprime "✓ vínculo do projeto Vercel presente (trifold-design-system)".
+    Assembly passou de 17 para 18 entradas: `.vercel/{project.json,README.txt}`.
+    Depois do rebuild: `dist/.vercel/project.json` presente, `cmp -s` IDÊNTICO ao da pasta-fonte
+    (projectId prj_1SRBOXwTclTFwGDz3zjIO6uM0pMG / trifold-design-system) — vínculo certo, não só "algum"
+    vínculo; `dist/.vercel/cache` inexistente.
+
+  prova_independente_pela_CLI: >
+    De dentro do `dist/` RECONSTRUÍDO (não do que o @dev deixou):
+      `vercel env ls` => "Environment Variables found for trifold-s-projects/trifold-design-system"
+      `vercel ls`     => "Deployments for trifold-s-projects/trifold-design-system", listando o deployment
+                         de produção real (● Ready / Production). Prova mais forte que `env ls`: a CLI não só
+                         resolve um projeto, resolve O projeto que serve o site.
+    Contraste com a 1ª rodada, mesmo comando e mesma CLI 54.6.1: "Error: Your codebase isn't linked".
+
+  claim_do_dev_sobre_cwd_conferida: >
+    O @dev alega ter descartado `--cwd` porque a flag move a resolução do vínculo junto. Confirmado sem
+    desfazer nada: `vercel env ls --cwd assets` (pasta sem vínculo, invocada de dentro da pasta-fonte que TEM
+    vínculo) => "isn't linked to a project". Logo `--cwd dist` sozinho não teria resolvido o QA-1 — a rota
+    descartada foi descartada pelo motivo certo.
+
+  falha_dura_sem_vinculo: >
+    Testei o caminho negativo movendo `.vercel/project.json` para fora (com backup) e restaurando depois:
+      `./deploy.sh --dry-run` => aborta no PASSO 1, antes de gastar o build, com o comando pronto:
+                                 "rode: vercel link --yes --scope trifold-s-projects --project trifold-design-system"
+      `node scripts/build-dist.mjs` (invocação direta) => `copyProjectLink()` lança com a mesma orientação.
+    Duas barreiras, nenhuma silenciosa. "Publicar sem vínculo" não tem fallback — correto, era o modo de
+    falha caro.
+
+  QA_2_fechado_com_o_MEU_mutante: >
+    A suíte nova (`gateMutations()`, 10 mutantes) codifica o caso "observador E style E SENTINELAS removidos
+    juntos". O meu mutante original era diferente: sentinelas INTACTAS, observador e style ausentes. Testei
+    exatamente ele contra o `inspectDocument()` novo => `fallback: false`, 1 problema apontado. REPROVA.
+    Na 1ª rodada esse mesmo mutante era APROVADO. Buraco fechado inclusive na variante que a suíte não cobre.
+
+  harness_e_suite_de_mutacao: >
+    `node scripts/verify-prerender.mjs` => EXIT 0, 90/90 na minha execução (era 80/80).
+    Os 10 mutantes comportam-se como esperado, e a suíte tem MUTANTE DE CONTROLE ("HTML bom deve APROVAR") —
+    sem ele, um gate que reprovasse tudo passaria nos outros 9. É suíte de mutação de verdade, não fachada.
+    `node --check` ok nos 3 .mjs alterados; `bash -n` ok no deploy.sh.
+
+  saida_do_prerender_inalterada: >
+    Contra-checagem de escopo: os tamanhos por página no build pós-fix são idênticos aos da 1ª rodada
+    (2104 / 2007 / 948 / 5898 / 2790 chars de texto; gate: 2112 / 2011 / 956 / 5951 / 2794). O fix mexeu no
+    vínculo e no gate, não no HTML publicado.
+
+  deriva_producao_rechecada: >
+    Refiz o sha256 produção-vs-árvore (houve um deploy de produção do projeto ~3h antes desta rodada, visto
+    no `vercel ls`): as 5 páginas (documento E `<x-dc>`) + Artigo + "Design System" + Logo + support.js
+    seguem IGUAIS em 100%. O deploy do @devops continua adicionando exatamente o bloco pré-renderizado.
+
+  minha_secao_intacta: "Confirmei que a seção QA Results da 1ª rodada não foi editada pelo @dev — só acrescida por mim agora."
+
+# ---------------------------------------------------------------------------
+verdict_rationale_1a_rodada: >
+  CONCERNS com um must-fix BLOQUEANTE (QA-1). Não é PASS e não é FAIL.
+
+  Não é FAIL porque as 10 ACs estão entregues e eu reproduzi TODAS independentemente do relato do @dev:
+  80/80 checagens do harness na minha execução, 5 contraprovas por mutação (a do formulário fantasma
+  materializou o vazamento `/?nome=&mensagem=` e foi pega em 7 checagens + abort do gate), CLS remedido por
+  mim nas duas variantes de posição (0.2944 vs 2.9137 — a decisão de inverter a posição do bloco é correta
+  e mensurável, não racionalização), comparador de pixel auditado e mutado (76.6% quando alimentado com a
+  imagem errada, 0% nos pares reais), fallback do AC5 reproduzido com `cmp` byte a byte, e deriva
+  produção-vs-árvore zerada em todos os artefatos publicáveis. O desvio das âncoras é uma interpretação
+  correta da AC7 — a única que não contradiz a AC1 — e não volta para o @dev.
+
+  Não é PASS porque o único caminho de deploy que a story criou não publica no projeto certo (QA-1), provado
+  sem deployar nada, e porque o `dist/` é apagado a cada build (um `vercel link` manual não sobrevive) — ou
+  seja, é correção de código, não contorno operacional do @devops. Além disso, como em toda story deste epic,
+  as ACs são escritas contra produção e produção ainda não recebeu nada.
+
+  Volta para o @dev: QA-1 (1 linha). Opcionalmente QA-2 e QA-3 na mesma passada. Depois, @devops.
+
+next_agent: "@devops"
+recommended_status: "InReview (não Done — as ACs são escritas contra produção; @devops promove para Done após ./deploy.sh e o passo 5 passarem no ar)"
+
+files_reviewed:
+  - landing-pages/trifold-design-system/deploy.sh
+  - landing-pages/trifold-design-system/scripts/dc-site.mjs
+  - landing-pages/trifold-design-system/scripts/prerender.mjs
+  - landing-pages/trifold-design-system/scripts/build-dist.mjs
+  - landing-pages/trifold-design-system/scripts/check-dist.mjs
+  - landing-pages/trifold-design-system/scripts/check-live.mjs
+  - landing-pages/trifold-design-system/scripts/capture-metrics.mjs
+  - landing-pages/trifold-design-system/scripts/compare-metrics.mjs
+  - landing-pages/trifold-design-system/scripts/verify-prerender.mjs
+  - landing-pages/trifold-design-system/README.md
+  - landing-pages/trifold-design-system/.gitignore
+  - landing-pages/trifold-design-system/.vercelignore
+  - landing-pages/trifold-design-system/support.js          # leitura (boot/updateHtml/parseDcText) — não modificado
+  - landing-pages/trifold-design-system/vercel.json         # leitura (CSP inline permitido, rewrites) — não modificado
+  - landing-pages/trifold-design-system/dist/*.dc.html      # build-output inspecionado (não versionado)
+  - landing-pages/trifold-design-system/.seo-metrics/after/comparison.json
+
+verdict_rationale: >
+  PASS na re-verificação focada de 2026-09-02.
+
+  QA-1 (o único bloqueante) está fechado no mecanismo, não só no relato: `copyProjectLink()` re-copia o
+  vínculo a cada build, o que neutraliza a causa-raiz que eu tinha apontado (o `fsp.rm(outRoot)` apagar um
+  `vercel link` manual). Verifiquei de dentro de um `dist/` que EU reconstruí — `vercel ls` resolve
+  `trifold-s-projects/trifold-design-system` e lista o deployment de produção real, onde na 1ª rodada o mesmo
+  comando dava "isn't linked". Os dois caminhos negativos (deploy.sh no passo 1 e `copyProjectLink` na
+  invocação direta) abortam duro, com o `vercel link` pronto — sem fallback silencioso, que era exatamente o
+  modo de falha caro. E a rota `--cwd`, que o @dev diz ter descartado por medição, eu confirmei que de fato
+  não resolveria (`--cwd assets` de dentro de pasta vinculada => "isn't linked").
+
+  QA-2 fechado inclusive na variante que a suíte nova NÃO cobre (o meu mutante original, com sentinelas
+  intactas): antes aprovava, agora reprova. QA-3 corrigido na redação. A suíte de mutação nova tem mutante de
+  controle, o que a torna uma suíte real e não uma que passaria com um gate quebrado.
+
+  Sem escopo novo: `prerender.mjs` não foi tocado, a saída do prerender é idêntica byte a byte em tamanho à
+  da 1ª rodada, e a deriva produção-vs-árvore continua zerada — o deploy do @devops adiciona exatamente o
+  bloco pré-renderizado e nada mais.
+
+  Liberada para @devops. Restam 6 itens não bloqueantes, nenhum deles condição para publicar: QA-4 e QA-7
+  (@sm, alimentam a 90-2 e a redação herdada pelas 90-3a/90-3b), QA-9 (cosmético, arrumar antes do commit),
+  QA-5, QA-6, QA-8, QA-10 (informativos).
