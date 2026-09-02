@@ -18,12 +18,44 @@
  * financeiro. Identidade, administrador, status de integração e trilha, tudo dentro das 5
  * tabelas de `PLATFORM_READABLE_TABLES`. Não é economia de escopo: é a fronteira (D14/CON-10).
  *
- * ## Sem botão "Editar"
+ * ## O botão "Editar" (Story 900-62)
  *
- * Não existe rota de edição de org — nem nesta story nem em nenhuma anterior. Um botão que
- * abrisse um formulário sem destino prometeria uma ação que não existe (Artigo IV).
+ * Até a `900-62` este cabeçalho dizia que não existia rota de edição de org — era verdade, e a
+ * `900-57` deixou o botão de fora justamente por isso. Agora existe:
+ * `PATCH /api/platform/orgs/[id]/dados`, com validação real, trava otimista por `updated_at` e
+ * trilha em `platform_audit_log` (migration `252`). O botão abre `<EditarDadosEmpresa />`.
+ *
+ * ## A projeção carrega `updated_at` e `settings`, e uma régua estática prende os dois
+ *
+ * `updated_at` é a trava otimista da AC3: sem ele o diálogo mandaria `undefined` e a rota
+ * responderia `400` — feature morta. Pior: se alguém "consertasse" mandando `null`,
+ * `now() <> NULL` avalia para `NULL` e o `IF` não entra no ramo. Trava que falha ABERTA é pior
+ * que trava ausente, porque a AC3 afirma para o operador que ela existe. (Por isso a migration
+ * `252` compara com `IS DISTINCT FROM` e barra o `NULL` com `P0024`.)
+ *
+ * `settings` é de onde vêm os valores iniciais dos seis campos de contato/fiscal. Sem ele, eles
+ * abrem SEMPRE vazios — inclusive numa empresa que já tem os dados — e o operador que abre o
+ * diálogo para corrigir o nome APAGA o contato e o fiscal já gravados, com `200` na tela.
+ *
+ * As duas colunas estão presas por `platform-query-scan.test.ts` (AC13). Um refactor que as
+ * remova reprova lá, com o nome da coluna na mensagem.
+ *
+ * ⚠️ **Custo declarado:** puxar `settings` inteiro traz para o console TODAS as chaves de
+ * configuração do tenant (medido em produção: `city`, `state`, `materiais_url`,
+ * `relatorio_diario_destinatarios`). É alargamento real da superfície de leitura da Trifold sobre
+ * o dado do cliente. O que a AC13 PROÍBE é renderizar qualquer chave fora de `contato`/`fiscal` —
+ * e é isso que este arquivo faz: as duas funções importadas de `console-dados-empresa` são a
+ * fronteira, e nenhuma delas deixa passar uma sétima chave.
+ *
+ * ## Nenhuma DECISÃO sobre esses dados mora neste arquivo (QA-900-62-1 / QA-900-62-2)
+ *
+ * `vitest.config.ts` casa `*.test.ts` e **não** `.tsx`: o que for decidido aqui não tem carrasco.
+ * O gate mediu os dois buracos que isso abriu — a fiação dos seis campos até o diálogo e as seis
+ * linhas do card ficavam verdes ao serem apagadas. Por isso as duas viraram função pura, e o que
+ * sobra aqui é `map` e classe de CSS.
  */
 
+import { Fragment } from "react"
 import Link from "next/link"
 import { platformQuery } from "@web/lib/tenancy/platform-query"
 import { leituraFalhou } from "@web/lib/tenancy/console-visao-geral"
@@ -42,6 +74,12 @@ import {
   type LinhaWhatsAppConfig,
 } from "@web/lib/integrations/painel/providers"
 import { ReenviarConvite } from "../_components/reenviar-convite"
+import { EditarDadosEmpresa } from "../_components/editar-dados-empresa"
+import {
+  dadosIniciaisDoDialogo,
+  linhasDeContatoEFiscal,
+  type LinhaDeDadoDaEmpresa,
+} from "@web/lib/tenancy/console-dados-empresa"
 import {
   LinhaDaTrilhaDaPlataforma,
   ListaDeTrilha,
@@ -57,6 +95,10 @@ interface OrgDoResumo {
   is_active: boolean
   created_at: string
   admin_invite_email: string | null
+  /** Story 900-62 · AC13 — a trava otimista do diálogo de edição. */
+  updated_at: string
+  /** Story 900-62 · AC13 — de onde saem os valores iniciais de contato/fiscal. */
+  settings: Record<string, unknown> | null
 }
 
 interface AdminDoResumo {
@@ -79,9 +121,21 @@ export default async function ResumoDaEmpresaPage({
   // CodeRabbit #547 — as CINCO consultas desta página descartavam o `error`. Duas telas do mesmo
   // console fazem requisições independentes: a da casca pode voltar e a daqui não. Por isso o
   // `notFound()` do layout não cobre esta leitura.
+  // Story 900-62 · AC13 — `updated_at` e `settings` entram na projeção abaixo, e não numa
+  // segunda consulta: o diálogo de edição precisa dos dois e esta página já paga a viagem. As
+  // duas colunas estão presas por régua estática em `platform-query-scan.test.ts`.
+  //
+  // A lista não tem parêntese, então a guarda de embedding da 900-42a continua recusando
+  // aninhamento sem precisar ser afrouxada — e a AC8 daquela story proíbe afrouxá-la.
+  //
+  // ⚠️ ESTE COMENTÁRIO MORA AQUI, E NÃO DENTRO DA CHAMADA, POR MEDIÇÃO. O detector
+  // `detectEmbeddedTableReads` captura tudo até o PRIMEIRO `)` depois da abertura da chamada e
+  // acende se achar um `(` no meio. Escrito entre os argumentos, um comentário que cite uma
+  // função com parênteses acende a régua — medido nesta story, com a varredura acusando este
+  // arquivo. O conserto é tirar o texto de dentro da população varrida, nunca relaxar o detector.
   const respostaOrg = await platformQuery(
     "organizations",
-    "id, name, slug, is_active, created_at, admin_invite_email",
+    "id, name, slug, is_active, created_at, admin_invite_email, updated_at, settings",
   ).eq("id", orgId)
   const orgFalhou = leituraFalhou(respostaOrg)
   const org = ((respostaOrg.data ?? []) as unknown as OrgDoResumo[])[0]
@@ -157,8 +211,32 @@ export default async function ResumoDaEmpresaPage({
     quantidade: trilha.length,
   })
 
+  // Story 900-62 · AC15 — o contato e o fiscal aparecem NO CARD, não só dentro do diálogo.
+  // A User Story justifica o escopo de contato com "saber com quem falar quando a integração de
+  // uma empresa quebra": exigir um clique em "Editar" para descobrir para quem ligar é
+  // exatamente o gesto que uma tela de diagnóstico não deve pedir. Nenhuma consulta nova — a
+  // AC13 já trouxe `settings` na projeção acima.
+  //
+  // `linhasDeContatoEFiscal` é a fronteira da AC13: só as SEIS chaves saem dele, já com o
+  // travessão e com o CNPJ mascarado. `city`, `state`, `materiais_url` e
+  // `relatorio_diario_destinatarios` chegam nesta página dentro de `settings` e NÃO são
+  // renderizadas em lugar nenhum. As seis linhas têm carrasco em `console-dados-empresa.test.ts`.
+  const secoesDeDados = linhasDeContatoEFiscal(org?.settings)
+
   return (
     <div className="grid gap-4 lg:grid-cols-2">
+      {/* ⚠️ A ABERTURA DESTE CARD É LITERAL E DE UMA LINHA SÓ, DE PROPÓSITO — não quebrar em
+          várias linhas para acrescentar prop nenhuma.
+
+          `console-fail-closed.test.ts` (Story 900-57) delimita o ramo fail-closed desta
+          Identidade ancorando na abertura da tag verbatim, e exige exatamente uma abertura de
+          card dentro do recorte. Reformatá-la deixa aquele recorte VAZIO — e recorte vazio não
+          reprova nada, só some. Medido nesta story: 4 testes daquele arquivo ficaram vermelhos.
+
+          Por isso o botão da 900-62 entra como FILHO do card (o mesmo lugar de
+          `<ReenviarConvite />` no card ao lado) e não como prop do cabeçalho: nada da régua irmã
+          precisa mudar. E esta explicação não repete a string da âncora — o delimitador é um
+          `indexOf`, e um comentário que a reproduza é casado ANTES do código de verdade. */}
       <Cartao titulo="Identidade">
         <dl className="grid grid-cols-[7rem_1fr] gap-y-1 text-sm">
           <dt className="text-slate-400">Nome</dt>
@@ -179,7 +257,39 @@ export default async function ResumoDaEmpresaPage({
                 ? "● ativa"
                 : "○ inativa"}
           </dd>
+
+          {/* AC15 — contato e fiscal. Os rótulos, os valores, o travessão e a máscara do CNPJ
+              são decididos por `linhasDeContatoEFiscal`; aqui só se imprime. O travessão
+              significa "não cadastrado", e não "não medido" como no Status acima — a diferença é
+              que estas seis chaves vêm da MESMA leitura que já decidiu `orgFalhou`, e o card
+              inteiro sumiria com ela. */}
+          {secoesDeDados.map((secao) => (
+            <Fragment key={secao.titulo}>
+              <dt className="col-span-2 pt-3 text-[0.65rem] font-semibold uppercase tracking-wide text-slate-500">
+                {secao.titulo}
+              </dt>
+              {secao.linhas.map((linha) => (
+                <Fragment key={linha.rotulo}>
+                  <dt className="text-slate-400">{linha.rotulo}</dt>
+                  <dd className={classeDoValor(linha)}>{linha.valor}</dd>
+                </Fragment>
+              ))}
+            </Fragment>
+          ))}
         </dl>
+
+        {/* Sem `org` não há `updated_at`, e sem `updated_at` não há trava otimista — o diálogo
+            não pode nem abrir. `orgFalhou` entra junto: um botão de editar em cima de uma
+            leitura que não voltou prometeria agir sobre um estado que a tela não conhece. */}
+        {org && !orgFalhou && (
+          <div className="mt-4">
+            <EditarDadosEmpresa
+              orgId={orgId}
+              inicial={dadosIniciaisDoDialogo(org)}
+              expectedUpdatedAt={org.updated_at}
+            />
+          </div>
+        )}
       </Cartao>
 
       <Cartao titulo="Administrador">
@@ -276,6 +386,18 @@ export default async function ResumoDaEmpresaPage({
       />
     </div>
   )
+}
+
+/**
+ * A única coisa que sobrou do card de contato/fiscal neste arquivo: classe de CSS.
+ *
+ * Não é decisão de produto — é o mesmo `font-mono` do `slug` logo acima (CNPJ é identificador) e
+ * o `whitespace-pre-line` que preserva as quebras de um endereço de duas linhas. Quais rótulos,
+ * quais valores e quando o travessão aparece foi para `linhasDeContatoEFiscal`, onde há carrasco.
+ */
+function classeDoValor(linha: LinhaDeDadoDaEmpresa): string {
+  if (linha.mono) return "font-mono text-xs text-slate-300"
+  return linha.multilinha ? "whitespace-pre-line text-slate-100" : "text-slate-100"
 }
 
 function Cartao({ titulo, children }: { titulo: string; children: React.ReactNode }) {

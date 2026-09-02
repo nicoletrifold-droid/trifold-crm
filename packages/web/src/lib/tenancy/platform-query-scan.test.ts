@@ -138,6 +138,135 @@ describe("AC-B3 — orgs/page.tsx passou a ler por platformQuery", () => {
   })
 })
 
+/**
+ * Story 900-62 · AC13 — a projeção do Resumo da empresa PRECISA carregar `updated_at` e
+ * `settings`, e isso não pode depender de ninguém lembrar.
+ *
+ * ## Por que uma régua estática, e por que ela existe
+ *
+ * `orgs/[id]/page.tsx` é Server Component sem harness. As duas colunas foram acrescentadas pela
+ * `900-62`; sem elas, a story falha das DUAS maneiras piores, e nenhuma acende sozinha:
+ *
+ *   • Sem `updated_at`: `expectedUpdatedAt` sai `undefined` do diálogo e a rota devolve `400` —
+ *     funcionalidade morta. Se alguém "consertar" mandando `null`, a comparação `<>` com `NULL`
+ *     avalia para `NULL`, o `IF` não entra no ramo e a trava otimista passa BATIDO. Uma feature
+ *     morta é ruim; uma trava que mente é pior, porque a AC3 afirma ao operador que ela existe.
+ *     (A migration `252` também barra isso, com `IS DISTINCT FROM` + `P0024` — duas redes.)
+ *   • Sem `settings`: os seis campos de contato/fiscal abrem SEMPRE vazios, inclusive numa
+ *     empresa que já tem os dados. O operador que abre o diálogo para corrigir o `name` e salva
+ *     APAGA o contato e o fiscal já gravados — perda de dado silenciosa, com `200` na tela.
+ *
+ * ## A régua lê o LITERAL, não a região
+ *
+ * O trecho do arquivo em volta da consulta tem um comentário que menciona `updated_at` e
+ * `settings` — de propósito, porque é onde a explicação pertence. Um `expect(regiao).toContain(
+ * "updated_at")` ficaria VERDE só por causa desse comentário, mesmo com a coluna fora da
+ * projeção. Por isso o que se mede é a primeira linha DEPOIS da âncora que começa com aspas: a
+ * lista de colunas, e nada mais. Linhas de comentário começam com `//` e não casam.
+ */
+describe("AC13 (900-62) — a projeção de orgs/[id]/page.tsx", () => {
+  const PAGE = path.join(SRC, "app/platform/orgs/[id]/page.tsx")
+  const ANCORA = 'platformQuery(\n    "organizations",'
+
+  /** A lista de colunas, extraída do literal — nunca do texto em volta dele. */
+  function projecaoDeOrganizations(): string {
+    const fonte = fs.readFileSync(PAGE, "utf8")
+    // Fail-closed explícito: `indexOf` devolve `-1` quando a âncora some, e um recorte que não
+    // achou o alvo não pode virar aprovação por acidente do que estiver no resto do arquivo.
+    const i = fonte.indexOf(ANCORA)
+    expect(i, "âncora da consulta de `organizations`").toBeGreaterThanOrEqual(0)
+    const depois = fonte.slice(i + ANCORA.length)
+    const linha = depois.split("\n").find((l) => l.trim().startsWith('"'))
+    expect(linha, "literal de colunas depois da âncora").toBeTruthy()
+    return linha!.trim().replace(/^"|",?$/g, "")
+  }
+
+  it("carrega `updated_at` — a trava otimista da AC3 depende dela", () => {
+    expect(projecaoDeOrganizations().split(", ")).toContain("updated_at")
+  })
+
+  it("carrega `settings` — sem ela, editar o nome APAGA o contato e o fiscal já gravados", () => {
+    expect(projecaoDeOrganizations().split(", ")).toContain("settings")
+  })
+
+  /**
+   * QA-900-62-1 — a coluna lida CHEGA aos seis campos.
+   *
+   * Os dois `it` acima prendem a projeção. O gate mediu que isso parava uma casa antes do dano
+   * que a AC13 nomeia: com `settings` na projeção, trocar o espalhamento por seis literais `""`
+   * na prop `inicial` deixava `tsc` rc=0 e a suíte INTEIRA verde — e apagava contato e fiscal com
+   * `200` na tela.
+   *
+   * O COMPORTAMENTO da montagem tem carrasco próprio em `console-dados-empresa.test.ts`
+   * (`dadosIniciaisDoDialogo`). O que só se pode medir por texto é o `.tsx` CONSUMIR aquela
+   * função — função pura bem testada com componente que a ignora é o mesmo verde vazio.
+   *
+   * Medida por LINHA, e não por `toContain` no arquivo inteiro: um comentário que reproduzisse a
+   * âncora satisfaria o `toContain` sem que uma linha de código mudasse. Linha de comentário
+   * começa com `//`, `/*` ou `*` depois do `trim` e não casa com `inicial=` — e duas linhas
+   * casando também reprova, porque `toHaveLength(1)` é exigência, não tolerância.
+   */
+  function linhaDaPropInicial(): string {
+    const fonte = fs.readFileSync(PAGE, "utf8")
+    const casadas = fonte
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l.startsWith("inicial="))
+    expect(casadas, "prop `inicial` de <EditarDadosEmpresa /> em orgs/[id]/page.tsx").toHaveLength(
+      1,
+    )
+    return casadas[0]!
+  }
+
+  it("a prop `inicial` é a função pura — os seis campos não são montados no JSX", () => {
+    expect(linhaDaPropInicial()).toBe("inicial={dadosIniciaisDoDialogo(org)}")
+  })
+
+  it("as duas funções vêm do módulo com carrasco, e não de cópias locais do `.tsx`", () => {
+    // Sem isto, um `dadosIniciaisDoDialogo` definido dentro do próprio `.tsx` — de volta ao ponto
+    // cego do vitest — satisfaria a âncora de cima com exatamente o mesmo texto.
+    const fonte = fs.readFileSync(PAGE, "utf8")
+    const importes = [
+      ...fonte.matchAll(/import \{[^}]*\} from "@web\/lib\/tenancy\/console-dados-empresa"/g),
+    ]
+    expect(importes, "import de `console-dados-empresa` em orgs/[id]/page.tsx").toHaveLength(1)
+    expect(importes[0]![0]).toContain("dadosIniciaisDoDialogo")
+    expect(importes[0]![0]).toContain("linhasDeContatoEFiscal")
+  })
+
+  /**
+   * QA-900-62-2 — a AC15 tem carrasco de COMPORTAMENTO em `console-dados-empresa.test.ts`
+   * (`linhasDeContatoEFiscal`). Aqui fica só o elo que nenhum teste de comportamento alcança: o
+   * card de fato pedir as seis linhas e de fato imprimi-las. Sem o segundo `expect`, a chamada
+   * poderia continuar existindo com o resultado jogado fora — que é o desfecho que o gate mediu
+   * (PROBE-2: apagar as seis linhas do card deixava a suíte inteira verde).
+   */
+  it("AC15 — o card CHAMA as seis linhas e as imprime", () => {
+    const fonte = fs.readFileSync(PAGE, "utf8")
+    const chamadas = fonte
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l.startsWith("const secoesDeDados"))
+    expect(chamadas, "a chamada de `linhasDeContatoEFiscal` no card").toEqual([
+      "const secoesDeDados = linhasDeContatoEFiscal(org?.settings)",
+    ])
+    expect(fonte.split("\n").filter((l) => l.includes("secoesDeDados.map("))).toHaveLength(1)
+  })
+
+  it("controle: a régua lê o literal, e não o comentário que fala das duas colunas", () => {
+    // Sem esta asserção, a leitura poderia ter voltado a região inteira do arquivo (comentário
+    // incluído) e os dois `it` acima passariam com a projeção vazia. A projeção é uma lista de
+    // colunas: sem `//`, sem quebra de linha, e sem `(` — que é embedding do PostgREST, fechado
+    // pela `900-42a` por vazar PII de lead (e a AC8 dela proíbe afrouxar a guarda).
+    const projecao = projecaoDeOrganizations()
+    expect(projecao).not.toContain("//")
+    expect(projecao).not.toContain("\n")
+    expect(projecao).not.toContain("(")
+    expect(projecao).not.toContain("*")
+    expect(projecao.split(", ").length).toBeGreaterThanOrEqual(8)
+  })
+})
+
 describe("AC-B4 item 2 — varredura da árvore real", () => {
   it("nenhum `.from(<literal>)` cru sobrevive em app/platform/** e app/api/platform/**", () => {
     const achados: Array<{ arquivo: string; tabelas: string[] }> = []
