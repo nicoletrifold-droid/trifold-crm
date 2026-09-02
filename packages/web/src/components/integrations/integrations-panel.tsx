@@ -31,8 +31,14 @@ import { useRouter } from "next/navigation"
 import {
   DEFINICOES_DE_PROVIDER,
   PROVIDERS_DO_PAINEL,
+  rotuloDeStatusDoTile,
   type ProviderDoPainel,
 } from "@web/lib/integrations/painel/providers"
+import {
+  classesDaPaleta,
+  type ClassesDaPaleta,
+  type PaletaDoPainel,
+} from "./paleta"
 
 export type PapelDoVisitante = "platform_admin" | "org_admin"
 
@@ -62,6 +68,17 @@ export interface IntegrationsPanelProps {
   /** Base das rotas: `/api/platform/orgs/{id}/integracoes` ou `/api/configuracoes/integracoes`. */
   endpoint: string
   trilha?: LinhaDaTrilha[]
+  /**
+   * Escala de cinza. Ausente = `stone`, que é o CRM do cliente — o `/dashboard` NÃO passa a prop
+   * e por isso não muda de aparência. `/platform` passa `"slate"` para parar de parecer um
+   * enxerto do CRM dentro do console (900-57/AC4).
+   *
+   * É prop de APRESENTAÇÃO e nada mais: nenhum dado entra ou sai por ela. Resolver a diferença
+   * de paleta buscando dado aqui dentro é que esbarraria na régua
+   * `dashboard-platform-boundary.test.ts`, que proíbe este diretório de importar o caminho de
+   * leitura de plataforma.
+   */
+  palette?: PaletaDoPainel
 }
 
 interface RespostaDaRota {
@@ -73,21 +90,23 @@ interface RespostaDaRota {
   last4?: string
 }
 
-const ROTULO_DE_STATUS: Record<string, { texto: string; classe: string }> = {
-  connected: { texto: "Conectado", classe: "bg-emerald-500/15 text-emerald-300" },
-  active: { texto: "Conectado", classe: "bg-emerald-500/15 text-emerald-300" },
-  error: { texto: "Com erro", classe: "bg-red-500/15 text-red-300" },
-  disconnected: { texto: "Não conectado", classe: "bg-stone-500/15 text-stone-300" },
-  inactive: { texto: "Não conectado", classe: "bg-stone-500/15 text-stone-300" },
-}
-
-function Badge({ status }: { status: string }) {
-  const r = ROTULO_DE_STATUS[status] ?? {
-    texto: status,
-    classe: "bg-stone-500/15 text-stone-300",
-  }
+/**
+ * O status vira TOM (em `providers.ts`, compartilhado), e o tom vira classe só aqui.
+ *
+ * Verde e vermelho não dependem da paleta — "com erro" é vermelho nas duas superfícies. O que
+ * depende é o NEUTRO, que era fixo aqui na escala do CRM e por isso pintava o console com ela
+ * mesmo quando o resto do tile já estivesse certo.
+ */
+function Badge({ status, classes }: { status: string; classes: ClassesDaPaleta }) {
+  const r = rotuloDeStatusDoTile(status)
+  const classe =
+    r.tom === "ok"
+      ? "bg-emerald-500/15 text-emerald-300"
+      : r.tom === "erro"
+        ? "bg-red-500/15 text-red-300"
+        : classes.badgeNeutro
   return (
-    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${r.classe}`}>
+    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${classe}`}>
       {r.texto}
     </span>
   )
@@ -97,10 +116,13 @@ function Tile({
   estado,
   viewerRole,
   endpoint,
+  classes,
 }: {
   estado: EstadoDoTile
   viewerRole: PapelDoVisitante
   endpoint: string
+  /** Prop PRÓPRIA, não herdada: `Tile` é uma função separada e hardcodava a escala sozinho. */
+  classes: ClassesDaPaleta
 }) {
   const def = DEFINICOES_DE_PROVIDER[estado.provider]
   const router = useRouter()
@@ -154,20 +176,20 @@ function Tile({
   return (
     <div
       data-testid={`tile-${estado.provider}`}
-      className="rounded-lg border border-stone-800 bg-stone-900 p-5"
+      className={classes.cartao}
     >
       <div className="mb-3 flex items-start justify-between gap-4">
         <div>
-          <h3 className="text-base font-semibold text-stone-100">{def.rotulo}</h3>
-          <p className="mt-0.5 text-sm text-stone-400">{def.descricao}</p>
+          <h3 className={classes.titulo}>{def.rotulo}</h3>
+          <p className={classes.descricao}>{def.descricao}</p>
         </div>
-        <Badge status={estado.status} />
+        <Badge status={estado.status} classes={classes} />
       </div>
 
       {/* O limite honesto do selo, em TEXTO junto do badge — não só numa nota da story.
           "Conectado" garante que um segredo não vazio foi gravado E que a chamada de teste
           passou no momento da gravação; não garante que a credencial continua válida agora. */}
-      <p className="mb-3 text-xs text-stone-500">
+      <p className={classes.nota}>
         {estado.status === "connected" || estado.status === "active"
           ? `Credencial testada com sucesso ao ser salva${
               estado.atualizadoEm
@@ -183,7 +205,7 @@ function Tile({
         // ZERO escrevem (nenhum `.update`/`.upsert`/`.insert`). Mandar alguém para um caminho
         // inexistente é pior do que dizer que não há caminho — quem lê perde tempo procurando e
         // conclui que a tela está quebrada. Aqui o cartão diz a verdade.
-        <div className="space-y-2 rounded bg-stone-800/60 px-3 py-2 text-xs text-stone-400">
+        <div className={classes.caixaInformativa}>
           <p>
             O estado acima vem de <code>whatsapp_config</code>, que é a fonte que decide se o canal
             atende — não de <code>org_integrations</code>, onde a linha de WhatsApp é
@@ -200,20 +222,20 @@ function Tile({
         <div className="space-y-3">
           {def.chavesDeConfig.map((chave) => (
             <label key={chave} className="block">
-              <span className="text-xs font-medium text-stone-400">
+              <span className={classes.rotuloDeCampo}>
                 {def.rotulosDeConfig[chave] ?? chave}
               </span>
               <input
                 type="text"
                 value={config[chave] ?? ""}
                 onChange={(e) => setConfig({ ...config, [chave]: e.target.value })}
-                className="mt-1 w-full rounded border border-stone-700 bg-stone-950 px-2 py-1 text-sm text-stone-100"
+                className={classes.campo}
               />
             </label>
           ))}
 
           <label className="block">
-            <span className="text-xs font-medium text-stone-400">
+            <span className={classes.rotuloDeCampo}>
               {def.rotuloSegredo} — {estado.temSegredo ? "configurado" : "não configurado"}
             </span>
             <input
@@ -222,7 +244,7 @@ function Tile({
               value={segredo}
               placeholder={estado.temSegredo ? "•••••••• (deixe vazio para manter)" : ""}
               onChange={(e) => setSegredo(e.target.value)}
-              className="mt-1 w-full rounded border border-stone-700 bg-stone-950 px-2 py-1 font-mono text-sm text-stone-100"
+              className={classes.campoMono}
             />
           </label>
 
@@ -239,13 +261,13 @@ function Tile({
               <button
                 type="button"
                 onClick={revelar}
-                className="rounded border border-stone-700 px-3 py-1 text-xs text-stone-300"
+                className={classes.botaoSecundario}
               >
                 Revelar últimos 4
               </button>
             )}
             {last4 !== null && (
-              <span className="font-mono text-xs text-stone-300">…{last4}</span>
+              <span className={classes.mono}>…{last4}</span>
             )}
           </div>
 
@@ -283,7 +305,9 @@ export function IntegrationsPanel({
   tiles,
   endpoint,
   trilha,
+  palette,
 }: IntegrationsPanelProps) {
+  const classes = classesDaPaleta(palette)
   const porProvider = new Map(tiles.map((t) => [t.provider, t]))
   return (
     <div className="space-y-4">
@@ -304,22 +328,23 @@ export function IntegrationsPanel({
               estado={estado}
               viewerRole={viewerRole}
               endpoint={endpoint}
+              classes={classes}
             />
           )
         })}
       </div>
 
       {trilha && trilha.length > 0 && (
-        <div className="rounded-lg border border-stone-800 bg-stone-900 p-5">
-          <h3 className="mb-2 text-sm font-semibold text-stone-200">
+        <div className={classes.cartao}>
+          <h3 className={classes.tituloDaTrilha}>
             {viewerRole === "platform_admin"
               ? "Trilha desta empresa"
               : "Quem mexeu nas suas integrações"}
           </h3>
-          <ul className="space-y-1 text-xs text-stone-400">
+          <ul className={classes.listaDaTrilha}>
             {trilha.map((l) => (
               <li key={l.id}>
-                <span className="text-stone-500">
+                <span className={classes.carimboDaTrilha}>
                   {new Date(l.created_at).toLocaleString("pt-BR")}
                 </span>{" "}
                 — {l.action} ·{" "}

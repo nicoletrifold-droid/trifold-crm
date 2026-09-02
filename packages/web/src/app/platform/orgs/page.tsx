@@ -15,6 +15,7 @@
 import Link from "next/link"
 import { platformQuery } from "@web/lib/tenancy/platform-query"
 import { deriveAdminInviteStatus } from "@web/lib/tenancy/admin-invite"
+import { FUSO_DO_CONSOLE } from "@web/lib/tenancy/console-leitura"
 import { ReenviarConvite } from "./_components/reenviar-convite"
 
 export const dynamic = "force-dynamic"
@@ -136,7 +137,7 @@ export default async function OrgsPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-xs text-slate-400">
-                    {new Date(org.created_at).toLocaleDateString("pt-BR")}
+                    {new Date(org.created_at).toLocaleDateString("pt-BR", { timeZone: FUSO_DO_CONSOLE })}
                   </td>
                 </tr>
               )
