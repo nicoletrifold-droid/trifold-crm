@@ -12,7 +12,10 @@
   própria leva de trabalho em andamento vai ativar.
 - **Complexity:** S no mecanismo central (uma função pura + um `if`), M no total pela auditoria de
   10 pontos de chamada que hoje não passam org nenhuma para a decisão.
-- **Depende de:** nada em termos de merge (nenhuma outra story precisa entrar antes). Referencia
+- **Depende de:** o merge do PR **#565** (Story 900-66 — "na dúvida o sistema deixa de assumir
+  Trifold") **antes** deste PR. Motivo: as duas stories partem do mesmo merge-base e alteram os
+  **mesmos 6 arquivos** — entre eles `app/login/actions.ts`, onde esta story **move** a declaração
+  de `const emailOrgId` —, então mergear fora da ordem `#565 → #566` gera conflito. Referencia
   `lib/tenancy/trifold-org.ts` (`trifoldOrgId()`), já existente desde a Story 900-23.
 
 ### Executor Assignment
