@@ -337,10 +337,16 @@ describe("AC1 — papelDoHost", () => {
     expect(papelDoHost("nao.listado.com")).toBe("app")
   })
 
-  it("normalizarHost tira porta e caixa, e preserva o literal IPv6", () => {
+  it("normalizarHost tira porta, caixa e ponto final de FQDN, e preserva o literal IPv6", () => {
     expect(normalizarHost("EXEMPLO.com:3000")).toBe("exemplo.com")
     expect(normalizarHost("[::1]:3000")).toBe("[::1]")
     expect(normalizarHost(null)).toBe("")
+    // Ponto final de FQDN — a forma que escapava da guarda de inquilino (ver C6).
+    expect(normalizarHost("Exemplo.com.")).toBe("exemplo.com")
+    expect(normalizarHost("exemplo.com.:443")).toBe("exemplo.com")
+    expect(normalizarHost("exemplo.com..")).toBe("exemplo.com")
+    // Um host que é SÓ ponto vira vazio, e vazio já cai em `app` por `papelDoHost`.
+    expect(normalizarHost(".")).toBe("")
   })
 
   it("lê a env a CADA chamada, sem cache de módulo", () => {
@@ -487,8 +493,55 @@ describe("C6 — AC10: host de tenant é recusado mesmo se a env mandar", () => 
     expect(desviantes).toEqual([])
   })
 
-  it("o host da Trifold está na constante, com um nome só", () => {
-    expect(HOSTS_DE_TENANT).toContain(HOST_DE_TENANT)
-    expect(HOSTS_DE_TENANT.length).toBeGreaterThan(0)
+  it("os QUATRO hosts medidos servindo o CRM estão na constante", () => {
+    // Literais âncora, escritos aqui à mão de propósito: derivar a expectativa de
+    // `HOSTS_DE_TENANT` faria este teste concordar com qualquer conteúdo da constante,
+    // inclusive com o conteúdo que o gate da 900-65 reprovou (um host só).
+    // Medidos em 2026-09-03, GET público: os quatro respondem 200 com <title>Trifold CRM</title>
+    // em /login e 307 para /login em /dashboard.
+    for (const host of [
+      "crm.trifold.eng.br",
+      "trifold-crm.vercel.app",
+      "trifold-crm-teste.vercel.app",
+      "trifold-crm-teste-three.vercel.app",
+    ]) {
+      expect(HOSTS_DE_TENANT, `host medido servindo o CRM e ausente da constante: ${host}`).toContain(host)
+    }
+    expect(HOSTS_DE_TENANT.length).toBeGreaterThanOrEqual(4)
+  })
+
+  it("cada host de inquilino é recusado quando a env o nomeia — os quatro, um a um", () => {
+    // O laço acima prova PRESENÇA na constante; este prova EFEITO. Um sem o outro passa
+    // verde com a constante certa e a guarda quebrada, ou vice-versa.
+    const erro = vi.spyOn(console, "error").mockImplementation(() => {})
+    for (const host of [
+      "crm.trifold.eng.br",
+      "trifold-crm.vercel.app",
+      "trifold-crm-teste.vercel.app",
+      "trifold-crm-teste-three.vercel.app",
+    ]) {
+      erro.mockClear()
+      process.env["PLATFORM_ADMIN_HOSTS"] = `${host},${HOST_ADMIN_DE_TESTE}`
+      expect([papelDoHost(host), papelDoHost(HOST_ADMIN_DE_TESTE)], host).toEqual(["app", "admin"])
+      expect(erro).toHaveBeenCalledWith("[900-65] host de tenant recusado em PLATFORM_ADMIN_HOSTS", {
+        host,
+      })
+    }
+  })
+
+  it("recusa também na forma FQDN com ponto final, dos DOIS lados", () => {
+    // `normalizarHost` é aplicada ao host que CHEGA e ao token que ENTRA na allowlist. Uma forma
+    // que ela não colapsasse escaparia de `HOSTS_DE_TENANT.includes(...)` e o `Host` na mesma
+    // forma casaria com ela — medido no gate da 900-65: devolvia "admin" para o host da Trifold.
+    const erro = vi.spyOn(console, "error").mockImplementation(() => {})
+    process.env["PLATFORM_ADMIN_HOSTS"] = `${HOST_DE_TENANT}.,${HOST_ADMIN_DE_TESTE}.`
+    expect([papelDoHost(`${HOST_DE_TENANT}.`), papelDoHost(HOST_DE_TENANT)]).toEqual(["app", "app"])
+    // A recusa é AUDÍVEL, não um não-casamento por acidente: o token chegou normalizado à guarda.
+    expect(erro).toHaveBeenCalledWith("[900-65] host de tenant recusado em PLATFORM_ADMIN_HOSTS", {
+      host: HOST_DE_TENANT,
+    })
+    // E o ponto final não quebra a promoção legítima — a normalização colapsa, não descarta.
+    expect(papelDoHost(`${HOST_ADMIN_DE_TESTE}.`)).toBe("admin")
+    expect(papelDoHost(HOST_ADMIN_DE_TESTE)).toBe("admin")
   })
 })

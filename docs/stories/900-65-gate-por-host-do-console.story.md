@@ -149,9 +149,12 @@ Novo arquivo de teste (nome sugerido: `packages/web/src/lib/tenancy/papel-do-hos
    converter caminho de arquivo em pathname de rota (`[id]` → valor concreto, `(grupo)` removido).
 2. Particionar em "sob `/platform` ou `/api/platform`" e "fora".
 3. **C1 — vivacidade:** o conjunto "fora de `/platform`" tem **> 100** rotas (medido nesta sessão:
-   147 `page.tsx` totais menos 9 sob `/platform` = 138; 333 `route.ts` totais menos 7 sob
+   147 `page.tsx` totais menos 9 sob `/platform` = 138; 332 `route.ts` totais menos 6 sob
    `api/platform` = 326 — os dois muito acima de 100; reconfira no dia da implementação, os números
    crescem).
+   _Os quatro números acima foram **medidos** por varredura de `packages/web/src/app/**` contra
+   `origin/main` em 2026-09-03 (não escritos de cabeça); `332`/`6` corrigem o `333`/`7` do draft, e o
+   derivado não muda: 326 + 138 = 464._
 4. Para cada rota de "fora", com `PLATFORM_ADMIN_HOSTS` apontando para um host de teste, asseverar
    `decidirNoHostAdmin({ pathname }).tipo === "bloqueado"`.
 5. Para cada rota de "dentro", asseverar `"segue"`.
@@ -270,8 +273,12 @@ devolve `"app"` para ele — mesmo que `PLATFORM_ADMIN_HOSTS` o inclua:
   - [x] C6: as duas asserções na mesma régua (tenant ⇒ `"app"`, host da Jud ⇒ `"admin"`)
 
 - [x] **Task 5 — Conferência manual**
-  - [x] `pnpm --filter web test -- papel-do-host` localmente (não em CI headless sem rede, se a
-        rede permanecer instável — registrar se não rodou)
+  - [x] `npx vitest run packages/web/src/lib/tenancy/papel-do-host.test.ts packages/web/src/proxy.test.ts`
+        **da raiz do repo** (não em CI headless sem rede, se a rede permanecer instável —
+        registrar se não rodou).
+        ⚠️ O comando que esta Task pedia antes — `pnpm --filter web test -- papel-do-host` —
+        **sai rc=0 sem executar nada**: `packages/web/package.json` não tem script `test` (só
+        `test:e2e`), e o `vitest.config.ts` vive na raiz. Corrigido pelo achado QA-900-65-6.
   - [x] Ler o diff final e confirmar AC8 (zero linha em `platform-guard.ts` ou nos 7 handlers)
 
 ---
@@ -327,6 +334,8 @@ devolve `"app"` para ele — mesmo que `PLATFORM_ADMIN_HOSTS` o inclua:
 
 | Date | Version | Description | Author |
 |---|---|---|---|
+| 2026-09-03 | 1.2 | **Correção de número na AC6.3 (@po).** A C1 dizia `333` `route.ts` menos `7` sob `api/platform`; medi eu mesmo contra `origin/main` (`git ls-tree -r`, commit `6a02c523`) e o verdadeiro é **332 menos 6** — um a menos nos dois lados. As outras duas contagens da C1 conferem ao arquivo (`147` `page.tsx`, `9` sob `/platform`), e a partição foi conferida por listagem: os 6 `route.ts` estão todos sob `app/api/platform/`, as 9 `page.tsx` sob `app/platform/`. **Nenhuma conclusão da story muda**: o derivado é idêntico (326 + 138 = 464) e a cardinalidade total 479 = 15 + 464 segue valendo. Acrescentei na AC6.3 a linha de proveniência (medido, contra quê, em que data) — a lição desta onda é que constante escrita de cabeça é a que apodrece, como no "não depende de nada" da 900-67 e no "hoje há um host de inquilino" desta mesma story. Escopo mínimo: só a AC6.3; nenhuma outra AC, task, QA Results ou linha de terceiro tocada; gate segue **PASS**. | Pax (@po) |
+| 2026-09-03 | 1.1 | **Consertos do gate CONCERNS (@dev).** Os tres achados fechados; `proxy.ts` e `middleware.ts` NAO foram tocados (hash identico ao commit `c01cfa03`). **QA-900-65-1:** em vez de adotar o host que o gate citou, enumerei a classe e sondei cada candidato — sao **quatro** hosts servindo o CRM (os dois `-teste.vercel.app` tambem, e sao justamente os candidatos naturais da sonda pre-DNS), nao dois; a prosa deixou de afirmar completude e nomeia por que nao pode (alias por deployment e de cardinalidade ilimitada). **QA-900-65-2:** `normalizarHost` corta o ponto final de FQDN e o JSDoc, que afirmava o contrario, foi reescrito com a razao estrutural (a funcao vale nas duas pontas). **QA-900-65-3:** `proxy.test.ts` novo, com o duble um nivel ABAIXO do que o gate propos (`createServerClient` em vez do modulo `updateSession`) — assim `proxy()` e `updateSession()` sao os reais e morrem os **dois** sobreviventes, nao so o primeiro. Bateria re-rodada INTEIRA: **18 mutantes, 18 mortos**, `tsc` rc=0 em todas, controle negativo 39/39 antes e depois. Contraprova medida: M15 e M16 sobrevivem 32/32 a regua so de FORMA. A formulacao do M15 do gate nao compilava (TS2339 por narrowing de codigo inalcancavel) e foi reformulada. Raiz: 319 / 4394 / 6 (baseline 318 / 4385 / 6), lint 0 erros, type-check rc=0, build 5/5. Task 5 corrigida para a invocacao da raiz; **AC6.3 (333/7 em vez de 332/6) NAO tocada — pendencia do @po**. | Dex (@dev) |
 | 2026-09-03 | 1.0 | **Implementada (@dev, YOLO).** Módulo novo `lib/tenancy/papel-do-host.ts` com as quatro funções puras mais `HOSTS_DE_TENANT`; gate no `proxy.ts` antes de `updateSession`; bounce de `/login` ciente do host via função extraída. Régua nova de 30 testes, derivada de `readdirSync` sobre `src/app/**`: cardinalidade das duas partições afirmada com número (479 = 15 dentro + 464 fora), três dimensões independentes além da contagem (conservação, unicidade, largura de topo) e alfabeto declarado nas duas camadas. Bateria de 14 mutantes, 14 mortos, `tsc` rc=0 em todas. Três medições divergiram da story e estão registradas nas Completion Notes sem contorno: a contagem crua de `route.ts` (332/6, não 333/7 — derivado idêntico), a linha do bounce (138, não 136) e a reconfirmação de que `login/actions.ts` não precisa de mudança. Duas âncoras acrescentadas além da letra da AC6, com justificativa: sem elas M6, M9, M10, M11 e M12 sobreviveriam. | Dex (@dev) |
 | 2026-09-03 | 0.2 | **Validação do @po (GO).** Remedi as 5 afirmações medidas da story contra o código e todas conferem exatamente: `proxy.ts` tem 12 linhas; a notação de colchete tem precedente em `lib/supabase/middleware.ts:36-47`; o bounce de `/login` está na **linha 136** (a story dizia ~135-139); `login/actions.ts:100-101` de fato já roteia `is_platform_admin === true` para `/platform`, confirmando a correção da story ao doc-fonte; e a contagem da C1 bate ao arquivo (`147` `page.tsx`, `9` sob `/platform`; `333` `route.ts`, `7` sob `api/platform`). Duas correções aplicadas: (1) **AC10 nova** — `PLATFORM_ADMIN_HOSTS` com o valor errado (contendo `crm.trifold.eng.br`) derrubaria as 464 rotas do CRM da Trifold em 404, e a story não tinha guard nenhum contra isso; o argumento "reversível por env var" cobria "liguei e quero desligar", não "liguei errado". (2) Task 3 endurecida de "extrair **ou parametrizar**" para **extrair**: a C5 assevera o destino do bounce num `*.test.ts` e o bounce só é alcançável via `updateSession`, então "parametrizar sem extrair" faria a C5 nascer sem carrasco. | Pax (@po) |
 | 2026-09-03 | 0.1 | Draft inicial — item 0 dos três itens de fundação do whitelabel. Número `900-65` reconfirmado livre contra `docs/stories/`, `git branch -a`, `git for-each-ref` (heads+remotes) e `gh pr list --state open` (nenhuma referência a `900-65`+ em nenhuma delas, medido em 2026-09-03). Reusa o desenho já medido em `admin-saas-isolamento-por-host.md` (2026-08-31), com uma atualização própria: `login/actions.ts` já roteia `is_platform_admin` para `/platform` (mudança posterior à data daquele doc), então só o bounce de `middleware.ts:/login` precisa de tratamento (AC5) — não os dois pontos que o doc-fonte original previa. | River (@sm) |
@@ -460,15 +469,175 @@ Pela mesma razão acrescentei o `describe` de AC3/AC4/AC7 sobre o `proxy.ts`, qu
 (404 com corpo) e M12 (`not-found`) sobreviveriam todas sem ele — e M12 é justamente o defeito
 que vazaria a marca da Trifold no host da Jud.
 
+### Rodada de consertos do gate ⚠️ CONCERNS (2026-09-03, @dev)
+
+Três achados fechados. Os dois de código eram **1 linha cada**; o terceiro era régua faltando.
+
+#### QA-900-65-1 (HIGH) — a lista da AC10 era falsa, e a população era maior que a medida
+
+O achado estava certo: `HOSTS_DE_TENANT` tinha um host e a prosa afirmava "Hoje há um".
+Antes de aplicar a correção de 1 literal que o gate prescreveu, **enumerei a classe** em vez de
+adotar o achado — "que hosts servem o CRM?", não "o host que o gate citou existe?". Levantei os
+candidatos por varredura de `*.vercel.app` no repo (envs, docs, configs) e sondei cada um com
+`GET /login` + `GET /dashboard`. **São quatro, não dois:**
+
+| Host | `/login` | `/dashboard` | Servia o CRM? |
+|---|---|---|---|
+| `crm.trifold.eng.br` | 200 `<title>Trifold CRM</title>` | 307 → `/login` | ✅ (já estava) |
+| `trifold-crm.vercel.app` | 200 `<title>Trifold CRM</title>` | 307 → `/login` | ✅ (o que o gate achou) |
+| `trifold-crm-teste.vercel.app` | 200 `<title>Trifold CRM</title>` | 307 → `/login` | ✅ **novo** |
+| `trifold-crm-teste-three.vercel.app` | 200 `<title>Trifold CRM</title>` | 307 → `/login` | ✅ **novo** |
+| `trifold-crm-staging.vercel.app` | 404 | — | ❌ (não é o CRM) |
+| `staging.trifold-crm.vercel.app` | não resolve | — | ❌ |
+
+Os dois `-teste` são justamente os candidatos mais prováveis para a sonda pré-DNS que o gate
+nomeia como cenário de alcance — o operador que quer ver o console antes do DNS pega um alias de
+teste, não o de produção.
+
+**A prosa agora não afirma completude, e diz por quê:** a Vercel também publica um alias por
+**deployment** (`trifold-{hash}-{team}.vercel.app`), de cardinalidade ilimitada, servindo o mesmo
+CRM. Fechá-los exigiria casar por **padrão** em vez de por lista — desenho que esta story não
+toma. Consequência nomeada no próprio cabeçalho da constante, para não repetir o defeito de
+afirmar mais do que se mediu. Não consegui enumerar os domínios pela API da Vercel: o token da CLI
+nesta máquina é da conta `freelans-dev`, e o projeto de produção vive em outra conta (`403 Not
+authorized`) — registrado como limite da medição, não contornado.
+
+**Régua:** duas asserções novas na C6, e as duas são necessárias — a primeira prova **presença**
+na constante (por literais âncora escritos à mão, nunca derivados de `HOSTS_DE_TENANT`, senão o
+teste concordaria com qualquer conteúdo, inclusive com o que o gate reprovou), a segunda prova
+**efeito** (para cada host, a env nomeando-o ⇒ `"app"` **e** `console.error` audível ⇒ o token
+chegou à guarda, não deixou de casar por acidente).
+
+#### QA-900-65-2 (MEDIUM) — ponto final de FQDN, e o JSDoc que afirmava o contrário
+
+Reproduzido no módulo vivo antes de consertar: `PLATFORM_ADMIN_HOSTS="crm.trifold.eng.br."` +
+`Host: crm.trifold.eng.br.` ⇒ **`"admin"`**. `normalizarHost` ganhou `.replace(/\.+$/, "")`
+depois da remoção da porta. O JSDoc foi reescrito: ele afirmava que o ponto final "cai em `app`,
+o lado seguro", e essa conclusão só valia na direção do **pedido** — na direção da **allowlist**
+era o furo. O texto agora nomeia a razão estrutural (a função é aplicada nas duas pontas, então
+cada forma que ela não colapsa é furo de guarda) e mantém a exceção que continua verdadeira:
+Unicode/punycode só afeta a ponta do pedido, porque nenhuma dessas formas é escrita alternativa
+de um literal ASCII de `HOSTS_DE_TENANT`.
+
+Efeito colateral desejado: o ponto final também deixa de quebrar a promoção legítima do host
+admin — asseverado no mesmo `it`, para que a normalização seja medida como *colapso*, não como
+*descarte*.
+
+#### QA-900-65-3 (MEDIUM) — as âncoras mediam FORMA; agora há carrasco de COMPORTAMENTO
+
+Arquivo novo `packages/web/src/proxy.test.ts` (7 testes, ~140ms). **Nenhuma linha de `proxy.ts` ou
+`middleware.ts` mudou nesta rodada** — os dois sobreviventes morreram por régua, não por conserto
+de comportamento, e `shasum -a 256` + `git status` confirmam os dois arquivos byte a byte iguais
+ao commit `c01cfa03`.
+
+**Onde o dublê foi posto, e por que não onde o gate pôs.** O carrasco do gate dublava
+`@web/lib/supabase/middleware` (o módulo `updateSession`) e matava M15 **2/3** — mas deixaria M16
+vivo, porque o bounce de `/login` mora **dentro** de `updateSession`. Desci o dublê um nível, para
+`createServerClient` de `@supabase/ssr` — a fronteira do Supabase. Com ele aí, `proxy()` **e**
+`updateSession()` são os reais em todos os 7 testes, e os **dois** mutantes morrem. Ganho de
+brinde: a sonda de NÃO-chamada da AC7 passa a medir o round-trip ao Supabase de verdade (o custo
+que a AC7 existe para evitar), não a chamada a uma função intermediária.
+
+**Contraprova, medida nos dois sentidos:**
+
+| | régua só de FORMA (a anterior) | + `proxy.test.ts` |
+|---|---|---|
+| **M15** (404 incondicional no topo do `proxy()`) | 🟢 32/32 SOBREVIVE | 🔴 **6 vermelhos** |
+| **M16** (`url.pathname = "/platform"` após o bounce) | 🟢 32/32 SOBREVIVE | 🔴 **2 vermelhos** |
+
+⚠️ **A formulação do M15 do gate não compilava aqui.** `return` incondicional no topo torna o
+resto inalcançável, o `tsc` narrowa `decisao` para `never` e sai
+`TS2339: Property 'para' does not exist on type 'DecisaoDeHost'` — rc=2. Vermelho com erro de
+compilação não conta, e mutante que não compila também não. Reformulei com um predicado opaco ao
+compilador (`request.method !== "___METODO_QUE_NAO_EXISTE___"`), que é incondicional na prática e
+deixa o resto alcançável para o `tsc`: rc=0, e aí sim o mutante vale.
+
+#### QA-900-65-6 — o comando inerte da Task 5 (corrigido) e a AC6.3 (**não** corrigida)
+
+A linha de comando da Task 5 foi trocada para a invocação da raiz, com o motivo registrado no
+próprio checkbox. **A AC6.3 continua com `333/7` e eu não a toquei**: é texto de AC, e a divergência
+já está registrada acima como medida (`332/6`, derivado idêntico: 326 + 138 = 464, nenhuma
+conclusão muda). 🔴 **Fica como pendência para o @po**, dono da seção.
+
+#### QA-900-65-4 e QA-900-65-5 (LOW) — dívida nomeada, sem conserto
+
+População **0 medida** nas duas, e as duas são fail-closed:
+- `ARQUIVOS_DE_ROTA` não conhece `route.tsx`/`page.ts`/`.js`/`.jsx` — se aparecer um, a régua
+  sub-conta, mas o deny-by-default em produção continua negando a rota invisível.
+- Rota de interceptação (`(.)foto`, `(..)foto`) vaza para o pathname — e o alfabeto da C1 a
+  reprova, deixando a régua **vermelha** em vez de silenciosamente errada.
+
+Não consertei nenhuma das duas: o custo é maior que a dívida e nenhuma tem sítio hoje. Ficam
+nomeadas aqui e no gate.
+
+#### Bateria re-rodada INTEIRA — 18 mutantes, 18 mortos
+
+Troca de régua invalida os vermelhos de **todas** as mutações, então nenhum número foi herdado da
+rodada anterior. Controle negativo **39/39 verde antes e depois**, `tsc` rc=0 antes de contar
+qualquer vermelho, restauro por `cp` + `shasum -a 256 -c` dos 5 arquivos após **cada** mutante, e
+o manifesto conferiu em todas as 18 iterações.
+
+| Mutante | Alvo | 🔴 |
+|---|---|---|
+| M01 allowlist vira "permite tudo" | `papel-do-host.ts` | 6 |
+| M02 deny-by-default vira blocklist | `papel-do-host.ts` | 6 |
+| M03 `decidirPorHost` sem o return antecipado de `"app"` | `papel-do-host.ts` | 5 |
+| M04 `destinoDoBounceDeLogin` sempre `/platform` | `papel-do-host.ts` | 3 |
+| M05 `HOSTS_DE_TENANT` vazia | `papel-do-host.ts` | 6 |
+| M06 middleware volta ao destino fixo `/dashboard` | `middleware.ts` | 2 |
+| M07 `normalizarHost` sem case-fold | `papel-do-host.ts` | 2 |
+| M08 guarda de inquilino compara o token cru | `papel-do-host.ts` | 2 |
+| M09 `updateSession` antes da decisão | `proxy.ts` | 6 |
+| M10 proxy lê `nextUrl.hostname` | `proxy.ts` | 1 |
+| M11 404 com corpo e sem `X-Robots-Tag` | `proxy.ts` | 2 |
+| M12 proxy reescreve para rota inexistente (`not-found`) | `proxy.ts` | 3 |
+| M13 conversor devolve lista vazia | `papel-do-host.test.ts` | 8 |
+| M14 conversor colapsa tudo em `/x` | `papel-do-host.test.ts` | 7 |
+| **M15 404 incondicional inserido no topo do `proxy()`** | `proxy.ts` | **6** |
+| **M16 `url.pathname = "/platform"` após o bounce** | `middleware.ts` | **2** |
+| **M17 `HOSTS_DE_TENANT` volta a um host só** | `papel-do-host.ts` | **2** |
+| **M18 `normalizarHost` sem o corte do ponto final** | `papel-do-host.ts` | **2** |
+
+M17 e M18 são as contraprovas dos consertos 1 e 2: **são literalmente o código commitado**, e o
+código commitado passava 30/30. Os vermelhos vieram das asserções novas, não de efeito colateral.
+
+#### Réguas da rodada de consertos — todas da raiz
+
+- Suíte da raiz: **319 arquivos · 4394 passed | 6 expected fail**. Baseline do gate:
+  318 / 4385 / 6. Delta desta rodada: **+1 arquivo, +9 testes, +0 expected fail** — exatamente os
+  7 do `proxy.test.ts` e as 2 asserções novas da C6/`normalizarHost`.
+- `pnpm lint --force`: **0 erros**, 30 avisos — os mesmos 30 pré-existentes, nenhum em arquivo
+  desta story.
+- `pnpm type-check --force`: 8 tasks, **rc=0**.
+- `pnpm build`: **5 tasks successful**.
+- Divergência local↔CI de 14 testes: inalterada, mesma causa (árvore compartilhada com outras
+  sessões).
+
+#### A Trifold, byte a byte
+
+O caminho `"app"` não foi tocado — e agora isso é **medido, não lido**: com a env ligada,
+`/dashboard`, `/api/webhook/whatsapp`, `/broker` e `/` no host de inquilino alcançam o Supabase
+(1 chamada a `createServerClient` cada) e **nenhuma** responde 404; sem a env, até o host admin
+alcança; e o bounce de `/login` devolve `/dashboard` no papel `"app"`. As duas mudanças de código
+desta rodada só andam na direção segura: `HOSTS_DE_TENANT` maior só move host de `"admin"` para
+`"app"`, e o corte do ponto final normaliza igual nas duas pontas, então nenhum host de inquilino
+pode virar admin por ele.
+
 ### File List
 
 Novos:
 - `packages/web/src/lib/tenancy/papel-do-host.ts`
 - `packages/web/src/lib/tenancy/papel-do-host.test.ts`
+- `packages/web/src/proxy.test.ts` *(rodada de consertos do gate — carrasco comportamental do
+  `proxy()`, achado QA-900-65-3)*
 
 Modificados:
 - `packages/web/src/proxy.ts`
 - `packages/web/src/lib/supabase/middleware.ts`
+
+⚠️ **Na rodada de consertos do gate, `proxy.ts` e `middleware.ts` NÃO foram tocados de novo** —
+`shasum -a 256` e `git status` confirmam os dois byte a byte iguais ao commit `c01cfa03`. Os dois
+mutantes sobreviventes do gate morreram por **régua nova**, não por mudança de comportamento.
 
 Não tocados, por AC:
 - `packages/web/src/lib/tenancy/platform-guard.ts` (AC8)
@@ -478,4 +647,123 @@ Não tocados, por AC:
 ---
 
 ## QA Results
-_A preencher pelo @qa durante o gate._
+
+### Rodada 2 (re-gate do delta) — Gate: ✅ **PASS** — `docs/qa/gates/900.65-gate-por-host-do-console.yml`
+**Revisor:** Quinn (Test Architect) · 2026-09-03 · escopo: só o delta dos consertos
+
+#### Os dois refutes: os DOIS procedem — e num deles o erro era meu
+- **QA-900-65-1.** Refeitas as sondas: os quatro hosts respondem **200 com
+  `<title>Trifold CRM</title>`** em `/login` e **307** em `/dashboard`;
+  `trifold-crm-staging.vercel.app` dá 404 e de fato não é o CRM. A tabela da story reproduz byte a
+  byte. **"Deixar de afirmar completude" é suficiente para esta story**: nenhuma LISTA fecha uma
+  classe infinita, os quatro hosts que um humano escolheria para a sonda pré-DNS estão fechados, e
+  o host de cliente já estava. O resíduo virou dívida nomeada (**QA-900-65-8**, LOW). O limite do
+  token da Vercel (`403`, outra conta) fica **registrado, não contornado** — a existência do alias
+  por deployment permanece declarada, não medida.
+- **QA-900-65-3.** As **duas metades** medidas separadamente: **(a)** escrevi o carrasco exatamente
+  como o prescrevi (dublê do módulo `@web/lib/supabase/middleware`), apliquei o M16 e ele ficou
+  **3/3 VERDE** — minha prescrição era um teste que exigia a cegueira; **(b)** com o dublê dele em
+  `createServerClient`, **M15 morre 6🔴 e M16 morre 2🔴**. O nível certo do dublê é a **fronteira
+  externa**, não o módulo vizinho.
+- **M15 reformulado:** `tsc` **rc=0**, e **incondicional na prática** — medido em 7 métodos HTTP
+  (`GET/POST/PUT/PATCH/DELETE/HEAD/OPTIONS` = 404). Minha formulação original não compilava (TS2339
+  por narrowing de código inalcançável): mutante que não compila não é mutante. Erro meu, aceito.
+
+#### Bateria e contraprova — reproduzidas
+`M15` FORMA 🟢**32/32** · comportamento 🔴**6** · `M16` FORMA 🟢**32/32** · comportamento 🔴**2** ·
+`M17` 🔴**2** · `M18` 🔴**2** — todas com `tsc` rc=0. M17 e M18 são literalmente o código de
+`c01cfa03`, então são contraprova válida dos consertos 1 e 2. Controle negativo **39/39** antes e
+depois de cada mutação.
+
+#### `proxy.ts` e `middleware.ts` NÃO foram tocados — confirmado
+`sha256` idêntico ao de `c01cfa03` nos dois (`dde5a51b…` e `e1a97511…`), e nenhum dos dois aparece
+em `git status`. Os sobreviventes morreram **por régua**. (Nota: não existe
+`packages/web/src/middleware.ts` — o arquivo é `lib/supabase/middleware.ts`.)
+
+#### A Trifold, reproduzida
+Com a env ligada, as 4 rotas do host de inquilino alcançam o Supabase (1 chamada cada) e nenhuma é
+404; sem a env, até o host admin alcança; o bounce devolve `/dashboard` no papel `"app"` e
+`/platform` no `"admin"`, na mesma asserção.
+
+#### Réguas — idênticas ao declarado
+**319 · 4394 passed | 6 expected fail** (+1 arquivo, +9 testes: 7 do `proxy.test.ts` + 2 da C6/AC1)
+· `lint --force` 0 erros/30 avisos · `type-check --force` rc=0 · `build` 5/5. Restauro por `cp` +
+`shasum -a 256 -c`, manifesto 5/5 OK ao fim.
+
+#### Um achado novo, que **não bloqueia** — QA-900-65-7 (MEDIUM, população 0)
+O carrasco novo é comportamental de verdade (status, headers, corpo, `location`, contagem de
+chamadas — zero `toContain` sobre fonte). Mas o predicado do caminho `"app"` é `not.toBe(404)`, que
+é o dano do **M15**, não o dano geral. Medido: inserção **depois** de `await updateSession(request)`
+devolvendo `redirect("/manutencao")` para todo `crm.trifold.eng.br` exceto `/login` passa
+**39/39 com `tsc` rc=0** — e derruba 100% do tráfego não-`/login` do cliente. **População 0 hoje**
+(`proxy.ts` é byte a byte o já validado). Conserto medido nos dois sentidos: comparar
+`[status, location]` de `proxy(req)` com o de `updateSession(req)` direto — 🔴 sob o mutante,
+🟢 no código limpo.
+
+#### Pendência que não é do @dev
+**AC6.3 segue com `333/7`.** Medido agora: **332** `route.ts` / **6** sob `api/platform`; derivado
+**idêntico** (326 + 138 = 464). É seção do @po e o @dev fez certo em não tocar. **Não bloqueia** —
+a régua C1 lê o filesystem, não o texto da AC.
+
+**Décima oitava armadilha:** *o dublê que viabiliza a mutação apaga o defeito irmão.* Ao prescrever
+um dublê, pergunte "que código deixa de executar por causa dele?" — se algum defeito da story mora
+nessa região, o dublê está alto demais.
+
+---
+
+### Gate: ⚠️ CONCERNS — `docs/qa/gates/900.65-gate-por-host-do-console.yml`
+**Revisor:** Quinn (Test Architect) · 2026-09-03 · branch `story/900-65-gate-por-host-do-console`, 1 commit sobre `origin/main`
+
+#### O caminho `"app"` — provado por comportamento, não por leitura
+O padrão de prova exigido (a Trifold byte a byte igual) foi verificado **chamando o `proxy()` real
+com `NextRequest` real**, fora da árvore: host de inquilino recebe `updateSession` em 4/4 rotas
+(`/dashboard`, `/api/webhook/whatsapp`, `/broker`, `/`); **sem** a env, até
+`admin.judtecnologia.com.br/dashboard` recebe `updateSession`; o bounce devolve `/dashboard` no
+papel `"app"`. `M3` reproduzido: **3 vermelhos**, `tsc` rc=0.
+
+#### Réguas reproduzidas
+318 arquivos · 4385 passed | 6 expected fail (**idêntico ao declarado**) · arquivo da story 30/30 ·
+`lint --force` 0 erros/30 avisos · `type-check --force` rc=0. Restauro por `cp` + `shasum -a 256 -c`
+conferido após **cada** mutação; `git status` dos 4 alvos limpo ao fim.
+
+#### Mutantes
+- **Reproduzidos:** `M3` 3🔴 · `M12` 1🔴 · `M13` 8🔴 · `M14` 7🔴 — todos com `tsc` rc=0.
+- **`M14b` (novo, deste gate):** conversor truncando o pathname em 2 segmentos — preserva 479/15/464,
+  conservação, alfabeto e largura, e morre **só** na unicidade (+ o carrasco sintético): **2🔴**.
+  A tese da AC6 se sustenta e fica mais forte que o próprio `M14` (que também morre por contagem,
+  porque `DENTRO` esvazia). A **AC6 não é suspeita**.
+- **Censo da AC6 conferido item a item:** 479 = 15 + 464 ✅ · 333 segmentos distintos, zero fora do
+  alfabeto ✅ · zero `(grupo)` (carrasco sintético justificado) ✅ · 55 diretórios `_*` com **zero**
+  arquivo de rota dentro ✅ · lê filesystem, e as 2 asserções de fonte leem **código** e **posição**,
+  cada índice contra `-1` dentro do `it` ✅.
+- **As duas âncoras extras: escopo legítimo, não invenção.** Não acrescentam comportamento de
+  produto; são medição, e sem elas `M6`, `M9`, `M10`, `M11` e `M12` ficavam sem carrasco — inclusive
+  o `M12`, o vazamento de marca. A ressalva é a **natureza** delas, abaixo.
+
+#### As três divergências registradas: todas confirmadas
+1. `origin/main` tem **332** `route.ts` e **6** sob `api/platform`; derivado idêntico (326 + 138 = 464).
+   Nenhuma conclusão muda.
+2. `url.pathname = "/dashboard"` está na linha **138** de `origin/main`; a **136** é o `if`.
+3. `login/actions.ts` intocado e já roteando `is_platform_admin` para `/platform`. **AC8 confirmada**
+   por `git diff`: 5 arquivos, nenhum deles `platform-guard.ts` nem `api/platform/**`.
+
+#### Concerns (detalhe e conserto no gate)
+- **QA-900-65-1 · HIGH — a lista da AC10 está incompleta e a prosa é falsa.** `HOSTS_DE_TENANT` diz
+  "hoje há um"; medido: `https://trifold-crm.vercel.app/login` responde **200 com
+  `<title>Trifold CRM</title>`**, e `papelDoHost` devolve **`"admin"`** para ele se a env o nomear.
+  População: **≥1 host real**, e o cenário de alcance é a story de ativação (sonda pré-DNS num alias
+  `*.vercel.app`). Conserto: 1 linha + 1 asserção.
+- **QA-900-65-2 · MEDIUM — ponto final de FQDN evade a guarda.** Env `crm.trifold.eng.br.` + `Host`
+  na mesma forma ⇒ `"admin"`. O JSDoc do `normalizarHost` afirma o oposto. Conserto: 1 linha.
+- **QA-900-65-3 · MEDIUM — as âncoras do `proxy.ts`/bounce são régua de FORMA.** Dois mutantes de
+  inserção passam **30/30 com `tsc` rc=0** e desviam o caminho `"app"` (um deles: 404 para 100% das
+  requisições de `crm.trifold.eng.br`). O carrasco comportamental existia: escrito neste gate em
+  ~30 linhas, mata o mutante **2/3**.
+- **QA-900-65-4/5 · LOW (dívida, população 0):** varredura cega a `route.tsx`/`page.ts`; rotas de
+  interceptação `(.)`/`(..)` vazam para o pathname — mas o alfabeto da C1 as reprova (fail-closed).
+- **QA-900-65-6 · LOW (dono: @po):** a Task 5 manda rodar `pnpm --filter web test`, que **sai rc=0
+  sem executar nada** (não existe script `test` em `packages/web`); e a AC6.3 segue com 333/7.
+
+**Décima sétima armadilha:** *a normalização é medida só na direção do pedido.* A função é usada nas
+duas pontas (host que chega e token da allowlist), e a conclusão "forma estranha cai no lado seguro"
+só vale na ponta do pedido. Caixa e porta são colapsadas — e testadas; o ponto final não é.

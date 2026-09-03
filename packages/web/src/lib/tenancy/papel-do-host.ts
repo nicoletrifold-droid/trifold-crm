@@ -55,9 +55,31 @@
  *
  * ## Como um host entra aqui
  *
- * Todo host de produção que sirva o CRM de uma organização. Hoje há um.
+ * Todo host que sirva o CRM de uma organização — **não** só o domínio custom. Um alias
+ * `*.vercel.app` do mesmo projeto serve exatamente as mesmas 464 rotas, e é justamente o host que
+ * alguém escolheria para uma sonda antes de o DNS do console existir.
+ *
+ * ## Como esta lista foi levantada, e por que ela é PARCIAL
+ *
+ * Medido em 2026-09-03 por `GET https://{host}/login` e `GET https://{host}/dashboard`: os quatro
+ * abaixo respondem **200 com `<title>Trifold CRM</title>`** e **307 para `/login`** — a assinatura
+ * do CRM. (A primeira redação desta constante tinha um só e afirmava em prosa "hoje há um": era
+ * falso por medição, e o gate da 900-65 pegou. A prosa agora não afirma completude.)
+ *
+ * Ela **não** é completa e não tem como ser, por literal: a Vercel também publica um alias por
+ * deployment (`trifold-{hash}-{team}.vercel.app`), de cardinalidade ilimitada, servindo o mesmo
+ * CRM. Fechá-los exigiria casar por padrão em vez de por lista — decisão de desenho que esta story
+ * não toma. Consequência aceita e nomeada: os quatro literais abaixo estão fechados para sonda; um
+ * alias por deployment continua sendo um host de sonda possível, e continua sendo um pé de bala.
+ *
+ * A lista some no dia em que os hosts de inquilino vierem do banco (`organizations`).
  */
-export const HOSTS_DE_TENANT: readonly string[] = ["crm.trifold.eng.br"]
+export const HOSTS_DE_TENANT: readonly string[] = [
+  "crm.trifold.eng.br",
+  "trifold-crm.vercel.app",
+  "trifold-crm-teste.vercel.app",
+  "trifold-crm-teste-three.vercel.app",
+]
 
 /** O que o gate decide para uma requisição. */
 export type DecisaoDeHost =
@@ -75,10 +97,19 @@ export type PapelDeHost = "admin" | "app"
  * A porta sai porque `admin.judtecnologia.com.br:443` e `admin.judtecnologia.com.br` são o mesmo
  * host, e ninguém escreve a porta na variável de ambiente.
  *
- * O que **não** é normalizado: ponto final de FQDN (`exemplo.com.`) e formas Unicode/punycode.
- * As duas deixam o host **não** casar com `PLATFORM_ADMIN_HOSTS` — ou seja, caem em `"app"`, o
- * lado seguro. Normalizá-las só importaria para deixar o gate mais fácil de LIGAR, nunca para
- * impedir que ele ligue por engano.
+ * O **ponto final de FQDN** (`exemplo.com.`) também sai — e sai por um motivo que não é
+ * conveniência. Esta função é aplicada nas **duas pontas**: ao host que CHEGA e a cada token que
+ * ENTRA em `PLATFORM_ADMIN_HOSTS`. Uma forma que ela não colapsa é segura só na ponta do pedido
+ * ("não casa com a allowlist, cai em `app`") e é **insegura na ponta da allowlist**: o token
+ * `crm.trifold.eng.br.` escapava de `HOSTS_DE_TENANT.includes(...)` em {@link hostsAdminDeclarados}
+ * e virava host admin, e então um `Host: crm.trifold.eng.br.` casava com ele. Foi medido: o gate
+ * da Story 900-65 devolvia `"admin"` para o host da Trifold por essa via. Quando uma normalização
+ * é usada nas duas pontas, cada forma que ela deixa passar é um furo na guarda, não uma
+ * inconveniência de ligação.
+ *
+ * O que continua **não** normalizado: formas Unicode/punycode. Essas só afetam a ponta do pedido
+ * (nenhuma delas é uma escrita alternativa de um literal ASCII de `HOSTS_DE_TENANT`), então
+ * continuam caindo em `"app"`, o lado seguro.
  */
 export function normalizarHost(host: string | null | undefined): string {
   const bruto = (host ?? "").trim().toLowerCase()
@@ -87,7 +118,8 @@ export function normalizarHost(host: string | null | undefined): string {
     return fim < 0 ? bruto : bruto.slice(0, fim + 1)
   }
   const doisPontos = bruto.indexOf(":")
-  return doisPontos < 0 ? bruto : bruto.slice(0, doisPontos)
+  const semPorta = doisPontos < 0 ? bruto : bruto.slice(0, doisPontos)
+  return semPorta.replace(/\.+$/, "")
 }
 
 /**
