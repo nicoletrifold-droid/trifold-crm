@@ -1,8 +1,9 @@
 # Site institucional Trifold (`trifold-design-system`)
 
-> **ATENÇÃO:** este projeto **NÃO é deployado via git.** Ele é publicado por **upload
-> direto na Vercel** (`vercel --prod`) a partir de uma pasta local completa. Push nesta
-> branch/repo **não** publica nada aqui.
+> **ATENÇÃO:** este projeto **NÃO é deployado via git.** Ele é publicado rodando
+> **`./deploy.sh`** localmente, que monta o `dist/` (com as páginas
+> pré-renderizadas) e faz upload direto na Vercel. Push nesta branch/repo **não**
+> publica nada aqui. Ver "Como publicar de verdade".
 
 O `trifold-design-system` é o site institucional de `trifold.eng.br` — um export do
 Claude Design canvas (HTML puro `*.dc.html` + `support.js` + assets), hospedado como um
@@ -19,6 +20,9 @@ mão e caberia numa code review; deixamos fora o que é binário pesado gerado p
 | ✅ | `support.js` | Runtime do template (roteamento client-side, form, animações). |
 | ✅ | `api/contact.js` | Serverless function do formulário de contato (honeypot, rate limit, allowlist de origem, Resend). Código de segurança — tem que ser auditável. |
 | ✅ | `vercel.json`, `.vercelignore` | Config de roteamento/segurança de produção, incluindo o proxy do Vind. |
+| ✅ | `deploy.sh`, `scripts/*.mjs` | Pipeline de publicação e pré-renderização (Story 90-1). É o único caminho de deploy — tem que ser revisável. |
+| ❌ | `dist/` | Build-output da pré-renderização. Regerado a cada `./deploy.sh` a partir dos `*.dc.html`; **nunca** editado à mão. |
+| ❌ | `.seo-metrics/` | Screenshots de baseline/depois e números de CLS (AC2/AC6b da Story 90-1). Artefato de verificação local, pesado e não-diffável. |
 | ❌ | `assets/` (20 MB), `uploads/` (57 MB), `preview/`, `brand_imgs/`, `.thumbnail` | ~77 MB de mídia binária gerada pelo canvas. Não diffa, não revisa, e infla o repo do CRM. |
 | ❌ | `.vercel/`, `.claude/` | Internals da CLI e memória de agente. `.claude/` estava sendo servido publicamente — ver PR #505. |
 
@@ -72,21 +76,83 @@ O `.gitignore` local implementa essa separação. Ele **não é espelho do `.ver
 
 ## Como publicar de verdade (deploy manual)
 
-O conteúdo versionado aqui sozinho **não deploya**. Para publicar uma mudança é preciso a
-pasta completa do site, com os assets. O processo cuidadoso:
+```bash
+cd landing-pages/trifold-design-system
+./deploy.sh              # monta, valida e publica em produção
+./deploy.sh --dry-run    # monta e valida, sem publicar
+```
 
-1. Montar a pasta local completa: o git já entrega `*.dc.html`, `support.js`, `api/`,
-   `vercel.json` e `.vercelignore`; falta baixar `assets/` + `uploads/` (+ `preview/`,
-   `brand_imgs/`) do **deployment de produção atual** via API da Vercel, ou reusar a cópia
-   local de trabalho se ainda existir.
-2. Aplicar a mudança desejada (incluindo, se for o caso, editar este `vercel.json`).
-3. Deploy manual de dentro da pasta:
-   ```bash
-   cd <pasta-local-completa-do-trifold-design-system>
-   vercel deploy --prod --yes --scope trifold-s-projects
-   ```
-4. Validar (o site é template client-side: `curl`+grep não prova render — validar headless).
+**É esse o único caminho.** Não rode `vercel deploy` da pasta-fonte: desde a
+Story 90-1 o que sobe não é esta pasta, é o `dist/` montado — com as 5 páginas
+institucionais pré-renderizadas. Um deploy feito à mão da pasta-fonte publica o
+site **sem** a pré-renderização, e nada avisa.
 
-Detalhes operacionais completos (SSO nos previews, protocolo de validação headless,
-gotchas de CSP, receita do proxy do Vind) estão documentados nas memórias do agente
-`@devops` (`vercel-landing-pages-projects`, `vindresidence-proxy-path-resolution`).
+O `deploy.sh` faz 5 passos e aborta em qualquer um deles:
+
+1. **Verifica `assets/` + `uploads/`.** São ~77 MB que não estão no git. Sem
+   eles o snapshot sai com imagem quebrada — e o snapshot quebrado é o que iria
+   para produção. Se faltarem, baixe-os do deployment de produção atual pela
+   API da Vercel, ou reuse a cópia local de trabalho.
+2. **Monta o `dist/`** (`scripts/build-dist.mjs`): copia os arquivos-fonte por
+   uma *allowlist* explícita + `support.js` + `api/` + `vercel.json` +
+   `.vercelignore` + a mídia, e pré-renderiza as 5 páginas com headless browser.
+   Se a pré-renderização de UMA página falhar, aquela página fica com o
+   `.dc.html`-fonte original (comportamento anterior: render 100% no cliente), o
+   erro é logado alto, e as outras quatro seguem — uma página não derruba o
+   deploy inteiro.
+3. **Gate pré-deploy** (`scripts/check-dist.mjs`): procura template cru (`{{`,
+   `<sc-for>`) **dentro do `#dc-prerender`** e reprova elemento interativo
+   sobrevivente no bloco. O grep é escopado de propósito: o `<x-dc>` sempre tem
+   `{{ }}` — é o template-fonte, e isso é correto. Se achar problema, **nada é
+   publicado**.
+4. **`vercel deploy --prod --yes --scope trifold-s-projects`** de dentro do `dist/`.
+5. **Verificação pós-deploy** (`scripts/check-live.mjs`): bate nas 5 URLs de
+   produção e confere que o HTML final não tem `{{ }}` cru fora do `<x-dc>` e
+   que as páginas que o build pré-renderizou chegaram pré-renderizadas.
+
+### A pré-renderização, em uma tela (Story 90-1)
+
+O site é um export do Claude Design canvas: HTML com `<x-dc>` renderizado 100%
+no cliente por `support.js`. Um crawler sem JS recebia `{{ s.heading }}` e
+`<sc-for …>` no lugar do conteúdo dinâmico (slides do hero, cards de
+empreendimento, posts do blog).
+
+O `support.js` **não pode ser alterado** — é gerado fora deste repositório
+(`dc-runtime/`, que não existe aqui). E ele faz **mount, não hydrate**: `boot()`
+exige encontrar um `<x-dc>` e o substitui por `<div id="dc-root">`. Publicar o
+DOM serializado no lugar do `.dc.html` mataria o `<x-dc>` e, no carregamento
+seguinte, **nada montaria** — sem carrossel, sem menu mobile, sem formulário de
+contato.
+
+Por isso o desenho é **aditivo**: o HTML de saída mantém o `<x-dc>` íntegro e
+ganha um irmão `<div id="dc-prerender">` com o DOM já renderizado, mais um
+`<script>` inline que observa `document.body` e remove esse irmão assim que
+`#dc-root` ganha filhos. Se o mount falhar, o bloco nunca é removido — o
+conteúdo real continua visível.
+
+Três detalhes que parecem cosméticos e não são:
+
+- **O bloco vem ANTES do `<x-dc>`, não depois.** Medido: depois, o CLS chegava a
+  1.0 (o bloco visível era empurrado para baixo pela altura inteira do documento
+  quando o React montava, e o `componentDidMount` de cada página lê
+  `window.innerWidth`, forçando o layout nessa janela). Antes, fica em y=0 e
+  nunca é empurrado: CLS ≤ 0.045.
+- **`<form>`/`<button>`/`<input>` são removidos fisicamente do snapshot.** A
+  cópia estática do formulário de contato não carrega handler (`onSubmit` é prop
+  React), e um submit na janela pré-mount faria `GET` nativo para a própria URL,
+  vazando nome/telefone/e-mail para a query string e para os logs. Âncoras
+  **são** preservadas — são o grafo de links interno e não carregam dado do
+  usuário.
+- **Cada `<h1>` aparece 2x no HTML servido** (um no `<x-dc>` escondido, um no
+  `#dc-prerender`). É consequência esperada do desenho aditivo. Qualquer
+  validação de "exatamente um `<h1>`" precisa contar **só dentro de
+  `#dc-prerender>`**, não no documento inteiro.
+
+Scripts auxiliares (todos em `scripts/`, nenhum roda em produção):
+`capture-metrics.mjs` (screenshots/console/CLS), `compare-metrics.mjs` (diff
+baseline × depois), `verify-prerender.mjs` (suíte das ACs 1/4/6a/7/8).
+Dependem do `@playwright/test` da raiz do monorepo — rode-os de dentro desta pasta.
+
+Detalhes operacionais complementares (SSO nos previews, gotchas de CSP, receita
+do proxy do Vind) estão documentados nas memórias do agente `@devops`
+(`vercel-landing-pages-projects`, `vindresidence-proxy-path-resolution`).
