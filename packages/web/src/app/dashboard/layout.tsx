@@ -256,6 +256,20 @@ export default async function DashboardLayout({
   // Story 75-104 — módulo Pastas (upload de documentos por link). Gate via matriz.
   const showPastas = Boolean(permissions["pastas"])
   const pastasItem = { href: "/dashboard/pastas", label: "Pastas", icon: <FolderClosed className={ICON_SIZE} /> }
+  // Story 900-64 — a marca da EMPRESA na barra lateral, no lugar da Trifold.
+  //
+  // INCONDICIONAL, diferente da leitura de `materiais_url` logo abaixo: aquela depende do módulo
+  // Materiais estar ligado, o logo tem de aparecer para toda org. `.maybeSingle()` e não
+  // `.single()` porque zero linhas NÃO é erro aqui — a leitura roda sempre e "sem linha" tem
+  // significado ("sem logo"); `.single()` devolveria `PGRST116` (HTTP 406) e poluiria o log com um
+  // erro que não é erro. Falha de leitura não trava a página: cai em `undefined`, que
+  // `resolveSidebarBrand` já trata como "sem logo customizado" — o estado seguro de hoje.
+  const { data: orgBrand } = await supabase
+    .from("organizations")
+    .select("name, logo_url")
+    .eq("id", user.orgId)
+    .maybeSingle()
+
   // Story 75-117 — módulo Central de Materiais (link externo p/ materiais de marketing).
   // Gate via matriz. URL configurável em organizations.settings.materiais_url; se vazia,
   // aponta p/ página interna de aviso (nunca link quebrado).
@@ -340,6 +354,8 @@ export default async function DashboardLayout({
         userName={user.name}
         userRole={user.role}
         basePath="/dashboard"
+        orgName={orgBrand?.name}
+        orgLogoUrl={orgBrand?.logo_url}
         atalhoDoConsole={atalhoDoConsole(await isPlatformAdmin(user.id))}
         alertCount={alertCount ?? 0}
         liveBadges={[

@@ -1456,4 +1456,97 @@ Estes dois vinham enterrados no meio da lista de considerações e **falharam na
 - Env vars **só** por `scripts/vercel-env-set.sh`/REST API; nunca `vercel env add` via stdin.
 - Fluxo AIOS por story: `@sm *draft → @po *validate → @dev *develop → @qa *qa-gate → @devops *push`.
 
+### 📍 Censo da marca fixa "Trifold" — levantamento largo, 2026-09-02 (@dev, ressalva QA-900-64-2)
+
+**Por que este censo existe.** A `900-64` (marca da empresa na barra lateral) declarou "a `900-63`
+mediu **3** superfícies que hoje mostram a marca da Trifold de forma fixa" e derivou DISSO a regra
+normativa mais forte do documento: ninguém pode dizer que a marca da empresa aparece sem o
+qualificador "só faltam login e e-mail". A régua de exclusão de cada uma das 3 é impecável — o que
+falhou foi a **LISTA** sobre a qual ela opera. O predicado da varredura herdou o viés de quem
+escreveu a AC (o caminho do asset, `logo-trifold`), e não via `metadata`, `manifest.json` nem texto
+solto. Refeito com predicado largo, por **enumeração da classe e triagem**, não por casamento
+contra a lista dos conhecidos.
+
+**Comando (reprodutível, 383 ocorrências em 186 arquivos):**
+
+```bash
+grep -rn -i trifold packages/web/src packages/web/public \
+  --include='*.ts' --include='*.tsx' --include='*.js' --include='*.mjs' --include='*.json' --include='*.css' \
+  | grep -v -E "\.(test|spec)\.(ts|tsx):|/__tests__/|/__mocks__/|/__fixtures__/"
+```
+
+**As quatro classes** (comentário separado do código pelo `linhasDeCodigo` de
+`lib/tenancy/fonte-scan.ts`, que tem estado e não é filtro por prefixo):
+
+| Classe | Ocorrências | Arquivos | O que é |
+|---|---|---|---|
+| Comentário / prosa | 101 | 52 | docblock, comentário JSX, nota de decisão. Não renderiza |
+| Nome interno | 171 | 118 | alias de pacote, domínio, slug da org da plataforma, chave de cache do service worker, cookie, constante de fallback. **Não é marca visível — não migrar** |
+| Superfície da própria plataforma | 26 | 11 | console `/platform`, política de privacidade da Trifold Engenharia LTDA, e-mails de billing/anomalia/health que vão para o time da Trifold, banner de ambiente. **Correto como está** |
+| **Marca fixa em superfície do cliente** | **85** | **45** | **O que falta migrar.** Descontando 2 legítimas por decisão (o fallback declarado da `900-64` em `sidebar-nav.tsx:337` e "fale com o suporte da Trifold" em `integrations-panel.tsx:239`): **83 em 43 arquivos** |
+
+**As 45, agrupadas por alcance** — e as três primeiras NÃO estavam no censo da `900-64`:
+
+1. **Nome do PWA instalado** — `public/manifest.json:3-4` ("Trifold CRM" / "Trifold") e
+   `public/cliente-manifest.json:3` ("Trifold — Minha Obra"). O corretor instala no celular um app
+   chamado Trifold, e é `app/broker/instalar/page.tsx:39,45,171,233` (4 ocorrências, DENTRO do app
+   do corretor) que manda ele instalar. Some-se `lib/pwa/sw-source.js:109,113`, o título default da
+   notificação push.
+2. **Título da aba do navegador** — `app/layout.tsx:22,28`. Na **mesma tela** da barra lateral que
+   a `900-64` acabou de rebrandar: o operador vê o próprio logo à esquerda e "Trifold CRM" a três
+   centímetros dali. Conserto mais barato do lote e o que apaga a contradição mais visível.
+3. **Portal do cliente FINAL** — `app/cliente/[obra_id]/_components/sidebar.tsx:83-84` (uma SEGUNDA
+   barra lateral, com `/logo-trifold.svg` fixo), `app/cliente/page.tsx:23-24,99`,
+   `app/cliente/selecionar/page.tsx:63-64`, `app/cliente/sem-obra/page.tsx:17` e
+   `app/cliente/[obra_id]/mensagens/_components/chat-feed.tsx:188,381` ("Equipe Trifold" assinando
+   a mensagem da empresa). Alcance **externo** — o mesmo argumento que a `900-64` usa para colocar
+   o e-mail acima do login.
+4. **E-mails transacionais** (já nomeado pela `900-64`, e maior do que ela contou) —
+   `lib/notificacoes.ts` (9, incluindo a wordmark `TRIFOLD` em 4 rodapés HTML),
+   `lib/email-layout/components/password-action.ts` (6), `lib/email-layout/index.ts:15`,
+   `lib/email.ts:24`, `lib/roleta/notify-broker.ts:476,544`,
+   `lib/obras/aprovacao-notifications.ts:79`, e os assuntos `[Trifold] …` de
+   `api/admin/obras/[obra_id]/aprovacoes/[id]/route.ts:318,325`,
+   `api/cron/aprovacoes-digest/route.ts:61`, `api/cron/obras-approval-reminder/route.ts:68`,
+   `api/cron/appointment-email-reminders/route.ts:83,104`.
+5. **Páginas públicas por token** (o lead da empresa vê antes de virar cliente) —
+   `app/formulario/[token]/page.tsx:21,26,75,82` + `form-runner.tsx:491`,
+   `app/agendar/[token]/page.tsx:37,53,64`, `app/agendar/cancelar/[token]/page.tsx:86,121`,
+   `app/pasta/[token]/_components/pasta-public.tsx:64`,
+   `app/pasta/nova/[token]/_components/pasta-nova-public.tsx:24` + `page.tsx:29`.
+6. **WhatsApp da Nicole** — `lib/broker/transition-message.ts:34-35` ("nosso consultor especialista
+   da Trifold", dito ao lead da empresa cliente), `lib/whatsapp/opening-context.ts:56`,
+   `lib/appointments/visit-whatsapp.ts:253`, `api/cron/appointment-whatsapp-reminders/route.ts:147`.
+7. **Defaults de DADO, não de tela** (mais traiçoeiros: gravam a marca no banco) — `"Stand Trifold"`
+   em `api/appointments/route.ts:171`, exibido por `dashboard/agenda/page.tsx:390` e
+   `broker/agenda/page.tsx:325`; `sender_name: "Trifold"` em `lib/email.ts:24`,
+   `api/admin/email-settings/route.ts:8` e `email-settings-form.tsx:17`.
+8. **Login** — `app/login/page.tsx:46,47,54,240` (já nomeado) e `app/reset-senha/page.tsx:38,39,136`,
+   que é a **página de destino dos próprios e-mails** do item 4.
+9. **Painel do operador** — `dashboard/brindes/_components/print-modal.tsx:124`,
+   `destinatario-modal.tsx:392`, `configuracoes/integracoes/google-integration-card.tsx:56`,
+   `sistema/email-templates/_components/visual-editor.tsx:73,268` (o rodapé
+   "©2026 TRIFOLD Engenharia" que o editor injeta como default em template de OUTRA empresa),
+   `template-form.tsx:199`, `lib/pdf/analytics-report-pdf.tsx:223`.
+
+**Efeito na prioridade das stories futuras.** A `900-64` sugeriu "e-mail > login". Com o censo
+completo, a ordem passa a ser:
+
+1. **`app/layout.tsx` (título da aba)** — uma linha por org, apaga a contradição na mesma tela que
+   a `900-64` já rebrandou. Barato e imediato.
+2. **E-mails transacionais** — segue no topo por alcance externo e volume de pontos de chamada.
+3. **Portal do cliente + manifests/PWA** — empatam com o e-mail em alcance externo; o PWA tem o
+   agravante de o nome ficar *instalado* no celular do corretor.
+4. **Páginas públicas por token e mensagens da Nicole** — o lead vê a marca errada antes de existir
+   relação comercial.
+5. **Defaults de dado** — precisam de migração de dado já gravado, não só de código.
+6. **Login** — por último, como a `900-64` argumentou: só é visto por quem já sabe onde está
+   entrando.
+
+⚠️ **Regra que sai daqui, para o @sm e para o @po:** quando uma story declarar "medimos N
+superfícies", **o N é alegação**. Refaça a varredura com predicado mais largo que o da story (a
+palavra da marca, não o caminho do asset), inclua o que não é `.tsx` (`public/*.json`, `metadata`
+de `layout.tsx`) e **classifique** — enumerar a classe e triar acha o que casar contra a lista dos
+conhecidos nunca acha.
+
 O epic preserva a operação da Trifold Engenharia em produção enquanto converte o CRM em SaaS vendável."
