@@ -298,6 +298,7 @@ export async function ensureAdminInvited(
     actionLink,
     siteUrl,
     mode: "create",
+    orgId,
   })
 
   // `sendEmail` NUNCA lança: devolve `{ id, error }`. Ignorar o `error` era o último ponto em

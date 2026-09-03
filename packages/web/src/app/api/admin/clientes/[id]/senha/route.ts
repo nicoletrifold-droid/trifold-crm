@@ -99,6 +99,7 @@ export async function POST(
       actionLink,
       siteUrl,
       mode: "reset",
+      orgId: appUser.org_id,
     })
 
     // Rota staff-autenticada: mantém `await` para propagar erro de envio (não há

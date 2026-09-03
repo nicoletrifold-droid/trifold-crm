@@ -212,11 +212,20 @@ export async function requestPasswordReset(
   // consome via verifyOtp({ token_hash, type }) e redireciona para `next`. [Story 75-139]
   const actionLink = `${baseUrl}/auth/callback?token_hash=${linkData.properties.hashed_token}&type=recovery&next=/reset-senha`
 
+  // Story 900-67 (AC4): UMA leitura de `org_id` serve o cabeçalho do e-mail E o `sendEmail`
+  // abaixo. Declarada aqui (antes era logo acima do `after()`) para que as duas não possam
+  // divergir — se o remetente é de uma org, a marca do cabeçalho tem de ser da mesma org.
+  // O `?? undefined` é o que já existia para o `sendEmail`; não é uma guarda nova (`users.org_id`
+  // é NOT NULL no banco), e `isMarcaTrifold(undefined)` é `false` — falha para o texto, não para
+  // a marca da Trifold.
+  const emailOrgId = appUser.org_id ?? undefined
+
   const { subject, html } = renderPasswordActionEmail({
     userName: appUser.name ?? 'usuário',
     actionLink,
     siteUrl: baseUrl,
     mode: 'reset',
+    orgId: emailOrgId,
   })
 
   // `after()` (Next 16, estável desde v15.1) agenda o envio para DEPOIS que a resposta
@@ -226,7 +235,6 @@ export async function requestPasswordReset(
   // round-trip ao Resend completar e o e-mail nunca era enviado (Story 75-139).
   // Como o trabalho roda após a resposta, a mitigação de timing side-channel da
   // anti-enumeração é preservada: a latência de resposta não vaza se o e-mail existe.
-  const emailOrgId = appUser.org_id ?? undefined
   const emailTo = appUser.email as string
   after(async () => {
     const res = await sendEmail({

@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
           <p>Passando para lembrar que você tem uma visita ao decorado <strong>${propertyName}</strong> agendada para amanhã, <strong>${data}</strong>, às <strong>${hora}</strong>, com <strong>${leadName}</strong>.</p>
           <p><strong>Endereço:</strong> Av. Nildo Ribeiro, 1337 - Maringá - PR</p>
           <p>Até lá! ☕</p>`,
-          { orgName: "Trifold" }
+          { orgName: "Trifold", orgId: appointment.org_id }
         )
         const result = await sendEmail({
           to: broker.email,
@@ -101,7 +101,7 @@ export async function GET(request: NextRequest) {
           <p><strong>Endereço:</strong> Av. Nildo Ribeiro, 1337 - Maringá - PR</p>
           <p>Te esperamos com muito carinho! Em caso de dúvidas, é só responder este e-mail. ☕</p>
           <p style="margin-top:16px">${cancelButtonHtml}</p>`,
-          { orgName: "Trifold" }
+          { orgName: "Trifold", orgId: appointment.org_id }
         )
         const result = await sendEmail({
           to: lead.email,

@@ -12,7 +12,7 @@ export function renderBaseLayout(
   content: string,
   options: EmailLayoutOptions = {}
 ): string {
-  const { orgName = 'Trifold', unsubscribeUrl, previewText } = options
+  const { orgName = 'Trifold', orgId, unsubscribeUrl, previewText } = options
   const c = emailTokens.colors
   const f = emailTokens.fonts
   const s = emailTokens.spacing
@@ -33,7 +33,7 @@ export function renderBaseLayout(
     <tr>
       <td align="center" style="padding:${s.lg} ${s.md};">
         <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:${emailTokens.maxWidth};width:100%;background-color:${c.surface};border-radius:${emailTokens.borderRadius.card};overflow:hidden;">
-          ${renderHeader(orgName)}
+          ${renderHeader({ orgName, orgId })}
           <tr>
             <td style="padding:${s.xl};color:${c.text.primary};font-family:${f.base};font-size:${f.sizes.base};line-height:1.6;">
               ${content}
