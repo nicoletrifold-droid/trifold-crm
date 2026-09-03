@@ -8,6 +8,7 @@ import {
 } from "@web/lib/roleta/business-time"
 import { sendPushToUser } from "@web/lib/server/push-service"
 import { formatDuration } from "@web/lib/reports/daily-leads-report"
+import { tentarAppUrl } from "@web/lib/tenancy/app-url-fallback"
 
 // Story 75-50 — escalonamento pro gestor por WhatsApp (template alerta_sla_gestor),
 // enviado a cada telefone de SLA_ESCALATION_PHONES (Fernanda + Alexandre).
@@ -58,7 +59,6 @@ async function sendGestorSlaWhatsApp(
 // via sla_alerta_corretor_em / sla_alerta_gestor_em. Kill-switch sla_alertas_enabled.
 // Dry-run: GET ?dry=1 (calcula e relata, NÃO envia/marca) — para validar antes de ligar.
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://crm.trifold.eng.br"
 const RECENT_HOURS = 48 // evita rajada: só leads distribuídos recentemente
 
 type CfgRow = {
@@ -227,13 +227,19 @@ export async function GET(request: NextRequest) {
       if (lead.assigned_broker_id && corretorElapsed >= corretorMin && !lead.sla_alerta_corretor_em) {
         wouldAlert.push({ lead: lead.id, tipo: "corretor", elapsed: corretorElapsed })
         if (!dryRun) {
-          await sendPushToUser(admin, lead.assigned_broker_id, {
-            title: "⏱ Lead aguardando atendimento",
-            body: `${lead.name ?? "Um lead"} está há ${corretorElapsed} min sem atendimento. Atenda agora.`,
-            url: `${APP_URL}/broker/leads/${lead.id}`,
-          }).catch((e: unknown) => console.error("[sla] push corretor:", e))
-          markCorretor.push(lead.id)
-          alertasCorretor++
+          // Story 900-66 (AC4) — o push É o alerta ao corretor: sem URL base ele não sai, e o
+          // lead NÃO é marcado como alertado. Marcar sem enviar suprimiria para sempre um
+          // alerta que nunca aconteceu. As demais orgs do laço seguem normalmente.
+          const basePush = tentarAppUrl(process.env.NEXT_PUBLIC_APP_URL, "cron/sla-alerts:corretor", { orgId })
+          if (basePush.ok) {
+            await sendPushToUser(admin, lead.assigned_broker_id, {
+              title: "⏱ Lead aguardando atendimento",
+              body: `${lead.name ?? "Um lead"} está há ${corretorElapsed} min sem atendimento. Atenda agora.`,
+              url: `${basePush.url}/broker/leads/${lead.id}`,
+            }).catch((e: unknown) => console.error("[sla] push corretor:", e))
+            markCorretor.push(lead.id)
+            alertasCorretor++
+          }
         }
       }
 
@@ -253,11 +259,16 @@ export async function GET(request: NextRequest) {
           // Push p/ o gestor-usuário (Fernanda) — Story 75-82: SÓ enquanto o bolsão está
           // OFF. Com o bolsão ligado, a Fernanda recebe o resumo do bolsão (30min) no lugar.
           if (gestorUserId && !cfg.bolsao_enabled) {
-            await sendPushToUser(admin, gestorUserId, {
-              title: "Lead sem atendimento (SLA)",
-              body: `${lead.name ?? "Lead"} (${brokerNm}) está há ${tempo} sem atendimento.`,
-              url: `${APP_URL}/dashboard/leads/${lead.id}`,
-            }).catch((e: unknown) => console.error("[sla] push gestor:", e))
+            // Story 900-66 (AC4) — sem URL base este push não sai. `markGestor` continua fora
+            // deste `if`: o escalonamento por WhatsApp acima (que não leva link) aconteceu.
+            const basePush = tentarAppUrl(process.env.NEXT_PUBLIC_APP_URL, "cron/sla-alerts:gestor", { orgId })
+            if (basePush.ok) {
+              await sendPushToUser(admin, gestorUserId, {
+                title: "Lead sem atendimento (SLA)",
+                body: `${lead.name ?? "Lead"} (${brokerNm}) está há ${tempo} sem atendimento.`,
+                url: `${basePush.url}/dashboard/leads/${lead.id}`,
+              }).catch((e: unknown) => console.error("[sla] push gestor:", e))
+            }
           }
           markGestor.push(lead.id)
           escalonamentos++

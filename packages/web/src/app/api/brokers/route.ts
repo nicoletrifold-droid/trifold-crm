@@ -3,6 +3,7 @@ import { requireAuth, requireCapability } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { sendEmail } from "@web/lib/email"
 import { renderPasswordActionEmail } from "@web/lib/email-layout"
+import { tentarAppUrl } from "@web/lib/tenancy/app-url-fallback"
 import { normalizePhoneBR } from "@trifold/shared"
 
 export async function GET() {
@@ -129,7 +130,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Step 4: Generate password setup link and send branded email
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://crm.trifold.eng.br"
+    // Story 900-66 (AC4) — sem URL base não sai convite: o corretor JÁ foi criado, então a
+    // resposta 201 é a mesma; o que não acontece é o e-mail com link para a marca errada.
+    const base = tentarAppUrl(process.env.NEXT_PUBLIC_SITE_URL, "api/brokers:POST(user_id existente)", {
+      orgId: appUser.org_id,
+    })
+    if (!base.ok) return NextResponse.json({ data: broker }, { status: 201 })
+    const siteUrl = base.url
     const { data: linkData } = await adminSupabase.auth.admin.generateLink({
       type: "recovery",
       email: body.email.trim(),
@@ -288,14 +295,21 @@ export async function POST(request: NextRequest) {
         .eq("id", targetUser.id)
 
       // Envia link de criação de senha
-      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://crm.trifold.eng.br"
-      const { data: linkData } = await adminSupabase.auth.admin.generateLink({
-        type: "recovery",
-        email: (targetUser.email as string).trim(),
-        options: { redirectTo: `${siteUrl}/reset-senha` },
+      // Story 900-66 (AC4) — sem URL base o convite não sai; a criação do usuário e do broker
+      // segue normalmente, que é o que o `if` externo já fazia quando o link falhava.
+      const base = tentarAppUrl(process.env.NEXT_PUBLIC_SITE_URL, "api/brokers:POST(criação completa)", {
+        orgId: appUser.org_id,
       })
+      const siteUrl = base.ok ? base.url : null
+      const { data: linkData } = siteUrl
+        ? await adminSupabase.auth.admin.generateLink({
+            type: "recovery",
+            email: (targetUser.email as string).trim(),
+            options: { redirectTo: `${siteUrl}/reset-senha` },
+          })
+        : { data: null }
 
-      if (linkData?.properties?.hashed_token) {
+      if (siteUrl && linkData?.properties?.hashed_token) {
         // `action_link` usa /auth/v1/verify (verify + fragment) e não chega em /reset-senha.
         // Link direto para /auth/callback com `hashed_token` (verifyOtp). [Story 75-139]
         const actionLink = `${siteUrl}/auth/callback?token_hash=${linkData.properties.hashed_token}&type=recovery&next=/reset-senha`

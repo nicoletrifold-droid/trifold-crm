@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { sendEmail } from "@web/lib/email"
+import { tentarAppUrl } from "@web/lib/tenancy/app-url-fallback"
 import { sendPushToUser } from "@web/lib/server/push-service"
 import {
   hojeSaoPaulo,
@@ -27,7 +28,6 @@ import {
 //   SEM filtro org_id — dado da plataforma). Guard CRON_SECRET. Dry-run: GET ?dry=1.
 // Best-effort: erro numa linha/admin não derruba o restante (NFR-3).
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://crm.trifold.eng.br"
 
 // Status que NUNCA disparam alerta (suprimem o motor). 'paid' = pago; 'postponed'/'skipped' =
 // decisão manual do admin. Candidatos do cron = tudo que NÃO está nesta lista.
@@ -71,7 +71,9 @@ function buildMensagem(
   serviceName: string,
   valor: string,
   vencBr: string,
-  distancia: number
+  distancia: number,
+  /** Story 900-66 — base do link, resolvida pelo handler (que sabe abortar quando não há). */
+  appUrl: string
 ): { subject: string; pushTitle: string; pushBody: string; html: string } {
   let situacao: string
   let acao: string
@@ -102,7 +104,7 @@ function buildMensagem(
     `<p>A fatura do serviço <strong>${serviceName}</strong> ${situacao}.</p>` +
     `<p>Valor esperado: <strong>${valor}</strong> · Vencimento: ${vencBr}</p>` +
     `<p>${acao}</p>` +
-    `<p><a href="${APP_URL}/dashboard">Abrir o painel</a></p>`
+    `<p><a href="${appUrl}/dashboard">Abrir o painel</a></p>`
 
   return { subject, pushTitle, pushBody, html }
 }
@@ -121,6 +123,14 @@ export async function GET(request: NextRequest) {
   const now = new Date()
   const hoje: SaoPauloDate = hojeSaoPaulo(now)
   const hojeIso = toIsoDate(hoje)
+
+  // Story 900-66 (AC4) — quem não tem URL não envia. Resolvido ANTES do laço porque a env é a
+  // mesma para todo item: por item, o único efeito seria repetir o log. Nenhum alerta sai, e
+  // nenhum `last_alerted_on` é carimbado — ligada a URL, os alertas do dia voltam a sair.
+  const base = tentarAppUrl(process.env.NEXT_PUBLIC_APP_URL, "cron/billing-reminders")
+  if (!base.ok) {
+    return NextResponse.json({ ok: true, dryRun, hoje: hojeIso, skipped: "app_url_indisponivel" })
+  }
 
   const selectCols =
     "id, service_id, due_date, expected_amount, currency, billing_cycle, alert_days_before, status, last_alerted_on, platform_services!inner(slug, name, enabled)"
@@ -210,7 +220,8 @@ export async function GET(request: NextRequest) {
             serviceName,
             valor,
             vencBr,
-            distancia
+            distancia,
+            base.url
           )
 
           for (const a of admins) {
@@ -226,7 +237,7 @@ export async function GET(request: NextRequest) {
               sendPushToUser(admin, a.id, {
                 title: pushTitle,
                 body: pushBody,
-                url: `${APP_URL}/dashboard`,
+                url: `${base.url}/dashboard`,
               }).catch((e: unknown) => {
                 alertErrors++
                 console.error("[billing-reminders] push:", a.id, e)

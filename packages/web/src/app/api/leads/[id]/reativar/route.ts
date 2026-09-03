@@ -7,6 +7,7 @@ import { logAudit, getRequestIp } from "@web/lib/audit"
 import { PERDIDO_STAGE_IDS } from "@web/lib/leads/stage-filters"
 import { distributeLeadToNextBroker } from "@web/lib/roleta/distributor"
 import { STAGE_IDS } from "@trifold/shared"
+import { tentarAppUrl } from "@web/lib/tenancy/app-url-fallback"
 
 // Valor sentinela do seletor: em vez de um corretor específico, devolve o lead à roleta
 // (distribuição automática na ordem dela).
@@ -21,7 +22,6 @@ const ROLETA = "__roleta__"
 // (roleta/distributor) é por ETAPA atual, então ao sair de Perdido o lead volta a fluir sem
 // conflito (ver distributor.ts / 156_roleta_pick_no_perdido.sql).
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://crm.trifold.eng.br"
 
 type EligibleBroker = { userId: string; name: string }
 
@@ -257,11 +257,18 @@ export async function POST(
     ip_address: getRequestIp(request.headers),
   })
 
-  void sendPushToUser(admin, brokerUserId, {
-    title: "Lead reativado para você",
-    body: `${lead.name ?? "Um lead"} voltou para atendimento. Motivo: ${motivo}`,
-    url: leadDeepLink(APP_URL, target.role as string, id), // Story 75-226: sdr → /dashboard
-  }).catch((e: unknown) => console.error("[reativar] push:", e))
+  // Story 900-66 (AC4) — sem URL base o push não sai. A reativação em si já aconteceu e o
+  // 200 não muda: o push é best-effort desde sempre (`void ... .catch`).
+  const base = tentarAppUrl(process.env.NEXT_PUBLIC_APP_URL, "api/leads/[id]/reativar", {
+    orgId: lead.org_id,
+  })
+  if (base.ok) {
+    void sendPushToUser(admin, brokerUserId, {
+      title: "Lead reativado para você",
+      body: `${lead.name ?? "Um lead"} voltou para atendimento. Motivo: ${motivo}`,
+      url: leadDeepLink(base.url, target.role as string, id), // Story 75-226: sdr → /dashboard
+    }).catch((e: unknown) => console.error("[reativar] push:", e))
+  }
 
   return NextResponse.json({ ok: true })
 }

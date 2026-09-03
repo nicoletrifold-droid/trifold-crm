@@ -4,6 +4,7 @@ import { createAdminClient } from "@web/lib/supabase/admin"
 import { sendEmail } from "@web/lib/email"
 import { renderPasswordActionEmail } from "@web/lib/email-layout"
 import { logAudit, getRequestIp } from "@web/lib/audit"
+import { tentarAppUrl } from "@web/lib/tenancy/app-url-fallback"
 
 
 export async function POST(
@@ -72,7 +73,19 @@ export async function POST(
 
   // ── Opção 1: Enviar e-mail de redefinição ─────────────────────────────
   if (action === "send_reset_email") {
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://crm.trifold.eng.br"
+    // Story 900-66 (AC4) — rota staff-autenticada e síncrona: sem URL base o e-mail NÃO sai, e
+    // quem clicou precisa saber disso. 503 em vez de 500 porque é indisponibilidade de
+    // configuração, não erro do pedido.
+    const base = tentarAppUrl(process.env.NEXT_PUBLIC_SITE_URL, "api/admin/clientes/[id]/senha", {
+      orgId: appUser.org_id,
+    })
+    if (!base.ok) {
+      return NextResponse.json(
+        { error: "URL da aplicação indisponível para esta organização — e-mail não enviado." },
+        { status: 503 }
+      )
+    }
+    const siteUrl = base.url
 
     // generateLink (sem envio nativo) + Resend, substituindo resetPasswordForEmail.
     // redirectTo corrigido de /portal/reset-password (inexistente) para /reset-senha (AC2).

@@ -9,6 +9,7 @@ import {
   type OrgAtiva,
 } from "@web/lib/tenancy/for-each-org"
 import { trifoldOrgId } from "@web/lib/tenancy/trifold-org"
+import { tentarAppUrl } from "@web/lib/tenancy/app-url-fallback"
 
 /**
  * Story 87-3 — reconciliação diária entre o que a Nicole AFIRMOU e o que existe
@@ -41,7 +42,6 @@ import { trifoldOrgId } from "@web/lib/tenancy/trifold-org"
 // A rodada de 60 dias lê ~2.500 mensagens e cruza com os appointments.
 export const maxDuration = 300
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://crm.trifold.eng.br"
 const MAX_DIAS = 180
 /** Teto de alertas por rodada — a retroativa de 60 dias não pode virar 12 pushes. */
 const MAX_ALERTAS_TELEGRAM = 10
@@ -231,7 +231,15 @@ async function reconciliarOrg(
     // (a guarda de interrogação do Epic 88 é o conserto disso, não heurística
     // nova aqui). Itera os REIVINDICADOS: sem isso, o índice único tornaria a
     // linha única e mesmo assim os dois lados alertariam.
-    const avisos: string[] = reivindicados.slice(0, MAX_ALERTAS_TELEGRAM).map(
+    // Story 900-66 (AC4) — o deep link É metade do valor do alerta ("loop detectado NESTA
+    // conversa"). Sem URL base, o Telegram NÃO sai; o caso continua GRAVADO em `system_events`
+    // logo acima (rastreável), e as demais orgs do laço seguem.
+    const baseAviso = tentarAppUrl(process.env.NEXT_PUBLIC_APP_URL, "cron/nicole-agenda-reconcile", {
+      orgId,
+    })
+    const avisos: string[] = !baseAviso.ok
+      ? []
+      : reivindicados.slice(0, MAX_ALERTAS_TELEGRAM).map(
       (a) =>
         `⚠️ *Nicole afirmou visita SEM LASTRO*\n\n` +
         `Lead: *${a.lead_nome}*\n` +
@@ -239,9 +247,9 @@ async function reconciliarOrg(
         `Afirmou a visita para: *${a.afirmado_para_brt} BRT*\n` +
         `Não existe appointment correspondente.\n\n` +
         `_"${a.trecho}"_\n\n` +
-        `${APP_URL}/dashboard/leads/${a.lead_id}`,
+        `${baseAviso.url}/dashboard/leads/${a.lead_id}`,
     )
-    if (reivindicados.length > MAX_ALERTAS_TELEGRAM) {
+    if (baseAviso.ok && reivindicados.length > MAX_ALERTAS_TELEGRAM) {
       avisos.push(
         `⚠️ Reconciliação de agenda: +${reivindicados.length - MAX_ALERTAS_TELEGRAM} casos sem lastro além dos listados (janela de ${dias}d).`,
       )

@@ -6,6 +6,7 @@ import { sendPushToUser } from "@web/lib/server/push-service"
 import { logWhatsappSend } from "@web/lib/whatsapp/log-send"
 import { leadDeepLink } from "@web/lib/leads/lead-url"
 import { logEvent } from "@web/lib/logger"
+import { tentarAppUrl } from "@web/lib/tenancy/app-url-fallback"
 
 interface NotifyBrokerParams {
   orgId: string
@@ -60,7 +61,16 @@ export async function notifyBroker(params: NotifyBrokerParams): Promise<NotifyRe
   const admin = createAdminClient()
   const result: NotifyResult = { push: false, email: false, whatsapp: false }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://crm.trifold.eng.br"
+  // Story 900-66 (AC4) — os TRÊS canais desta função carregam o deep link do lead (o push, o
+  // botão do e-mail e o botão dinâmico do template HSM). Sem URL base, nada é enviado, e o
+  // resultado devolvido é o mesmo `{ push:false, email:false, whatsapp:false }` que a função já
+  // usa para dizer "nenhum canal saiu".
+  const base = tentarAppUrl(process.env.NEXT_PUBLIC_APP_URL, "lib/roleta/notify-broker:notifyBroker", {
+    orgId,
+    leadId: lead.id,
+  })
+  if (!base.ok) return result
+  const appUrl = base.url
   // Story 75-226: deep link segue o app do dono (SDR → /dashboard).
   // Limitação conhecida: o template HSM `novo_lead_corretor` tem botão com base
   // FIXA /broker/leads aprovada na Meta — p/ SDR o botão cai no /dashboard raiz.
@@ -366,8 +376,14 @@ export async function notifyImobiliaria(params: NotifyImobiliariaParams): Promis
 
   if (!user?.email) return
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://crm.trifold.eng.br"
-  const leadUrl = `${appUrl}/dashboard/leads/${lead.id}`
+  // Story 900-66 (AC4) — push, e-mail e WhatsApp desta função levam ao lead: sem URL base
+  // nenhum dos três sai.
+  const base = tentarAppUrl(process.env.NEXT_PUBLIC_APP_URL, "lib/roleta/notify-broker:notifyImobiliaria", {
+    orgId,
+    leadId: lead.id,
+  })
+  if (!base.ok) return
+  const leadUrl = `${base.url}/dashboard/leads/${lead.id}`
 
   await Promise.allSettled([
     sendPushToUser(admin, userId, { title, body: messageBody, url: leadUrl })

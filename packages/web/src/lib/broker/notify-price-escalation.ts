@@ -3,6 +3,7 @@ import "server-only"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { sendPushToUser } from "@web/lib/server/push-service"
 import { leadDeepLink } from "@web/lib/leads/lead-url"
+import { tentarAppUrl } from "@web/lib/tenancy/app-url-fallback"
 
 /**
  * Story 75-361 — chama o corretor quando o lead insiste em preço.
@@ -75,7 +76,13 @@ export async function notifyBrokerOfPriceEscalation(
       params.brokerUserId ?? (lead?.assigned_broker_id as string | null) ?? null
     if (!brokerUserId) return
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://crm.trifold.eng.br"
+    // Story 900-66 (AC4) — o push É um deep link para o lead; sem URL base ele não sai.
+    const base = tentarAppUrl(process.env.NEXT_PUBLIC_APP_URL, "lib/broker/notify-price-escalation", {
+      orgId,
+      leadId,
+    })
+    if (!base.ok) return
+    const appUrl = base.url
     const owner = Array.isArray(lead?.owner) ? lead?.owner[0] : lead?.owner
     const payload = buildPriceEscalationPush({
       leadName: (lead?.name as string | null) ?? null,
