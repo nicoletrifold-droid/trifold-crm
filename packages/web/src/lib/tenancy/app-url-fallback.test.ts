@@ -8,12 +8,12 @@
  * fecharia com um quarto do trabalho não feito e a suíte verde. É a armadilha "régua que prende
  * presença mas não alcance".
  *
- * A AC10 varre o **código-fonte de produção** e afirma, na forma de conjunto, exatamente quais
- * arquivos ainda podem conter o literal. `.toEqual` sobre as chaves ordenadas, nunca `.has(x)`:
- * `.has` só prova que os declarados estão lá e fica verde com sete arquivos a mais que ninguém
- * migrou.
+ * A AC10 varre o **código-fonte de produção** e afirma, na forma de **mapa arquivo → contagem**,
+ * exatamente quais arquivos ainda podem conter o literal e quantas vezes cada um. `.toEqual` sobre
+ * o mapa inteiro, nunca `.has(x)`: `.has` só prova que os declarados estão lá e fica verde com
+ * sete arquivos a mais que ninguém migrou.
  *
- * ## Duas cegueiras que esta régua NÃO pode herdar
+ * ## Três cegueiras que esta régua NÃO pode herdar
  *
  * 1. **Comentário.** `lib/notificacoes.ts` tem seis comentários citando o host em prosa (a
  *    documentação dos templates do WhatsApp). Uma régua de texto cru os contaria como sítios.
@@ -23,12 +23,26 @@
  *    casava linha a linha — e por isso foi cega ao sítio 28 (`app/login/actions.ts`), uma cadeia
  *    de quatro termos em cinco linhas com o literal em aspas simples. Aqui a busca é pelo **host
  *    nu**, no arquivo inteiro como texto: não há aspa nem quebra de linha que a driblem.
+ * 3. **O nome do arquivo perdoando o sítio que mora nele.** Achado do gate (QA-900-66-1) e MEDIDO:
+ *    um conjunto de NOMES fica verde quando o defeito exato que esta story fecha — o literal cru
+ *    de volta — cai num arquivo que já estava na lista por outro motivo. Dois dos seis declarados
+ *    hospedam sítios migrados (`lib/notificacoes.ts` ×3, `billing-reminders` ×1): eram 4 dos 29
+ *    sítios descobertos, e são justamente os avisos ao CLIENTE FINAL. Daí a CONTAGEM ao lado de
+ *    cada nome — o perdão é do literal declarado, nunca do arquivo.
+ *
+ * ## A régua irmã: ausência do literal não é presença do resolver
+ *
+ * A varredura acima é de AUSÊNCIA. Um sítio desmigrado para `?? ""` some do literal sem passar a
+ * chamar ninguém, e ficaria verde (QA-900-66-2, medido no gate). Por isso o `it` de PRESENÇA
+ * afirma o número de CHAMADAS de `tentarAppUrl` **e** o de arquivos que as hospedam: a contagem
+ * de chamadas pega o sítio desmigrado dentro de um arquivo que tem outros; a de arquivos, o
+ * arquivo inteiro desmigrado.
  */
 import { describe, it, expect, afterEach } from "vitest"
 import fs from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
-import { arquivosDeProducao, codigoDe } from "./fonte-scan"
+import { arquivosDeProducao, ocorrenciasNoCodigo } from "./fonte-scan"
 import { trifoldOrgId } from "./trifold-org"
 import {
   AppUrlIndisponivelError,
@@ -150,46 +164,52 @@ const SRC = path.resolve(AQUI, "../..") // packages/web/src
 /** O host nu. Sem aspas, sem protocolo: nenhuma das duas formas de aspas o dribla. */
 const HOST = "crm.trifold.eng.br"
 
-/**
- * Quantas vezes o host aparece nas linhas de CÓDIGO de `fonte` — arquivo inteiro como texto,
- * não linha a linha.
- */
-function ocorrenciasDoHost(fonte: string): number {
-  return codigoDe(fonte).split(HOST).length - 1
-}
+/** A chamada do resolver, como texto — a agulha da régua de PRESENÇA. */
+const CHAMADA = "tentarAppUrl("
+
+/** O módulo desta story: hospeda a DEFINIÇÃO de `tentarAppUrl`, não uma chamada. */
+const MODULO = "lib/tenancy/app-url-fallback.ts"
 
 /**
- * Os arquivos de produção que AINDA contêm o host, e por que cada um pode.
+ * Os arquivos de produção que AINDA contêm o host, **quantas vezes cada um**, e por que pode.
  *
  * Cinco vêm da tabela "O que fica FORA" da story, um por linha dela. O sexto é o módulo criado
  * por esta story — a **única declaração** do literal, que é o ponto: o valor passou a ter um dono.
  *
  * ⚠️ A AC10.4 listou cinco, porque foi escrita antes de o resolver existir. O sexto não é uma
  * exclusão a mais: é o destino para onde os 28 literais migraram. Registrado no Dev Agent Record.
+ *
+ * ⚠️ É um MAPA, não uma lista, por causa da cegueira 3 do cabeçalho: `lib/notificacoes.ts` e
+ * `billing-reminders` hospedam sítios JÁ migrados, e sob uma lista de nomes o literal cru podia
+ * voltar para dentro deles com a suíte verde. A contagem é o que fecha isso — cada número abaixo
+ * foi medido contra a árvore, e subir qualquer um deles é o defeito que a AC10 existe para pegar.
  */
-const RESIDUAL_DECLARADO = [
-  // A ÚNICA declaração do literal — para onde os 28 sítios apontam agora (AC2).
-  "lib/tenancy/app-url-fallback.ts",
+const RESIDUAL_DECLARADO: Record<string, number> = {
+  // A ÚNICA declaração do literal — para onde os 28 sítios apontam agora (AC2). Se ele se
+  // multiplicar aqui dentro, a concentração que a story entrega já começou a se desfazer.
+  [MODULO]: 1,
   // Tabela "O que fica FORA", linha 2: alvo EXCLUSIVO da Story 900-67 (o `isTrifold` por regex
   // e o logo do e-mail). Incluir aqui criaria dois donos para o mesmo arquivo.
-  "lib/email-layout/components/header.ts",
+  "lib/email-layout/components/header.ts": 1,
   // Linha 6: `CRM_BASE` é constante INCONDICIONAL (sem `??`, sem env) — não há ramo "não sei"
-  // para redirecionar. Mesma classe do `"[Trifold]"` do billing.
-  "lib/notificacoes.ts",
-  // Linha 6: texto EXIBIDO ao olho humano dentro de uma frase de alerta, não roteamento.
-  "app/api/cron/billing-reminders/route.ts",
-  // Linha 6: texto exibido — "Acesse crm.trifold.eng.br pelo Safari".
-  "app/broker/instalar/page.tsx",
+  // para redirecionar. Mesma classe do `"[Trifold]"` do billing. As outras 3 ocorrências que o
+  // arquivo tinha eram sítios, e migraram: por isso 1, e não "o arquivo está perdoado".
+  "lib/notificacoes.ts": 1,
+  // Linha 6: texto EXIBIDO ao olho humano dentro de uma frase de alerta, não roteamento. O sítio
+  // de `APP_URL` que morava aqui migrou — daí 1.
+  "app/api/cron/billing-reminders/route.ts": 1,
+  // Linha 6: texto exibido — "Acesse crm.trifold.eng.br pelo Safari", três vezes na mesma página.
+  "app/broker/instalar/page.tsx": 3,
   // Linha 6: texto exibido no passo a passo de cadastro de corretor.
-  "app/dashboard/configuracoes/corretores/novo/page.tsx",
-]
+  "app/dashboard/configuracoes/corretores/novo/page.tsx": 1,
+}
 
 describe("AC10 — nenhum sítio de fallback ficou para trás", () => {
   const arquivos = arquivosDeProducao(SRC)
 
   const residual = new Map<string, number>()
   for (const caminho of arquivos) {
-    const n = ocorrenciasDoHost(fs.readFileSync(caminho, "utf-8"))
+    const n = ocorrenciasNoCodigo(fs.readFileSync(caminho, "utf-8"), HOST)
     if (n > 0) residual.set(path.relative(SRC, caminho).split(path.sep).join("/"), n)
   }
 
@@ -200,29 +220,44 @@ describe("AC10 — nenhum sítio de fallback ficou para trás", () => {
   })
 
   it("a lista declarada tem exatamente os seis arquivos autorizados", () => {
-    expect(RESIDUAL_DECLARADO).toHaveLength(6)
+    expect(Object.keys(RESIDUAL_DECLARADO)).toHaveLength(6)
   })
 
-  it("o conjunto residual é EXATAMENTE o declarado", () => {
-    // `.toEqual` sobre as chaves ordenadas, nunca `.has(x)`: `.has` fica verde com arquivos a
-    // mais que ninguém migrou — que é precisamente o defeito que esta AC existe para pegar.
-    expect([...residual.keys()].sort()).toEqual([...RESIDUAL_DECLARADO].sort())
+  it("o residual é EXATAMENTE o declarado — arquivo E contagem", () => {
+    // `.toEqual` sobre o mapa inteiro, nunca `.has(x)` nem um conjunto de NOMES. `.has` fica
+    // verde com arquivos a mais que ninguém migrou; o conjunto de nomes fica verde com o literal
+    // cru de volta dentro de um arquivo já declarado (QA-900-66-1, medido: 4 dos 29 sítios).
+    // Este `it` absorve o antigo "declara o literal UMA vez só": ele virou a entrada de `MODULO`.
+    expect(Object.fromEntries([...residual.entries()].sort())).toEqual(RESIDUAL_DECLARADO)
   })
 
-  it("app-url-fallback.ts declara o literal UMA vez só", () => {
-    // Se o literal se multiplicar dentro do próprio módulo, a concentração que a story entrega
-    // já começou a se desfazer.
-    expect(residual.get("lib/tenancy/app-url-fallback.ts")).toBe(1)
+  it("os sítios migrados continuam CHAMANDO o resolver", () => {
+    // A régua acima é de AUSÊNCIA do literal. Um sítio desmigrado para `?? ""` some do literal
+    // sem passar a chamar ninguém — e ficava verde (QA-900-66-2, medido no gate). As DUAS
+    // contagens são necessárias: a de arquivos pega o arquivo inteiro desmigrado; a de chamadas
+    // pega um sítio dentro de arquivo que tem outros (`notificacoes.ts` tem 3).
+    let arquivosComChamada = 0
+    let chamadas = 0
+    for (const caminho of arquivos) {
+      const relativo = path.relative(SRC, caminho).split(path.sep).join("/")
+      if (relativo === MODULO) continue // aqui mora a DEFINIÇÃO, não uma chamada
+      const n = ocorrenciasNoCodigo(fs.readFileSync(caminho, "utf-8"), CHAMADA)
+      if (n > 0) {
+        arquivosComChamada += 1
+        chamadas += n
+      }
+    }
+    expect({ arquivosComChamada, chamadas }).toEqual({ arquivosComChamada: 24, chamadas: 30 })
   })
 })
 
 describe("AC10 — o detector, contra as formas que já driblaram uma régua neste repositório", () => {
   it("acha o host com aspas DUPLAS", () => {
-    expect(ocorrenciasDoHost(`const x = process.env.A ?? "https://${HOST}"`)).toBe(1)
+    expect(ocorrenciasNoCodigo(`const x = process.env.A ?? "https://${HOST}"`, HOST)).toBe(1)
   })
 
   it("acha o host com aspas SIMPLES (a cegueira que deixou o sítio 28 passar)", () => {
-    expect(ocorrenciasDoHost(`const x = process.env.A ?? 'https://${HOST}'`)).toBe(1)
+    expect(ocorrenciasNoCodigo(`const x = process.env.A ?? 'https://${HOST}'`, HOST)).toBe(1)
   })
 
   it("acha o host numa cadeia MULTILINHA (a outra metade da cegueira do sítio 28)", () => {
@@ -233,20 +268,20 @@ describe("AC10 — o detector, contra as formas que já driblaram uma régua nes
       "  process.env.NEXT_PUBLIC_APP_URL ??",
       `  'https://${HOST}'`,
     ].join("\n")
-    expect(ocorrenciasDoHost(fonte)).toBe(1)
+    expect(ocorrenciasNoCodigo(fonte, HOST)).toBe(1)
   })
 
   it("IGNORA o host dentro de comentário de linha", () => {
-    expect(ocorrenciasDoHost(`// botão do template aponta para https://${HOST}/cliente/{{1}}`)).toBe(0)
+    expect(ocorrenciasNoCodigo(`// botão aponta para https://${HOST}/cliente/{{1}}`, HOST)).toBe(0)
   })
 
   it("IGNORA o host dentro de comentário de bloco, inclusive na CONTINUAÇÃO", () => {
     const fonte = ["/**", ` * base https://${HOST}/agendar/cancelar/{{1}}`, " */", "const x = 1"].join("\n")
-    expect(ocorrenciasDoHost(fonte)).toBe(0)
+    expect(ocorrenciasNoCodigo(fonte, HOST)).toBe(0)
   })
 
   it("conta a ocorrência de código que vem DEPOIS do comentário no mesmo arquivo", () => {
     const fonte = [`// documentação: https://${HOST}/x`, `const CRM_BASE = "https://${HOST}"`].join("\n")
-    expect(ocorrenciasDoHost(fonte)).toBe(1)
+    expect(ocorrenciasNoCodigo(fonte, HOST)).toBe(1)
   })
 })

@@ -438,6 +438,7 @@ Documentar no topo de `app-url-fallback.ts` a origem da decisão (mesmo padrão 
 
 | Date | Version | Description | Author |
 |---|---|---|---|
+| 2026-09-03 | 0.4 | **Ressalva do gate fechada (@dev) — uma mudança de teste, nenhum arquivo de produção tocado.** QA-900-66-1: `RESIDUAL_DECLARADO` virou **mapa arquivo → contagem** (6 entradas remedidas por mim), absorvendo o `it` de "uma vez só"; **mutante 3** (literal cru de volta em `lib/notificacoes.ts:230`, o defeito exato da story) passou de **24/24 verde** para **VERMELHO** com `2` contra `1`. QA-900-66-2 fechada junto **por decisão**, e com desvio: em vez da contagem de ARQUIVOS sugerida (mesma cegueira que a -1 fechou), o `it` de presença afirma `{ arquivosComChamada: 24, chamadas: 30 }`; **mutante 5** (desmigração para `?? ""` em arquivo não declarado) passou de verde a **VERMELHO**, kill set disjunto. QA-900-66-3: `ocorrenciasDoHost` apagado em favor de `ocorrenciasNoCodigo` de `fonte-scan.ts`. Incorporados ao registro o CON medido da AC11 (`uri_allow_list` de produção só tem hosts da Trifold ⇒ inverter a direção é **necessário e não suficiente**), o endereço do fim-a-fim que falta (projeto de teste, já em `demo.judtecnologia.com.br`) e a nota de `pnpm lint --force` na raiz. Réguas: 318 arquivos · 4379 passed + 6 xfail (delta **0**) · lint 0/30 · `tsc` rc=0 · build verde. | Dex (@dev) |
 | 2026-09-03 | 0.3 | **Implementada (@dev).** Censo remedido contra `origin/main` (`f3992973`): a régua reproduz 27 em 23, mais o sítio 28 e o sítio da AC5 = **29 sítios em 25 arquivos**, todos migrados. Novo `lib/tenancy/app-url-fallback.ts` concentra a decisão. AC4 auditada e registrada uso a uso (30 usos de URL). AC10 vermelho→verde por **duas** mutações; a segunda prova que a cegueira foi consertada: com o sítio 28 revertido para aspas simples em 5 linhas, o `grep` herdado conta **0** e a régua nova fica vermelha nomeando o arquivo. Réguas: `tsc` rc=0 · lint 0 erros/30 warnings (= baseline) · `pnpm test` da raiz 318/4379+6 · build verde. **Três desvios da letra registrados**, o principal sendo `RESIDUAL_DECLARADO` com 6 entradas em vez de 5 — a sexta é o próprio resolver, que precisa conter o literal por ser o destino dos 28. | Dex (@dev) |
 | 2026-09-03 | 0.2 | **Validação do @po — NO-GO na v0.1, corrigido para GO.** Confirmei contra o código, uma a uma, as afirmações da story: a régua de `grep` reproduz **exatamente 27 em 23**; as 5 exclusões conferem todas (`sidebar-nav-brand.ts` existe em `components/layout/` e foi corrigido na 900-64; `header.ts:14` é o regex alvo da 900-67; os 4 `"Stand Trifold"` estão nas linhas citadas, e o 4º — `api/appointments/route.ts:171` — é o **sítio de escrita**, o que confirma expand→migrate→contract; os 3 ramos do ternário de `billing-reminders:92,94` dizem `"[Trifold]"`, sem ramo não-Trifold, confirmando "literal incondicional"). **A exclusão do `daily-report` está certa e é a mais importante:** o comentário do arquivo (linhas 68-73) e a Story 900-23 (linhas 421-422) dizem, com essas palavras, que sem a condição *"os telefones em `DAILY_REPORT_RECIPIENTS` receberiam o relatório de TODAS as orgs — vazamento de métricas de negócio criado pela própria correção"*. Aplicar a regra em lote ali teria desfeito uma proteção. Precisão: o vazamento não é um bug que a 900-23 *fechou*; é uma armadilha que a migração da 900-23 *criaria* e que ela preveniu no mesmo movimento — a conclusão operacional ("não mexer") não muda. **Três correções aplicadas:** (1) 🔴 **sítio 28** — `app/login/actions.ts:160-164` é um fallback genuíno da classe alvo (base do link de recuperação de senha), invisível à régua porque a cadeia é multilinha e usa aspas simples; o doc-fonte §4.4 **já o nomeava** e a story o perdeu. Régua impecável, lista incompleta. Entrou no escopo, e a régua da AC10 foi desenhada para não repetir a cegueira. (2) 🔴 **AC10 nova** — não havia carrasco de **alcance**: migrar 21 de 28 sítios deixava a suíte inteira verde. (3) 🟠 **AC4 reescrita** — dizia "capturar, logar e não interromper", sem dizer com que URL o fluxo segue; todos os 28 sítios montam um link, então "seguir" produziria link quebrado em e-mail de cliente. Agora: quem não tem URL **não envia**. Mais AC11 (CON do `uri_allow_list` global, §4.3) e uma nota de sequenciamento com a 900-67 (6 arquivos em comum). | Pax (@po) |
 | 2026-09-03 | 0.1 | Draft inicial — item 1 dos três itens de fundação do whitelabel. Número reconfirmado livre (mesma verificação da 900-65). Remedido o "39 em 31" do doc-fonte contra o código: 28 ocorrências reais em 24 arquivos entram no escopo (27 URL + 1 texto), com 5 exclusões justificadas (900-64 já corrigido, header.ts é da 900-67, "Stand Trifold" é dado gravado — item 10 do doc-fonte, `daily-report`'s `trifoldOrgId()` é escopo deliberado e não um vazamento, `billing-reminders` linhas 92/94 são literal incondicional, não fallback de ambiguidade). `packages/ai` excluído por instrução do coordenador — tensão com o próprio doc-fonte registrada explicitamente. | River (@sm) |
@@ -585,6 +586,73 @@ Nenhuma entrada — nenhum bloqueio de 3 tentativas.
 - Nenhum commit inclui os 6 arquivos da outra frente. `git add` foi path a path, nunca `-A`;
   nenhum `git stash`; nenhum `git push`.
 
+### Follow-up do gate — QA-900-66-1, -2 e -3 fechadas (uma mudança de teste)
+
+Escopo fechado: **só `app-url-fallback.test.ts`**. Nenhum arquivo de produção mudou — o `shasum -c`
+dos dois alvos de mutação bate byte a byte com o estado antes da sessão, e `git status` mostra o
+arquivo de teste como o único modificado desta frente.
+
+**QA-900-66-1 (bloqueante) — o conjunto de NOMES virou MAPA arquivo → contagem.** As seis entradas
+foram remedidas por mim contra a árvore, não copiadas do parecer: `app-url-fallback.ts` 1,
+`header.ts` 1, `notificacoes.ts` 1, `billing-reminders` 1, `broker/instalar/page.tsx` **3**,
+`corretores/novo/page.tsx` 1. O `it` "declara o literal UMA vez só" foi **absorvido** (virou a
+entrada de `MODULO` no mapa), não duplicado — os dois não coexistem.
+
+- **Contraprova, mutante 3** (`lib/notificacoes.ts:230` revertido ao literal cru, o defeito exato
+  que a story fecha; `tsc` rc=0): **VERMELHO**, `- "lib/notificacoes.ts": 1` / `+ 2`. Antes do
+  conserto o gate mediu esse mesmo mutante como **24/24 verde**. Restaurado por `cp` + `shasum -c`.
+
+**QA-900-66-2 (`low`) — decidi FECHAR aqui, não virar concern própria.** Razão: é a metade que falta
+da mesma catraca (ausência do literal ≠ presença do resolver), mora no mesmo arquivo, e a 900-67
+herda as duas juntas. Deixá-la aberta entregaria à próxima story uma régua que ela acha completa.
+
+Um desvio deliberado do conserto sugerido: o parecer propunha `expect(comChamada).toHaveLength(24)`
+— **contagem de ARQUIVOS**, que é a mesma classe de cegueira que a QA-900-66-1 acabou de fechar
+(desmigrar 1 das 3 chamadas de `notificacoes.ts` deixaria 24 arquivos e ficaria verde). O `it`
+afirma as **duas** dimensões: `{ arquivosComChamada: 24, chamadas: 30 }`, ambas medidas por mim.
+
+- **Contraprova, mutante 5** (`notify-price-escalation.ts` desmigrado para `?? ""`, arquivo **não**
+  declarado, sem deixar literal; `tsc` rc=0): **VERMELHO**, `24→23` arquivos e `30→29` chamadas —
+  e **só esse `it`** (23 passed), kill set disjunto do mutante 3. Antes: 24/24 verde.
+- O mutante 3 também acende esta régua (`chamadas` 30→29), o que é a prova direta da dimensão que o
+  conserto sugerido não teria: o sítio revertido morava num arquivo que tem outros dois.
+
+**QA-900-66-3 (`low`) — `ocorrenciasDoHost` apagado**, trocado por `ocorrenciasNoCodigo(fonte, HOST)`
+de `fonte-scan.ts`. Era a terceira cópia de um detector cujo módulo existe justamente porque
+duplicá-lo já custou três verdes falsos. Os 6 `it`s de detector passaram a exercitar o helper
+compartilhado — o que os torna carrasco dele também.
+
+**Não fechadas, por escopo:** QA-900-66-4 (os 4 `.js` de `landing-pages/` — ingestão, mesma classe do
+`daily-report`) e QA-900-66-5 (a flag ligada em runtime).
+
+### AC11 — o CON deixou de ser hipótese (medido pelo gate, incorporado aqui)
+
+A `uri_allow_list` de **produção** contém exclusivamente hosts da Trifold, e o `site_url` é
+`https://crm.trifold.eng.br`. Com `TENANT_FALLBACK_FAIL_CLOSED` ligada, um redirect para o host de
+outro tenant seria **descartado em silêncio** pelo Supabase e a pessoa cairia na Trifold — na
+**recuperação de senha**. Em uma frase: **inverter a direção do fallback é necessário e não
+suficiente**; cadastrar a URL do tenant na `uri_allow_list` é pré-requisito de LIGAR a flag (não de
+mergear esta story).
+
+**Endereço para a prova que falta:** o projeto de TESTE `xnxvygyfyyyzwhiuoehz` já aponta para
+`demo.judtecnologia.com.br` — é o ambiente onde o fim-a-fim com a flag ligada (o degrau que ninguém
+subiu, QA-900-66-5) pode ser feito. Fora do escopo desta rodada; fica registrado como endereço.
+
+### Nota de ferramenta (irmã do `--filter web test` que sai rc=0 sem rodar nada)
+
+`pnpm --filter web lint --force` sai **exit 2**: `--force` é flag do turbo e o eslint 9 a rejeita
+(`Invalid option '--force'`). A forma certa é **`pnpm lint --force` na raiz**. Um agente que rodasse
+a primeira forma leria exit 2 como "lint quebrado" e reprovaria por engano.
+
+### Réguas desta rodada
+
+`pnpm test` na **raiz**: **318 arquivos · 4379 passed | 6 expected fail** — idêntico ao baseline do
+gate (delta **0**: um `it` removido por absorção, um `it` novo). Suíte isolada: 24 → 24.
+`tsc --noEmit` rc=0 **antes de cada mutante** e depois. `pnpm lint --force` na raiz: **0 erros / 30
+warnings** (= baseline). `pnpm type-check --force`: 8/8. `pnpm --filter web build`: rc=0.
+2 mutações, ambas com `cp` antes e `shasum -c` OK depois — **nunca `git checkout --`**, que apagaria
+o mutante e a árvore alheia junto.
+
 ### File List
 **Novos (2)**
 - `packages/web/src/lib/tenancy/app-url-fallback.ts`
@@ -622,4 +690,120 @@ _(25 modificados contando `opening-context.ts`, que é o sítio da AC5 e não de
 ---
 
 ## QA Results
-_A preencher pelo @qa durante o gate._
+
+**Gate: CONCERNS** · Quinn (@qa) · 2026-09-03 · `docs/qa/gates/900.66-inverte-direcao-do-fallback-de-marca.yml`
+Branch `story/900-66-inverte-direcao-do-fallback-de-marca` @ `1a91ec6a`, base `origin/main` `f3992973`.
+
+### O que reproduzi, e bateu
+
+- **🔴 Mutante 2 — exato.** Revertido o sítio 28 (`app/login/actions.ts` inteiro para `origin/main`,
+  a cadeia de 5 linhas com aspas simples): a régua **herdada** (`grep -rnE` da story) conta **0** —
+  segue cega; a régua **nova** fica vermelha com
+  `AssertionError: expected [ …(7) ] to deeply equal [ …(6) ]` e `+ "app/login/actions.ts"`
+  (1 failed | 23 passed). Restaurado por `cp` + `shasum -c` OK, `git status` vazio.
+- **🟢 O `catch` estreito é real.** Mutação nova: troquei
+  `if (!(erro instanceof AppUrlIndisponivelError)) throw erro` por `void erro`. Morre **1** teste, e
+  é o certo (`o catch é estreito…`) — kill set **disjunto** do mutante 2. E o `it` mede pelo `try`:
+  o insumo é um objeto cujo `.trim()` lança, e `.trim()` é a primeira coisa que
+  `resolveAppUrlFallback` toca **dentro** do `try`.
+- **🟢 O desvio da AC3 está certo.** `resolveAppUrlFallback` lança; espalhá-lo cru produziria os 500
+  que a AC4 proíbe. Medido: 30 chamadas de `tentarAppUrl` em 24 arquivos + 1 de
+  `resolveCorretorFallbackName` = os 25 arquivos do File List.
+- **🟢 String vazia.** `if (envValue !== undefined && envValue.trim() !== "") return envValue` —
+  devolve o valor **sem trimar**, byte a byte o que o `??` devolvia. `trim()` só como predicado.
+- **🟢 `RESIDUAL_DECLARADO` com 6: a recusa está CERTA.** Auto-excluir o resolver da varredura seria
+  afrouxar a régua para caber num número escrito antes de o módulo existir. Ele fez o oposto —
+  declarou, explicou e **fixou a contagem em 1**. Ironia: é a única das seis com contagem fixada, e
+  é exatamente a disciplina que falta nas outras cinco (ver abaixo).
+- **🟢 As cinco exclusões.** `daily-report/route.ts`: diff **VAZIO**, `DAILY_REPORT_ORG_ID ??
+  trifoldOrgId()` vivo na linha 65 — a exclusão mais consequente, e ela está intocada.
+  `billing-reminders`: por diff, só a declaração de `APP_URL` saiu; o texto exibido e os **três**
+  ramos `[Trifold]` seguem intactos (hoje nas linhas 83/94/96/97 — o arquivo ganhou +2 linhas).
+  `sidebar-nav-brand`, `header.ts`, os 4 de `"Stand Trifold"` e `packages/ai`: zero linhas no diff.
+- **🟢 Réguas, reconciliadas por CONTAGEM.** `pnpm test` da **raiz**: 318 · 4379 | 6 (rc=0).
+  Suíte nova isolada: **24** (não é rc=0 vazio). Alheios: **123** em runtime na árvore contra
+  **137** em `origin/main` → **−14 medido dos dois lados**, não subtraído. `4369 + 24 − 14 = 4379` ✓.
+  Prova mais forte que a aritmética: o diff **não toca nenhum `.test.ts` pré-existente**.
+  `tsc --noEmit` rc=0 · `pnpm lint --force` (raiz) 0 erros / 30 warnings · build rc=0.
+- **🟢 Efeito colateral.** `epic-900-saas-multi-tenant.md`: **40 adicionadas / 0 removidas** na
+  árvore, **0** ocorrências no commit. Conteúdo é trabalho alheio de 2026-08-31 (@po/@pm), íntegro.
+
+### 🔵 AC11: eu medi o que ficou declarado — e o CON é real
+
+Management API, **só leitura**, `GET /v1/projects/{ref}/config/auth`, sem chave de serviço:
+
+| projeto | `site_url` | `uri_allow_list` |
+|---|---|---|
+| produção `dsopqkqjkmhytudaaolv` | `https://crm.trifold.eng.br` | **só hosts da Trifold** (+ `trifold-crm.vercel.app`) |
+| teste `xnxvygyfyyyzwhiuoehz` | `https://demo.judtecnologia.com.br` | `demo.judtecnologia.com.br/**`, 2 previews, `localhost:3000/**` |
+
+Ou seja: com a flag ligada, um redirect para a URL de um tenant seria **descartado em silêncio** e o
+usuário cairia em `crm.trifold.eng.br` — o vazamento que a story fecha, na recuperação de senha.
+Trocar a direção é **necessário e não suficiente** para os 6 sítios de `SITE_URL` + o sítio 28.
+Achado lateral útil: o projeto de **teste já aponta para `demo.judtecnologia.com.br`** — é o
+ambiente para o degrau fim-a-fim que esta story declara não ter dado.
+
+### 🔴 A décima quarta armadilha — conjunto de NOMES é cego ao sítio que mora em arquivo já perdoado
+
+`expect([...residual.keys()].sort()).toEqual(RESIDUAL_DECLARADO)` afirma um conjunto de **nomes de
+arquivo**. Dois dos seis declarados **também hospedam sítios migrados**: `lib/notificacoes.ts`
+(3 chamadas, declarado por causa do `CRM_BASE`) e `billing-reminders/route.ts` (1 chamada, declarado
+por causa do texto exibido). Para esses 4 sítios, o perdão do arquivo perdoa o defeito.
+
+**Mutante 3, medido:** revertido `notifyClientes` (`lib/notificacoes.ts:230`) para
+`process.env.NEXT_PUBLIC_APP_URL ?? "https://crm.trifold.eng.br"` — o literal cru, o defeito exato
+que a story existe para fechar. Ocorrências no arquivo: 1 → 2. `tsc` rc=0. Régua: **24/24 VERDE**.
+O mesmo defeito, no mutante 2, fica vermelho. **O veredicto depende de em qual arquivo o defeito
+cai, não do defeito.** Cobertura real: **25 de 29 sítios**, não 29 — e os 4 descobertos são os
+avisos ao **cliente final** (portal de obra, boletos), justamente o app que a regra-mãe da story diz
+que não pode mudar de marca.
+
+**Mutante 5 (adjacente, `low`):** desmigrei `notify-price-escalation.ts` para `?? ""` — sem deixar
+literal, em arquivo não-declarado: **24/24 VERDE**. A régua é de *ausência do literal*, não de
+*presença do resolver*.
+
+### O que precisa mudar antes do merge — QA-900-66-1 (4 linhas, números já medidos)
+
+Em `app-url-fallback.test.ts`, trocar o conjunto por um **mapa arquivo → contagem**:
+
+```ts
+const RESIDUAL_DECLARADO: Record<string, number> = {
+  "lib/tenancy/app-url-fallback.ts": 1,                       // a única declaração (AC2)
+  "lib/email-layout/components/header.ts": 1,                 // 900-67
+  "lib/notificacoes.ts": 1,                                   // só o CRM_BASE
+  "app/api/cron/billing-reminders/route.ts": 1,               // só o texto exibido (l. 83)
+  "app/broker/instalar/page.tsx": 3,
+  "app/dashboard/configuracoes/corretores/novo/page.tsx": 1,
+}
+it("o residual é EXATAMENTE o declarado — arquivo E contagem", () => {
+  expect(Object.fromEntries([...residual.entries()].sort())).toEqual(RESIDUAL_DECLARADO)
+})
+```
+
+Absorve o `it` de "declara o literal uma vez só". **Contraprova obrigatória:** rodar o mutante 3 de
+novo e ver VERMELHO nomeando `lib/notificacoes.ts` com `2` contra `1`.
+
+### Concerns não-bloqueantes
+
+- **QA-900-66-2** (`low`) — nenhuma régua afirma a **presença** do resolver. `it` de 2 linhas:
+  `expect(comChamada).toHaveLength(24)` (medido: 24 arquivos, 30 chamadas).
+- **QA-900-66-3** (`low`) — `fonte-scan` já exporta `ocorrenciasNoCodigo(fonte, agulha)`;
+  `ocorrenciasDoHost` é a terceira cópia do mesmo detector, e evitar cópias é o motivo de o módulo
+  existir.
+- **QA-900-66-4** (`low`) — censo do épico: `landing-pages/{yarden,vind-residence}/api/{lead,track}.js`
+  têm 4× `process.env.CRM_* || "https://crm.trifold.eng.br/api/webhooks/…"`, fora do alcance de
+  qualquer régua desta story. **Não é defeito daqui** (são URLs de ingestão, mesma classe do
+  `daily-report`) — fica registrado para a próxima story não os "descobrir" como vazamento.
+- **QA-900-66-5** (`low`) — a flag ligada não é exercitada em runtime por ninguém. Correto como
+  escopo; vira pré-requisito da story que ligar a flag, junto com a `uri_allow_list`.
+
+### Nota de régua para quem vier depois
+
+`pnpm --filter web lint --force` **sai com exit 2** — `--force` é flag do turbo, e o eslint 9 a
+rejeita (`Invalid option '--force'`). A forma certa é `pnpm lint --force` na **raiz**. Um agente que
+rodasse a primeira forma leria exit 2 como "lint quebrado".
+
+**Higiene:** produção só-leitura (config de auth via Management API, User-Agent identificado, sem
+chave de serviço, sem SQL, sem sessão forjada). Sem `reset:testdb`, sem push, sem PR, sem merge, sem
+`git stash`, sem commit. 4 mutações, todas com `cp` + `shasum` antes e `shasum -c` OK + `git status`
+vazio depois — a árvore voltou exatamente aos 6 arquivos da frente alheia.
