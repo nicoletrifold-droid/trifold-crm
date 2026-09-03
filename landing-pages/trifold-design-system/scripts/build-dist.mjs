@@ -108,6 +108,29 @@ export async function assertMediaPresent(root = SITE_ROOT) {
 }
 
 async function assemble(srcRoot, outRoot) {
+  // GUARDA DESTRUTIVA. A linha abaixo é um `rm -rf` no `outRoot`, e o `outRoot`
+  // vem de `process.argv[2]`. Um `node scripts/build-dist.mjs .` (ou `..`)
+  // apagaria a pasta-fonte inteira — incluindo os ~77 MB de `assets/` e
+  // `uploads/`, que NÃO estão no git e só se recuperam baixando do deployment
+  // de produção. O `deploy.sh` nunca passa argumento, mas o script é chamável
+  // à mão; um erro de digitação não pode custar a pasta-fonte.
+  const src = path.resolve(srcRoot);
+  const out = path.resolve(outRoot);
+  const outAsPrefix = out.endsWith(path.sep) ? out : out + path.sep; // cobre '/' e 'C:\\'
+  const ehFonteOuAncestral = out === src || src.startsWith(outAsPrefix);
+  // `dist/` é filho legítimo de srcRoot, então não dá para barrar descendentes em
+  // bloco — mas os diretórios do assembly são justamente os que não estão no git.
+  const ehDiretorioDoAssembly =
+    path.dirname(out) === src && ASSEMBLY.dirs.includes(path.basename(out));
+  if (ehFonteOuAncestral || ehDiretorioDoAssembly) {
+    throw new Error(
+      `outRoot inválido: '${out}'.\n` +
+        `  ${ehDiretorioDoAssembly ? 'É um diretório do assembly (não versionado).' : `É a pasta-fonte ou contém ela ('${src}').`}\n` +
+        `  O build apaga o outRoot antes de montar — isso destruiria fontes e/ou a\n` +
+        `  mídia que não está no git. Use um diretório separado (o padrão é 'dist/').`
+    );
+  }
+
   await fsp.rm(outRoot, { recursive: true, force: true });
   await fsp.mkdir(outRoot, { recursive: true });
 

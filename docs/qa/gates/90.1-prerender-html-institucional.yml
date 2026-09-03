@@ -190,7 +190,7 @@ issues:
       observador" como problema duro em vez de cair no ramo de fallback.
 
   - id: QA-3
-    status: RESOLVIDO (Dev Agent Record reescrito: explicita que os 64 testes são de yarden/vind e que turbo só cobre packages/web)
+    status: "RESOLVIDO (Dev Agent Record reescrito: explicita que os 64 testes são de yarden/vind e que turbo só cobre packages/web)"
     severity: low
     blocking: false
     category: documentation
