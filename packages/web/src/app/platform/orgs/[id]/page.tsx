@@ -25,6 +25,19 @@
  * `PATCH /api/platform/orgs/[id]/dados`, com validação real, trava otimista por `updated_at` e
  * trilha em `platform_audit_log` (migration `252`). O botão abre `<EditarDadosEmpresa />`.
  *
+ * ## O bloco do logo (Story 900-63) — e o que ele NÃO entrega
+ *
+ * `<LogoDaEmpresa />` guarda o arquivo em `organizations.logo_url` (bucket `org-logos`, migration
+ * `254`). 🔴 **Nenhuma tela do CRM do cliente lê essa coluna**: login, cabeçalho, sidebar e
+ * e-mails continuam com a marca da Trifold. Trocar a marca é a `900-64`. O componente declara
+ * isso em voz alta, e o placeholder de "sem logo" é neutro de propósito — a marca da Trifold ali
+ * sugeriria que é ela que o cliente vê por causa deste cadastro.
+ *
+ * A projeção ganhou `logo_url` pela mesma razão de `updated_at`/`settings` (AC11): sem ela o
+ * bloco mostraria SEMPRE o placeholder, inclusive logo depois de um upload bem-sucedido — e o
+ * aviso obrigatório da AC9 camuflaria o defeito, dando ao operador uma explicação plausível para
+ * aceitá-lo.
+ *
  * ## A projeção carrega `updated_at` e `settings`, e uma régua estática prende os dois
  *
  * `updated_at` é a trava otimista da AC3: sem ele o diálogo mandaria `undefined` e a rota
@@ -75,6 +88,7 @@ import {
 } from "@web/lib/integrations/painel/providers"
 import { ReenviarConvite } from "../_components/reenviar-convite"
 import { EditarDadosEmpresa } from "../_components/editar-dados-empresa"
+import { LogoDaEmpresa } from "../_components/logo-empresa"
 import {
   dadosIniciaisDoDialogo,
   linhasDeContatoEFiscal,
@@ -99,6 +113,15 @@ interface OrgDoResumo {
   updated_at: string
   /** Story 900-62 · AC13 — de onde saem os valores iniciais de contato/fiscal. */
   settings: Record<string, unknown> | null
+  /**
+   * Story 900-63 · AC11 — a URL do logo guardado, ou `null`.
+   *
+   * Sem ela na projeção, `org.logo_url` é `undefined` e o bloco do logo mostra SEMPRE o
+   * placeholder, inclusive logo depois de um upload bem-sucedido e do `router.refresh()` — e o
+   * texto obrigatório da AC9 ("isto só guarda o arquivo") daria ao operador uma explicação
+   * plausível para aceitar o defeito como se fosse o comportamento declarado.
+   */
+  logo_url: string | null
 }
 
 interface AdminDoResumo {
@@ -135,7 +158,7 @@ export default async function ResumoDaEmpresaPage({
   // arquivo. O conserto é tirar o texto de dentro da população varrida, nunca relaxar o detector.
   const respostaOrg = await platformQuery(
     "organizations",
-    "id, name, slug, is_active, created_at, admin_invite_email, updated_at, settings",
+    "id, name, slug, is_active, created_at, admin_invite_email, updated_at, settings, logo_url",
   ).eq("id", orgId)
   const orgFalhou = leituraFalhou(respostaOrg)
   const org = ((respostaOrg.data ?? []) as unknown as OrgDoResumo[])[0]
@@ -289,6 +312,20 @@ export default async function ResumoDaEmpresaPage({
               expectedUpdatedAt={org.updated_at}
             />
           </div>
+        )}
+
+        {/* Story 900-63 · AC8/AC9 — GUARDAR o logo. O MESMO guard do botão acima, e pela mesma
+            razão: sem `org` não há `updated_at`, e sem `updated_at` não há trava otimista; com a
+            leitura caída, um bloco que diz "sem logo" afirmaria sobre um estado que a tela não
+            conhece. Fica DENTRO deste card porque é o card "Identidade" — e como FILHO, nunca
+            como prop do cabeçalho, para não reformatar a abertura literal que a régua da
+            `900-57` ancora. */}
+        {org && !orgFalhou && (
+          <LogoDaEmpresa
+            orgId={orgId}
+            logoUrl={org.logo_url}
+            expectedUpdatedAt={org.updated_at}
+          />
         )}
       </Cartao>
 
