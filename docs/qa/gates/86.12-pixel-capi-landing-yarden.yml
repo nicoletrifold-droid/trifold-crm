@@ -1,27 +1,237 @@
 storyId: "86-12"
 title: "Pixel Meta + CAPI na landing do Yarden (landing nova)"
 reviewer: "Quinn (@qa)"
-reviewed_at: "2026-09-01"
+reviewed_at: "2026-09-02"
 schema: 1
 story: "86.12"
 
 # ===========================================================================
-# ITERAÇÃO 2 (2026-09-01) — conteúdo/design DEFINITIVOS, 3 formulários
+# ITERAÇÃO 3 (2026-09-02) — rótulo "LANÇAMENTO", imagem do mapa, título do form
 # ===========================================================================
-# Metadata conferida rodando `git`/`gh`, NÃO lida do contexto da sessão.
-# `git rev-parse --abbrev-ref HEAD`               → feat/86-12-yarden-conteudo-definitivo
-# `git rev-parse --short HEAD`                    → f2ad92e9
-# `git ls-remote --heads origin feat/86-12-*`     → VAZIO (nenhum push)
-# `gh pr list --head feat/86-12-yarden-...`       → [] (nenhum PR aberto)
-# `gh pr view 512`                                → MERGED em 2026-08-28 (iteração 1)
-# `git merge-base main HEAD`                      → 412eb2cf (branch é filha do pré-merge do #512)
-branch: "feat/86-12-yarden-conteudo-definitivo"
-commit: "f2ad92e9 — 5 commits novos desde o gate da iteração 1 (aee1fb54, 8606f09b, b8ed634b, 49954854, f2ad92e9). Nenhum pushado."
+# Metadata conferida rodando `git`, NÃO lida do contexto da sessão nem do relato.
+# `git rev-parse --abbrev-ref HEAD`                          → fix/86-12-yarden-lancamento-mapa
+# `git rev-parse --short HEAD`                               → e36b133f
+# `git ls-remote origin refs/heads/fix/86-12-yarden-...`     → VAZIO (nenhum push desta branch)
+# `git ls-remote origin | grep 86-12`                        → só a antiga feat/86-12-yarden-conteudo-definitivo
+# `git log --oneline -3`                                     → e36b133f, 3e9ee7ad, f3992973 (base = origin/main)
+# `git diff f3992973..HEAD --stat`                           → 4 arquivos: story.md, .jpg, .webp, index.html
+branch: "fix/86-12-yarden-lancamento-mapa"
+commit: "e36b133f — 2 commits novos desde o gate da iteração 2 (3e9ee7ad rótulo+mapa, e36b133f título do form). Nenhum pushado. Base: f3992973 (= origin/main)."
 
 gate: CONCERNS
 verdict: CONCERNS
 
+# O veredito CUMULATIVO da story segue CONCERNS por herança da iteração 2:
+# 86.12-QA-004 e 86.12-QA-005 (medium, cobertura funcional de `leadFormMobile` e
+# `leadFormSaber`) continuam OPEN e esta leva não tinha escopo para resolvê-las.
+# O DELTA da iteração 3, isolado, é PASS: zero achado bloqueante, zero regressão.
+gate_iteracao_3: PASS
+
 status_reason: >
+  A leva 3 (rótulo "EM BREVE"→"LANÇAMENTO", imagem nova do mapa, título dos 2
+  formulários do hero) está correta e é cirúrgica: o CSS normalizado e todo o JS
+  inline são **byte-idênticos** ao baseline (mesmo sha256), e o diff do DOM
+  renderizado contém **exatamente** as 3 mudanças pretendidas e nada mais. Sem
+  overflow em 14 larguras medidas de 320 a 2560px com Montserrat comprovadamente
+  pintada. O gate cumulativo fica em CONCERNS apenas por herança: as 2 lacunas
+  `medium` de cobertura da iteração 2 seguem abertas.
+
+verdict_rationale: >
+  Escopo real medido, não aceito por relato: `git diff f3992973..HEAD --stat` dá
+  4 arquivos — a story, os 2 binários do mapa e o `index.html`. Zero byte em
+  `packages/`, `yarden/api/`, `trifold-design-system/` ou `vind-residence/`, logo
+  AC5-AC9 seguem cobertos pelos gates 1 e 2 sem re-verificação.
+
+  Três provas de escopo que valem mais que a leitura do diff:
+  (1) extraído o `<style>` dos dois lados, removidos os comentários e normalizado
+  — `sha256` IDÊNTICO (538a326a…), ou seja **nenhuma regra de CSS mudou**, o delta
+  de CSS era 100% comentário; (2) extraídos todos os `<script>` inline — `diff`
+  VAZIO, **nenhuma linha de comportamento mudou**; (3) renderizados baseline e
+  HEAD no Chromium a 1440px e 390px e diferenciados textContent, `<img>`,
+  `<source>`, `<a>`, inputs/botões, lista de `id`, href do WhatsApp, `<title>` e
+  todas as `<meta>` — divergem **só** em `"EM BREVE"→"LANÇAMENTO"` (1 ocorrência),
+  `"Antecipe-se ao lançamento"→"Cadastre-se para mais informações"` (2 ocorrências,
+  texto idêntico entre si) e na linha do mapa (attrs 637→636 + `alt`). Todo o
+  resto — hero pool, interior lounge, família, logos, rodapé, float do WhatsApp,
+  os 3 formulários, os 4 links de política — bit a bit igual. Isso é
+  não-regressão provada, não eyeballada.
+
+  O ponto onde eu não confiei na medição do @dev e refiz: o `<link>` do Google
+  Fonts usa `display=optional`, e `font-display:optional` NUNCA faz swap — a
+  primeira varredura que eu rodei pintou na fallback `-apple-system`, ~7% mais
+  estreita que Montserrat, e teria me dado um falso "cabe". Refeito interceptando
+  o CSS de `fonts.googleapis.com` e reescrevendo para `font-display:block`, com
+  `document.fonts.load("400 20px 'Montserrat'")` explícito. **Prova de que a face
+  certa pintou:** o mesmo texto mede 422,2px em Montserrat contra 394,4px na
+  fallback em toda medição válida.
+
+  Um número do Change Log 0.16 é vacuoso como está escrito (86.12-QA-009): "o
+  eyebrow tem 393,9px dentro de brand 413,3px" compara CAIXAS, e `.hero-eyebrow` é
+  filho de um flex column — a caixa dele é `stretch` do container por construção,
+  então **jamais** poderia exceder. A conclusão está certa, mas a métrica que a
+  sustenta é a contagem de linhas e a largura do TEXTO (200,4px de 393,9
+  disponíveis a 1440px; 97,5px de ~170px a 320px), que eu medi. Achado `low` de
+  documentação, não defeito de código.
+
+checks:
+  code_review: PASS         # delta = 3 nós de texto + 2 binários + attrs/alt do <img>; CSS normalizado com sha256 idêntico; JS inline com diff vazio
+  unit_tests: CONCERNS      # `vitest run landing-pages/yarden` 2 arq / 50 passed; suíte completa em paridade EXATA com baseline. CONCERNS herdado: nada trava o título nem as dimensões do <img> (86.12-QA-010) + QA-004/QA-005 da iteração 2
+  acceptance_criteria: PASS # AC12 re-verificado (conteúdo/copy); AC1-AC11 intactos por git diff vazio nos caminhos; AC13 segue pós-deploy (@devops/T13)
+  no_regressions: PASS      # diff do DOM renderizado = exatamente as 3 mudanças pretendidas em 1440px e 390px; 71 falhas da suíte reproduzidas IDÊNTICAS no baseline extraído (artefato de symlink de worktree, ver `falso_positivo_de_worktree_iteracao_3`)
+  performance: PASS         # jpg 129.183 B (era 131.969) e webp 85.970 B (era 86.768) — os dois MENORES apesar da arte melhor; `loading=lazy`/`decoding=async` mantidos; width/height batem com o arquivo (900x636 por `file` e `sips`), sem CLS
+  security: PASS            # nenhuma linha de JS alterada (diff vazio), nenhum endpoint/token/dataset tocado, nenhum `console.*` novo, 0 erro de console em 14 larguras
+  documentation: CONCERNS   # Change Log 0.16/0.17 e File List batem com o código; 1 resíduo de evidência vacuosa (86.12-QA-009) + 86.12-QA-007 da iteração 2 segue OPEN
+
+# ---------------------------------------------------------------------------
+# ITERAÇÃO 3 — pontos de atenção do briefing, um a um
+# ---------------------------------------------------------------------------
+pontos_de_atencao_iteracao_3: |
+  1. AS DUAS MARCAÇÕES DO HERO TÊM O TÍTULO NOVO IDÊNTICO — CONFIRMADO lendo o
+     HTML, não o relato. `grep -n '<h2'` devolve 5 ocorrências no arquivo:
+     linha 512 (`hero-form--sobreposto`, `id="leadForm"`) e linha 548
+     (`hero-form--estatico`, `id="leadFormMobile"`) com
+     "Cadastre-se para mais informações" — string idêntica, byte a byte; 574 e
+     601 são os `titulo-secao` das seções 2 e 3; 616 é "Quer saber mais?".
+     `grep -i 'antecipe'` no arquivo: ZERO ocorrência. O único resíduo de
+     "em breve" no arquivo é o comentário de CSS (274, que documenta de propósito
+     a divergência com o mockup) e a mensagem de sucesso do formulário
+     ("Em breve entraremos em contato.", linha 772) — que é outro texto, outro
+     papel, e corretamente não foi tocada.
+
+  2. `leadFormSaber` INTOCADO — CONFIRMADO por 3 vias independentes:
+     (a) os hunks do `git diff` param na linha 599, o bloco começa em 613;
+     (b) o `<h2>Quer saber mais?</h2>` e o
+     `<p class="sub">Deixe seu contato e receba informações exclusivas</p>`
+     lidos direto no arquivo (615-616);
+     (c) screenshot da seção `#saber-mais` a 1440px e 1024px com Montserrat
+     pintada, mostrando "QUER SABER MAIS?" + o subtítulo + os 3 campos +
+     "Enviar agora mesmo" — e o diff do DOM renderizado não lista NENHUM desses
+     textos como divergente.
+
+  3. OVERFLOW/QUEBRA DO TÍTULO NOVO — 14 larguras REAIS no Chromium, com
+     Montserrat comprovadamente pintada (não é leitura de CSS):
+     | px   | linhas | maior linha | contentW | folga  |
+     | 320  | 2      | 254,7       | 280      | +25,3  |
+     | 360  | 2      | 314,1       | 320      | +5,9   |
+     | 375  | 2      | 314,1       | 335      | +20,9  |
+     | 390  | 2      | 314,1       | 350      | +35,9  |
+     | 430  | 2      | 314,1       | 390      | +75,9  |
+     | 480  | 2      | 314,1       | 440      | +125,9 |
+     | 546  | 2      | 314,1       | 506      | +191,9 |
+     | 768  | 1      | 506,7       | 728      | +221,3 |
+     | 980  | 2      | 212,3       | 238      | +25,7  |
+     | 1024 | 2      | 212,3       | 238      | +25,7  |
+     | 1440 | 2      | 250,6       | 297      | +46,4  |
+     | 1719 | 2      | 356,0       | 356      |   0,0  |
+     | 1920 | 2      | 356,0       | 402      | +46,0  |
+     | 2560 | 2      | 356,0       | 550      | +194,0 |
+     Em NENHUMA: `h2.scrollWidth > h2.clientWidth`, nem
+     `documentElement.scrollWidth > clientWidth`, nem 3 linhas, nem overflow
+     vertical do card. Screenshots em todas as 14. O `0,0` de folga a 1719px é o
+     ponto de virada do wrap (o navegador só adota a linha mais larga quando ela
+     cabe — é tautológico, não fragilidade); a pior consequência de uma métrica de
+     fonte ligeiramente diferente ali é uma 3ª linha, que só faz o card crescer,
+     nunca vazar. Piso real de segurança: "INFORMAÇÕES", a palavra mais longa e
+     inquebrável, mede 155,2px no card mais estreito de todos (238px de contentW
+     a 980px de viewport) — folga de 82,8px.
+
+  4. IMAGEM DO MAPA — CONFIRMADA VISUALMENTE, não por número:
+     - dimensões do arquivo por `file` E por `sips`: jpg 900x636, webp 900x636;
+       atributos do `<img>`: `width="900" height="636"` → BATEM. Em runtime,
+       `naturalWidth/naturalHeight` = 900/636 = `attrW/attrH`, e a proporção
+       exibida (1,4151) é a intrínseca (1,4151) — sem distorção, sem CLS.
+     - screenshot da seção a 1440px (desktop, imagem em 641,4x453,3) e a 375px
+       (mobile, coluna única, 339x239,5): a arte aparece INTEIRA. Os 6 pins com
+       rótulo (Catedral, Bosque II, Av. JK, `yarden`, Parque Do Ingá,
+       Av. Itororó), o título "Localização" e as 2 linhas de endereço
+       ("Rua Carlos Meneghetti, 168 / Gleba Itororó") estão todos visíveis e
+       nenhum é cortado pela borda.
+     - `object-fit` computado = `fill` com `.split img{width:100%;height:auto}`,
+       isto é, sem recorte possível — a caixa segue a proporção intrínseca.
+     - comparação com o asset ANTIGO (extraído por `git show f3992973:`): era
+       900x637 e trazia o prédio como SILHUETA MARROM PLANA com o manuscrito
+       "Gleba Itororó"; o novo traz o render real do edifício + "Localização" +
+       endereço. É upgrade de conteúdo, não só de compressão — e o `alt` foi
+       ajustado junto, o que é obrigatório porque texto embutido em imagem é
+       invisível para leitor de tela.
+
+  5. TESTE BIDIRECIONAL HTML↔`assets/` — RODADO: `npx vitest run
+     landing-pages/yarden` → 2 arquivos / 50 passed. Passa com os binários
+     sobrescritos porque a asserção é por NOME de arquivo
+     (`readdirSync(assets)` × refs extraídas dos atributos do HTML), e os nomes
+     não mudaram: 13 arquivos, 0 órfão, 0 referência quebrada, piso de 12 refs
+     respeitado. Consequência que registrei como achado: esse teste é insensível
+     a CONTEÚDO e a DIMENSÃO — ver 86.12-QA-010.
+
+  6. NENHUMA REGRESSÃO NO RESTO DA PÁGINA — provado por diff do DOM renderizado
+     (ver `verdict_rationale`), não por inspeção visual. `<source>`, `<a>`,
+     inputs/botões (os 3 formulários, placeholders, `required`, `aria-label`),
+     lista de `id` (nenhum duplicado, nenhum novo), href do float do WhatsApp,
+     `<title>` e todas as `<meta>`: IDÊNTICOS nos dois lados, em 1440px e 390px.
+     A única sobreposição vista nas fotos é o botão flutuante do WhatsApp cobrindo
+     parte do aviso de SPAM no mobile — `position:fixed`, aparece igual no
+     baseline, pré-existente.
+
+  7. SUÍTE E GATES — ver `falso_positivo_de_worktree_iteracao_3`.
+
+  8. CONSISTÊNCIA DA STORY — Change Log 0.16 e 0.17 presentes e conferidos contra
+     o código: os bytes dos 4 arquivos (129.183/85.970 novos vs 131.969/86.768
+     antigos) batem com o `git diff --stat`; o "13 arquivos" do File List bate com
+     `ls assets | wc -l`; a linha de `mapa-gleba-itororo` no File List foi
+     atualizada para 900x636 com a nota da rodada 0.16; T12/T13 seguem `[ ]`;
+     Status segue `InReview`. Uma imprecisão de evidência em 0.16 (86.12-QA-009).
+
+  9. NENHUM PUSH — `git ls-remote origin refs/heads/fix/86-12-yarden-lancamento-mapa`
+     devolve VAZIO. `git ls-remote origin | grep 86-12` só acha a branch antiga
+     `feat/86-12-yarden-conteudo-definitivo`. O `[origin/main: ahead 2]` do
+     `git branch -vv` é upstream de comparação, não branch remota publicada.
+
+# ---------------------------------------------------------------------------
+# ITERAÇÃO 3 — o falso positivo que eu tinha que descartar antes de reportar
+# ---------------------------------------------------------------------------
+falso_positivo_de_worktree_iteracao_3: |
+  A suíte completa nesta worktree dá **71 failed / 4266 passed + 6 expected fail**
+  em 3 arquivos de `packages/web` (`webhook/whatsapp/__tests__/route.test.ts`,
+  `lib/coach/barrel-contract.test.ts`, `lib/env-banner.test.ts`), e o
+  `type-check` dá 12 linhas de erro. Número cru não é veredito — eu tinha que
+  provar a paridade com baseline, e o `git stash` não servia (o trabalho está
+  COMMITADO, o stash seria no-op).
+
+  Método usado, sem mutar a worktree e sem criar branch/worktree nova:
+  `git archive f3992973 | tar -x` num diretório temporário, replicando os MESMOS
+  3 symlinks de `node_modules` da worktree. Confirmado que o extrato é o baseline
+  (`grep -c 'Cadastre-se para mais informações'` = 0, `grep -c 'EM BREVE</span>'`
+  = 1). Rodados os 3 arquivos lá: **3 failed / 71 failed** com as MESMAS TRÊS
+  assinaturas de erro (`Cannot find package '@trifold/ai/src/flows/loop-breaker'`,
+  `TypeError: conjunto is not iterable`,
+  `AssertionError: expected 'undefined' to be 'function'`). Contagem idêntica →
+  **0 regressão**, é pré-existente.
+
+  Causa-raiz medida, não suposta: `node_modules` da worktree é symlink para
+  `/Users/lucasprado/trifold-crm/node_modules`, e `packages/{web,ai}/node_modules`
+  também. Não existe `node_modules/@trifold`, então `@trifold/ai`/`@trifold/shared`
+  resolvem pela checkout PRINCIPAL, que está num commit mais antigo.
+  `packages/ai/src/flows/loop-breaker.ts` **existe na worktree** e **não existe**
+  no destino do symlink. Idem para todos os símbolos do `type-check`:
+  `ehRefDeProducao`, `extrairRefDeUrlSupabase`, `detectObjection`,
+  `draftCoachReply`, `isCoachEligible`, `bloqueadoPorLoop` — cada um aparece em
+  2-3 arquivos da worktree e em **0** do destino do symlink.
+
+  Prova adicional de que não pode ser desta leva: `git diff f3992973..HEAD --stat
+  -- packages/` é **VAZIO** — zero byte de `.ts` tocado. `tsc` não lê `.html`,
+  `.jpg`, `.webp` nem `docs/*.md`.
+
+  `lint`: rodado com `turbo lint --force` (**0 cached**, porque cache hit não é
+  evidência) → 8/8 tasks, **0 errors** / 30 warnings, todas pré-existentes em
+  `packages/web`, nenhuma em `landing-pages/`.
+
+  Nota estrutural registrada: `pnpm-workspace.yaml` declara só `packages/*`, e
+  `landing-pages/yarden/package.json` não tem script de `lint`/`type-check` —
+  logo esses dois gates **não cobrem** este arquivo de forma nenhuma. A cobertura
+  real do `index.html` é o `vitest` de `landing-pages/yarden` + medição no
+  browser. Isso reforça 86.12-QA-010.
+
+status_reason_iteracao_2: >
   O conteúdo definitivo entrou correto: as 3 marcações de formulário são de fato
   isoladas, o dataset bate nos 2 pontos do <head>, o `noindex` saiu e a nova
   asserção bidirecional de `assets/` mata as 4 mutações que ela promete matar.
@@ -30,7 +240,7 @@ status_reason: >
   (trava de duplo-envio POR formulário) sobrevive à mutação — provado, não
   suposto.
 
-verdict_rationale: >
+verdict_rationale_iteracao_2: >
   Esta leva reescreveu o `index.html` de placeholder para a página definitiva e
   passou de 1 para 3 formulários. `api/`, `packages/web/` e a CSP do
   `trifold-design-system` NÃO foram tocados (`git diff 5a115358..HEAD` vazio
@@ -55,7 +265,7 @@ verdict_rationale: >
   CAPI), com a suíte verde. Num arquivo que o próprio README avisa que vai ser
   mexido de novo, isso é uma regressão à espera de um merge.
 
-checks:
+checks_iteracao_2:
   code_review: PASS         # 3 marcações, 1 lógica; isolamento real por closure; honeypot por acesso nomeado ao form; nenhum id duplicado (uniq -d vazio); media queries 980/979.98 sem sobreposição
   unit_tests: CONCERNS      # suíte verde (255 arq / 3155 passed + 6 expected fail), mas 5 de 11 mutações sobreviveram — ver `mutacoes_executadas`
   acceptance_criteria: PASS # AC1/AC4/AC10/AC12 re-verificados no arquivo novo; AC5-AC9 herdados intactos do gate 1 (git diff vazio); AC13 é pós-deploy (@devops/T13)
@@ -139,6 +349,82 @@ falsos_positivos_descartados: |
     apenas como aviso de rebase.
 
 top_issues:
+  # --- abertos na ITERAÇÃO 3 (2026-09-02) ---
+  - id: "86.12-QA-011"
+    severity: low
+    category: docs
+    iteracao: 3
+    finding: >
+      A linha de Status da story
+      (`docs/stories/86-12-pixel-capi-landing-yarden.story.md:3`) diz
+      `**Status:** InReview (QA PASS — liberado para @devops; \`Done\` após
+      T12/T13/AC13)`. O "QA PASS" ali é resíduo da iteração 1 e contradiz o gate
+      desde 2026-09-01, quando a iteração 2 baixou o veredito cumulativo para
+      CONCERNS. Quem ler só o cabeçalho da story conclui que a story está
+      liberada sem ressalvas e não vai procurar os 2 `medium` abertos. Não editei
+      a linha: `story-file-permissions` do @qa autoriza apenas a seção
+      "QA Results".
+    suggested_action: >
+      @po ou @dev: trocar por `InReview (QA CONCERNS — não bloqueia push; ver
+      86.12-QA-004/005; \`Done\` após T12/T13/AC13)`, ou remover a menção ao
+      veredito do cabeçalho e deixar o gate como fonte única.
+    status: OPEN
+
+  - id: "86.12-QA-010"
+    severity: low
+    category: tests
+    iteracao: 3
+    finding: >
+      Nada no repositório trava o conteúdo desta leva. (a) NENHUM teste afirma
+      sobre o título do formulário do hero — o próprio Change Log 0.17 admite
+      isso ("nenhum teste afirmava sobre o título") —, então as DUAS marcações
+      duplicadas (`leadForm` na linha 512 e `leadFormMobile` na 548) podem
+      dessincronizar num edit futuro e a suíte segue verde: a página passaria a
+      dizer coisas diferentes acima e abaixo de 980px, em silêncio.
+      (b) O teste bidirecional de `assets/` em
+      `landing-pages/yarden/tracking-browser.test.ts:145-156` compara apenas
+      NOMES de arquivo (`readdirSync` × refs dos atributos do HTML); é insensível
+      a conteúdo E a dimensão. Trocar o binário por um de proporção diferente e
+      deixar `width`/`height` do `<img>` desatualizados passa liso — exatamente o
+      erro que esta leva evitou à mão (637→636) e que ninguém pegaria na próxima.
+      (c) `pnpm-workspace.yaml` só declara `packages/*` e
+      `landing-pages/yarden/package.json` não tem script de `lint`/`type-check`,
+      então esses dois gates não cobrem o `index.html` de forma alguma — medido,
+      não suposto.
+    suggested_action: >
+      2 asserções estáticas baratas em `tracking-browser.test.ts`, no espírito das
+      que já existem lá: (1) extrair os `<h2>` dos containers `.hero-form` e
+      exigir `length === 2` E textos idênticos entre si — no SINGULAR não serve,
+      porque é a duplicação que é o risco; (2) para cada `<img>`, ler as dimensões
+      reais do binário em `assets/` (o header do JPEG/WebP basta, sem dependência
+      nova) e exigir que batam com `width`/`height` do atributo. As duas morrem se
+      mutadas e cobrem justamente a classe de erro desta leva.
+    status: OPEN
+
+  - id: "86.12-QA-009"
+    severity: low
+    category: docs
+    iteracao: 3
+    finding: >
+      Evidência vacuosa no Change Log 0.16 da story
+      (`docs/stories/86-12-pixel-capi-landing-yarden.story.md`, linha da entrada
+      0.16): o não-overflow do rótulo "LANÇAMENTO" é justificado com
+      "`eyebrow` 393,9px dentro de `brand` 413,3px". Isso compara CAIXAS, e
+      `.hero-eyebrow` (index.html:502) é filho de `.hero-brand-txt`, que é
+      `display:flex;flex-direction:column` — a caixa do filho é `stretch` do
+      container por construção, logo jamais poderia exceder o pai. O número é
+      verdadeiro e ao mesmo tempo incapaz de detectar a falha que alega excluir.
+      A conclusão está CERTA (eu confirmei), mas pela métrica certa: 1 linha em
+      todas as 14 larguras, com o TEXTO medindo 200,4px de 393,9 disponíveis a
+      1440px e 97,5px de ~170px a 320px.
+    suggested_action: >
+      Ao registrar não-overflow de elemento blockificado por flex/grid, citar
+      contagem de linhas + largura do texto (via `Range.getClientRects()`) ou
+      `scrollWidth` vs `clientWidth`. Comparação caixa-filho vs caixa-pai nesse
+      contexto é tautologia. Não requer mudança de código.
+    status: OPEN
+
+  # --- abertos na ITERAÇÃO 2 (2026-09-01) ---
   - id: "86.12-QA-005"
     severity: medium
     category: tests
@@ -249,13 +535,17 @@ top_issues:
     severity: low
     category: requirements
     finding: >
-      Segue OPEN e inalterado: nenhum dos 3 checkboxes de política é link
-      (`<span>` puro), nem o `<span class="politica">` do rodapé — não existe URL
-      de política publicada para apontar. Conteúdo pendente do stakeholder, não
-      fix de dev. Relacionado ao DT-1 (sem URL, um aceite persistido apontaria
-      para texto inexistente).
-    suggested_action: "Fornecer a URL da política. Fora do controle do @dev."
-    status: OPEN
+      RESOLVIDO — conferido por mim na iteração 3 e corrigido no registro: o
+      achado nasceu na iteração 1 e a iteração 2 o marcou OPEN, mas a rodada 0.14
+      da story (posterior ao commit f2ad92e9 que a iteração 2 auditou) versionou
+      `landing-pages/yarden/assets/politica-de-privacidade.pdf` e ligou os
+      **4** pontos a ele: os 3 checkboxes (index.html:530, 562, 636) e o rodapé
+      (index.html:660), todos com `target="_blank" rel="noopener"`. Não havia URL
+      pública porque a política virou PDF versionado, não página. Esta leva NÃO
+      tocou nesses links (a lista de `<a>` do DOM renderizado é idêntica ao
+      baseline) — a atualização aqui é só do registro do gate, que estava atrasado.
+    suggested_action: "Nenhuma. Fechado."
+    status: RESOLVED
 
   - id: "86.12-QA-003"
     severity: low
@@ -280,6 +570,19 @@ debitos_tecnicos_aceitos: |
   DT-2 (herdados da 86-11) — inalterados, nada nesta leva tocou os proxies.
 
 status_da_story: |
+  ITERAÇÃO 3 (2026-09-02): mantida em `InReview`, **NÃO promovida para `Done`** —
+  T12/T13 seguem `[ ]` e o AC13 segue não validado (`trifold.eng.br/yarden/` não
+  está no ar, projeto Vercel `yarden` não existe). O delta desta leva é PASS e
+  nada nele bloqueia o push. Os 2 achados novos são `low`: um é registro
+  (86.12-QA-009) e o outro é lacuna de teste sem defeito associado
+  (86.12-QA-010). O gate CUMULATIVO fica CONCERNS por herança das 2 lacunas
+  `medium` da iteração 2 (86.12-QA-004/005), que esta leva não tinha escopo para
+  fechar — mas que ela TANGENCIA: os títulos trocados estão justamente nas duas
+  marcações funcionalmente não testadas (`leadForm` e `leadFormMobile`), o que
+  sobe a prioridade prática de 86.12-QA-005.
+
+  ---
+  ITERAÇÃO 2 (2026-09-01):
   Mantida em `InReview`. **NÃO promovi para `Done`** — mesma lógica dos gates
   anteriores desta story e da irmã 86-11: `story-lifecycle.md` atribui o `Done` ao
   @devops após o push, T12 (projeto Vercel `yarden` + `LANDING_PAGE_WEBHOOK_SECRET`)
@@ -309,6 +612,39 @@ notas_para_devops: |
      `git check-ignore assets/*` → nenhum ignorado, e o `.vercelignore` do projeto
      (`.claude`, `README.md`, `*.test.ts`) **não** exclui `assets/` — conferido,
      porque excluir seria 404 silencioso sob o hero em produção.
+
+evidence_iteracao_3: |
+  Tudo abaixo executado por mim (Quinn) em 2026-09-02, na worktree
+  `.claude/worktrees/86-12-lancamento-mapa`. Nada aceito por relato do @dev.
+
+  | Verificação | Comando / método | Resultado |
+  |---|---|---|
+  | escopo real do diff | `git diff f3992973..HEAD --stat` | 4 arquivos (story.md, mapa .jpg, mapa .webp, index.html) |
+  | nenhum `.ts` tocado | `git diff f3992973..HEAD --stat -- packages/` | VAZIO |
+  | CSS não mudou | extrair `<style>`, remover comentários, normalizar, `shasum -a 256` | `538a326a…` nos DOIS lados — idêntico |
+  | JS não mudou | extrair todos os `<script>` inline dos dois lados, `diff` | VAZIO |
+  | 2 títulos do hero idênticos | `grep -n '<h2'` + leitura das linhas 512 e 548 | mesma string, byte a byte |
+  | resíduo do texto antigo | `grep -i 'antecipe'` | 0 ocorrências |
+  | `leadFormSaber` intocado | leitura de index.html:615-616 + screenshot de `#saber-mais` a 1440/1024px | "Quer saber mais?" / "Deixe seu contato e receba informações exclusivas" / "Enviar agora mesmo" |
+  | dimensões do arquivo | `file` e `sips -g pixelWidth -g pixelHeight` nos 2 binários | jpg 900x636, webp 900x636 |
+  | dimensões vs atributos | `naturalWidth/naturalHeight` vs `attrW/attrH` em runtime | 900/636 == 900/636; aspect exibido 1,4151 == intrínseco 1,4151 |
+  | asset antigo, p/ comparar | `git show f3992973:…/mapa-gleba-itororo.jpg` + inspeção visual | era 900x637 com silhueta marrom plana + "Gleba Itororó"; novo tem render real + "Localização" + endereço |
+  | overflow do título | Chromium, 14 larguras (320/360/375/390/430/480/546/768/980/1024/1440/1719/1920/2560), com screenshot em cada | 0 overflow de `h2`, 0 overflow de documento, máximo 2 linhas, 0 overflow vertical do card |
+  | fonte de verdade da medição | interceptar `fonts.googleapis.com/css2` e reescrever `display=optional`→`block` + `document.fonts.load("400 20px 'Montserrat'")` | Montserrat pintada, provada por 422,2px (Montserrat) vs 394,4px (fallback) no mesmo texto |
+  | mapa visualmente inteiro | screenshot de `.split--invista` a 1440px e 375px | 6 pins + "Localização" + 2 linhas de endereço, nada cortado |
+  | não-regressão do resto | render de baseline vs HEAD no Chromium a 1440px e 390px, `diff` de textContent / `<img>` / `<source>` / `<a>` / inputs / lista de `id` / href do WhatsApp / `<title>` / `<meta>` | divergem SÓ nas 3 mudanças pretendidas; todo o resto idêntico |
+  | erros de console | `console.error` + `pageerror` em todas as 14 larguras | 0 |
+  | teste bidirecional de assets | `npx vitest run landing-pages/yarden` | 2 arquivos / 50 passed |
+  | contagem de assets | `ls -1 assets \| wc -l` | 13 (bate com o File List) |
+  | suíte completa | `npx vitest run` | 71 failed / 4266 passed + 6 expected fail |
+  | BASELINE da suíte | `git archive f3992973 \| tar -x` em dir temp + os MESMOS 3 symlinks de `node_modules` + rodar os 3 arquivos que falharam | 71 failed — contagem e as 3 assinaturas de erro IDÊNTICAS → 0 regressão |
+  | causa-raiz do falso positivo | `ls node_modules/@trifold` (não existe) + `loop-breaker.ts` existe na worktree e NÃO no destino do symlink + grep dos 6 símbolos do type-check (2-3 arquivos na worktree, 0 no destino) | artefato de worktree, não defeito |
+  | type-check | `npm run type-check` | 12 linhas de erro, todas de resolução `@trifold/*`, nenhuma em `landing-pages/` |
+  | lint | `npx turbo lint --force` (**0 cached** — cache hit não é evidência) | 8/8 tasks, 0 errors / 30 warnings pré-existentes |
+  | nenhum push | `git ls-remote origin refs/heads/fix/86-12-yarden-lancamento-mapa` | VAZIO |
+  | branches remotas da story | `git ls-remote origin \| grep 86-12` | só `feat/86-12-yarden-conteudo-definitivo` (a antiga) |
+  | Status / tasks da story | leitura de `docs/stories/86-12-…story.md` | Status `InReview`; T12 e T13 seguem `[ ]` |
+  | links de política | `grep -n 'politica-de-privacidade'` | 4 (3 checkboxes + rodapé) → fecha 86.12-QA-002 |
 
 evidence_verificada_por_mim: |
   Tudo abaixo foi executado por mim nesta sessão. Nada aceito por relato de @dev,
