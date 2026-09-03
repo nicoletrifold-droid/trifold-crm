@@ -83,6 +83,7 @@ export async function POST(
     actionLink,
     siteUrl,
     mode: "reset",
+    orgId: appUser.org_id,
   })
 
   await sendEmail({

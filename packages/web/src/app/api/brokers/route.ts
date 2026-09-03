@@ -152,6 +152,7 @@ export async function POST(request: NextRequest) {
         actionLink,
         siteUrl,
         mode: "create",
+        orgId: appUser.org_id,
       })
 
       await sendEmail({
@@ -318,6 +319,7 @@ export async function POST(request: NextRequest) {
           actionLink,
           siteUrl,
           mode: "create",
+          orgId: appUser.org_id,
         })
 
         await sendEmail({

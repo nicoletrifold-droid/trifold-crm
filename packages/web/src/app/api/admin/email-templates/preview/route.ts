@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { can } from "@web/lib/permissions"
 import { getServerUser } from "@web/lib/auth"
 import { renderBaseLayout } from "@web/lib/email-layout"
+import { trifoldOrgId } from "@web/lib/tenancy/trifold-org"
 
 export async function POST(request: NextRequest) {
   const user = await getServerUser()
@@ -21,7 +22,11 @@ export async function POST(request: NextRequest) {
   }
 
   const resolved = resolveVariablesForPreview(html_body, variables ?? {})
-  const html = renderBaseLayout(resolved, { orgName: "Trifold" })
+  // Story 900-67 (AC5): ferramenta de PRÉ-VISUALIZAÇÃO do admin, não um envio a um tenant.
+  // O `orgId` é fixado no da Trifold DE PROPÓSITO, para que a saída continue byte a byte a
+  // de hoje (a logo). Omitir o campo faria `isMarcaTrifold(undefined) === false` e trocaria
+  // silenciosamente o preview por texto — comportamento novo que ninguém pediu.
+  const html = renderBaseLayout(resolved, { orgName: "Trifold", orgId: trifoldOrgId() })
 
   return NextResponse.json({ html, subject: subject ?? "" })
 }
