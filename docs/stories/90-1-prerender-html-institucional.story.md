@@ -1,6 +1,6 @@
 # Story 90-1 — Pré-renderizar o HTML institucional (Home, Sobre Nós, Empreendimentos, B2B, Blog)
 
-**Status:** Ready for Review (@dev, 2026-09-02) — QA-1 corrigido, aguardando re-verificação focada do @qa no passo 4 do `deploy.sh`
+**Status:** InReview (@devops, 2026-09-03) — deployado em produção e smoke-testado; PR #564 aberto e **aguardando confirmação explícita do usuário para merge** (promove para `Done` só depois do merge)
 **Epic:** 90 — SEO Técnico do site institucional trifold.eng.br
 **Executor:** @dev (Dex)
 **Quality Gate:** @qa (Quinn) — `*qa-gate` ao fim da implementação
@@ -972,6 +972,7 @@ Completion Notes abaixo.
 | 2026-09-01 | 0.8 | Decisão do usuário: AC7 deixa de dar escolha entre `inert`+`pointer-events:none` e remoção física — trava só na remoção física de `<form>`/`<button>`/`<input>` no script de prerender. Motivo explícito: `inert` é no-op em browsers antigos (pré-Chrome 102/Safari 15.5/Firefox 112) — mesmo minoria de tráfego, o usuário preferiu eliminar o risco de PII por completo em vez de mitigá-lo parcialmente. `inert` mantido só como alternativa descartada, com o motivo, para contexto. Referências cruzadas corrigidas em Task 6 e Testing (não apresentam mais as duas rotas como opção). Constrição de escopo dentro do que já estava aprovado pelo @po — não precisa de nova validação. Status permanece `Ready`. | @sm (River) |
 | 2026-09-02 | 1.0 | **Implementada pelo @dev (Dex).** Mecanismo aditivo entregue conforme especificado (`#dc-prerender` irmão + `MutationObserver` em `document.body` + checagem síncrona de corrida + `<style>x-dc{display:none}` pareado). Uma decisão de implementação não coberta pela story: o bloco é inserido **antes** do `<x-dc>`, não depois — por medição de CLS (3.5251 → 0.2862 somado; a variante "depois" chegava a 1.0045 numa página, porque o bloco visível era empurrado pela altura inteira do documento e o `componentDidMount` de cada página força layout lendo `window.innerWidth`). AC7 por remoção física (`inert` não usado em lugar nenhum), com âncoras preservadas de propósito e como invariante testada — desvio registrado para o @qa. AC2 com 0% de diff de pixel e zero console novo; AC6b com todas as 10 combinações ≤ 0.061. `deploy.sh` com os 5 passos + `--dry-run`, testado fim a fim incluindo os caminhos de abort e o fallback do AC5. 80/80 checagens de verificação. Status → `Ready for Review`. | @dev (Dex) |
 | 2026-09-02 | 1.1 | **Correção do gate do @qa (CONCERNS 9/10).** QA-1 (bloqueante): `deploy.sh` rodava `cd dist && vercel deploy`, mas `dist/` não tem `.vercel/project.json` e `assemble()` o recria a cada build — o deploy criaria um projeto Vercel novo em vez de publicar em `trifold-s-projects/trifold-design-system`. Medi as duas rotas na CLI 54.6.1: `--cwd dist` (rota b) **não** serve, move também a resolução do vínculo e dá o mesmo erro; adotada a rota (a), `copyProjectLink()` no `assemble()`, com `deploy.sh` e `build-dist.mjs` abortando duro se o vínculo não existir na fonte. Provado por `vercel env ls` de dentro do `dist/` reconstruído. QA-2: `id="dc-prerender"` sem sentinelas deixou de ser confundido com fallback do AC5; o teste de mutação manual do @qa virou suíte repetível de 10 mutantes (harness 80 → **90 checagens**). QA-3: redação de lint/typecheck/vitest corrigida para não sugerir cobertura que não existe sobre `landing-pages/`. QA-4/QA-7 deixados para o @sm. | @dev (Dex) |
+| 2026-09-03 | 1.2 | **Publicada em produção pelo @devops (Gage).** Branch `feat/90-1-prerender-institucional` cortada de `origin/main` (worktree isolada) com os 14 arquivos da story por pathspec — sem os commits de Microsoft Clarity nem o resíduo da 90-6 que contaminavam a working tree. PR #564 aberto, **sem merge** (aguarda confirmação do usuário). `./deploy.sh --dry-run` verde, deploy real `dpl_EGqFvA9ENYBydWY3rTXgzJM3SgPw` aliasado em `trifold.eng.br`, passo 5 (`check-live.mjs`) aprovado nas 5 URLs. Smoke test completo registrado na seção "Deploy & Smoke Test em produção" — inclui **envio real do formulário de contato**, que continua funcionando (POST `/api/contact` → 200, ramo de envio real comprovado por latência). QA-9 (linha órfã do Change Log) corrigido antes do commit. | @devops (Gage) |
 
 ## QA Results
 
@@ -1159,3 +1160,148 @@ rodada, visto no `vercel ls`): 5 páginas (documento **e** `<x-dc>`) + `Artigo` 
 **Pendências não bloqueantes** (nenhuma é condição para publicar): QA-4 e QA-7 (@sm — alimentam a 90-2 e a
 redação que as 90-3a/90-3b herdam), QA-9 (a linha `1.1` do Change Log ficou **depois** da seção QA Results,
 partindo a tabela — arrumar antes do commit), QA-5, QA-6, QA-8, QA-10 (informativos).
+
+---
+
+## Deploy & Smoke Test em produção (@devops — Gage, 2026-09-03)
+
+Seção do @devops (não edita `Dev Agent Record` nem `QA Results`, que pertencem ao @dev e ao @qa).
+
+### Branch e PR — o que entrou, e o que foi deliberadamente deixado de fora
+
+A working tree estava na branch `feat/86-12-yarden-conteudo-definitivo` (outra story), que carregava
+**dois blocos de contaminação**: (a) commits de instalação do Microsoft Clarity em `Home.dc.html` e
+`vercel.json`, de outra iniciativa; (b) resíduo da Story 90-6 (`Artigo/B2B/Blog/Empreendimentos.dc.html`
++ o rename de `Sobre Nós.dc.html`), que já está em `main` via PR #523.
+
+Por isso a branch da 90-1 foi cortada de `origin/main` em **worktree isolada**
+(`.claude/worktrees/90-1-prerender-institucional`) e os arquivos foram copiados e **staged por pathspec
+explícito** — nunca `git add -A`. Conferido antes do commit: 14 arquivos staged, nenhum `.dc.html`-fonte,
+nenhum `vercel.json`, nenhum rename.
+
+| Item | Valor |
+|------|-------|
+| Branch | `feat/90-1-prerender-institucional` (base `origin/main` @ `f3992973`) |
+| Commit | `3d634a51` — 14 arquivos, +3343 / −21 |
+| PR | **#564 — aberto, SEM merge** (aguarda confirmação explícita do usuário) |
+| QA-9 | corrigido antes do commit (linha `1.1` do Change Log movida para dentro da tabela) |
+| Varredura de segredos | 0 credenciais. Único achado: `prj_…` (projectId da Vercel, identificador não-secreto, com precedente em docs já versionados) |
+
+### Deploy
+
+| Passo | Resultado |
+|-------|-----------|
+| `./deploy.sh --dry-run` | **EXIT 0.** Passos 1–3 verdes; 18 entradas no assembly (inclui `.vercel/{project.json,README.txt}` do fix do QA-1); 5/5 páginas pré-renderizadas; gate pré-deploy aprovado com 2112 / 2011 / 956 / 5951 / 2794 chars — idêntico aos números do gate do @qa |
+| `./deploy.sh` (real) | **Sucesso.** `dpl_EGqFvA9ENYBydWY3rTXgzJM3SgPw`, target `production`, aliasado em `https://trifold.eng.br` |
+| Passo 5 (`check-live.mjs`) | Aprovado nas 5 URLs de produção na 1ª tentativa |
+
+**Por que o deploy saiu da working tree principal e não da worktree do PR** (decisão registrada porque é
+contraintuitiva): o assembly exige os ~77 MB de `assets/` + `uploads/`, que não estão no git e só existem
+na árvore principal. Mais importante: **`origin/main` não tem o Microsoft Clarity, mas produção tem.**
+Verificado por `sha256` antes de publicar — as 5 páginas servidas e o `support.js` eram byte-idênticos à
+árvore principal, e `origin/main` divergia em `Home.dc.html` e `vercel.json` (Clarity). Publicar de uma
+worktree cortada de `origin/main` teria **removido o Clarity de produção e revertido a CSP**. A árvore
+principal era a única fonte que reproduz produção + a mudança desta story.
+
+Confirmado depois do deploy: Clarity segue no HTML servido (2 ocorrências) e no header de CSP.
+
+### Smoke test — 8 verificações
+
+**1. `curl` nas 5 URLs — snapshot real servido antes do JS (AC1).** OK em 5/5.
+
+| URL | texto no `#dc-prerender` | âncoras | `{{` / `<sc-` no bloco | interativos no bloco | `<x-dc>` == fonte | bloco antes do `<x-dc>` | `{{` fora do `<x-dc>` |
+|-----|---|---|---|---|---|---|---|
+| `/` | 2112 | 20 | 0 / 0 | nenhum | ✅ byte a byte | ✅ | 0 |
+| `/sobre-nos` | 2011 | 14 | 0 / 0 | nenhum | ✅ byte a byte | ✅ | 0 |
+| `/empreendimentos` | 956 | 16 | 0 / 0 | nenhum | ✅ byte a byte | ✅ | 0 |
+| `/corporativas` | 5951 | 15 | 0 / 0 | nenhum | ✅ byte a byte | ✅ | 0 |
+| `/blog` | 2794 | 40 | 0 / 0 | nenhum | ✅ byte a byte | ✅ | 0 |
+
+A integridade do `<x-dc>` (AC3) foi verificada **por mim, manualmente** — o passo 5 do `deploy.sh` pula
+essa checagem quando roda contra produção ("sem fonte local para comparar"). Comparei o `<x-dc>` servido
+com o `.dc.html`-fonte: idêntico byte a byte nas 5 páginas.
+
+**2. Browser real — o snapshot DESAPARECE depois do mount (AC6a).** OK em 5/5.
+Chromium (Playwright 1.60.0), espera de `#dc-root` com filhos + 2,5 s de margem:
+`#dc-prerender` **removido do DOM** (não escondido) em 5/5; `#dc-root` com 1 filho e 956–5945 chars de
+texto; `<x-dc>` consumido pelo `boot()`; contagem de `h1` visível 0/0/1/1/1 — bate com a tabela do @qa.
+
+**3. ⭐ FORMULÁRIO DE CONTATO REAL — a verificação crítica de regressão. FUNCIONA.**
+Preenchido e enviado **pela UI, no browser, depois do mount concluído**, em `https://trifold.eng.br/`:
+
+- método: **`POST https://trifold.eng.br/api/contact`** — não é `GET` nativo de formulário;
+- resposta: **`200 {"ok":true}"`**;
+- **URL não mudou e não ganhou query string** (`https://trifold.eng.br/`, `search` vazio) — nenhuma PII
+  foi para a barra de endereço, para o histórico ou para os logs de acesso;
+- feedback visível ao usuário: *"Mensagem enviada! Em breve entraremos em contato."*;
+- honeypot `empresa` verificado **vazio** no corpo capturado; `loadedAt` ~6 s antes do submit (a guarda
+  `MIN_SUBMIT_MS` é 2 s).
+
+**O 200 é do ramo de envio real, não de um 200 "de mentira"** — provado por latência contra os dois
+controles negativos disparados na mesma sessão e na mesma origem:
+
+| Cenário | status | latência |
+|---------|--------|----------|
+| honeypot preenchido (`empresa` = valor) — retorna 200 sem chamar a Resend | 200 | **257 ms** |
+| time-guard (`loadedAt` = agora) — retorna 200 sem chamar a Resend | 200 | **185 ms** |
+| **envio real pelo formulário** | 200 | **2505 ms** |
+
+O envio real levou ~10x mais tempo: é o round-trip para `api.resend.com`. E como `api/contact.js`
+devolve `502 email_send_failed` se a Resend responde não-2xx (e `500` se a chave faltar), um `200` nesse
+ramo significa que a Resend **aceitou** a mensagem. Limitação registrada com honestidade: a confirmação
+do `last_event` pela API da Resend **não** foi feita — exigia ler a chave em texto claro, o que o
+ambiente bloqueou. A prova acima é indireta (ramo + latência), não o `last_event`.
+Foram 2 e-mails de smoke test para `caio@trifold.eng.br`, ambos identificados no corpo como
+"SMOKE TEST AUTOMATIZADO — Story 90-1 … Pode ignorar".
+
+**4. Nada é interativo ANTES do mount (AC7, reproduzido em produção).** OK em 5/5.
+Com `assets/vendor/react*.js` abortado na rede (janela pré-mount aberta indefinidamente):
+`#dc-prerender` vivo e visível com 899–5888 chars, `#dc-root` nunca criado, e no bloco
+**0** `form` / `input` / `button` / `textarea` / `select` / `iframe` / `script`, **0** atributos `on*`;
+`requestSubmit()` forçado em todo `<form>` do documento **não navega**; digitar + Enter sem foco não gera
+query string nem requisição contendo `nome=|email=|telefone=|mensagem=` (0 requisições suspeitas); 40x
+`Tab` pousam só em `A` e `BODY`. Âncoras preservadas (20/14/16/15/40), como esperado pela AC1.
+
+**5. Comportamento visual normal, sem flash e sem duplicação visível (AC2/AC6b).** OK em 10/10
+combinações página × viewport (390px e 1440px): **0** headings visíveis duplicados; bloco removido no
+mesmo tick de polling de 1 ms do mount (a janela de coexistência de 0,1–0,4 ms medida pelo @qa está
+abaixo da resolução do meu instrumento — na prática, imperceptível). Screenshots de Home mobile e Blog
+desktop inspecionados: layout normal.
+
+**CLS medido em produção:** soma **0,1823** | pior **0,0741** (`/corporativas` mobile) — todas as 10
+combinações abaixo do limite 0,1 de "bom". Referência do gate local: soma 0,2944 / pior 0,0583.
+
+**6. Console / rede sem regressão.** Os únicos 4xx são `404 /{{ c.src }}`, `/{{ s.logoSrc }}`,
+`/{{ t.photoSrc }}`, `/{{ t.photo }}` — `src` de imagem não resolvido **dentro do `<x-dc>`**, e são
+**pré-existentes**: o `.seo-metrics/baseline/report.json` (capturado em 2026-09-01, sobre a fonte, antes
+desta story) registra exatamente `404 …%7B%7B%20s.logoSrc%20%7D%7D` e `404 …%7B%7B%20c.src%20%7D%7D` na
+Home, com `errors: 2 / httpErrors: 2` — e o `comparison.json` fecha `httpBefore == httpAfter`.
+`/empreendimentos` e `/blog` ficaram com **0** erro e **0** 4xx em produção.
+
+**7. Sem regressão de roteamento nem nas outras rotas do projeto.**
+`200`: `/`, `/sobre-nos`, `/empreendimentos`, `/corporativas`, `/blog`, `/vindresidence/` (proxy do Vind),
+`/Artigo.dc.html?slug=f1`, `/support.js`. `301` da Story 90-6 preservados:
+`/Sobre%20Nós.dc.html` → `/sobre-nos`, `/B2B.dc.html` → `/corporativas`. `/api/contact` via `GET` → `405`.
+`/y/` segue `404` — estado pré-existente, fora do escopo desta story.
+
+**8. Nada do que a story criou foi exposto na web.** `404` em `/deploy.sh`, `/scripts/build-dist.mjs`,
+`/scripts/prerender.mjs`, `/dist/Home.dc.html`, `/.seo-metrics/after/report.json`, `/.vercel/project.json`,
+`/.claude/settings.json`, `/README.md`, `/.gitignore`, `/.vercelignore`. A allowlist do `build-dist.mjs`
+resolve isso por construção (nada fora da lista entra no `dist/`), e o `.vercelignore` novo é a rede de
+segurança para quem publicar da pasta-fonte por hábito.
+
+### Observações não bloqueantes
+
+- **Mount lento em `/corporativas` desktop na 1ª medição (8186 ms).** Era cache de edge frio logo depois
+  do deploy: re-medido 3x, deu 1438 / 1498 / 1261 ms. Não é efeito do bloco pré-renderizado (que adiciona
+  ~6 KB nessa página).
+- **Deployment anterior (`…-9jx77gcvy`) não serve como controle de console.** A URL de deployment injeta
+  toolbar/SSO da Vercel (`vercel.com/api/jwt`, Sentry) e roteia paths desconhecidos de forma diferente do
+  domínio aliasado. O controle válido é o `.seo-metrics/baseline/` — usado no item 6.
+
+### Estado final
+
+**Deploy concluído e verificado. Nenhuma divergência encontrada — nada volta para o @dev.**
+Status da story: **`InReview`**. O PR #564 fica **aberto, sem merge**, até confirmação explícita do
+usuário. Como este projeto não é deployado por git, o merge é apenas registro no repositório — produção
+já está com a Story 90-1 no ar.
