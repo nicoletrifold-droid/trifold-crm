@@ -3,26 +3,32 @@ story: "900.67"
 story_title: "O logo da Trifold no cabeçalho do e-mail deixa de ser decidido por regex no nome, e passa a ser por org_id"
 gate: CONCERNS
 status_reason: >-
-  **Rodada 2 — re-gate focado no CARRASCO, que é o que mudou (`161fae29` → `4bafc03d`).**
-  O conserto do QA-900-67-1 procede e é carregador: `objetoDeOpcoes()` recorta o último objeto
-  literal de TOPO da região e a régua passou a medir `s.opcoes`. **M5 🔴 2/17** nomeando
-  `appointment-email-reminders` e derrubando a contagem 2→1; **M5-contraprova com o arquivo de
-  teste do `161fae29` 🟢 15/15** — foi o detector novo que matou. **M1 e M2 re-rodadas: 🔴 2/17
-  cada.** **O achado do @dev está CONFIRMADO nas duas metades**, e é o mais importante do dia:
-  sem o `it` sintético novo a M3 fica **🟢 18/18** (medido), e com ele **🔴 1/18** — o conserto
-  que eu pedi, sozinho, teria tornado a AC11.1 inmatável em silêncio. **Ataquei o extrator eu
-  mesmo nas quatro formas nomeadas** (comentário `{/* */}` dentro das opções, `}`/`(`/`)`/`[`
-  dentro de literal de string, vírgula final, objeto em linha única): **nenhuma produz falso
-  verde**, e as três com `orgId` presente seguem 🟢 19/19 — não há falso alarme. **A concern que
-  resta é NOVA e é do último elo, não do extrator:** a dívida que o @dev nomeou como inalcançável
-  **é alcançável** — os tipos são mesmo planos, mas o argumento de planura só cobre a CHAVE
-  aninhada; o token `orgId` dentro do VALOR de uma opção-irmã do tipo string satisfaz
-  `PASSA_ORG_ID`. Medido em call site real (`admin-invite.ts:296`): logo perdida, `tsc` rc=0,
-  suíte **19/19 VERDE**.
+  **Rodada 3 — confirmacao final, escopo estreito (`4bafc03d` -> `261d542f`, um arquivo:
+  `header-brand.test.ts`).** O conserto do QA-900-67-5 **procede e e carregador**: **M6 🔴 2/18**
+  byte a byte como declarado, nomeando `src/lib/tenancy/admin-invite.ts` e derrubando a contagem
+  1->0; **M6-contraprova com o predicado de `4bafc03d` 🟢 19/19** — foi o apagamento novo que matou.
+  Reguas da raiz batem byte a byte: **318 arquivos · 4377 passed · 6 expected fail**. As duas
+  checagens que o @dev pediu que eu nao elogiasse **confirmam-se as duas**: (a) o falso alarme do
+  comentario colado na chave e **anterior** — restaurei o teste de `4bafc03d` e medi 🔴 **3/16** la,
+  igual ao declarado; (b) `codigoDe`/`linhasDeCodigo` **nao tem estado de string nenhum** (so a
+  guarda de `:` para URL), logo ha **um unico** lugar decidindo o que e literal — "sem segunda
+  varredura" e verdade lida no codigo. **O argumento da interpolacao esta certo**, e por um motivo
+  mais forte do que o declarado: a mascara so troca caractere por espaco, e para `orgId` sobreviver
+  desmascarado o caractere seguinte tem de ser uma aspa — que nao e espaco nem `[,:}]`. Logo a
+  mascara **nunca cria** um casamento; so pode gerar falso alarme, jamais falso verde. **Mas o
+  furo nao estava na interpolacao — estava ao lado dela.** Abro o **QA-900-67-6**: o gemeo por
+  CONCATENACAO do QA-900-67-5. Como a mascara apaga o CONTEUDO do literal e o token fica FORA
+  dele, `actionLink + "&org=" + orgId,` satisfaz `PASSA_ORG_ID` intacto. Medido em call site real,
+  `admin-invite.ts:296`: logo perdida, `tsc` rc=0, suite **20/20 VERDE**. E a segunda forma dispensa
+  variavel local: `actionLink + "&" + new URLSearchParams({ orgId: appUser.org_id ?? "" }).toString()`
+  em `users/[id]/reset-password/route.ts` — idiomatica, `tsc` rc=0, **20/20 VERDE**. **Populacao
+  alcancavel: 9 de 9 sitios fiados**, porque a segunda forma so exige um objeto aninhado dentro do
+  valor de qualquer opcao-irma. Pelo criterio de parada dito antes da medicao (>=1 sitio real
+  => conserta antes do merge), **este gate nao vira PASS**.
 reviewer: "Quinn (Test Architect)"
-updated: "2026-09-03T11:55:00Z"
-rodada: 2
-commit_avaliado: "4bafc03d (sobre 161fae29)"
+updated: "2026-09-03T12:20:00Z"
+rodada: 3
+commit_avaliado: "261d542f (sobre 4bafc03d)"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # O QUALIFICADOR
@@ -361,11 +367,147 @@ evidence_rodada_2:
   arvore_alheia: "os mesmos 6 arquivos de outra frente seguem sujos e NÃO foram tocados."
   doc_untracked: "✅ `docs/architecture/whitelabel-e-migracao-jud.md` segue untracked e FORA do commit — confirmado em `git diff --stat origin/main...HEAD`, que lista 17 arquivos e nenhum sob `docs/architecture/`."
 
+# =============================================================================
+# RODADA 3 — o delta de `4bafc03d` para `261d542f`
+# =============================================================================
+
+rodada_3_reguas:
+  suite_da_story: "header-brand.test.ts -> 20/20 (19 + 1 `it` novo). Baseline medida ANTES de cada mutacao."
+  test_raiz: "npx vitest run (da RAIZ) -> **318 arquivos · 4377 passed | 6 expected fail (4383)** — IDENTICO ao declarado. Rodada 2 media 4376; +1 = o `it` novo."
+  lint: "Aceito como declarado (rc=0, 0 erros / 30 warnings). O delta e um `.test.ts` e a rodada 2 mediu o mesmo numero."
+  type_check: "`npx tsc --noEmit` em packages/web rodado rc=0 ANTES de cada vermelho e ANTES de creditar cada falso verde. 4 execucoes."
+  build: >-
+    **Omissao ACEITA.** `git diff 4bafc03d HEAD -- packages/` e um arquivo so, `header-brand.test.ts`,
+    que o `include` do vitest casa e o bundle do Next nao. Nenhum artefato de producao mudou desde o
+    build 5/5 da rodada 1. Recusar aqui seria cerimonia, nao medida.
+
+rodada_3_mutacoes:
+  - id: M6
+    alvo: "src/lib/tenancy/admin-invite.ts:296 — tira a chave `orgId,` e devolve o token interpolado em `actionLink`"
+    resultado: "🔴 **2 failed / 18 passed**. Nomeia `src/lib/tenancy/admin-invite.ts` na particao SEM orgId e derruba a contagem 1->0. `tsc` rc=0 antes."
+    veredicto: "IDENTICO ao declarado, byte a byte."
+  - id: M6-contraprova
+    alvo: "MESMA mutacao, com o `header-brand.test.ts` de `4bafc03d` restaurado por `git show`"
+    resultado: "🟢 **19/19**."
+    veredicto: "Carregador confirmado — o apagamento do conteudo dos literais e o que mata, nao outra coisa."
+  - id: ATAQUE-comentario-colado
+    alvo: "comentario de bloco colado na chave de abertura das opcoes, em admin-invite.ts, contra o teste de `4bafc03d`"
+    resultado: "🔴 **3 failed / 16 passed**, com a vivacidade acesa."
+    veredicto: >-
+      **A alegacao do @dev e verdadeira: o falso alarme e ANTERIOR a este commit.** Causa confirmada
+      por leitura: a regra JSX de `linhasDeCodigo` leva a chave de abertura junto com o comentario, a
+      pilha nao acha objeto de topo, e o sitio cai fail-closed na particao acusada. **Julgamento:
+      aceitavel.** Falha na direcao visivel (vermelho que nomeia o arquivo E acende a vivacidade
+      `opcoes.literal === ""`, que diz QUAL elo quebrou), a forma nao existe no corpus, e o conserto
+      exigiria dar estado de string ao `codigoDe` — que e justamente a segunda maquina de estado que
+      esta onda esta evitando. Fica como **divida nomeada**, nao como bloqueio.
+  - id: M7-CONCAT
+    alvo: 'src/lib/tenancy/admin-invite.ts:296 — tira `orgId,` e escreve `actionLink: actionLink + "&org=" + orgId,`'
+    resultado: "🟢 **20/20 VERDE**, `tsc` rc=0. O convite de admin vai SEM `orgId` => `isMarcaTrifold(undefined)` = false => **perde a logo da Trifold em silencio**."
+    veredicto: "🔴 **FALSO VERDE — QA-900-67-6.**"
+  - id: M8-OBJETO-ANINHADO
+    alvo: 'src/app/api/users/[id]/reset-password/route.ts — tira `orgId: appUser.org_id,` e escreve `actionLink: actionLink + "&" + new URLSearchParams({ orgId: appUser.org_id ?? "" }).toString(),`'
+    resultado: "🟢 **20/20 VERDE**, `tsc` rc=0. Mesmo dano, em outro sitio."
+    veredicto: "🔴 **FALSO VERDE — QA-900-67-6, forma que NAO precisa de variavel local `orgId`.** E esta que abre a populacao para os 9."
+
+rodada_3_o_que_o_conserto_ACERTOU:
+  mascara_na_mesma_passada: >-
+    ✅ **Verdade, lida no codigo.** O array `mascara` e preenchido dentro do MESMO laco que equilibra
+    a pilha; nao ha segundo laco. E o vizinho suspeito tambem esta limpo: `linhasDeCodigo`/`codigoDe`
+    (`fonte-scan.ts`) **nao tem estado de string algum** — so a guarda para nao cortar URL. Entao nao
+    existem duas maquinas que possam divergir sobre o que e literal.
+  argumento_da_interpolacao: >-
+    ✅ **Correto, e por razao mais forte que a declarada.** O @dev justifica por semantica ("chave nao
+    mora dentro de string"). A justificativa robusta e mecanica: a mascara so troca caractere por
+    ESPACO, entao so pode **remover** casamentos. Para um `orgId` desmascarado casar `[,:}]` apos
+    caracteres mascarados, o caractere imediatamente seguinte teria de ser a aspa que abre o literal —
+    que nao e espaco nem `[,:}]`. **Logo a mascara nunca fabrica um casamento**: o pior que a
+    interpolacao apagada pode causar e falso ALARME (vermelho), nunca falso verde. Procurei os tres
+    contra-exemplos pedidos (chave computada com template literal, template tag, spread de objeto
+    inline): todos caem nesse lado seguro — apagados, viram vermelho que nomeia o arquivo. Nenhum
+    deles existe no corpus.
+  segunda_bateria: >-
+    ✅ **E a que vale, e eu nao herdei numero nenhum.** Nao conferi a bateria do @dev: re-rodei M6,
+    M6-contraprova e o ataque do comentario eu mesmo, contra o arquivo **como esta em `261d542f`**
+    (sha256 `a297fb67de912b49ca5f3df511c293a94e25ffb01fbef58c024f6f783c0b01fa`, conferido antes e
+    depois de cada mutacao). A limpeza cosmetica nao muda nada do que medi.
+
+rodada_3_issues:
+  - id: QA-900-67-6
+    severity: medium
+    finding: >-
+      🔴 **O gemeo por CONCATENACAO do QA-900-67-5 — a mascara fecha a interpolacao e deixa a
+      concatenacao aberta.** O conserto apaga o CONTEUDO do literal; num template, `orgId` mora
+      dentro do literal e morre. Numa concatenacao, `orgId` mora **fora** do literal — so as aspas e
+      o miolo sao apagados — e o token chega intacto a regua, seguido da virgula que satisfaz
+      `[,:}]`. E o MESMO refactor (carimbar a org na URL), escrito com `+` em vez de interpolacao.
+      **Medido em dois call sites reais, `tsc --noEmit` rc=0 nos dois, suite 20/20 VERDE nos dois:**
+      (1) `admin-invite.ts:296`; (2) `users/[id]/reset-password/route.ts` com `URLSearchParams`. Nos
+      dois casos `orgId` chega `undefined`, `isMarcaTrifold` devolve `false` e **o e-mail perde a
+      logo da Trifold em silencio** — exatamente o modo de falha que a AC11 existe para fechar.
+    populacao_alcancavel: >-
+      **9 de 9 call sites fiados.** A forma (1) e estreita — exige um token grafado `orgId` em escopo,
+      e so `admin-invite.ts` tem. A forma (2) **nao exige nada disso**: basta aninhar um objeto
+      literal com a chave `orgId` dentro do valor de qualquer opcao-irma, e os dois tipos de opcoes
+      tem irma de tipo `string` escrita inline em **todos** os 9 sitios (`userName`/`actionLink`/
+      `siteUrl` no `renderPasswordActionEmail`; `orgName` no `renderBaseLayout`). Medida direta em 2
+      dos 9; o mecanismo e o mesmo nos outros 7 e nao depende de nome de variavel.
+    mecanismo: >-
+      `objetoDeOpcoes` esta CERTO nas duas vezes — devolve o objeto de opcoes e mascara os literais.
+      Quem erra segue sendo o ultimo elo: `PASSA_ORG_ID` e um teste de PRESENCA DE TEXTO, e continua
+      sem distinguir "`orgId` e CHAVE deste objeto" de "`orgId` e texto em algum lugar do codigo
+      deste objeto". Apagar strings tirou UMA das fontes de texto alheio; sobraram a concatenacao e
+      o objeto aninhado.
+    suggested_owner: dev
+    suggested_action: >-
+      Parar de perguntar por texto e passar a perguntar por POSICAO: casar `orgId` so quando ele e
+      chave **do nivel de topo** do objeto extraido — a mesma pilha que ja roda pode marcar, na mesma
+      passada, quais indices estao no nivel do objeto de opcoes e fora de qualquer aninhamento. Ai o
+      objeto aninhado, o `+ orgId` e a interpolacao caem juntos, sem mascara e sem terceira regua.
+      Carrascos obrigatorios: **M7-CONCAT** e **M8-OBJETO-ANINHADO** 🔴, com M1/M2/M3/M5/M6 seguindo
+      🔴 e os 9 sitios reais seguindo 🟢 (controle de falso alarme).
+
+rodada_3_residuo_presenca_vs_valor:
+  decisao: "**(c) BLOQUEANTE — e a decisao mudou por medida, nao por gosto.**"
+  fundamento: >-
+    Na rodada 2 fechei "a regua mede presenca, nao valor" por LEITURA, e classifiquei como estreito.
+    A rodada 3 mostra que era a leitura que estava estreita: o residuo nao e uma nota de rodape do
+    QA-900-67-5, e a **causa** dele — e a causa continua viva depois do conserto, com populacao que
+    subiu de 1 para 9. `orgId: outraCoisa` (valor errado na chave certa) segue **divida nomeada de
+    severidade baixa**: exige um `tsc` que aceite o tipo e nao tem forma medida em sitio real. Mas
+    "chave errada com o texto certo" tem **duas** formas medidas, em **dois** sitios reais, com
+    `tsc` rc=0 e suite verde. Pelo criterio dito antes da medicao, isso nao e divida.
+
+evidence_rodada_3:
+  mutacoes_rodadas: 5
+  call_sites_reais_mutados: 2
+  falsos_verdes_encontrados: 2
+  falsos_alarmes_encontrados: 1
+  falso_alarme_detalhe: "o do comentario colado na chave — reproduzido em `4bafc03d` (🔴 3/16), portanto ANTERIOR a este commit. Aceito como divida nomeada."
+  restauro: >-
+    `cp` + `shasum -a 256` nos 3 arquivos tocados (`header-brand.test.ts`, `admin-invite.ts`,
+    `users/[id]/reset-password/route.ts`); todos batem com o commit ao fim, e `git status --short --
+    packages/` volta a listar apenas os 6 arquivos alheios. Zero `git stash`, zero commit, zero push,
+    zero escrita em producao.
+  arvore_alheia: >-
+    Os mesmos 6 arquivos de outra frente seguem sujos e NAO foram tocados. Estao DENTRO da arvore
+    varrida pela AC11, mas a baseline 20/20 foi medida com eles no lugar antes de cada mutacao,
+    entao nao contaminam nenhum delta.
+  gate_r2_no_commit: "✅ Confirmado: `261d542f` inclui `docs/qa/gates/900.67-istrifold-por-org-id-no-email.yml`. Esta atualizacao da rodada 3 fica nao commitada, para o @devops levar junto."
+  doc_untracked: "✅ `docs/architecture/whitelabel-e-migracao-jud.md` segue untracked (`git ls-files --error-unmatch` falha) e fora do commit."
+
 recommended_status: >-
-  ✓ **CONCERNS — pode seguir para @devops.** O QA-900-67-1 está morto e o conserto é carregador
-  (M5 🔴 + contraprova 🟢). O achado do @dev sobre a M3 procede nas duas metades e o re-armamento
-  é o que segura a AC11.1. O que impede o PASS é o QA-900-67-5: existe forma medida, em call site
-  real, com `tsc` rc=0, que perde a logo e deixa a suíte VERDE — a mesma regra que me fez abrir a
-  16ª armadilha me obriga a abrir esta. É estritamente menor (1 sítio hoje contra 10) e o conserto
-  é curto; se o coordenador optar por mergear e abrir acompanhamento, o risco está quantificado
-  acima e nomeado com dono.
+  ⚠️ **CONCERNS — NAO seguir para @devops ainda.** O conserto entregue e bom e e carregador: M6 🔴 2/18
+  com contraprova 🟢 19/19, mascara numa passada so (verificado por leitura, e o `codigoDe` vizinho nao
+  tem estado de string), argumento da interpolacao correto — e mais forte do que o @dev o defendeu,
+  porque a mascara so sabe REMOVER casamentos. As duas checagens pedidas confirmam-se: o falso alarme
+  do comentario e anterior (🔴 3/16 em `4bafc03d`) e a segunda bateria e a que vale (re-medi tudo eu
+  mesmo contra o sha256 do commit). O que impede o PASS e o **QA-900-67-6**: o conserto fechou a
+  interpolacao e deixou a **concatenacao** aberta — mesmo refactor, mesmo dano, escrito com `+`. Duas
+  formas medidas, dois call sites reais, `tsc` rc=0, **20/20 verde** nas duas, e-mail sem logo nas duas.
+  **Populacao alcancavel: 9 de 9 sitios fiados**, contra 1 de 10 na rodada anterior — o furo nao
+  encolheu, cresceu. Pelo criterio de parada que o coordenador fixou ANTES da medicao (>=1 sitio real
+  alcancavel => conserta antes do merge), isto e conserto, nao divida. O conserto e curto e e o ultimo:
+  trocar o teste de PRESENCA DE TEXTO por um de POSICAO NA PILHA, na mesma passada que ja existe — o
+  que mata a interpolacao, a concatenacao e o objeto aninhado de uma vez, e torna a mascara
+  desnecessaria.

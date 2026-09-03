@@ -151,29 +151,41 @@ const FIADOS_ESPERADOS: Record<string, number> = {
 }
 
 /**
- * `orgId` como CHAVE do objeto de opções: `orgId: valor`, `orgId,` (atalho) ou `orgId }` (atalho
- * na ÚLTIMA posição, sem vírgula final).
+ * A régua PURAMENTE TEXTUAL das rodadas 1–3: `orgId` seguido de `:`, `,` ou `}`.
  *
- * O `}` na classe não é decoração: a primeira versão desta régua era `/\borgId\s*[,:]/` e ficou
- * VERDE contra a mutação obrigatória da AC11.5 — `{ orgName: "Portal de Obras", orgId }` em
- * `auto-vincular-cliente-obra.ts` não tem vírgula depois do atalho, e o furo deixava a porta
- * que a AC7 existe para fechar aberta em silêncio. Foi a mutação que achou, não a leitura.
+ * ⚠️ **Não é a régua desta suíte.** Está aqui como CONTROLE POSITIVO dos `it` de furo: cada
+ * entrada de ataque é medida também por ela, e o `true` prova que a entrada é mesmo a forma que
+ * a régua antiga aprovava — sem isso, um extrator que devolvesse vazio para tudo passaria nos
+ * `it` de furo por acidente, e não por medir.
  *
- * ⚠️ É testada contra `objetoDeOpcoes(regiao).codigo`, **nunca** contra a região inteira (furo
- * QA-900-67-1) e **nunca** contra o `.literal` (furo QA-900-67-5). Ver `objetoDeOpcoes`.
+ * A história de por que ela morreu, em três epiciclos, é o motivo de a régua de hoje ser de
+ * POSIÇÃO e não de texto:
  *
- * ⚠️ Ancorar em `(^|[{,])` NÃO substitui o apagamento de string: medido pelo @qa, a âncora
- * ingênua continua casando `${orgId}`, porque o caractere anterior é o `{` do abre-interpolação.
+ * 1. **QA-900-67-1** — medida contra a REGIÃO da chamada, casava `orgId` escondido no argumento
+ *    `content`. Conserto: medir só o objeto de opções (`objetoDeOpcoes`).
+ * 2. **QA-900-67-5** — medida contra o objeto de opções, casava `orgId` interpolado no VALOR de
+ *    uma opção-irmã (``actionLink: `${actionLink}&org=${orgId}` ``), porque o `}` do
+ *    fecha-interpolação satisfaz a classe. Conserto de então: apagar o conteúdo dos literais.
+ * 3. **QA-900-67-6** — a máscara apaga o CONTEÚDO do literal, e na CONCATENAÇÃO o token mora
+ *    FORA dele: `actionLink: actionLink + "&org=" + orgId,` ficava 🟢 20/20 em call site real, e
+ *    o mesmo valia para um objeto ANINHADO no valor de uma irmã
+ *    (`new URLSearchParams({ orgId: … })`) — que não exige nome nenhum e alcançava **9 dos 9**
+ *    sítios fiados.
+ *
+ * Três consertos de texto, três furos de texto. A pergunta nunca foi "o token `orgId` aparece?",
+ * e sim "`orgId` é CHAVE DE TOPO do objeto de opções?". `objetoDeOpcoes` responde essa, extraindo
+ * as chaves na mesma passada que equilibra os delimitadores — ver `passaOrgId`.
  */
-const PASSA_ORG_ID = /\borgId\s*[,:}]/
+const REGUA_SO_DE_TEXTO = /\borgId\s*[,:}]/
 
 /**
  * Da abertura do marcador até o parêntese que a FECHA, contando profundidade.
  *
  * Recorte por balanceamento e não "até o fim do arquivo": um `slice` até o EOF engoliria o call
  * site seguinte, e a asserção sobre o primeiro passaria a ser satisfeita pelo segundo. Sem
- * fechamento, devolve `""` — que não casa `PASSA_ORG_ID` e cai na partição SEM `orgId`, onde a
- * asserção de conjunto o acusa pelo nome. Um recorte que falhou nunca vira aprovação.
+ * fechamento, devolve `""` — de onde `objetoDeOpcoes` não extrai chave nenhuma, e o sítio cai na
+ * partição SEM `orgId`, onde a asserção de conjunto o acusa pelo nome. Um recorte que falhou nunca
+ * vira aprovação.
  */
 function regioesDeChamada(codigo: string, marcador: string): string[] {
   const regioes: string[] = []
@@ -195,126 +207,155 @@ function regioesDeChamada(codigo: string, marcador: string): string[] {
   }
 }
 
-/** O que `objetoDeOpcoes` devolve: o recorte cru e o recorte SEM o conteúdo dos literais. */
+/** O que `objetoDeOpcoes` devolve: o recorte cru e as CHAVES DE TOPO desse recorte. */
 interface Opcoes {
   /** O objeto de opções como está escrito no arquivo. Serve para ler e para asserção de forma. */
   literal: string
   /**
-   * O MESMO recorte com o conteúdo de todo literal de string apagado (trocado por espaço, com as
-   * quebras de linha preservadas). É contra ISTO — e só isto — que `PASSA_ORG_ID` é medido.
+   * Os nomes que aparecem em POSIÇÃO DE CHAVE no nível de topo desse objeto, na ordem do texto.
+   * É a única coisa que a régua consulta — ver `passaOrgId`.
    */
-  codigo: string
+  chaves: string[]
 }
 
-/** Extração que não achou objeto de opções. Fail-closed nos dois campos. */
-const SEM_OPCOES: Opcoes = { literal: "", codigo: "" }
+/** Extração que não achou objeto de opções. Fail-closed: nenhuma chave. */
+const SEM_OPCOES: Opcoes = { literal: "", chaves: [] }
 
 /**
- * O ÚLTIMO objeto literal de TOPO da região — o objeto de OPÇÕES, e só ele.
+ * 🔴 **A régua.** `orgId` está fiado como CHAVE DE TOPO do objeto de opções?
  *
- * Medir `PASSA_ORG_ID` contra a região INTEIRA foi o furo **QA-900-67-1**: a região vai de
- * `renderBaseLayout(` até o `)` que a fecha, e portanto inclui o argumento `content`. Um token
- * `orgId:` em QUALQUER argumento satisfazia a régua. Medido pelo @qa: tirar
- * `orgId: appointment.org_id` das OPÇÕES de `appointment-email-reminders` (o e-mail passa a
- * renderizar TEXTO em vez da logo, em silêncio) e devolver o token dentro de um comentário HTML
- * no corpo deixava `tsc` em rc=0 e a suíte INTEIRA verde — o modo de falha nº 1 que a AC11 existe
- * para fechar, na forma que o próximo refactor produz (`renderBaseLayout(montarCorpo({ orgId }),
- * { orgName })`).
+ * Não é presença de TEXTO — é POSIÇÃO NA PILHA. Foi essa troca de natureza que encerrou três
+ * rodadas de epiciclo sobre `REGUA_SO_DE_TEXTO` (ver o histórico lá em cima): interpolação,
+ * concatenação e objeto aninhado no valor de uma opção-irmã morrem todos de uma vez, porque
+ * nenhum deles põe o nome em posição de chave no topo.
+ */
+function passaOrgId(opcoes: Opcoes): boolean {
+  return opcoes.chaves.includes("orgId")
+}
+
+const INICIO_DE_NOME = /[A-Za-z_$]/
+const CORPO_DE_NOME = /[\w$]/
+
+/**
+ * O ÚLTIMO objeto literal de TOPO da região — o objeto de OPÇÕES — e as chaves de topo DELE.
  *
- * **"De topo" é o que fecha isso**: só conta o `{` que abre quando a pilha de aninhamento tem
- * apenas o `(` da própria chamada. O objeto que o @qa escondeu no `content` está dentro de um
- * `${…}` de template literal — nunca no topo da lista de argumentos.
+ * Uma passada só, com pilha de delimitadores e estado de literal de string. A pilha já existia
+ * para achar o objeto; marcar a POSIÇÃO de cada nome é o registro que faltava nela.
  *
- * A varredura tem ESTADO de string (`'`, `"`, crase, e o `${…}` que volta a ser código dentro do
- * template): sem ele, uma chave dentro de um literal desbalancearia a pilha. Comentários já
- * saíram antes, em `codigoDe` (AC11.1).
+ * ## O que "de topo" e "posição de chave" significam aqui
  *
- * **Fail-closed nas três direções**: região sem `(`, região sem fechamento, ou chamada que passa
- * as opções por VARIÁVEL (`renderBaseLayout(corpo, opcoes)`) devolvem `""` — que não casa
- * `PASSA_ORG_ID`, cai na partição SEM `orgId` e é acusada pelo nome. Uma extração que não achou
- * o objeto nunca vira aprovação.
+ * - **De topo (o objeto)**: só conta o `{` que abre quando a pilha tem apenas o `(` da própria
+ *   chamada. Objeto dentro de outro argumento, dentro de outra chamada ou dentro de um `${…}`
+ *   nunca é o objeto de opções.
+ * - **De topo (a chave)**: só conta o nome lido quando a pilha é exatamente `["(", "{"]` — isto é,
+ *   diretamente dentro do objeto de opções, fora de qualquer aninhamento — e em posição de chave:
+ *   logo após a abertura do objeto ou após uma `,` daquele nível, com o próximo caractere não
+ *   branco sendo `:` (`orgId: valor`), `,` (atalho) ou `}` (atalho na última posição, sem vírgula
+ *   final — a forma que a mutação obrigatória da AC11.5 exige, e que a primeira régua desta story
+ *   deixou passar).
  *
- * ## Por que o `.codigo` existe — o furo QA-900-67-5
+ * ## Por que POSIÇÃO, e não texto — o furo QA-900-67-6
  *
- * A versão anterior declarava um resíduo "não alcançável": um `orgId` aninhado dentro das opções
- * (`{ orgName, extra: { orgId } }`) casaria, mas os dois tipos são PLANOS e o excess property
- * checking do `tsc` recusa a chave inventada. O argumento estava certo e era irrelevante — **a
- * dívida não precisa de chave inventada**. `PASSA_ORG_ID` é texto, e o token `orgId` dentro do
- * VALOR de uma opção-irmã do tipo string satisfazia a régua. Medido pelo @qa em call site REAL,
- * `src/lib/tenancy/admin-invite.ts:296`: tirar a chave `orgId,` e trocar `actionLink,` por
- * `` actionLink: `${actionLink}&org=${orgId}` `` — o que um refactor de rastreamento de org
- * produz sozinho — deixava `tsc` em rc=0, o convite de admin SEM a logo, e a suíte 19/19 verde.
- * O `}` que fecha a interpolação vinha logo depois do token e satisfazia a classe `[,:}]`.
+ * A régua de texto foi consertada três vezes e furou três vezes, sempre um elo adiante. A terceira
+ * (`.codigo`, com o conteúdo dos literais apagado) caiu porque **a máscara apaga o conteúdo do
+ * literal e na CONCATENAÇÃO o token mora fora dele**. Medido pelo @qa em dois call sites REAIS,
+ * `tsc` rc=0 e suíte 20/20 verde nos dois, o e-mail sem logo nos dois:
  *
- * Por isso a mesma varredura devolve `codigo`: o conteúdo de todo literal (aspas, aspas duplas e
- * crase) sai trocado por espaço antes de a régua correr. Sem segunda varredura — duas máquinas de
- * estado que possam divergir são a dívida que esta onda está fechando.
+ * - `src/lib/tenancy/admin-invite.ts:296` — a chave `orgId,` sai e `actionLink,` vira
+ *   `actionLink: actionLink + "&org=" + orgId,`.
+ * - `src/app/api/users/[id]/reset-password/route.ts` — a chave sai e `actionLink,` vira
+ *   `actionLink: actionLink + "&" + new URLSearchParams({ orgId: … }).toString()`. Esta forma
+ *   **não exige nome nenhum**: basta aninhar `{ orgId: … }` no valor de qualquer opção-irmã, e os
+ *   dois tipos de opção têm irmã `string` inline em **9 dos 9** sítios fiados.
  *
- * **`${…}` também é apagado, embora seja CÓDIGO para o JS.** É deliberado: a pergunta desta régua
- * é "`orgId` está fiado como CHAVE das opções?", e uma chave não pode morar dentro de um literal
- * de string. Tudo que aparece numa interpolação é, por construção, parte do VALOR de uma
- * opção-irmã — deixar a interpolação transparente reabre exatamente o QA-900-67-5. Os 10 call
- * sites reais têm o `orgId` FORA de string, e a vivacidade abaixo acende se isso mudar.
+ * Medir posição mata as três formas de uma vez, e **torna a máscara desnecessária** — ela foi
+ * removida, não deixada como código órfão: um nome só é lido como chave fora de qualquer literal,
+ * porque a mesma pilha que equilibra os delimitadores sabe quando está dentro de um.
  *
- * Limite conhecido: literal de expressão regular com aspas ou chaves desbalanceadas dentro da
- * chamada confundiria a pilha. Nenhum dos 10 call sites tem um, e a vivacidade
- * (`opcoes.literal !== ""`, abaixo) acende se algum passar a ter.
+ * ## Fail-closed
+ *
+ * Região sem `(`, região sem o `)` que a fecha, chamada que passa as opções por VARIÁVEL
+ * (`renderBaseLayout(corpo, opcoes)`) ou objeto sem nenhuma chave de topo reconhecível devolvem
+ * `chaves` vazio — o sítio cai na partição SEM `orgId` e é acusado pelo nome. Uma extração que não
+ * achou nunca vira aprovação.
+ *
+ * ## Limites conhecidos, todos fail-closed (falso alarme visível, nunca verde silencioso)
+ *
+ * - Chave em forma de literal (`{ "orgId": v }`) ou computada (`{ ["orgId"]: v }`) não é lida como
+ *   chave: o sítio seria ACUSADO, não aprovado. Nenhum dos 10 sítios reais usa essas formas, e o
+ *   `it` dos 9 fiados acende se algum passar a usar.
+ * - `orgId` espalhado por `...` a partir de outro objeto (`{ ...comOrgId }`) também acusa.
+ * - Comentário é removido antes, por `codigoDe` (AC11.1) — sem isso, um comentário entre a `,` e a
+ *   chave quebraria a leitura da chave seguinte e produziria falso alarme. É o que o `it` da
+ *   AC11.1 mede, nos dois sentidos.
+ *
+ * O resíduo que SOBRA é `orgId: outraCoisa` — chave certa, VALOR errado. Está declarado como
+ * dívida BAIXA na Story 900-67: fechá-lo exigiria seguir o valor, e isso não é régua de
+ * texto-fonte. A régua mede fiação, não destinatário.
  */
 function objetoDeOpcoes(regiao: string, marcador: string): Opcoes {
   const abre = marcador.length - 1
   if (regiao[abre] !== "(") return SEM_OPCOES
   const pilha: string[] = ["("]
-  // O texto mascarado é construído NA MESMA passada: a máquina de estado que equilibra a pilha é
-  // a que sabe o que é literal. Uma segunda varredura poderia divergir desta em silêncio.
-  const mascara = regiao.split("")
-  /** Aspas ABERTAS na pilha. `> 0` ⇒ este ponto do texto mora dentro de um literal. */
-  let aspas = 0
   let candidato = -1
+  let chavesCandidatas: string[] = []
+  /** Estamos num ponto do objeto de topo onde a próxima coisa lida seria uma CHAVE? */
+  let esperandoChave = false
   let de = -1
   let ate = -1
+  let chaves: string[] = []
   let fechou = false
-
-  // Espaço, não remoção: apagar encurtando deslocaria `de`/`ate`, que indexam o texto ORIGINAL.
-  // A quebra de linha fica: `codigoDe` já juntou as linhas com `\n` e o `\s*` da régua a atravessa
-  // de qualquer jeito, então preservá-la só mantém o recorte legível numa falha.
-  const apagar = (i: number) => {
-    if (i < mascara.length && mascara[i] !== "\n") mascara[i] = " "
-  }
 
   for (let i = abre + 1; i < regiao.length; i++) {
     const c = regiao[i]
     const topo = pilha[pilha.length - 1]
-    // Avaliado ANTES de processar `c`: diz se este caractere já estava dentro de um literal.
-    const emLiteral = aspas > 0
 
+    // Dentro de um literal de string: nada aqui é chave, e nada aqui mexe na pilha além do
+    // próprio fechamento e do `${…}` do template, que volta a ser código para o balanceamento.
     if (topo === "'" || topo === '"' || topo === "`") {
-      if (c === "\\") {
-        apagar(i)
-        apagar(i + 1)
-        i++
-      } else if (c === topo) {
-        pilha.pop()
-        aspas--
-        // A aspa que fecha um literal ANINHADO (dentro de um `${…}`) ainda é conteúdo do de fora.
-        if (aspas > 0) apagar(i)
-      } else if (topo === "`" && c === "$" && regiao[i + 1] === "{") {
-        apagar(i)
-        apagar(i + 1)
+      if (c === "\\") i++
+      else if (c === topo) pilha.pop()
+      else if (topo === "`" && c === "$" && regiao[i + 1] === "{") {
         pilha.push("${")
         i++
-      } else {
-        apagar(i)
       }
       continue
     }
 
-    // Daqui para baixo `c` é CÓDIGO para o JS. Se `emLiteral`, esse código está dentro de um
-    // `${…}` de template — e para ESTA régua isso é valor, não chave. Ver o cabeçalho.
-    if (emLiteral) apagar(i)
+    // POSIÇÃO: diretamente dentro do objeto de opções, fora de qualquer aninhamento.
+    if (pilha.length === 2 && pilha[1] === "{") {
+      if (c === ",") {
+        esperandoChave = true
+        continue
+      }
+      if (esperandoChave) {
+        // `charAt` e não indexação: sob `noUncheckedIndexedAccess` o índice devolve
+        // `string | undefined`, e `undefined` não entra num `RegExp.test`. Fora do texto o
+        // `charAt` devolve `""`, que não casa nenhuma das classes — o mesmo fail-closed.
+        if (/\s/.test(regiao.charAt(i))) continue
+        if (INICIO_DE_NOME.test(regiao.charAt(i))) {
+          let j = i + 1
+          while (j < regiao.length && CORPO_DE_NOME.test(regiao.charAt(j))) j++
+          let k = j
+          while (k < regiao.length && /\s/.test(regiao.charAt(k))) k++
+          const seguinte = regiao.charAt(k)
+          // `:` é `chave: valor`; `,` e `}` são o atalho. Qualquer outra coisa (`(` de método,
+          // por exemplo) não é a fiação que a AC4/AC5 pede, e o sítio cai na partição acusada.
+          if (seguinte === ":" || seguinte === "," || seguinte === "}") {
+            chavesCandidatas.push(regiao.slice(i, j))
+          }
+          esperandoChave = false
+          i = j - 1
+          continue
+        }
+        // `...`, aspas, `[`: não é chave de nome simples. Sai do modo chave e deixa o caractere
+        // seguir para o tratamento estrutural abaixo (o `[` precisa entrar na pilha).
+        esperandoChave = false
+      }
+    }
 
     if (c === "'" || c === '"' || c === "`") {
       pilha.push(c)
-      aspas++
       continue
     }
 
@@ -324,7 +365,11 @@ function objetoDeOpcoes(regiao: string, marcador: string): Opcoes {
     }
 
     if (c === "{") {
-      if (pilha.length === 1) candidato = i
+      if (pilha.length === 1) {
+        candidato = i
+        chavesCandidatas = []
+        esperandoChave = true
+      }
       pilha.push("{")
       continue
     }
@@ -334,6 +379,7 @@ function objetoDeOpcoes(regiao: string, marcador: string): Opcoes {
       if (aberto === "{" && pilha.length === 1 && candidato >= 0) {
         de = candidato
         ate = i
+        chaves = chavesCandidatas
         candidato = -1
       }
       // O `)` que zera a pilha é o que fecha a chamada: daí em diante já não é esta região.
@@ -347,13 +393,13 @@ function objetoDeOpcoes(regiao: string, marcador: string): Opcoes {
   // Sem o `)` da chamada, o que veio antes é um recorte truncado, e um objeto achado nele pode
   // estar aberto no texto real. Fail-closed nos dois campos.
   if (!fechou || de < 0) return SEM_OPCOES
-  return { literal: regiao.slice(de, ate + 1), codigo: mascara.slice(de, ate + 1).join("") }
+  return { literal: regiao.slice(de, ate + 1), chaves }
 }
 
 interface CallSite {
   arquivo: string
   regiao: string
-  /** O objeto de opções da região. `PASSA_ORG_ID` mede o `.codigo`, nunca o `.literal`. */
+  /** O objeto de opções da região. A régua consulta `.chaves`; `.literal` é só para ler. */
   opcoes: Opcoes
   marcador: string
 }
@@ -394,19 +440,24 @@ function contarPor(sites: CallSite[]): Map<string, number> {
   return mapa
 }
 
-// `s.opcoes.codigo`, jamais `s.regiao` (a região inclui o argumento `content` — QA-900-67-1) e
-// jamais `s.opcoes.literal` (o token dentro de um literal de string — QA-900-67-5).
-const comOrgId = contarPor(callSites.filter((s) => PASSA_ORG_ID.test(s.opcoes.codigo)))
-const semOrgId = contarPor(callSites.filter((s) => !PASSA_ORG_ID.test(s.opcoes.codigo)))
+// A partição sai de `passaOrgId` — POSIÇÃO na pilha, nunca casamento de texto. Medir texto contra
+// a região (QA-900-67-1), contra o objeto cru (QA-900-67-5) ou contra o objeto mascarado
+// (QA-900-67-6) furou três vezes; ver o histórico em `REGUA_SO_DE_TEXTO`.
+const comOrgId = contarPor(callSites.filter((s) => passaOrgId(s.opcoes)))
+const semOrgId = contarPor(callSites.filter((s) => !passaOrgId(s.opcoes)))
 const ordenado = (m: Map<string, number>) => Object.fromEntries([...m].sort())
 
 /**
- * O carrasco do EXTRATOR — QA-900-67-1 e QA-900-67-3.
+ * O carrasco do EXTRATOR — QA-900-67-1, -3, -5 e -6.
  *
  * Estes `it` rodam contra entradas SINTÉTICAS, e é de propósito: o corpus real tem 10 call sites
  * todos bem-comportados, e uma régua que só olha o corpus não distingue "o extrator está certo"
- * de "o corpus ainda não produziu a forma errada". A forma errada já foi produzida uma vez — pelo
- * @qa, contra o código de verdade — e está reproduzida aqui.
+ * de "o corpus ainda não produziu a forma errada". Cada forma errada aqui já foi produzida uma
+ * vez — pelo @qa, contra o código de verdade — e está reproduzida.
+ *
+ * **Todo `it` de furo tem controle positivo com `REGUA_SO_DE_TEXTO`**: a mesma entrada, medida
+ * pela régua de TEXTO das rodadas 1–3, sai `true`. Sem essa linha, um extrator que devolvesse
+ * "nenhuma chave" para tudo passaria em todos eles por acidente, e não por medir.
  *
  * O `it` que ficava aqui antes ("a contagem por arquivo bate com uma medida independente do mesmo
  * texto") foi APAGADO, não consertado: os dois lados contavam ocorrências dos MESMOS marcadores no
@@ -416,24 +467,47 @@ const ordenado = (m: Map<string, number>) => Object.fromEntries([...m].sort())
  * não pode reprovar é pior que guarda ausente, porque conta como cobertura. Quem cobre o recorte
  * é, e sempre foi, o `it` "nenhum recorte engoliu o call site vizinho".
  */
-describe("objetoDeOpcoes — a régua mede as OPÇÕES, não a região (QA-900-67-1/5)", () => {
+describe("objetoDeOpcoes — a régua mede POSIÇÃO, não texto (QA-900-67-1/5/6)", () => {
   const REND = "renderBaseLayout("
 
   /**
-   * O veredicto da régua para cada call site de uma fonte SINTÉTICA, pelo caminho COMPLETO:
-   * `codigoDe` → `regioesDeChamada` → `objetoDeOpcoes` → `PASSA_ORG_ID` sobre o `.codigo`.
-   * É o mesmo caminho que o corpus percorre — nenhum elo é pulado.
+   * As opções de cada call site de uma fonte SINTÉTICA, pelo caminho COMPLETO:
+   * `codigoDe` → `regioesDeChamada` → `objetoDeOpcoes`. É o mesmo caminho que o corpus percorre —
+   * nenhum elo é pulado.
    */
-  const passa = (fonte: string) =>
-    callSitesDe("sintetico.ts", fonte).map((s) => PASSA_ORG_ID.test(s.opcoes.codigo))
+  const opcoesDe = (fonte: string) => callSitesDe("sintetico.ts", fonte).map((s) => s.opcoes)
 
-  it("recorta o objeto de opções — e é ele que a régua aprova", () => {
+  /** O veredicto da régua de verdade, por call site. */
+  const passa = (fonte: string) => opcoesDe(fonte).map(passaOrgId)
+
+  /** O veredicto da régua de TEXTO morta, por call site. Só existe como controle positivo. */
+  const passaNoTexto = (fonte: string) =>
+    opcoesDe(fonte).map((o) => REGUA_SO_DE_TEXTO.test(o.literal))
+
+  it("recorta o objeto de opções e lê as chaves de TOPO dele", () => {
     const regiao = 'renderBaseLayout("<p>Body</p>", { orgName: "Trifold", orgId: appUser.org_id })'
     const opcoes = objetoDeOpcoes(regiao, REND)
     expect(opcoes.literal).toBe('{ orgName: "Trifold", orgId: appUser.org_id }')
-    // O `.codigo` perde só o MIOLO do literal: a estrutura, as chaves e o `orgId` continuam lá.
-    expect(opcoes.codigo).toBe('{ orgName: "       ", orgId: appUser.org_id }')
-    expect(PASSA_ORG_ID.test(opcoes.codigo)).toBe(true)
+    // As chaves, na ordem do texto — e SÓ elas: nada do VALOR entra nesta lista.
+    expect(opcoes.chaves).toEqual(["orgName", "orgId"])
+    expect(passaOrgId(opcoes)).toBe(true)
+  })
+
+  it("as três formas de escrever a chave contam; o atalho na última posição inclusive", () => {
+    // `orgId: valor`, `orgId,` e `orgId }` (sem vírgula final). A terceira é a forma da mutação
+    // obrigatória da AC11.5, e foi ela que a primeira régua desta story deixou passar.
+    expect(objetoDeOpcoes('renderBaseLayout(c, { a: 1, orgId: x })', REND).chaves).toEqual([
+      "a",
+      "orgId",
+    ])
+    expect(objetoDeOpcoes("renderBaseLayout(c, { orgId, a: 1 })", REND).chaves).toEqual([
+      "orgId",
+      "a",
+    ])
+    expect(objetoDeOpcoes("renderBaseLayout(c, { a: 1, orgId })", REND).chaves).toEqual([
+      "a",
+      "orgId",
+    ])
   })
 
   it("🔴 o furo QA-900-67-1: `orgId` escondido no argumento `content` NÃO conta", () => {
@@ -443,38 +517,36 @@ describe("objetoDeOpcoes — a régua mede as OPÇÕES, não a região (QA-900-6
     const regiao =
       'renderBaseLayout(`<p>Olá, ${broker.name}!</p><!--${({ orgId: a.org_id }).orgId ?? ""}-->`, { orgName: "Trifold" })'
     expect(objetoDeOpcoes(regiao, REND).literal).toBe('{ orgName: "Trifold" }')
-    expect(PASSA_ORG_ID.test(objetoDeOpcoes(regiao, REND).codigo)).toBe(false)
-    // Controle positivo, obrigatório: é a MESMA entrada que a régua antiga aprovava. Sem esta
-    // linha, um `objetoDeOpcoes` que devolvesse `""` para tudo passaria neste `it` por acidente.
-    expect(PASSA_ORG_ID.test(regiao)).toBe(true)
+    expect(objetoDeOpcoes(regiao, REND).chaves).toEqual(["orgName"])
+    // Controle positivo, obrigatório: é a MESMA entrada que a régua antiga aprovava, medida
+    // contra a região. Sem esta linha, um extrator que devolvesse vazio para tudo passaria aqui.
+    expect(REGUA_SO_DE_TEXTO.test(regiao)).toBe(true)
   })
 
   it("objeto aninhado em OUTRA CHAMADA também não conta — a forma do próximo refactor", () => {
     const regiao = 'renderBaseLayout(montarCorpo({ orgId }), { orgName: "Trifold" })'
     expect(objetoDeOpcoes(regiao, REND).literal).toBe('{ orgName: "Trifold" }')
-    expect(PASSA_ORG_ID.test(objetoDeOpcoes(regiao, REND).codigo)).toBe(false)
-    expect(PASSA_ORG_ID.test(regiao)).toBe(true)
+    expect(objetoDeOpcoes(regiao, REND).chaves).toEqual(["orgName"])
+    expect(REGUA_SO_DE_TEXTO.test(regiao)).toBe(true)
   })
 
   it("fail-closed: opções por VARIÁVEL, ou região truncada, caem na partição acusada", () => {
     // "Não consegui medir" nunca pode virar "está fiado": sem objeto literal de topo o resultado
-    // é `""`, que não casa a régua e cai no lado que a asserção de conjunto acusa pelo nome.
-    // `toEqual` sobre o par: os DOIS campos têm de sair vazios. Um `.literal` vazio com um
-    // `.codigo` sobrevivente reabriria a porta pelo campo que a régua realmente mede.
-    const VAZIO = { literal: "", codigo: "" }
+    // é o par vazio, que não tem chave nenhuma e cai no lado que a asserção de conjunto acusa
+    // pelo nome. `toEqual` sobre o par: os DOIS campos têm de sair vazios.
+    const VAZIO = { literal: "", chaves: [] }
     expect(objetoDeOpcoes("renderBaseLayout(corpo, opcoes)", REND)).toEqual(VAZIO)
     expect(objetoDeOpcoes("renderBaseLayout(corpo, { orgId }", REND)).toEqual(VAZIO)
     expect(objetoDeOpcoes("", REND)).toEqual(VAZIO)
-    expect(PASSA_ORG_ID.test("")).toBe(false)
+    expect(passaOrgId(SEM_OPCOES)).toBe(false)
   })
 
-  it("🔴 o furo QA-900-67-5: `orgId` dentro de um LITERAL DE STRING não conta", () => {
+  it("🔴 o furo QA-900-67-5: `orgId` INTERPOLADO no valor de uma opção-irmã não conta", () => {
     // Forma exata da mutação M6 do @qa, sobre `src/lib/tenancy/admin-invite.ts:296`: a CHAVE
     // `orgId,` sai das opções — o convite de admin perde a logo da Trifold em silêncio — e o
     // token reaparece interpolado na URL de uma opção-irmã, que é o que um refactor de
-    // rastreamento de org produz sozinho. `tsc` aceita, e contra o `.literal` isto ficava
-    // 19/19 VERDE. Está aqui como código sintético para que a régua não dependa de ninguém
-    // manter aquele call site na forma que hoje a mata.
+    // rastreamento de org produz sozinho. `tsc` aceita, e contra o objeto CRU isto ficava
+    // 19/19 verde.
     const comOrgIdSoNaString = [
       "const { subject, html } = renderPasswordActionEmail({",
       "userName: admin.name ?? nomeDerivado,",
@@ -484,27 +556,73 @@ describe("objetoDeOpcoes — a régua mede as OPÇÕES, não a região (QA-900-6
       "})",
     ].join("\n")
     expect(passa(comOrgIdSoNaString)).toEqual([false])
+    // O nome não está na lista de chaves — e as chaves REAIS estão, o que prova que a leitura
+    // aconteceu (uma lista vazia passaria no `passa` acima por acidente).
+    expect(opcoesDe(comOrgIdSoNaString).map((o) => o.chaves)).toEqual([
+      ["userName", "actionLink", "siteUrl", "mode"],
+    ])
+    // Controle positivo: é a MESMA entrada que a régua de `4bafc03d` aprovava sobre o objeto cru.
+    expect(passaNoTexto(comOrgIdSoNaString)).toEqual([true])
 
-    // Controle positivo nº 1, obrigatório: é a MESMA entrada que a régua de `4bafc03d` aprovava.
-    // Sem o apagamento do conteúdo do literal, o `}` do fecha-interpolação satisfaz a classe
-    // `[,:}]` — o `.literal` prova que a diferença está no apagamento, e não em outra coisa.
-    const literais = callSitesDe("sintetico.ts", comOrgIdSoNaString).map((s) => s.opcoes.literal)
-    expect(literais.map((l) => PASSA_ORG_ID.test(l))).toEqual([true])
-
-    // Controle positivo nº 2: o apagamento não come a fiação LEGÍTIMA que vem DEPOIS de um
-    // literal, nem quando o vizinho é uma crase. Um estado de string que não fechasse mascararia
-    // o resto do objeto e reprovaria os 10 sítios reais — falso alarme, acusado aqui.
+    // Falso alarme, o outro sentido: o estado de literal não pode comer a fiação LEGÍTIMA que vem
+    // DEPOIS de um literal, nem quando o vizinho é uma crase.
     expect(passa(comOrgIdSoNaString.replace('mode: "create",', "mode: `create`, orgId,"))).toEqual([
       true,
     ])
   })
 
-  it("comentário DENTRO do objeto de opções não conta como fiação (AC11.1)", () => {
-    // O carrasco PRÓPRIO do `codigoDe` obrigatório, e a resposta ao QA-900-67-3: até aqui a
-    // matabilidade da AC11.1 dependia de UMA linha de prosa no comentário da AC7 em
-    // `auto-vincular-cliente-obra.ts` — reescrever aquela prosa devolvia o filtro ao estado
-    // decorativo, em silêncio. Agora o filtro morre por construção: tirar `codigoDe` de
-    // `callSitesDe` deixa este `it` vermelho, e nenhuma prosa do repositório o sustenta.
+  it("🔴 o furo QA-900-67-6 (a): `orgId` CONCATENADO no valor de uma opção-irmã não conta", () => {
+    // Forma exata da mutação M7 do @qa, sobre `src/lib/tenancy/admin-invite.ts:296`. A máscara de
+    // literais da rodada 3 apagava o CONTEÚDO da string; na concatenação o token mora FORA dela,
+    // e a régua de texto voltava a casar `orgId,`. Medido em call site real: `tsc` rc=0, convite
+    // de admin sem a logo, suíte 20/20 VERDE.
+    const comOrgIdConcatenado = [
+      "const { subject, html } = renderPasswordActionEmail({",
+      "userName: admin.name ?? nomeDerivado,",
+      'actionLink: actionLink + "&org=" + orgId,',
+      "siteUrl,",
+      'mode: "create",',
+      "})",
+    ].join("\n")
+    expect(passa(comOrgIdConcatenado)).toEqual([false])
+    expect(opcoesDe(comOrgIdConcatenado).map((o) => o.chaves)).toEqual([
+      ["userName", "actionLink", "siteUrl", "mode"],
+    ])
+    // Controle positivo: a régua de texto — inclusive com o conteúdo dos literais apagado, porque
+    // o token está fora deles — aprova esta entrada. É o furo, medido.
+    expect(passaNoTexto(comOrgIdConcatenado)).toEqual([true])
+  })
+
+  it("🔴 o furo QA-900-67-6 (b): objeto ANINHADO no valor de uma opção-irmã não conta", () => {
+    // Forma exata da mutação M8 do @qa, sobre `src/app/api/users/[id]/reset-password/route.ts`.
+    // Esta é a pior das duas porque **não exige nome nenhum**: basta aninhar `{ orgId: … }` no
+    // valor de qualquer opção-irmã do tipo string, e os dois tipos de opção têm irmã `string`
+    // inline em 9 dos 9 sítios fiados. `tsc` rc=0, e-mail sem logo, suíte 20/20 VERDE.
+    const comOrgIdAninhado = [
+      "const { subject, html } = renderPasswordActionEmail({",
+      "userName: brokerName,",
+      'actionLink: actionLink + "&" + new URLSearchParams({ orgId: appUser.org_id ?? "" }).toString(),',
+      "siteUrl,",
+      'mode: "reset",',
+      "})",
+    ].join("\n")
+    expect(passa(comOrgIdAninhado)).toEqual([false])
+    // A chave aninhada não sobe: as chaves de topo são só as quatro reais.
+    expect(opcoesDe(comOrgIdAninhado).map((o) => o.chaves)).toEqual([
+      ["userName", "actionLink", "siteUrl", "mode"],
+    ])
+    expect(passaNoTexto(comOrgIdAninhado)).toEqual([true])
+
+    // Falso alarme, o outro sentido: a fiação legítima que vem DEPOIS de um objeto aninhado
+    // continua sendo lida. Um `esperandoChave` que não se restabelecesse na `,` de topo depois do
+    // aninhamento reprovaria os sítios reais.
+    expect(passa(comOrgIdAninhado.replace('mode: "reset",', 'mode: "reset", orgId'))).toEqual([true])
+  })
+
+  it("comentário DENTRO do objeto de opções — os dois sentidos (AC11.1)", () => {
+    // Sentido 1 — comentário NÃO conta como fiação. Quem fecha esta porta agora é a POSIÇÃO: o
+    // `/` não é início de nome, então o modo "esperando chave" se desliga e nada depois dele
+    // naquele item é lido como chave. A régua de texto lia `orgId:` desta prosa como fiação.
     const semFiacao = [
       "const html = renderBaseLayout(corpo, {",
       '  orgName: "Portal de Obras",',
@@ -513,10 +631,26 @@ describe("objetoDeOpcoes — a régua mede as OPÇÕES, não a região (QA-900-6
     ].join("\n")
     // `toEqual([false])` e não `.some()`: afirma o veredicto E que houve exatamente um call site.
     expect(passa(semFiacao)).toEqual([false])
-    // Controle positivo no mesmo `it`: com o `orgId` em CÓDIGO, o mesmo caminho aprova.
-    expect(passa(semFiacao.replace("// orgId: deliberadamente ausente — ver AC7", "orgId,"))).toEqual([
-      true,
-    ])
+    // Sem controle positivo de `REGUA_SO_DE_TEXTO` aqui, e o motivo é medido: `.literal` já sai
+    // de `codigoDe`, então a régua de texto também não vê este comentário. Quem faz o papel de
+    // controle positivo neste `it` é a linha abaixo — com o `orgId` em CÓDIGO, o mesmo caminho
+    // aprova, o que prova que o `false` de cima veio do comentário e não de um extrator morto.
+    expect(passa(semFiacao.replace("// orgId: deliberadamente ausente — ver AC7", "orgId,"))).toEqual(
+      [true],
+    )
+
+    // Sentido 2 — e é ele que torna o `codigoDe()` da AC11.1 OBRIGATÓRIO por construção. Um
+    // comentário entre a `,` e a chave seguinte quebra a leitura DAQUELA chave: sem remover
+    // comentário, `orgId` deixa de ser visto e o sítio vira FALSO ALARME. Tirar `codigoDe` de
+    // `callSitesDe` derruba esta linha.
+    //
+    // ⚠️ Na rodada 3 este carrasco morava no sentido 1, e a troca da régua de texto por posição o
+    // teria desarmado em silêncio: com a régua nova, o sentido 1 dá `false` com ou sem
+    // `codigoDe`. Foi a re-rodada da M3 contra a régua nova que achou isso — troca de régua
+    // invalida os vermelhos de TODAS as mutações, não só os da que mudou.
+    const fiadoAtrasDeComentario = 'renderBaseLayout(corpo, { orgName, /* ver AC7 */ orgId })'
+    expect(passa(fiadoAtrasDeComentario)).toEqual([true])
+    expect(opcoesDe(fiadoAtrasDeComentario).map((o) => o.chaves)).toEqual([["orgName", "orgId"]])
   })
 })
 
