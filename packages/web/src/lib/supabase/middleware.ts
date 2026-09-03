@@ -1,6 +1,7 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { destinoDoBounceDeLogin, papelDoHost } from "@web/lib/tenancy/papel-do-host"
 
 /**
  * Reads the user's role.
@@ -135,7 +136,10 @@ export async function updateSession(request: NextRequest) {
     // Logged in user on /login → bounce to their home (legacy behavior, only for /login)
     if (user && pathname === "/login") {
       const url = request.nextUrl.clone()
-      url.pathname = "/dashboard"
+      // Story 900-65: no host do console (`papelDoHost() === "admin"`) o destino é `/platform`.
+      // Sem `PLATFORM_ADMIN_HOSTS` o papel é sempre `"app"` e o destino continua `/dashboard`,
+      // byte a byte igual ao de antes. O host vem do cabeçalho, nunca de `nextUrl.hostname`.
+      url.pathname = destinoDoBounceDeLogin(papelDoHost(request.headers.get("host")))
       return NextResponse.redirect(url)
     }
     // /cliente while logged in is intentionally NOT redirected here:
