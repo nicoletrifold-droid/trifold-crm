@@ -3,20 +3,26 @@ story: "900.67"
 story_title: "O logo da Trifold no cabeçalho do e-mail deixa de ser decidido por regex no nome, e passa a ser por org_id"
 gate: CONCERNS
 status_reason: >-
-  O mecanismo está certo e o defeito está morto: `isMarcaTrifold` compara por identidade, a fiação
-  chega aos 9 sítios, e eu **li os 9** — o `orgId` de cada um é mesmo o do DESTINATÁRIO (os alvos
-  são buscados com `.eq("org_id", appUser.org_id)`, o broker é inserido com `org_id: appUser.org_id`,
-  o cron usa `appointment.org_id` para os dois destinatários, e `ensureAdminInvited(orgId)` é a org
-  convidada). As duas descobertas que o @dev declara foram **reproduzidas**, e as duas procedem:
-  com o detector antigo `/\borgId\s*[,:]/` a M2 fica **VERDE**, e sem a linha "Concretamente: NÃO
-  acrescente `orgId,`…" a M3 fica **VERDE** — os dois consertos são carregadores, não cosméticos.
-  Réguas batem byte a byte com o declarado (318 · 4372 | 6 · lint 0 erros · type-check 8/8 · build
-  5/5 `--force`). **A concern é a 16ª armadilha, e é do carrasco, não do código:** `PASSA_ORG_ID` é
-  testado contra a REGIÃO INTEIRA da chamada, não contra o objeto de opções — medido, um call site
-  que PERDE o `orgId` das opções e menciona `orgId:` no argumento VIZINHO fica verde na suíte
-  inteira (318/4372), que é exatamente o modo de falha nº 1 que a AC11 existe para fechar.
+  **Rodada 2 — re-gate focado no CARRASCO, que é o que mudou (`161fae29` → `4bafc03d`).**
+  O conserto do QA-900-67-1 procede e é carregador: `objetoDeOpcoes()` recorta o último objeto
+  literal de TOPO da região e a régua passou a medir `s.opcoes`. **M5 🔴 2/17** nomeando
+  `appointment-email-reminders` e derrubando a contagem 2→1; **M5-contraprova com o arquivo de
+  teste do `161fae29` 🟢 15/15** — foi o detector novo que matou. **M1 e M2 re-rodadas: 🔴 2/17
+  cada.** **O achado do @dev está CONFIRMADO nas duas metades**, e é o mais importante do dia:
+  sem o `it` sintético novo a M3 fica **🟢 18/18** (medido), e com ele **🔴 1/18** — o conserto
+  que eu pedi, sozinho, teria tornado a AC11.1 inmatável em silêncio. **Ataquei o extrator eu
+  mesmo nas quatro formas nomeadas** (comentário `{/* */}` dentro das opções, `}`/`(`/`)`/`[`
+  dentro de literal de string, vírgula final, objeto em linha única): **nenhuma produz falso
+  verde**, e as três com `orgId` presente seguem 🟢 19/19 — não há falso alarme. **A concern que
+  resta é NOVA e é do último elo, não do extrator:** a dívida que o @dev nomeou como inalcançável
+  **é alcançável** — os tipos são mesmo planos, mas o argumento de planura só cobre a CHAVE
+  aninhada; o token `orgId` dentro do VALOR de uma opção-irmã do tipo string satisfaz
+  `PASSA_ORG_ID`. Medido em call site real (`admin-invite.ts:296`): logo perdida, `tsc` rc=0,
+  suíte **19/19 VERDE**.
 reviewer: "Quinn (Test Architect)"
-updated: "2026-09-03T11:40:00Z"
+updated: "2026-09-03T11:55:00Z"
+rodada: 2
+commit_avaliado: "4bafc03d (sobre 161fae29)"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # O QUALIFICADOR
@@ -37,7 +43,12 @@ qualificador_o_que_NAO_esta_provado: >-
 # Réguas — medidas nesta sessão, nesta árvore
 # ─────────────────────────────────────────────────────────────────────────────
 reguas:
-  test_raiz: "pnpm test → 318 arquivos · 4372 passed | 6 expected fail (4378) — IDÊNTICO ao declarado"
+  test_raiz_rodada2: "pnpm test (da RAIZ) → 318 arquivos · 4376 passed | 6 expected fail (4382) — IDÊNTICO ao declarado (+4 = 5 novos − 1 apagado)"
+  type_check_rodada2: "pnpm type-check --force → 8/8 tasks"
+  lint_rodada2: "pnpm lint --force → 8/8 tasks, 0 erros, 30 warnings (todos pré-existentes)"
+  build_rodada2: "NÃO re-rodado, e a omissão é declarada: o delta 161fae29→4bafc03d são 3 arquivos — o gate yml, o story md e `header-brand.test.ts`. Nenhum entra no bundle do Next. O 5/5 da rodada 1 continua valendo."
+  suite_da_story_rodada2: "header-brand.test.ts → 19/19 (15 + 5 novos − 1 apagado)"
+  test_raiz: "[rodada 1] pnpm test → 318 arquivos · 4372 passed | 6 expected fail (4378)"
   lint_raiz: "pnpm lint --force → 8/8 tasks, 0 erros, 30 warnings (todos pré-existentes)"
   type_check: "pnpm type-check --force → 8/8 tasks"
   build: "pnpm build --force → 5/5. O `Ecmascript file had an error` é o pré-existente e alheio (capi-hashing/crypto); `✓ Compiled successfully`, 244/244 páginas"
@@ -115,11 +126,74 @@ verificacao_secao_5_2:
     (`.eq("type","pre_bolsao_aviso")`, linhas 186-194). Claim + marcador.
 
 # ─────────────────────────────────────────────────────────────────────────────
+# RODADA 2 — o carrasco: o que foi medido nesta sessão
+# ─────────────────────────────────────────────────────────────────────────────
+rodada_2_mutacoes:
+  - id: M3-sem-o-it-novo
+    o_que: "`const codigo = codigoDe(fonte)` → `const codigo = fonte` em `callSitesDe`, COM o `it` sintético novo APAGADO do arquivo"
+    resultado: >-
+      🟢 **18/18 VERDE.** Metade (a) do achado do @dev **CONFIRMADA**: medir só `s.opcoes` tirou o
+      comentário da AC7 de dentro do que a régua lê, e as asserções de CORPUS deixaram de matar a
+      M3. O conserto do QA-900-67-1, sozinho, teria tornado a AC11.1 inmatável **em silêncio** —
+      régua trocada invalida vermelho antigo, pela quarta vez nesta onda.
+  - id: M3-com-o-it-novo
+    o_que: "a mesma mutação, no arquivo como está em `4bafc03d`"
+    tsc: "rc=0"
+    resultado: >-
+      🔴 **1 failed / 18 passed**, e quem mata é exatamente o `it` novo — `comentário DENTRO do
+      objeto de opções não conta como fiação (AC11.1)`. Metade (b) **CONFIRMADA**. O re-armamento
+      funciona, e agora o carrasco da AC11.1 é código sintético dentro do próprio arquivo de teste,
+      não uma linha de prosa em `auto-vincular-cliente-obra.ts` (QA-900-67-3 fechado por
+      construção).
+  - id: M5
+    o_que: "tira `orgId: appointment.org_id` das OPÇÕES de `appointment-email-reminders:83` e devolve o token dentro de um comentário HTML no corpo"
+    tsc: "rc=0"
+    resultado: "🔴 **2 failed / 17 passed** — nomeia `src/app/api/cron/appointment-email-reminders/route.ts` no conjunto E derruba a contagem 2→1 no `Record`. IDÊNTICO ao declarado."
+  - id: M5-contraprova
+    o_que: "a MESMA mutação, com `header-brand.test.ts` restaurado de `git show 161fae29:` (detector antigo, na região)"
+    resultado: "🟢 **15/15 VERDE.** Prova que foi o detector NOVO que matou, e não outra coisa da árvore."
+  - id: M1-rerodada
+    o_que: "tira `orgId: appUser.org_id,` do 1º call site de `api/brokers/route.ts`"
+    tsc: "rc=0"
+    resultado: "🔴 **2 failed / 17 passed** — nome + contagem 2→1."
+  - id: M2-rerodada
+    o_que: "põe `orgId` (atalho, última posição, sem vírgula) em `auto-vincular-cliente-obra.ts`"
+    tsc: "rc=0"
+    resultado: "🔴 **2 failed / 17 passed** — `semOrgId` vira `[]` e o arquivo entra no `Record` dos fiados."
+
+# ─────────────────────────────────────────────────────────────────────────────
+# O ataque ao `objetoDeOpcoes` — as quatro formas nomeadas, medidas pelo @qa
+# ─────────────────────────────────────────────────────────────────────────────
+rodada_2_ataque_ao_extrator:
+  metodo: >-
+    Nenhuma delas foi avaliada por leitura. Cada forma foi escrita no call site REAL
+    (`appointment-email-reminders:83`), com `tsc --noEmit` rc=0 antes de cada contagem, e medida
+    nos DOIS sentidos: com o `orgId` **removido** (procurando falso VERDE) e com o `orgId`
+    **presente** (procurando falso ALARME). Restauro por `cp` + `shasum -a 256 -c`.
+  resultados:
+    - forma: "comentário de bloco colado na chave — `{/* opções do layout */ orgName: \"Trifold\" }`, sem `orgId`"
+      resultado: >-
+        🔴 **3 failed / 16 passed** — fail-closed, e melhor do que o mínimo: além das duas
+        asserções de partição acende também a vivacidade `callSites.filter(s => s.opcoes === \"\")`,
+        que diz QUAL das duas coisas quebrou. (A regra JSX de `codigoDe` apaga o `{` junto com o
+        comentário, o extrator não acha objeto de topo e devolve `\"\"`.)
+    - forma: "`}`, `(`, `)` e `[` dentro de literal de string nas opções — `{ orgName: \"Trifold} (){[ Imoveis\" … }`"
+      resultado: "sem `orgId` 🔴 **2/17**; com `orgId` 🟢 **19/19**. O estado de string da pilha segura os quatro. Sem falso alarme."
+    - forma: "objeto de opções seguido de VÍRGULA FINAL — `{ orgName: \"Trifold\" },`"
+      resultado: "sem `orgId` 🔴 **2/17**; com `orgId` 🟢 **19/19**."
+    - forma: "objeto de opções em MÚLTIPLAS linhas (o corpus real só tem em linha única)"
+      resultado: "com `orgId` 🟢 **19/19**. `codigoDe` trima e junta com `\\n`, o `\\s*` da régua atravessa a quebra."
+  veredicto: >-
+    **Nenhuma das quatro produz falso verde, e nenhuma produz falso alarme.** O extrator se
+    sustenta. A 17ª armadilha não está nele — está no elo seguinte, `PASSA_ORG_ID`.
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Achados
 # ─────────────────────────────────────────────────────────────────────────────
 top_issues:
   - id: QA-900-67-1
     severity: medium
+    status: RESOLVIDO em 4bafc03d — verificado por M5 🔴 2/17 + M5-contraprova 🟢 15/15
     finding: >-
       🔴 **A 16ª armadilha — `PASSA_ORG_ID` é medido contra a REGIÃO INTEIRA da chamada, não contra
       o objeto de opções.** `regioesDeChamada` recorta de `renderBaseLayout(` até o `)` que fecha —
@@ -140,6 +214,15 @@ top_issues:
       não a que o próximo refactor produz.
   - id: QA-900-67-2
     severity: low
+    status: >-
+      ACEITO como APAGADO. O @dev não consertou, apagou, e o argumento se sustenta: qualquer
+      segunda contagem dentro de um teste de unidade termina em `ocorrenciasNoCodigo` sobre o
+      MESMO `codigoDe(fonte)` — não é medida independente, é a mesma medida escrita duas vezes.
+      A contagem por arquivo continua com dupla dimensão, e a segunda fonte é INDEPENDENTE de
+      verdade porque é EXTERNA ao código: `FIADOS_ESPERADOS`, escrito à mão. E o `it` vizinho
+      (`nenhum recorte engoliu o call site vizinho`) segue cobrindo o recorte. Saldo: **5 `it`
+      entraram no lugar de 1**, e os 5 têm carrasco medido. Guarda que não pode reprovar é pior
+      que guarda ausente — apagar foi a decisão certa, e o motivo ficou escrito no `describe`.
     finding: >-
       **O `it` "a contagem por arquivo bate com uma medida independente do mesmo texto" não pode
       falhar.** Os dois lados contam ocorrências dos MESMOS marcadores no MESMO `codigoDe(arquivo)`:
@@ -152,6 +235,12 @@ top_issues:
     suggested_action: "Ou tornar a 2ª medida independente de verdade (contar por outro caminho), ou apagar o `it` e corrigir o comentário — guarda que não muda o veredicto engorda a impressão de cobertura."
   - id: QA-900-67-3
     severity: low
+    status: >-
+      RESOLVIDO, e por CÓDIGO em vez de prosa — melhor do que eu havia sugerido. Eu pedi meia linha
+      de comentário; o @dev tirou o `codigoDe` do laço de módulo, pôs em `callSitesDe`, e amarrou
+      um `it` sintético nele. Medido: a M3 morre por esse `it` (🔴 1/18) e o corpus fica verde —
+      nenhuma prosa do repositório sustenta mais o filtro. `auto-vincular-cliente-obra.ts` NÃO foi
+      tocado (confirmado no diff).
     finding: >-
       **A matabilidade da AC11.1 depende de UMA linha de prosa dentro de um comentário.** Medido em
       M3-contraprova: sem a linha `// Concretamente: NÃO acrescente `orgId,`…`, desligar o
@@ -160,6 +249,43 @@ top_issues:
       em silêncio. O @dev documentou o RACIOCÍNIO ali; falta documentar a FRAGILIDADE.
     suggested_owner: dev
     suggested_action: "Acrescentar meia linha ao comentário da AC7: `// ↑ esta linha é o carrasco do filtro `codigoDe` da AC11.1 — não a reescreva sem re-rodar M3.`"
+  - id: QA-900-67-5
+    severity: low
+    finding: >-
+      🔴 **A 17ª armadilha — a dívida nomeada no cabeçalho de `objetoDeOpcoes` É alcançável, e o
+      motivo declarado para ela não ser cobre só metade da porta.** Verifiquei os dois tipos e eles
+      são mesmo PLANOS: `EmailLayoutOptions` = `orgName?: string`, `orgId?: string | null`,
+      `unsubscribeUrl?: string`, `previewText?: string` — sem índice de assinatura, sem
+      `Record<string, unknown>`, sem propriedade de tipo objeto e sem callback; os `params` de
+      `renderPasswordActionEmail` = `userName`, `actionLink`, `siteUrl`, `mode`, `orgId?`, idem.
+      Então o excess property checking realmente barra a CHAVE inventada (`{ orgName, extra: {
+      orgId } }`). **Mas a dívida não precisa de chave inventada.** `PASSA_ORG_ID` é texto aplicado
+      ao objeto extraído, e o token `orgId` dentro do VALOR de uma opção-irmã do tipo string
+      satisfaz a régua. **Medido em call site REAL, `src/lib/tenancy/admin-invite.ts:296`:** removi
+      `orgId,` das opções e troquei `actionLink,` por
+      ``actionLink: `${actionLink}&org=${orgId}`,`` — uma forma que um refactor de rastreamento de
+      org produz sozinho. Resultado: `orgId` chega `undefined` a `renderPasswordActionEmail`,
+      `isMarcaTrifold(undefined)` é `false`, **o e-mail de convite de admin perde a logo da
+      Trifold em silêncio**, `tsc --noEmit` **rc=0** e a suíte da story fica **19/19 VERDE**.
+      Mecanismo: `objetoDeOpcoes` acerta (devolve o objeto de opções); quem erra é o último elo —
+      `${orgId}` casa `\borgId\s*[,:}]` porque o `}` do fecha-interpolação está logo depois.
+      **População alcançável HOJE é estreita** (só sítios com uma variável literalmente chamada
+      `orgId` em escopo: `admin-invite.ts`, fiado, e `auto-vincular-cliente-obra.ts`, a exceção;
+      os outros 7 usam `appUser.org_id` / `appointment.org_id`, snake_case, e `login/actions.ts`
+      usa `emailOrgId`, que não tem a fronteira de palavra). **Mas ela cresce a cada renomeação
+      para camelCase**, e é exatamente a classe que a AC11 existe para fechar.
+    suggested_owner: dev
+    suggested_action: >-
+      ⚠️ **A âncora ingênua NÃO resolve** — verifiquei: `(^|[{,])\s*orgId\s*[,:}]` continua
+      casando `${orgId}`, porque o caractere anterior é `{`. O conserto certo reusa a varredura de
+      estado de string que `objetoDeOpcoes` já tem: antes de aplicar `PASSA_ORG_ID`, apagar (ou
+      substituir por espaço) o CONTEÚDO de todo literal de string/crase dentro do objeto extraído,
+      e só então casar. Todos os 10 sítios reais têm o `orgId` FORA de string, então o corpus
+      segue verde. **Carrasco obrigatório: a M6 acima, byte a byte** (esperado 🔴 nomeando
+      `src/lib/tenancy/admin-invite.ts` e derrubando a contagem 1→0), **mais a contraprova** de
+      que M1/M2/M5 seguem 🔴 e a suíte da raiz segue 318/4376.
+      Alternativa aceitável: não consertar agora e abrir story de acompanhamento com dono — o
+      furo é 1 sítio hoje, contra os 10 que o QA-900-67-1 expunha.
   - id: QA-900-67-4
     severity: low
     finding: >-
@@ -217,4 +343,29 @@ nfr_validation:
   reliability: { status: PASS, notes: "`isMarcaTrifold` é pura e total; `org_id` é NOT NULL nas duas tabelas de origem e o `?? undefined` reusado em login/actions é pré-existente, com o `false` resultante caindo para texto — falha audível, não silenciosa na direção errada." }
   maintainability: { status: CONCERNS, notes: "O carrasco de alcance (AC11) tem o furo QA-900-67-1; é ele que sustenta a promessa de longo prazo da story." }
 
-recommended_status: "✓ CONCERNS — pode seguir para @devops. QA-900-67-1 deve virar conserto de régua ANTES do merge, ou story de acompanhamento com dono."
+# ─────────────────────────────────────────────────────────────────────────────
+# O gate no commit
+# ─────────────────────────────────────────────────────────────────────────────
+gate_no_commit: >-
+  **FICA.** `docs/qa/gates/` é diretório versionado neste repositório (os gates das 900.x
+  anteriores estão rastreados), e o gate é a evidência da story — separá-lo do commit que ele
+  julga é o que faz gate virar prosa órfã. O @dev incluiu o arquivo da rodada 1; esta atualização
+  da rodada 2 fica **não commitada** para o @devops levar junto no mesmo push. Não commitei nada.
+
+evidence_rodada_2:
+  mutacoes_rodadas: 12
+  call_sites_reais_mutados: 3
+  falsos_verdes_encontrados: 1
+  falsos_alarmes_encontrados: 0
+  restauro: "cp + shasum -a 256 -c nos 5 arquivos, todos OK ao fim; brokers e admin-invite por `git checkout-index -f`. Zero `git stash`, zero commit, zero push."
+  arvore_alheia: "os mesmos 6 arquivos de outra frente seguem sujos e NÃO foram tocados."
+  doc_untracked: "✅ `docs/architecture/whitelabel-e-migracao-jud.md` segue untracked e FORA do commit — confirmado em `git diff --stat origin/main...HEAD`, que lista 17 arquivos e nenhum sob `docs/architecture/`."
+
+recommended_status: >-
+  ✓ **CONCERNS — pode seguir para @devops.** O QA-900-67-1 está morto e o conserto é carregador
+  (M5 🔴 + contraprova 🟢). O achado do @dev sobre a M3 procede nas duas metades e o re-armamento
+  é o que segura a AC11.1. O que impede o PASS é o QA-900-67-5: existe forma medida, em call site
+  real, com `tsc` rc=0, que perde a logo e deixa a suíte VERDE — a mesma regra que me fez abrir a
+  16ª armadilha me obriga a abrir esta. É estritamente menor (1 sítio hoje contra 10) e o conserto
+  é curto; se o coordenador optar por mergear e abrir acompanhamento, o risco está quantificado
+  acima e nomeado com dono.

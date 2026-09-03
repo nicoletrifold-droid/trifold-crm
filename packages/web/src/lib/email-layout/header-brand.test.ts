@@ -159,8 +159,11 @@ const FIADOS_ESPERADOS: Record<string, number> = {
  * `auto-vincular-cliente-obra.ts` não tem vírgula depois do atalho, e o furo deixava a porta
  * que a AC7 existe para fechar aberta em silêncio. Foi a mutação que achou, não a leitura.
  *
- * ⚠️ É testada contra `objetoDeOpcoes(regiao)`, **nunca** contra a região inteira — medir na
- * região era o furo QA-900-67-1. Ver o cabeçalho daquela função.
+ * ⚠️ É testada contra `objetoDeOpcoes(regiao).codigo`, **nunca** contra a região inteira (furo
+ * QA-900-67-1) e **nunca** contra o `.literal` (furo QA-900-67-5). Ver `objetoDeOpcoes`.
+ *
+ * ⚠️ Ancorar em `(^|[{,])` NÃO substitui o apagamento de string: medido pelo @qa, a âncora
+ * ingênua continua casando `${orgId}`, porque o caractere anterior é o `{` do abre-interpolação.
  */
 const PASSA_ORG_ID = /\borgId\s*[,:}]/
 
@@ -192,6 +195,20 @@ function regioesDeChamada(codigo: string, marcador: string): string[] {
   }
 }
 
+/** O que `objetoDeOpcoes` devolve: o recorte cru e o recorte SEM o conteúdo dos literais. */
+interface Opcoes {
+  /** O objeto de opções como está escrito no arquivo. Serve para ler e para asserção de forma. */
+  literal: string
+  /**
+   * O MESMO recorte com o conteúdo de todo literal de string apagado (trocado por espaço, com as
+   * quebras de linha preservadas). É contra ISTO — e só isto — que `PASSA_ORG_ID` é medido.
+   */
+  codigo: string
+}
+
+/** Extração que não achou objeto de opções. Fail-closed nos dois campos. */
+const SEM_OPCOES: Opcoes = { literal: "", codigo: "" }
+
 /**
  * O ÚLTIMO objeto literal de TOPO da região — o objeto de OPÇÕES, e só ele.
  *
@@ -217,40 +234,91 @@ function regioesDeChamada(codigo: string, marcador: string): string[] {
  * `PASSA_ORG_ID`, cai na partição SEM `orgId` e é acusada pelo nome. Uma extração que não achou
  * o objeto nunca vira aprovação.
  *
- * Resíduo NOMEADO: um `orgId` aninhado DENTRO das opções (`{ orgName, extra: { orgId } }`)
- * casaria. Não é alcançável hoje — `EmailLayoutOptions` e os `params` de
- * `renderPasswordActionEmail` são planos, e o excess property checking do `tsc` recusa a chave
- * inventada. Se algum dia uma opção virar objeto, esta função precisa medir a profundidade das
- * chaves, não só recortar o objeto.
+ * ## Por que o `.codigo` existe — o furo QA-900-67-5
+ *
+ * A versão anterior declarava um resíduo "não alcançável": um `orgId` aninhado dentro das opções
+ * (`{ orgName, extra: { orgId } }`) casaria, mas os dois tipos são PLANOS e o excess property
+ * checking do `tsc` recusa a chave inventada. O argumento estava certo e era irrelevante — **a
+ * dívida não precisa de chave inventada**. `PASSA_ORG_ID` é texto, e o token `orgId` dentro do
+ * VALOR de uma opção-irmã do tipo string satisfazia a régua. Medido pelo @qa em call site REAL,
+ * `src/lib/tenancy/admin-invite.ts:296`: tirar a chave `orgId,` e trocar `actionLink,` por
+ * `` actionLink: `${actionLink}&org=${orgId}` `` — o que um refactor de rastreamento de org
+ * produz sozinho — deixava `tsc` em rc=0, o convite de admin SEM a logo, e a suíte 19/19 verde.
+ * O `}` que fecha a interpolação vinha logo depois do token e satisfazia a classe `[,:}]`.
+ *
+ * Por isso a mesma varredura devolve `codigo`: o conteúdo de todo literal (aspas, aspas duplas e
+ * crase) sai trocado por espaço antes de a régua correr. Sem segunda varredura — duas máquinas de
+ * estado que possam divergir são a dívida que esta onda está fechando.
+ *
+ * **`${…}` também é apagado, embora seja CÓDIGO para o JS.** É deliberado: a pergunta desta régua
+ * é "`orgId` está fiado como CHAVE das opções?", e uma chave não pode morar dentro de um literal
+ * de string. Tudo que aparece numa interpolação é, por construção, parte do VALOR de uma
+ * opção-irmã — deixar a interpolação transparente reabre exatamente o QA-900-67-5. Os 10 call
+ * sites reais têm o `orgId` FORA de string, e a vivacidade abaixo acende se isso mudar.
  *
  * Limite conhecido: literal de expressão regular com aspas ou chaves desbalanceadas dentro da
  * chamada confundiria a pilha. Nenhum dos 10 call sites tem um, e a vivacidade
- * (`opcoes !== ""`, abaixo) acende se algum passar a ter.
+ * (`opcoes.literal !== ""`, abaixo) acende se algum passar a ter.
  */
-function objetoDeOpcoes(regiao: string, marcador: string): string {
+function objetoDeOpcoes(regiao: string, marcador: string): Opcoes {
   const abre = marcador.length - 1
-  if (regiao[abre] !== "(") return ""
+  if (regiao[abre] !== "(") return SEM_OPCOES
   const pilha: string[] = ["("]
+  // O texto mascarado é construído NA MESMA passada: a máquina de estado que equilibra a pilha é
+  // a que sabe o que é literal. Uma segunda varredura poderia divergir desta em silêncio.
+  const mascara = regiao.split("")
+  /** Aspas ABERTAS na pilha. `> 0` ⇒ este ponto do texto mora dentro de um literal. */
+  let aspas = 0
   let candidato = -1
   let de = -1
   let ate = -1
   let fechou = false
 
+  // Espaço, não remoção: apagar encurtando deslocaria `de`/`ate`, que indexam o texto ORIGINAL.
+  // A quebra de linha fica: `codigoDe` já juntou as linhas com `\n` e o `\s*` da régua a atravessa
+  // de qualquer jeito, então preservá-la só mantém o recorte legível numa falha.
+  const apagar = (i: number) => {
+    if (i < mascara.length && mascara[i] !== "\n") mascara[i] = " "
+  }
+
   for (let i = abre + 1; i < regiao.length; i++) {
     const c = regiao[i]
     const topo = pilha[pilha.length - 1]
+    // Avaliado ANTES de processar `c`: diz se este caractere já estava dentro de um literal.
+    const emLiteral = aspas > 0
 
     if (topo === "'" || topo === '"' || topo === "`") {
-      if (c === "\\") i++
-      else if (c === topo) pilha.pop()
-      else if (topo === "`" && c === "$" && regiao[i + 1] === "{") {
+      if (c === "\\") {
+        apagar(i)
+        apagar(i + 1)
+        i++
+      } else if (c === topo) {
+        pilha.pop()
+        aspas--
+        // A aspa que fecha um literal ANINHADO (dentro de um `${…}`) ainda é conteúdo do de fora.
+        if (aspas > 0) apagar(i)
+      } else if (topo === "`" && c === "$" && regiao[i + 1] === "{") {
+        apagar(i)
+        apagar(i + 1)
         pilha.push("${")
         i++
+      } else {
+        apagar(i)
       }
       continue
     }
 
-    if (c === "'" || c === '"' || c === "`" || c === "(" || c === "[") {
+    // Daqui para baixo `c` é CÓDIGO para o JS. Se `emLiteral`, esse código está dentro de um
+    // `${…}` de template — e para ESTA régua isso é valor, não chave. Ver o cabeçalho.
+    if (emLiteral) apagar(i)
+
+    if (c === "'" || c === '"' || c === "`") {
+      pilha.push(c)
+      aspas++
+      continue
+    }
+
+    if (c === "(" || c === "[") {
       pilha.push(c)
       continue
     }
@@ -277,15 +345,16 @@ function objetoDeOpcoes(regiao: string, marcador: string): string {
   }
 
   // Sem o `)` da chamada, o que veio antes é um recorte truncado, e um objeto achado nele pode
-  // estar aberto no texto real. Fail-closed: `""`.
-  return !fechou || de < 0 ? "" : regiao.slice(de, ate + 1)
+  // estar aberto no texto real. Fail-closed nos dois campos.
+  if (!fechou || de < 0) return SEM_OPCOES
+  return { literal: regiao.slice(de, ate + 1), codigo: mascara.slice(de, ate + 1).join("") }
 }
 
 interface CallSite {
   arquivo: string
   regiao: string
-  /** O objeto de opções da região — é ISTO que `PASSA_ORG_ID` mede. Ver `objetoDeOpcoes`. */
-  opcoes: string
+  /** O objeto de opções da região. `PASSA_ORG_ID` mede o `.codigo`, nunca o `.literal`. */
+  opcoes: Opcoes
   marcador: string
 }
 
@@ -325,9 +394,10 @@ function contarPor(sites: CallSite[]): Map<string, number> {
   return mapa
 }
 
-// `s.opcoes`, jamais `s.regiao`: a região inclui o argumento `content` (QA-900-67-1).
-const comOrgId = contarPor(callSites.filter((s) => PASSA_ORG_ID.test(s.opcoes)))
-const semOrgId = contarPor(callSites.filter((s) => !PASSA_ORG_ID.test(s.opcoes)))
+// `s.opcoes.codigo`, jamais `s.regiao` (a região inclui o argumento `content` — QA-900-67-1) e
+// jamais `s.opcoes.literal` (o token dentro de um literal de string — QA-900-67-5).
+const comOrgId = contarPor(callSites.filter((s) => PASSA_ORG_ID.test(s.opcoes.codigo)))
+const semOrgId = contarPor(callSites.filter((s) => !PASSA_ORG_ID.test(s.opcoes.codigo)))
 const ordenado = (m: Map<string, number>) => Object.fromEntries([...m].sort())
 
 /**
@@ -346,13 +416,24 @@ const ordenado = (m: Map<string, number>) => Object.fromEntries([...m].sort())
  * não pode reprovar é pior que guarda ausente, porque conta como cobertura. Quem cobre o recorte
  * é, e sempre foi, o `it` "nenhum recorte engoliu o call site vizinho".
  */
-describe("objetoDeOpcoes — a régua mede as OPÇÕES, não a região (QA-900-67-1)", () => {
+describe("objetoDeOpcoes — a régua mede as OPÇÕES, não a região (QA-900-67-1/5)", () => {
   const REND = "renderBaseLayout("
+
+  /**
+   * O veredicto da régua para cada call site de uma fonte SINTÉTICA, pelo caminho COMPLETO:
+   * `codigoDe` → `regioesDeChamada` → `objetoDeOpcoes` → `PASSA_ORG_ID` sobre o `.codigo`.
+   * É o mesmo caminho que o corpus percorre — nenhum elo é pulado.
+   */
+  const passa = (fonte: string) =>
+    callSitesDe("sintetico.ts", fonte).map((s) => PASSA_ORG_ID.test(s.opcoes.codigo))
 
   it("recorta o objeto de opções — e é ele que a régua aprova", () => {
     const regiao = 'renderBaseLayout("<p>Body</p>", { orgName: "Trifold", orgId: appUser.org_id })'
-    expect(objetoDeOpcoes(regiao, REND)).toBe('{ orgName: "Trifold", orgId: appUser.org_id }')
-    expect(PASSA_ORG_ID.test(objetoDeOpcoes(regiao, REND))).toBe(true)
+    const opcoes = objetoDeOpcoes(regiao, REND)
+    expect(opcoes.literal).toBe('{ orgName: "Trifold", orgId: appUser.org_id }')
+    // O `.codigo` perde só o MIOLO do literal: a estrutura, as chaves e o `orgId` continuam lá.
+    expect(opcoes.codigo).toBe('{ orgName: "       ", orgId: appUser.org_id }')
+    expect(PASSA_ORG_ID.test(opcoes.codigo)).toBe(true)
   })
 
   it("🔴 o furo QA-900-67-1: `orgId` escondido no argumento `content` NÃO conta", () => {
@@ -361,8 +442,8 @@ describe("objetoDeOpcoes — a régua mede as OPÇÕES, não a região (QA-900-6
     // HTML no corpo. `tsc` aceita, e contra a REGIÃO isto ficava verde na suíte inteira.
     const regiao =
       'renderBaseLayout(`<p>Olá, ${broker.name}!</p><!--${({ orgId: a.org_id }).orgId ?? ""}-->`, { orgName: "Trifold" })'
-    expect(objetoDeOpcoes(regiao, REND)).toBe('{ orgName: "Trifold" }')
-    expect(PASSA_ORG_ID.test(objetoDeOpcoes(regiao, REND))).toBe(false)
+    expect(objetoDeOpcoes(regiao, REND).literal).toBe('{ orgName: "Trifold" }')
+    expect(PASSA_ORG_ID.test(objetoDeOpcoes(regiao, REND).codigo)).toBe(false)
     // Controle positivo, obrigatório: é a MESMA entrada que a régua antiga aprovava. Sem esta
     // linha, um `objetoDeOpcoes` que devolvesse `""` para tudo passaria neste `it` por acidente.
     expect(PASSA_ORG_ID.test(regiao)).toBe(true)
@@ -370,18 +451,52 @@ describe("objetoDeOpcoes — a régua mede as OPÇÕES, não a região (QA-900-6
 
   it("objeto aninhado em OUTRA CHAMADA também não conta — a forma do próximo refactor", () => {
     const regiao = 'renderBaseLayout(montarCorpo({ orgId }), { orgName: "Trifold" })'
-    expect(objetoDeOpcoes(regiao, REND)).toBe('{ orgName: "Trifold" }')
-    expect(PASSA_ORG_ID.test(objetoDeOpcoes(regiao, REND))).toBe(false)
+    expect(objetoDeOpcoes(regiao, REND).literal).toBe('{ orgName: "Trifold" }')
+    expect(PASSA_ORG_ID.test(objetoDeOpcoes(regiao, REND).codigo)).toBe(false)
     expect(PASSA_ORG_ID.test(regiao)).toBe(true)
   })
 
   it("fail-closed: opções por VARIÁVEL, ou região truncada, caem na partição acusada", () => {
     // "Não consegui medir" nunca pode virar "está fiado": sem objeto literal de topo o resultado
     // é `""`, que não casa a régua e cai no lado que a asserção de conjunto acusa pelo nome.
-    expect(objetoDeOpcoes("renderBaseLayout(corpo, opcoes)", REND)).toBe("")
-    expect(objetoDeOpcoes("renderBaseLayout(corpo, { orgId }", REND)).toBe("")
-    expect(objetoDeOpcoes("", REND)).toBe("")
+    // `toEqual` sobre o par: os DOIS campos têm de sair vazios. Um `.literal` vazio com um
+    // `.codigo` sobrevivente reabriria a porta pelo campo que a régua realmente mede.
+    const VAZIO = { literal: "", codigo: "" }
+    expect(objetoDeOpcoes("renderBaseLayout(corpo, opcoes)", REND)).toEqual(VAZIO)
+    expect(objetoDeOpcoes("renderBaseLayout(corpo, { orgId }", REND)).toEqual(VAZIO)
+    expect(objetoDeOpcoes("", REND)).toEqual(VAZIO)
     expect(PASSA_ORG_ID.test("")).toBe(false)
+  })
+
+  it("🔴 o furo QA-900-67-5: `orgId` dentro de um LITERAL DE STRING não conta", () => {
+    // Forma exata da mutação M6 do @qa, sobre `src/lib/tenancy/admin-invite.ts:296`: a CHAVE
+    // `orgId,` sai das opções — o convite de admin perde a logo da Trifold em silêncio — e o
+    // token reaparece interpolado na URL de uma opção-irmã, que é o que um refactor de
+    // rastreamento de org produz sozinho. `tsc` aceita, e contra o `.literal` isto ficava
+    // 19/19 VERDE. Está aqui como código sintético para que a régua não dependa de ninguém
+    // manter aquele call site na forma que hoje a mata.
+    const comOrgIdSoNaString = [
+      "const { subject, html } = renderPasswordActionEmail({",
+      "userName: admin.name ?? nomeDerivado,",
+      "actionLink: `${actionLink}&org=${orgId}`,",
+      "siteUrl,",
+      'mode: "create",',
+      "})",
+    ].join("\n")
+    expect(passa(comOrgIdSoNaString)).toEqual([false])
+
+    // Controle positivo nº 1, obrigatório: é a MESMA entrada que a régua de `4bafc03d` aprovava.
+    // Sem o apagamento do conteúdo do literal, o `}` do fecha-interpolação satisfaz a classe
+    // `[,:}]` — o `.literal` prova que a diferença está no apagamento, e não em outra coisa.
+    const literais = callSitesDe("sintetico.ts", comOrgIdSoNaString).map((s) => s.opcoes.literal)
+    expect(literais.map((l) => PASSA_ORG_ID.test(l))).toEqual([true])
+
+    // Controle positivo nº 2: o apagamento não come a fiação LEGÍTIMA que vem DEPOIS de um
+    // literal, nem quando o vizinho é uma crase. Um estado de string que não fechasse mascararia
+    // o resto do objeto e reprovaria os 10 sítios reais — falso alarme, acusado aqui.
+    expect(passa(comOrgIdSoNaString.replace('mode: "create",', "mode: `create`, orgId,"))).toEqual([
+      true,
+    ])
   })
 
   it("comentário DENTRO do objeto de opções não conta como fiação (AC11.1)", () => {
@@ -396,8 +511,6 @@ describe("objetoDeOpcoes — a régua mede as OPÇÕES, não a região (QA-900-6
       "  // orgId: deliberadamente ausente — ver AC7",
       "})",
     ].join("\n")
-    const passa = (fonte: string) =>
-      callSitesDe("sintetico.ts", fonte).map((s) => PASSA_ORG_ID.test(s.opcoes))
     // `toEqual([false])` e não `.some()`: afirma o veredicto E que houve exatamente um call site.
     expect(passa(semFiacao)).toEqual([false])
     // Controle positivo no mesmo `it`: com o `orgId` em CÓDIGO, o mesmo caminho aprova.
@@ -418,7 +531,7 @@ describe("AC11 — todo call site de e-mail passa orgId, com UMA exceção decla
     // Vivacidade da SEGUNDA extração, a que a régua realmente mede: `objetoDeOpcoes` achou um
     // objeto literal de topo nos 10. Um extrator que devolvesse `""` para tudo é fail-closed (cai
     // na partição acusada), mas acender aqui diz QUAL das duas coisas quebrou.
-    expect(callSites.filter((s) => s.opcoes === "").map((s) => s.arquivo)).toEqual([])
+    expect(callSites.filter((s) => s.opcoes.literal === "").map((s) => s.arquivo)).toEqual([])
   })
 
   it("nenhum recorte engoliu o call site vizinho", () => {
