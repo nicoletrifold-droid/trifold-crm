@@ -13,6 +13,7 @@ import {
   recordPasswordResetAttempt,
 } from "@web/lib/auth/password-reset-throttle"
 import { logAudit } from "@web/lib/audit"
+import { tentarAppUrl } from "@web/lib/tenancy/app-url-fallback"
 
 export async function login(formData: FormData) {
   const supabase = await createClient()
@@ -157,11 +158,19 @@ export async function requestPasswordReset(
   // rota admin de senha do cliente e de brokers/route.ts) porque, em produção,
   // Server Actions recebem `origin` VAZIO e o link cairia em localhost. Em dev
   // local, defina NEXT_PUBLIC_SITE_URL=http://localhost:3000 no .env.development.
-  const baseUrl =
-    process.env.NEXT_PUBLIC_SITE_URL ??
-    headersList.get('origin') ??
-    process.env.NEXT_PUBLIC_APP_URL ??
-    'https://crm.trifold.eng.br'
+  // Story 900-66 — o sítio 28: a MESMA classe de fallback dos outros 27, invisível ao `grep` da
+  // story porque a cadeia é multilinha e o literal usava aspas simples. A precedência
+  // env → `origin` → env NÃO muda (o comentário acima diz por que ela existe); o que muda é só o
+  // último degrau, que era o literal da Trifold e agora é o resolver.
+  // Desfecho (AC4): sem URL base, o e-mail de recuperação NÃO é enviado — e a resposta continua
+  // sendo a genérica de sempre, porque revelar a diferença quebraria a anti-enumeração (AC3 da
+  // 75-139). Um link de recuperação para a marca errada é o pior desfecho possível aqui.
+  const base = tentarAppUrl(
+    process.env.NEXT_PUBLIC_SITE_URL ?? headersList.get('origin') ?? process.env.NEXT_PUBLIC_APP_URL,
+    'app/login/actions:requestPasswordReset'
+  )
+  if (!base.ok) return genericSuccess
+  const baseUrl = base.url
 
   const adminSupabase = createAdminClient() // AC5 — service-role, nunca client anônimo
 

@@ -3,6 +3,7 @@ import { createAdminClient } from "@web/lib/supabase/admin"
 import type { OpeningParamContext } from "./opening-templates"
 import { OPENING_PRIVILEGED_ROLES } from "./opening-roles"
 import { can } from "@web/lib/permissions"
+import { resolveCorretorFallbackName } from "@web/lib/tenancy/app-url-fallback"
 
 // Story 75-217 — contexto compartilhado entre o menu de templates de abertura
 // (GET opening-templates) e o envio (POST start-whatsapp): carrega o lead com
@@ -53,7 +54,15 @@ export async function loadOpeningContext(
   const hasName = (v: unknown): v is { name?: string } => !!v && typeof v === "object"
   const nomeLead = (lead.name as string | null)?.trim().split(/\s+/)[0] || "👋"
   // Story 75-164 — nomeia QUEM ASSUMIU (usuário logado), não o assigned_broker.
-  const corretor = appUser.name?.trim() || "Trifold"
+  // Story 900-66 (AC5) — o nome real do corretor continua vencendo; o que mudou é só o
+  // fallback, que era o literal "Trifold" para QUALQUER org. Com a flag desligada (padrão) a
+  // saída é byte a byte a de hoje, inclusive para orgs que não são a Trifold.
+  const corretor =
+    appUser.name?.trim() ||
+    resolveCorretorFallbackName({
+      orgId: appUser.org_id,
+      flagLigada: process.env["TENANT_FALLBACK_FAIL_CLOSED"] === "true",
+    })
   const propRel = Array.isArray(lead.property_interest) ? lead.property_interest[0] : lead.property_interest
   const empreendimento = (hasName(propRel) ? propRel.name : null)?.trim() || "que você procura"
 

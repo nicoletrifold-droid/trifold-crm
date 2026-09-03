@@ -3,6 +3,7 @@ import { createAdminClient } from "@web/lib/supabase/admin"
 import { sendEmail } from "@web/lib/email"
 import { sendPushToUser } from "@web/lib/server/push-service"
 import { logEvent } from "@web/lib/logger"
+import { tentarAppUrl } from "@web/lib/tenancy/app-url-fallback"
 import { hojeSaoPaulo, toIsoDate, type SaoPauloDate } from "@web/lib/billing/reminder-schedule"
 import {
   diasAlvoConsecutivos,
@@ -32,7 +33,6 @@ import {
 
 export const dynamic = "force-dynamic"
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://crm.trifold.eng.br"
 
 // Código de erro Postgres para violação de UNIQUE (o dedup funcionando, não uma falha).
 const PG_UNIQUE_VIOLATION = "23505"
@@ -88,6 +88,13 @@ export async function GET(request: NextRequest) {
   const hojeIso = toIsoDate(hoje)
   const diasAlvo = diasAlvoConsecutivos(hoje) // [hoje-1, hoje-2, hoje-3]
   const diasAlvoBr = [...diasAlvo].reverse().map(formatDateBr) // cronológico p/ leitura humana
+
+  // Story 900-66 (AC4) — quem não tem URL não envia. Antes do laço: a env é a mesma para todo
+  // serviço, e nenhum dedup é reivindicado, então o alerta volta a sair quando houver URL.
+  const base = tentarAppUrl(process.env.NEXT_PUBLIC_APP_URL, "cron/billing-collection-health")
+  if (!base.ok) {
+    return NextResponse.json({ ok: true, dryRun, hoje: hojeIso, skipped: "app_url_indisponivel" })
+  }
 
   // ── 1. Buscar linhas de erro nos dias-alvo (data-driven, sem filtro de serviço) ──
   const { data: errorRowsRaw, error: qErr } = await admin
@@ -206,7 +213,7 @@ export async function GET(request: NextRequest) {
         sendPushToUser(admin, a.id, {
           title: pushTitle,
           body: pushBody,
-          url: `${APP_URL}/dashboard`,
+          url: `${base.url}/dashboard`,
         }).catch((e: unknown) => {
           alertErrors++
           console.error("[billing-collection-health] push:", a.id, e)

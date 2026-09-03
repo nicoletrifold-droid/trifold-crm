@@ -22,6 +22,7 @@
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { sendEmail } from "@web/lib/email"
 import { renderPasswordActionEmail } from "@web/lib/email-layout"
+import { tentarAppUrl } from "./app-url-fallback"
 
 /**
  * Grava o e-mail do admin como convite PENDENTE na org.
@@ -268,7 +269,18 @@ export async function ensureAdminInvited(
     return { status: "failed", message }
   }
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://crm.trifold.eng.br"
+  // Story 900-66 (AC4) — sem URL base o convite NÃO é enviado. `failed` é o mesmo desfecho que
+  // esta função já dá quando o link não pode ser gerado: a conta existe, a UI não afirma um
+  // envio que não houve, e o admin entra por "esqueci minha senha".
+  const base = tentarAppUrl(process.env.NEXT_PUBLIC_SITE_URL, "lib/tenancy/admin-invite", { orgId })
+  if (!base.ok) {
+    return {
+      status: "failed",
+      message:
+        "Conta de acesso criada, mas a URL da aplicação está indisponível para esta organização — o e-mail de convite não foi enviado.",
+    }
+  }
+  const siteUrl = base.url
   const { data: linkData, error: linkErro } = await db.auth.admin.generateLink({
     type: "recovery",
     email: emailLimpo,

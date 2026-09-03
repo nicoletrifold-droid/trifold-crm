@@ -7,13 +7,13 @@ import {
 } from "@web/lib/roleta/business-time"
 import { sendPushToUser } from "@web/lib/server/push-service"
 import { logWhatsappSend } from "@web/lib/whatsapp/log-send"
+import { tentarAppUrl } from "@web/lib/tenancy/app-url-fallback"
 import {
   BOLSAO_REBALANCE_MIN,
   selecionarPreAviso,
   paramsPreAviso,
 } from "@web/lib/bolsao/pre-aviso"
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://crm.trifold.eng.br"
 
 // Story 75-80 (Epic 64) — Bolsão de Leads: rebalanceamento.
 // Lead distribuído e NÃO atendido por >= BOLSAO_REBALANCE_MIN minutos de horário
@@ -214,13 +214,20 @@ export async function GET(request: NextRequest) {
             metadata: { elapsed_min: Math.round(c.elapsed), minutos_restantes: selecao.minutosRestantes },
           }))
         )
-        preAvisoSent = await notificarGerentesComerciais(admin, orgId, {
-          template: "aviso_pre_bolsao_gestor",
-          params: (nome) => paramsPreAviso(nome, selecao.naJanela.length, selecao.minutosRestantes!),
-          pushTitle: "Leads a caminho do bolsão",
-          pushBody: `${selecao.naJanela.length} lead(s) sem atendimento — vão para o bolsão em ~${selecao.minutosRestantes} min.`,
-          pushUrl: `${APP_URL}/dashboard/pipeline`,
-        })
+        // Story 900-66 (AC4) — sem URL base o pré-aviso desta org não sai (nem WhatsApp nem
+        // push): o `pushUrl` é obrigatório no canal comum. `preAvisoSent` fica `false`, que é o
+        // mesmo estado de "não avisei" que o resto do fluxo já sabe tratar. As outras orgs do
+        // laço seguem.
+        const basePreAviso = tentarAppUrl(process.env.NEXT_PUBLIC_APP_URL, "cron/bolsao-rebalance:pre-aviso", { orgId })
+        if (basePreAviso.ok) {
+          preAvisoSent = await notificarGerentesComerciais(admin, orgId, {
+            template: "aviso_pre_bolsao_gestor",
+            params: (nome) => paramsPreAviso(nome, selecao.naJanela.length, selecao.minutosRestantes!),
+            pushTitle: "Leads a caminho do bolsão",
+            pushBody: `${selecao.naJanela.length} lead(s) sem atendimento — vão para o bolsão em ~${selecao.minutosRestantes} min.`,
+            pushUrl: `${basePreAviso.url}/dashboard/pipeline`,
+          })
+        }
       }
     }
 
@@ -300,12 +307,16 @@ async function sendBolsaoDigest(
   orgId: string,
   count: number
 ): Promise<boolean> {
+  // Story 900-66 (AC4) — sem URL base o resumo não sai; `false` é exatamente o contrato que
+  // esta função já tem para "nenhum envio ocorreu", e o claim anti-flood não é consumido.
+  const base = tentarAppUrl(process.env.NEXT_PUBLIC_APP_URL, "cron/bolsao-rebalance:digest", { orgId })
+  if (!base.ok) return false
   return notificarGerentesComerciais(admin, orgId, {
     template: "aviso_bolsao_gestor",
     params: (nome) => [nome, String(count)],
     pushTitle: "Leads parados no bolsão",
     pushBody: `Há ${count} lead(s) aguardando atendimento no bolsão.`,
-    pushUrl: `${APP_URL}/dashboard/bolsao`,
+    pushUrl: `${base.url}/dashboard/bolsao`,
   })
 }
 
