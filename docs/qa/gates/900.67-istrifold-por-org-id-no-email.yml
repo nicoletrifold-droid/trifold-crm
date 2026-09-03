@@ -1,34 +1,38 @@
 schema: 1
 story: "900.67"
 story_title: "O logo da Trifold no cabeçalho do e-mail deixa de ser decidido por regex no nome, e passa a ser por org_id"
-gate: CONCERNS
+gate: PASS
 status_reason: >-
-  **Rodada 3 — confirmacao final, escopo estreito (`4bafc03d` -> `261d542f`, um arquivo:
-  `header-brand.test.ts`).** O conserto do QA-900-67-5 **procede e e carregador**: **M6 🔴 2/18**
-  byte a byte como declarado, nomeando `src/lib/tenancy/admin-invite.ts` e derrubando a contagem
-  1->0; **M6-contraprova com o predicado de `4bafc03d` 🟢 19/19** — foi o apagamento novo que matou.
-  Reguas da raiz batem byte a byte: **318 arquivos · 4377 passed · 6 expected fail**. As duas
-  checagens que o @dev pediu que eu nao elogiasse **confirmam-se as duas**: (a) o falso alarme do
-  comentario colado na chave e **anterior** — restaurei o teste de `4bafc03d` e medi 🔴 **3/16** la,
-  igual ao declarado; (b) `codigoDe`/`linhasDeCodigo` **nao tem estado de string nenhum** (so a
-  guarda de `:` para URL), logo ha **um unico** lugar decidindo o que e literal — "sem segunda
-  varredura" e verdade lida no codigo. **O argumento da interpolacao esta certo**, e por um motivo
-  mais forte do que o declarado: a mascara so troca caractere por espaco, e para `orgId` sobreviver
-  desmascarado o caractere seguinte tem de ser uma aspa — que nao e espaco nem `[,:}]`. Logo a
-  mascara **nunca cria** um casamento; so pode gerar falso alarme, jamais falso verde. **Mas o
-  furo nao estava na interpolacao — estava ao lado dela.** Abro o **QA-900-67-6**: o gemeo por
-  CONCATENACAO do QA-900-67-5. Como a mascara apaga o CONTEUDO do literal e o token fica FORA
-  dele, `actionLink + "&org=" + orgId,` satisfaz `PASSA_ORG_ID` intacto. Medido em call site real,
-  `admin-invite.ts:296`: logo perdida, `tsc` rc=0, suite **20/20 VERDE**. E a segunda forma dispensa
-  variavel local: `actionLink + "&" + new URLSearchParams({ orgId: appUser.org_id ?? "" }).toString()`
-  em `users/[id]/reset-password/route.ts` — idiomatica, `tsc` rc=0, **20/20 VERDE**. **Populacao
-  alcancavel: 9 de 9 sitios fiados**, porque a segunda forma so exige um objeto aninhado dentro do
-  valor de qualquer opcao-irma. Pelo criterio de parada dito antes da medicao (>=1 sitio real
-  => conserta antes do merge), **este gate nao vira PASS**.
+  **Rodada 4 — escopo estreito (`261d542f` -> `4449a859`, um arquivo: `header-brand.test.ts`).**
+  A troca de PRESENCA DE TEXTO por POSICAO NA PILHA procede e e carregadora. **M7-CONCAT
+  🔴 2/21** e **M8-OBJETO-ANINHADO 🔴 2/21**, cada uma nomeando o arquivo e derrubando a contagem
+  1->0; contraprova das duas contra a regua de `261d542f` 🟢 20/20 — foi a regua nova que matou.
+  Baseline do arquivo medida por mim: **23/23**, `tsc -p packages/web` rc=0.
+  **(1) A AC11.1 re-armada CONFIRMA-SE nos dois sentidos, medida.** Sob M3 (`codigoDe(fonte)` ->
+  `fonte`) a suite fica **🔴 1/22**, e o vermelho e exatamente `expected [ false ] to deeply equal
+  [ true ]` — a assercao do sentido INVERSO (`{ orgName, /* ver AC7 */ orgId }`). Apaguei so as 3
+  linhas desse sentido, mantendo a M3: a suite volta a **🟢 23/23**. Logo o sentido 1 sozinho e
+  cego a M3 (a regua nova ja o resolve por posicao) e o carrasco da AC11.1 e, hoje, unicamente o
+  sentido inverso que o @dev acrescentou. A auto-deteccao dele estava certa, e o conserto e o
+  unico que sustenta a AC11.1.
+  **(2) `REGUA_SO_DE_TEXTO` nao e regua zumbi.** Os 4 usos (def, `passaNoTexto`, dois `.test`
+  diretos) estao todos dentro dos `it` de furo; nenhuma assercao de corpus a consulta — a particao
+  sai de `passaOrgId`. Medido: troquei-a por `/(?!)/` (a "correcao"), e os **5 `it` de furo caem
+  (🔴 5/18)** enquanto os **4 `it` de corpus seguem verdes**. E controle POSITIVO de verdade: acusa
+  quando o furo deixa de existir, e esta fora do caminho do corpus.
+  **(3) Ataque a regua por posicao — 5 formas do coordenador + 4 minhas.** Nenhuma das 5 pedidas
+  e furo: chave entre aspas `{ "orgId": x }` e computada `{ ["orgId"]: x }` -> ACUSAM (falso alarme
+  declarado no cabecalho); `{ ...base, orgId }` -> 🟢 correto (o `orgId` e passado mesmo);
+  `{ ...baseComOrgId, siteUrl }` -> acusa; funcao inline com `{ orgId }` no corpo -> acusa, e a
+  logo se perde MESMO (acusacao correta); objeto de opcoes como primeiro argumento e a forma
+  normal de `renderPasswordActionEmail`, ja coberta 6x no corpus. **Achei um furo novo,
+  QA-900-67-7** — ver abaixo. Populacao alcancavel medida: **0 de 10 sitios reais**. Pelo criterio
+  de parada fixado antes da medicao (zero => mergeia e vira divida com dono), **este gate vira
+  PASS**, com a divida nomeada.
 reviewer: "Quinn (Test Architect)"
-updated: "2026-09-03T12:20:00Z"
-rodada: 3
-commit_avaliado: "261d542f (sobre 4bafc03d)"
+updated: "2026-09-03T13:05:00Z"
+rodada: 4
+commit_avaliado: "4449a859 (sobre 261d542f)"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # O QUALIFICADOR
@@ -497,17 +501,18 @@ evidence_rodada_3:
   doc_untracked: "✅ `docs/architecture/whitelabel-e-migracao-jud.md` segue untracked (`git ls-files --error-unmatch` falha) e fora do commit."
 
 recommended_status: >-
-  ⚠️ **CONCERNS — NAO seguir para @devops ainda.** O conserto entregue e bom e e carregador: M6 🔴 2/18
-  com contraprova 🟢 19/19, mascara numa passada so (verificado por leitura, e o `codigoDe` vizinho nao
-  tem estado de string), argumento da interpolacao correto — e mais forte do que o @dev o defendeu,
-  porque a mascara so sabe REMOVER casamentos. As duas checagens pedidas confirmam-se: o falso alarme
-  do comentario e anterior (🔴 3/16 em `4bafc03d`) e a segunda bateria e a que vale (re-medi tudo eu
-  mesmo contra o sha256 do commit). O que impede o PASS e o **QA-900-67-6**: o conserto fechou a
-  interpolacao e deixou a **concatenacao** aberta — mesmo refactor, mesmo dano, escrito com `+`. Duas
-  formas medidas, dois call sites reais, `tsc` rc=0, **20/20 verde** nas duas, e-mail sem logo nas duas.
-  **Populacao alcancavel: 9 de 9 sitios fiados**, contra 1 de 10 na rodada anterior — o furo nao
-  encolheu, cresceu. Pelo criterio de parada que o coordenador fixou ANTES da medicao (>=1 sitio real
-  alcancavel => conserta antes do merge), isto e conserto, nao divida. O conserto e curto e e o ultimo:
-  trocar o teste de PRESENCA DE TEXTO por um de POSICAO NA PILHA, na mesma passada que ja existe — o
-  que mata a interpolacao, a concatenacao e o objeto aninhado de uma vez, e torna a mascara
-  desnecessaria.
+  ✅ **PASS — pode seguir para @devops.** A troca de presenca de texto por posicao na pilha e o
+  conserto certo e e carregador: M7 e M8 🔴 2/21 cada, contraprova das duas 🟢 20/20 contra a regua
+  de `261d542f`, e as tres formas de texto (interpolacao, concatenacao, aninhamento) morrem de uma
+  vez. Os tres ataques pedidos: **(1)** a AC11.1 re-armada e real, medida nos dois sentidos — sem o
+  `it` novo, M3 fica 🟢 23/23; com ele, 🔴 1/22 no vermelho exato do sentido inverso. **(2)**
+  `REGUA_SO_DE_TEXTO` esta fora do caminho do corpus e e controle positivo de verdade: "consertada"
+  para `/(?!)/`, derruba os 5 `it` de furo e deixa os 4 de corpus verdes. **(3)** as 5 formas
+  pedidas nao abrem furo — as duas de chave (aspas, computada) e o spread-so acusam sem perder
+  logo, a funcao inline acusa E perde a logo (acusacao correta), e `{ ...base, orgId }` passa
+  porque de fato esta fiado. Achei um furo novo, **QA-900-67-7** (dessincronia por regex de classe
+  de chaves), reproduzido em call site real com `tsc` rc=0 e 23/23 verde, com controle negativo
+  disjunto. **Populacao alcancavel: 0 de 10 sitios reais** — nenhuma regex literal dentro de
+  regiao de chamada, e a forma exige dois atos independentes, sendo que o primeiro sozinho ja e
+  acusado. Pelo criterio de parada fixado antes da medicao, isso e **divida nomeada com dono**, e
+  nao bloqueio. Nada mais pendente no delta.
