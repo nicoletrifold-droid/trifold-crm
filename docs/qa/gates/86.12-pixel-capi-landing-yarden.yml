@@ -201,7 +201,7 @@ falso_positivo_de_worktree_iteracao_3: |
   `git archive f3992973 | tar -x` num diretório temporário, replicando os MESMOS
   3 symlinks de `node_modules` da worktree. Confirmado que o extrato é o baseline
   (`grep -c 'Cadastre-se para mais informações'` = 0, `grep -c 'EM BREVE</span>'`
-  = 1). Rodados os 3 arquivos lá: **3 failed / 71 failed** com as MESMAS TRÊS
+  = 1). Rodados os 3 arquivos lá: **3 arquivos / 71 failed** com as MESMAS TRÊS
   assinaturas de erro (`Cannot find package '@trifold/ai/src/flows/loop-breaker'`,
   `TypeError: conjunto is not iterable`,
   `AssertionError: expected 'undefined' to be 'function'`). Contagem idêntica →
