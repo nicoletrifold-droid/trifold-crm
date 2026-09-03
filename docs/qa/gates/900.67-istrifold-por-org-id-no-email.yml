@@ -1,0 +1,220 @@
+schema: 1
+story: "900.67"
+story_title: "O logo da Trifold no cabeçalho do e-mail deixa de ser decidido por regex no nome, e passa a ser por org_id"
+gate: CONCERNS
+status_reason: >-
+  O mecanismo está certo e o defeito está morto: `isMarcaTrifold` compara por identidade, a fiação
+  chega aos 9 sítios, e eu **li os 9** — o `orgId` de cada um é mesmo o do DESTINATÁRIO (os alvos
+  são buscados com `.eq("org_id", appUser.org_id)`, o broker é inserido com `org_id: appUser.org_id`,
+  o cron usa `appointment.org_id` para os dois destinatários, e `ensureAdminInvited(orgId)` é a org
+  convidada). As duas descobertas que o @dev declara foram **reproduzidas**, e as duas procedem:
+  com o detector antigo `/\borgId\s*[,:]/` a M2 fica **VERDE**, e sem a linha "Concretamente: NÃO
+  acrescente `orgId,`…" a M3 fica **VERDE** — os dois consertos são carregadores, não cosméticos.
+  Réguas batem byte a byte com o declarado (318 · 4372 | 6 · lint 0 erros · type-check 8/8 · build
+  5/5 `--force`). **A concern é a 16ª armadilha, e é do carrasco, não do código:** `PASSA_ORG_ID` é
+  testado contra a REGIÃO INTEIRA da chamada, não contra o objeto de opções — medido, um call site
+  que PERDE o `orgId` das opções e menciona `orgId:` no argumento VIZINHO fica verde na suíte
+  inteira (318/4372), que é exatamente o modo de falha nº 1 que a AC11 existe para fechar.
+reviewer: "Quinn (Test Architect)"
+updated: "2026-09-03T11:40:00Z"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# O QUALIFICADOR
+# ─────────────────────────────────────────────────────────────────────────────
+qualificador_da_entrega: >-
+  **Nada muda para a Trifold hoje**, e é essa a promessa: com o `org_id` da Trifold real a saída é
+  byte a byte a de hoje (provado por `toBe` sobre a string completa do cabeçalho). O que muda é a
+  DIREÇÃO da falha: `orgId` desconhecido, ou de outra org, agora rende TEXTO em vez da marca do
+  primeiro cliente. O defeito latente que a `900-25` ia ativar ("Trifold Sandbox" casando
+  `/trifold/i`) está morto — e tem teste nomeado com esse nome.
+qualificador_o_que_NAO_esta_provado: >-
+  Nada em produção: não há e-mail enviado nem render em ambiente real; "byte a byte" é prova de
+  unidade. Além disso, o branch NÃO-Trifold continua imprimindo o literal hardcoded do chamador
+  ("Trifold", "Trifold CRM") — a marca do tenant continua errada no TEXTO, e isso é a story futura
+  já nomeada pela 900-64. Esta story só troca QUAL decisão abre o branch.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Réguas — medidas nesta sessão, nesta árvore
+# ─────────────────────────────────────────────────────────────────────────────
+reguas:
+  test_raiz: "pnpm test → 318 arquivos · 4372 passed | 6 expected fail (4378) — IDÊNTICO ao declarado"
+  lint_raiz: "pnpm lint --force → 8/8 tasks, 0 erros, 30 warnings (todos pré-existentes)"
+  type_check: "pnpm type-check --force → 8/8 tasks"
+  build: "pnpm build --force → 5/5. O `Ecmascript file had an error` é o pré-existente e alheio (capi-hashing/crypto); `✓ Compiled successfully`, 244/244 páginas"
+  suite_da_story: "header-brand.test.ts → 15/15"
+  arvore_alheia: "6 arquivos de outra frente sujos (webhook/whatsapp, meta/process-lead, tenancy/webhook-org + testes). NÃO tocados. Divergência local↔CI de 14 confere."
+  higiene: "Restauro só por `cp` + `shasum -a 256 -c` (5 arquivos, todos OK ao fim). Zero `git stash`, zero `git checkout --`, zero commit, zero push."
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Reprodução das duas descobertas do @dev — as duas procedem
+# ─────────────────────────────────────────────────────────────────────────────
+reproducoes:
+  - id: M2
+    o_que: "põe `orgId` (atalho, última posição, sem vírgula) em auto-vincular-cliente-obra.ts"
+    tsc: "rc=0"
+    resultado: "🔴 2 failed / 13 passed — `semOrgId` vira `[]` e o arquivo aparece no Record dos fiados. IDÊNTICO ao declarado."
+  - id: M2-contraprova
+    o_que: "M2 aplicada + detector revertido para `/\\borgId\\s*[,:]/` (a versão pré-conserto)"
+    resultado: >-
+      🟢 **15/15 VERDE**. Confirma a alegação central do @dev: a régua declarava a porta da AC7
+      fechada com a porta aberta, e a classe `}` é o que a fecha. O conserto é carregador.
+  - id: M3
+    o_que: "tira o `codigoDe()` da varredura (filtro de comentário desligado, AC11.1)"
+    resultado: "🔴 2 failed / 13 passed"
+  - id: M3-contraprova
+    o_que: "M3 aplicada + removida a linha `// Concretamente: NÃO acrescente `orgId,` nem `orgId: orgId`…` do comentário da AC7"
+    resultado: >-
+      🟢 **15/15 VERDE**. Confirma a segunda alegação: com `orgId` só entre crases na prosa, o
+      filtro obrigatório da AC11.1 é **inerte**. O desvio da letra da AC7 (comentário DENTRO dos
+      parênteses) é o que torna a M3 matável — **aceito**.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ALCANCE — auditado independentemente
+# ─────────────────────────────────────────────────────────────────────────────
+alcance:
+  varredura_propria: >-
+    `grep -rn` de `renderBaseLayout` / `renderPasswordActionEmail` / `renderHeader` no repositório
+    inteiro (fora `node_modules` e `docs`): **exatamente 10** call sites de aplicação, todos sob
+    `packages/web/src`. Nenhum em `scripts/`, `packages/ai`, `packages/shared` ou `landing-pages`
+    (que estão no `include` do vitest mas fora do `SRC` da régua). `renderHeader` só é chamado de
+    `email-layout/index.ts` — não há terceira porta para o cabeçalho.
+  duas_dimensoes: >-
+    A régua afirma NOMES **e** CONTAGENS nas duas partições (`toEqual` sobre chaves ordenadas +
+    `Record` com número por arquivo). Um 2º call site sem `orgId` dentro do arquivo já
+    excepcionado é pego pelo `semOrgId.get(EXCECAO_AC7) === 1`. Vivacidade (`callSites.length === 10`,
+    `arquivosVarridos.length > 100`, nenhuma região vazia) presente.
+  valor_do_orgId_lido_a_mao: >-
+    A régua mede PRESENÇA, não VALOR — o @dev declarou isso como não-provado. **Eu medi por leitura,
+    e os 9 estão certos hoje:** `users/[id]/reset-password` e `admin/clientes/[id]/senha` buscam o
+    alvo com `.eq("org_id", appUser.org_id)`; `brokers` sítio 1 insere o broker com
+    `org_id: appUser.org_id` e o sítio 2 busca `targetUser` com `.eq("org_id", appUser.org_id)`;
+    `appointment-email-reminders` usa `appointment.org_id` para corretor E lead;
+    `login/actions` usa o `org_id` do próprio solicitante; `ensureAdminInvited(orgId, email)` é a
+    org convidada. A invariante de um lado só fica fechada para os 9 de hoje — o risco residual é
+    de call site FUTURO, e cai na concern abaixo.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# §5.2 — as três correções do @dev ao briefing: CONFIRMADAS
+# ─────────────────────────────────────────────────────────────────────────────
+verificacao_secao_5_2:
+  procedencia: "`tentarAppUrl` NÃO existe em `origin/main` nem nesta árvore — só na branch `story/900-66-…` (PR #565). A ressalva do @dev procede."
+  sla_alerts_265: >-
+    ✅ **CONFIRMADO, e é o mais grave.** O portão é `if (gestorElapsed >= gestorMin &&
+    !lead.sla_alerta_gestor_em)`, e `markGestor.push(lead.id)` está **fora** de `if (wppConfig)` e
+    fora de `if (basePush.ok)`. `sla_alerta_gestor_em` é gravado UMA vez. Logo: sem WhatsApp e sem
+    URL base, nada sai, o lead é carimbado assim mesmo, e a supressão é **PERMANENTE por lead** —
+    não uma janela. A justificativa do autor ("o WhatsApp já saiu sem link") só vale dentro de
+    `if (wppConfig)`. Minha descrição de "janela" no briefing estava errada; a do @dev está certa.
+  bolsao_rebalance_263: >-
+    ✅ **CONFIRMADO.** `claim_obra_notif` é chamada e `claimed === true` é avaliado ANTES de
+    `sendBolsaoDigest` rodar. O claim É consumido; o comentário que afirma o contrário contradiz o
+    código.
+  bolsao_rebalance_199: >-
+    ✅ **CONFIRMADO — supressão DUPLA.** Entre o claim e o envio há um `insert` em `activities` com
+    `type: "pre_bolsao_aviso"`, e é exatamente essa linha que o `jaAvisados` da rodada seguinte lê
+    (`.eq("type","pre_bolsao_aviso")`, linhas 186-194). Claim + marcador.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Achados
+# ─────────────────────────────────────────────────────────────────────────────
+top_issues:
+  - id: QA-900-67-1
+    severity: medium
+    finding: >-
+      🔴 **A 16ª armadilha — `PASSA_ORG_ID` é medido contra a REGIÃO INTEIRA da chamada, não contra
+      o objeto de opções.** `regioesDeChamada` recorta de `renderBaseLayout(` até o `)` que fecha —
+      o que inclui o argumento `content`. Qualquer token `orgId:` em QUALQUER argumento satisfaz a
+      régua. **Medido:** em `appointment-email-reminders:83` removi `orgId: appointment.org_id` das
+      opções (o e-mail passa a renderizar TEXTO em vez da logo, em silêncio) e pus
+      `${({ orgId: appointment.org_id }).orgId ?? ""}` dentro do template do corpo. `tsc` rc=0,
+      `header-brand.test.ts` **15/15 VERDE**, e a suíte INTEIRA **318 arquivos / 4372 passed VERDE**.
+      Nada no repositório acende. É literalmente o modo de falha nº 1 que a AC11 enumera ("um call
+      site novo nasce sem `orgId` … o e-mail perde a logo da Trifold em silêncio, e nada fica
+      vermelho"). A forma é realista: `renderBaseLayout(montarCorpo({ orgId }), { orgName })`.
+    suggested_owner: dev
+    suggested_action: >-
+      Medir `PASSA_ORG_ID` só no ÚLTIMO objeto literal de topo da região (as opções), não na região
+      inteira. Ex.: extrair o trecho do último `{` de profundidade-1 até seu `}` e testar ali.
+      Rodar como M5 exatamente a mutação acima (esperado: 🔴, nomeando o arquivo) **e** re-rodar M1
+      e M2 contra o detector novo (as duas seguem 🔴). Sem isso a AC11 fecha as formas ingênuas mas
+      não a que o próximo refactor produz.
+  - id: QA-900-67-2
+    severity: low
+    finding: >-
+      **O `it` "a contagem por arquivo bate com uma medida independente do mesmo texto" não pode
+      falhar.** Os dois lados contam ocorrências dos MESMOS marcadores no MESMO `codigoDe(arquivo)`:
+      `regioesDeChamada` empurra exatamente uma região por ocorrência de marcador, dê certo o
+      balanceamento ou não. **Medido:** troquei o recorte por `codigo.slice(inicio)` (engole tudo
+      até o EOF) — o `it` "nenhum recorte engoliu o call site vizinho" ficou 🔴 (bom), e este ficou
+      🟢, refutando o próprio comentário dele ("Se o recorte estivesse errado, as duas
+      discordariam"). A cobertura real é do `it` vizinho; este é decorativo.
+    suggested_owner: dev
+    suggested_action: "Ou tornar a 2ª medida independente de verdade (contar por outro caminho), ou apagar o `it` e corrigir o comentário — guarda que não muda o veredicto engorda a impressão de cobertura."
+  - id: QA-900-67-3
+    severity: low
+    finding: >-
+      **A matabilidade da AC11.1 depende de UMA linha de prosa dentro de um comentário.** Medido em
+      M3-contraprova: sem a linha `// Concretamente: NÃO acrescente `orgId,`…`, desligar o
+      `codigoDe()` obrigatório fica 🟢 — e remover essa linha, por si só, não deixa nada vermelho.
+      Ou seja, qualquer reescrita futura daquele comentário devolve o filtro ao estado decorativo,
+      em silêncio. O @dev documentou o RACIOCÍNIO ali; falta documentar a FRAGILIDADE.
+    suggested_owner: dev
+    suggested_action: "Acrescentar meia linha ao comentário da AC7: `// ↑ esta linha é o carrasco do filtro `codigoDe` da AC11.1 — não a reescreva sem re-rodar M3.`"
+  - id: QA-900-67-4
+    severity: low
+    finding: >-
+      **AC5 (preview do admin) é um vazamento de marca quando houver 2º tenant.**
+      `email-templates/preview` fixa `orgId: trifoldOrgId()`, então o admin da "Trifold Sandbox"
+      (`900-25`) verá a logo da Trifold ao pré-visualizar um template DELE. A AUTO-DECISÃO está
+      correta para hoje (byte a byte, tenant único) e está declarada — mas é a mesma classe de
+      defeito que esta story existe para matar, adiada.
+    suggested_owner: po
+    suggested_action: "Nomear explicitamente na story futura da 900-64: o preview deve usar `user.orgId` quando houver mais de uma org ativa."
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Desvios julgados
+# ─────────────────────────────────────────────────────────────────────────────
+desvios:
+  ac7_comentario_dentro_dos_parenteses:
+    veredicto: "ACEITO"
+    razao: >-
+      A AC7/Task 6 dizem "sobre a chamada"; está DENTRO dos parênteses. Reproduzi o motivo (M3 fica
+      verde com o comentário acima da chamada, fora da região recortada). Diff conferido:
+      **+16/−0, todas as 16 linhas `//`**, `{ orgName: "Portal de Obras" }` byte a byte igual, zero
+      mudança de assinatura e de comportamento. Espírito preservado; a letra cedeu à prova.
+  ac10_teste_que_mudou_de_sentido:
+    veredicto: "OK"
+    razao: >-
+      `falls back to Trifold when orgName is not provided` virou `does NOT fall back to the Trifold
+      logo when no orgId is provided`, com o motivo escrito em comentário e no Change Log. A
+      asserção antiga (`toContain('Trifold')`) de fato não alcançava — "Trifold" aparece no rodapé
+      e nos DOIS branches. O `it` vizinho também subiu de `toContain('MinhaEmpresa')` para
+      `toContain('>MinhaEmpresa</span>')`. Não foi apagado silenciosamente.
+  ac9_catraca_do_literal:
+    veredicto: "OK"
+    razao: >-
+      Zero UUID cru novo. `header-brand.ts` importa `trifoldOrgId()`; os testes usam
+      `trifoldOrgId()` e `11111111-2222-3333-4444-555555555555` (não é o literal vigiado).
+      `trifold-org-literal.test.ts` continua verde dentro dos 318 sem declarar arquivo novo.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Merge
+# ─────────────────────────────────────────────────────────────────────────────
+merge:
+  ordem: "**900-66 → 900-67 continua correta.** Confirmados os 6 arquivos em comum. Em `login/actions.ts` a declaração `const emailOrgId = appUser.org_id ?? undefined` foi MOVIDA da linha 235 para a 218 (antes de `renderPasswordActionEmail`) — o @dev não resolveu por conta, como instruído. É do @devops resolver no merge; o risco é textual, não semântico (o valor é o mesmo)."
+  doc_untracked: "✅ `docs/architecture/whitelabel-e-migracao-jud.md` segue **untracked** (701 linhas) e NÃO está em `git diff origin/main...HEAD`. Não commitar."
+  branch: "story/900-67-istrifold-por-org-id-no-email · commit 161fae29 · base origin/main f3992973 · NÃO empilhada."
+
+evidence:
+  tests_reviewed: 15
+  mutacoes_rodadas: 6
+  risks_identified: 4
+  files_verified: 16
+
+nfr_validation:
+  security: { status: PASS, notes: "Nenhuma superfície nova. Nenhuma query nova. Nenhum dado de cliente no diff. Direção da falha INVERTIDA para o lado seguro (desconhecido ⇒ texto, nunca a marca de outro)." }
+  performance: { status: PASS, notes: "Uma comparação de string a mais por render de e-mail." }
+  reliability: { status: PASS, notes: "`isMarcaTrifold` é pura e total; `org_id` é NOT NULL nas duas tabelas de origem e o `?? undefined` reusado em login/actions é pré-existente, com o `false` resultante caindo para texto — falha audível, não silenciosa na direção errada." }
+  maintainability: { status: CONCERNS, notes: "O carrasco de alcance (AC11) tem o furo QA-900-67-1; é ele que sustenta a promessa de longo prazo da story." }
+
+recommended_status: "✓ CONCERNS — pode seguir para @devops. QA-900-67-1 deve virar conserto de régua ANTES do merge, ou story de acompanhamento com dono."

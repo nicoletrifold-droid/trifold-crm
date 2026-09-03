@@ -158,6 +158,9 @@ const FIADOS_ESPERADOS: Record<string, number> = {
  * VERDE contra a mutação obrigatória da AC11.5 — `{ orgName: "Portal de Obras", orgId }` em
  * `auto-vincular-cliente-obra.ts` não tem vírgula depois do atalho, e o furo deixava a porta
  * que a AC7 existe para fechar aberta em silêncio. Foi a mutação que achou, não a leitura.
+ *
+ * ⚠️ É testada contra `objetoDeOpcoes(regiao)`, **nunca** contra a região inteira — medir na
+ * região era o furo QA-900-67-1. Ver o cabeçalho daquela função.
  */
 const PASSA_ORG_ID = /\borgId\s*[,:}]/
 
@@ -189,10 +192,122 @@ function regioesDeChamada(codigo: string, marcador: string): string[] {
   }
 }
 
+/**
+ * O ÚLTIMO objeto literal de TOPO da região — o objeto de OPÇÕES, e só ele.
+ *
+ * Medir `PASSA_ORG_ID` contra a região INTEIRA foi o furo **QA-900-67-1**: a região vai de
+ * `renderBaseLayout(` até o `)` que a fecha, e portanto inclui o argumento `content`. Um token
+ * `orgId:` em QUALQUER argumento satisfazia a régua. Medido pelo @qa: tirar
+ * `orgId: appointment.org_id` das OPÇÕES de `appointment-email-reminders` (o e-mail passa a
+ * renderizar TEXTO em vez da logo, em silêncio) e devolver o token dentro de um comentário HTML
+ * no corpo deixava `tsc` em rc=0 e a suíte INTEIRA verde — o modo de falha nº 1 que a AC11 existe
+ * para fechar, na forma que o próximo refactor produz (`renderBaseLayout(montarCorpo({ orgId }),
+ * { orgName })`).
+ *
+ * **"De topo" é o que fecha isso**: só conta o `{` que abre quando a pilha de aninhamento tem
+ * apenas o `(` da própria chamada. O objeto que o @qa escondeu no `content` está dentro de um
+ * `${…}` de template literal — nunca no topo da lista de argumentos.
+ *
+ * A varredura tem ESTADO de string (`'`, `"`, crase, e o `${…}` que volta a ser código dentro do
+ * template): sem ele, uma chave dentro de um literal desbalancearia a pilha. Comentários já
+ * saíram antes, em `codigoDe` (AC11.1).
+ *
+ * **Fail-closed nas três direções**: região sem `(`, região sem fechamento, ou chamada que passa
+ * as opções por VARIÁVEL (`renderBaseLayout(corpo, opcoes)`) devolvem `""` — que não casa
+ * `PASSA_ORG_ID`, cai na partição SEM `orgId` e é acusada pelo nome. Uma extração que não achou
+ * o objeto nunca vira aprovação.
+ *
+ * Resíduo NOMEADO: um `orgId` aninhado DENTRO das opções (`{ orgName, extra: { orgId } }`)
+ * casaria. Não é alcançável hoje — `EmailLayoutOptions` e os `params` de
+ * `renderPasswordActionEmail` são planos, e o excess property checking do `tsc` recusa a chave
+ * inventada. Se algum dia uma opção virar objeto, esta função precisa medir a profundidade das
+ * chaves, não só recortar o objeto.
+ *
+ * Limite conhecido: literal de expressão regular com aspas ou chaves desbalanceadas dentro da
+ * chamada confundiria a pilha. Nenhum dos 10 call sites tem um, e a vivacidade
+ * (`opcoes !== ""`, abaixo) acende se algum passar a ter.
+ */
+function objetoDeOpcoes(regiao: string, marcador: string): string {
+  const abre = marcador.length - 1
+  if (regiao[abre] !== "(") return ""
+  const pilha: string[] = ["("]
+  let candidato = -1
+  let de = -1
+  let ate = -1
+  let fechou = false
+
+  for (let i = abre + 1; i < regiao.length; i++) {
+    const c = regiao[i]
+    const topo = pilha[pilha.length - 1]
+
+    if (topo === "'" || topo === '"' || topo === "`") {
+      if (c === "\\") i++
+      else if (c === topo) pilha.pop()
+      else if (topo === "`" && c === "$" && regiao[i + 1] === "{") {
+        pilha.push("${")
+        i++
+      }
+      continue
+    }
+
+    if (c === "'" || c === '"' || c === "`" || c === "(" || c === "[") {
+      pilha.push(c)
+      continue
+    }
+
+    if (c === "{") {
+      if (pilha.length === 1) candidato = i
+      pilha.push("{")
+      continue
+    }
+
+    if (c === "}" || c === ")" || c === "]") {
+      const aberto = pilha.pop()
+      if (aberto === "{" && pilha.length === 1 && candidato >= 0) {
+        de = candidato
+        ate = i
+        candidato = -1
+      }
+      // O `)` que zera a pilha é o que fecha a chamada: daí em diante já não é esta região.
+      if (pilha.length === 0) {
+        fechou = true
+        break
+      }
+    }
+  }
+
+  // Sem o `)` da chamada, o que veio antes é um recorte truncado, e um objeto achado nele pode
+  // estar aberto no texto real. Fail-closed: `""`.
+  return !fechou || de < 0 ? "" : regiao.slice(de, ate + 1)
+}
+
 interface CallSite {
   arquivo: string
   regiao: string
+  /** O objeto de opções da região — é ISTO que `PASSA_ORG_ID` mede. Ver `objetoDeOpcoes`. */
+  opcoes: string
   marcador: string
+}
+
+/**
+ * Os call sites de UM arquivo, a partir do texto CRU.
+ *
+ * É função, e não código solto no laço, porque o `codigoDe` que ela aplica é **obrigatório** pela
+ * AC11.1 e precisa de carrasco PRÓPRIO: o `it` "comentário DENTRO do objeto de opções não conta
+ * como fiação" chama esta função com uma fonte sintética e fica vermelho se o `codigoDe` sair
+ * daqui. Antes, a matabilidade daquele filtro dependia de uma linha de PROSA no comentário da AC7
+ * em `auto-vincular-cliente-obra.ts` (QA-900-67-3): reescrever aquela prosa devolvia o filtro ao
+ * estado decorativo, em silêncio.
+ */
+function callSitesDe(arquivo: string, fonte: string): CallSite[] {
+  const codigo = codigoDe(fonte)
+  const sites: CallSite[] = []
+  for (const marcador of MARCADORES) {
+    for (const regiao of regioesDeChamada(codigo, marcador)) {
+      sites.push({ arquivo, regiao, opcoes: objetoDeOpcoes(regiao, marcador), marcador })
+    }
+  }
+  return sites
 }
 
 const arquivosVarridos = arquivosDeProducao(SRC)
@@ -201,16 +316,7 @@ const callSites: CallSite[] = []
 for (const caminho of arquivosVarridos) {
   const arquivo = relative(RAIZ_WEB, caminho).split("\\").join("/")
   if (DEFINICOES.has(arquivo)) continue
-  // `codigoDe` remove os comentários ANTES de qualquer casamento. Obrigatório: a AC7 acabou de
-  // plantar, em `auto-vincular-cliente-obra.ts`, um comentário que menciona `orgId` — uma régua
-  // de texto cru leria aquele comentário como se o sítio estivesse fiado, e a exceção ficaria
-  // invisível justamente no arquivo que ela existe para vigiar.
-  const codigo = codigoDe(readFileSync(caminho, "utf-8"))
-  for (const marcador of MARCADORES) {
-    for (const regiao of regioesDeChamada(codigo, marcador)) {
-      callSites.push({ arquivo, regiao, marcador })
-    }
-  }
+  callSites.push(...callSitesDe(arquivo, readFileSync(caminho, "utf-8")))
 }
 
 function contarPor(sites: CallSite[]): Map<string, number> {
@@ -219,9 +325,87 @@ function contarPor(sites: CallSite[]): Map<string, number> {
   return mapa
 }
 
-const comOrgId = contarPor(callSites.filter((s) => PASSA_ORG_ID.test(s.regiao)))
-const semOrgId = contarPor(callSites.filter((s) => !PASSA_ORG_ID.test(s.regiao)))
+// `s.opcoes`, jamais `s.regiao`: a região inclui o argumento `content` (QA-900-67-1).
+const comOrgId = contarPor(callSites.filter((s) => PASSA_ORG_ID.test(s.opcoes)))
+const semOrgId = contarPor(callSites.filter((s) => !PASSA_ORG_ID.test(s.opcoes)))
 const ordenado = (m: Map<string, number>) => Object.fromEntries([...m].sort())
+
+/**
+ * O carrasco do EXTRATOR — QA-900-67-1 e QA-900-67-3.
+ *
+ * Estes `it` rodam contra entradas SINTÉTICAS, e é de propósito: o corpus real tem 10 call sites
+ * todos bem-comportados, e uma régua que só olha o corpus não distingue "o extrator está certo"
+ * de "o corpus ainda não produziu a forma errada". A forma errada já foi produzida uma vez — pelo
+ * @qa, contra o código de verdade — e está reproduzida aqui.
+ *
+ * O `it` que ficava aqui antes ("a contagem por arquivo bate com uma medida independente do mesmo
+ * texto") foi APAGADO, não consertado: os dois lados contavam ocorrências dos MESMOS marcadores no
+ * MESMO `codigoDe`, e `regioesDeChamada` empurra exatamente uma região por ocorrência — dê certo o
+ * balanceamento ou não. Não havia entrada capaz de reprová-lo, e o @qa mediu isso trocando o
+ * recorte por um `slice` até o EOF: o `it` vizinho ficou vermelho e aquele ficou verde. Guarda que
+ * não pode reprovar é pior que guarda ausente, porque conta como cobertura. Quem cobre o recorte
+ * é, e sempre foi, o `it` "nenhum recorte engoliu o call site vizinho".
+ */
+describe("objetoDeOpcoes — a régua mede as OPÇÕES, não a região (QA-900-67-1)", () => {
+  const REND = "renderBaseLayout("
+
+  it("recorta o objeto de opções — e é ele que a régua aprova", () => {
+    const regiao = 'renderBaseLayout("<p>Body</p>", { orgName: "Trifold", orgId: appUser.org_id })'
+    expect(objetoDeOpcoes(regiao, REND)).toBe('{ orgName: "Trifold", orgId: appUser.org_id }')
+    expect(PASSA_ORG_ID.test(objetoDeOpcoes(regiao, REND))).toBe(true)
+  })
+
+  it("🔴 o furo QA-900-67-1: `orgId` escondido no argumento `content` NÃO conta", () => {
+    // Forma exata da mutação M5 do @qa, sobre `appointment-email-reminders`: as OPÇÕES perdem o
+    // `orgId` (o e-mail perde a logo, em silêncio) e o token reaparece dentro de um comentário
+    // HTML no corpo. `tsc` aceita, e contra a REGIÃO isto ficava verde na suíte inteira.
+    const regiao =
+      'renderBaseLayout(`<p>Olá, ${broker.name}!</p><!--${({ orgId: a.org_id }).orgId ?? ""}-->`, { orgName: "Trifold" })'
+    expect(objetoDeOpcoes(regiao, REND)).toBe('{ orgName: "Trifold" }')
+    expect(PASSA_ORG_ID.test(objetoDeOpcoes(regiao, REND))).toBe(false)
+    // Controle positivo, obrigatório: é a MESMA entrada que a régua antiga aprovava. Sem esta
+    // linha, um `objetoDeOpcoes` que devolvesse `""` para tudo passaria neste `it` por acidente.
+    expect(PASSA_ORG_ID.test(regiao)).toBe(true)
+  })
+
+  it("objeto aninhado em OUTRA CHAMADA também não conta — a forma do próximo refactor", () => {
+    const regiao = 'renderBaseLayout(montarCorpo({ orgId }), { orgName: "Trifold" })'
+    expect(objetoDeOpcoes(regiao, REND)).toBe('{ orgName: "Trifold" }')
+    expect(PASSA_ORG_ID.test(objetoDeOpcoes(regiao, REND))).toBe(false)
+    expect(PASSA_ORG_ID.test(regiao)).toBe(true)
+  })
+
+  it("fail-closed: opções por VARIÁVEL, ou região truncada, caem na partição acusada", () => {
+    // "Não consegui medir" nunca pode virar "está fiado": sem objeto literal de topo o resultado
+    // é `""`, que não casa a régua e cai no lado que a asserção de conjunto acusa pelo nome.
+    expect(objetoDeOpcoes("renderBaseLayout(corpo, opcoes)", REND)).toBe("")
+    expect(objetoDeOpcoes("renderBaseLayout(corpo, { orgId }", REND)).toBe("")
+    expect(objetoDeOpcoes("", REND)).toBe("")
+    expect(PASSA_ORG_ID.test("")).toBe(false)
+  })
+
+  it("comentário DENTRO do objeto de opções não conta como fiação (AC11.1)", () => {
+    // O carrasco PRÓPRIO do `codigoDe` obrigatório, e a resposta ao QA-900-67-3: até aqui a
+    // matabilidade da AC11.1 dependia de UMA linha de prosa no comentário da AC7 em
+    // `auto-vincular-cliente-obra.ts` — reescrever aquela prosa devolvia o filtro ao estado
+    // decorativo, em silêncio. Agora o filtro morre por construção: tirar `codigoDe` de
+    // `callSitesDe` deixa este `it` vermelho, e nenhuma prosa do repositório o sustenta.
+    const semFiacao = [
+      "const html = renderBaseLayout(corpo, {",
+      '  orgName: "Portal de Obras",',
+      "  // orgId: deliberadamente ausente — ver AC7",
+      "})",
+    ].join("\n")
+    const passa = (fonte: string) =>
+      callSitesDe("sintetico.ts", fonte).map((s) => PASSA_ORG_ID.test(s.opcoes))
+    // `toEqual([false])` e não `.some()`: afirma o veredicto E que houve exatamente um call site.
+    expect(passa(semFiacao)).toEqual([false])
+    // Controle positivo no mesmo `it`: com o `orgId` em CÓDIGO, o mesmo caminho aprova.
+    expect(passa(semFiacao.replace("// orgId: deliberadamente ausente — ver AC7", "orgId,"))).toEqual([
+      true,
+    ])
+  })
+})
 
 describe("AC11 — todo call site de e-mail passa orgId, com UMA exceção declarada", () => {
   it("vivacidade: a varredura enxerga a árvore de verdade e acha os 10 call sites", () => {
@@ -231,6 +415,10 @@ describe("AC11 — todo call site de e-mail passa orgId, com UMA exceção decla
     expect(arquivosVarridos.length).toBeGreaterThan(100)
     expect(callSites.length).toBe(10)
     expect(callSites.every((s) => s.regiao !== "")).toBe(true)
+    // Vivacidade da SEGUNDA extração, a que a régua realmente mede: `objetoDeOpcoes` achou um
+    // objeto literal de topo nos 10. Um extrator que devolvesse `""` para tudo é fail-closed (cai
+    // na partição acusada), mas acender aqui diz QUAL das duas coisas quebrou.
+    expect(callSites.filter((s) => s.opcoes === "").map((s) => s.arquivo)).toEqual([])
   })
 
   it("nenhum recorte engoliu o call site vizinho", () => {
@@ -243,21 +431,6 @@ describe("AC11 — todo call site de e-mail passa orgId, com UMA exceção decla
       )
       .map((s) => `${s.arquivo} :: ${s.marcador}`)
     expect(engolidas).toEqual([])
-  })
-
-  it("a contagem por arquivo bate com uma medida independente do mesmo texto", () => {
-    // Segunda medida, por `ocorrenciasNoCodigo` sobre o arquivo inteiro, sem passar pelo
-    // balanceamento de parênteses. Se o recorte estivesse errado, as duas discordariam.
-    const porRegiao = contarPor(callSites)
-    const porOcorrencia = new Map<string, number>()
-    for (const caminho of arquivosVarridos) {
-      const arquivo = relative(RAIZ_WEB, caminho).split("\\").join("/")
-      if (DEFINICOES.has(arquivo)) continue
-      const fonte = readFileSync(caminho, "utf-8")
-      const n = MARCADORES.reduce((acc, m) => acc + ocorrenciasNoCodigo(fonte, m), 0)
-      if (n > 0) porOcorrencia.set(arquivo, n)
-    }
-    expect(ordenado(porRegiao)).toEqual(ordenado(porOcorrencia))
   })
 
   it("os call sites SEM orgId são exatamente a exceção da AC7 — nem um a mais", () => {
