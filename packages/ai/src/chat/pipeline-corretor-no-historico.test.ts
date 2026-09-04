@@ -1081,8 +1081,12 @@ describe("AC10 — conversa SEM corretor não sente a story", () => {
       // +695 bytes. Estes turnos-ouro rodam sem override de banco, então medem o
       // fallback — que é justamente o que não pode contradizer o painel.
       // **+695 nos DOIS cenários** — a igualdade do delta é a prova do confinamento.
-      sha256: "5751a3a1b91a40ebcf9020982be7338b907ce64c00ccbb0833d156f94eae1793",
-      length: 31205,
+      // 31/08/2026 — a Nicole parou de dar número de entrada (nem %, nem reais): os
+      // fallbacks `property-presentation` e `qualification` trocaram a régua do "20% /
+      // em torno de 80 mil" por "quem faz a conta é o corretor". +166 bytes, **iguais
+      // nos DOIS cenários** — de novo, a igualdade do delta é a prova do confinamento.
+      sha256: "95efdd992547f874cd336568bc75e0d1503698e936c0504e70df412f47bdf26a",
+      length: 31371,
     },
     {
       nome: "(b) primeira mensagem, só o lead → SEM bloco de não-reintro",
@@ -1091,8 +1095,9 @@ describe("AC10 — conversa SEM corretor não sente a story", () => {
       bloco: "tem apartamento de 3 quartos?",
       papeis: ["user", "user"],
       // Story 75-347 — idem: 30.082 + 254 = 30.336. Story 75-348: + 695 = 31.031.
-      sha256: "36d494a47d057f80ffef72ecf4141ac0ebc1248ed43c16e9684c750f00eb0558",
-      length: 31031,
+      // 31/08/2026 (entrada sem número): + 166 = 31.197.
+      sha256: "7e5acd70cfc7dc8366881c2babeeb7916d1e4feb4ed18835394527a5cec096b6",
+      length: 31197,
     },
   ]
 
