@@ -1,8 +1,11 @@
 # Story 86-13 — Landing do Yarden: seções institucionais completas (Overview, Lazer, Galeria, Sobre a Trifold, Nav, Banda CTA)
 
-**Status:** Ready (validação @po **GO 9/10**; as 5 decisões de curadoria
-**D1–D5 foram respondidas pelo stakeholder em 2026-09-03** e estão travadas nos
-ACs — ver Change Log 0.3. Nenhum gate pendente: implementação liberada)
+**Status:** **Ready for Review** (`InReview` no vocabulário do
+`story-lifecycle.md`) — implementação concluída pelo @dev em 2026-09-04, T1–T13
+fechadas mais uma T14 acrescentada pelo executor. Ver Change Log 0.4 e o Dev
+Agent Record. Histórico: validação @po **GO 9/10**, e as 5 decisões de curadoria
+**D1–D5 respondidas pelo stakeholder em 2026-09-03** e travadas nos ACs
+(Change Log 0.3). Próximo passo: `@qa *qa-gate`.
 **Epic:** 86 — Conversions API (CAPI) e Rastreamento Meta
 **Executor:** @dev (Dex)
 **Quality Gate:** @qa (Quinn) — `*qa-gate` ao fim da implementação
@@ -1087,44 +1090,55 @@ da 86-12 — `cd landing-pages/yarden && python3 -m http.server 8080`.
       - [x] D4 respondida (**(A) verbatim** — texto e foto do Vind) → AC8 travada
       - [x] D5 respondida (**(B) redesenho**) → AC6 travada **e estimativa
             confirmada em 9 pontos** (8 + 1 pela Opção B)
-- [ ] **T1 (AC1)** — Criar `<header class="nav">` fixo com logo + 5 links +
+- [x] **T1 (AC1)** — Criar `<header class="nav">` fixo com logo + 5 links +
       CTA; JS de scroll (`scrolled` no fundo) e toggle mobile; ajustar
       `scroll-margin-top`/`scroll-padding-top` nas seções-alvo.
-- [ ] **T2 (AC2)** — Validar visualmente (todos os breakpoints) que o nav novo
-      não sobrepõe o Hero existente.
-- [ ] **T3 (AC3)** — Construir seção Overview/Stats (`#empreendimento`) com os
+      → `<header class="topo" id="topo">`, `html{scroll-padding-top:72px}`.
+- [x] **T2 (AC2)** — Validar visualmente (todos os breakpoints) que o nav novo
+      não sobrepõe o Hero existente. → medido em screenshot a 1440px e 390px.
+- [x] **T3 (AC3)** — Construir seção Overview/Stats (`#empreendimento`) com os
       stats confirmados em T0.
-- [ ] **T4 (AC4)** — Construir seção Lazer (`#lazer`) com os chips confirmados
+- [x] **T4 (AC4)** — Construir seção Lazer (`#lazer`) com os chips confirmados
       em T0 + imagem de fundo `Térreo/Lazer Yarden.jpg` processada.
-- [ ] **T5 (AC5)** — Processar as 9 imagens da Galeria confirmadas em T0
+      → `assets/lazer-terreo.{jpg,webp}`, servida por `<picture>` (não por CSS).
+- [x] **T5 (AC5)** — Processar as 9 imagens da Galeria confirmadas em T0
       (redimensionar/otimizar para jpg+webp, nomear `galeria-01..09`),
       construir `.gallery-grid` + lightbox + CTA.
-- [ ] **T6 (AC6)** — Ajustar a seção "invista" existente: `id="localizacao"` +
+- [x] **T6 (AC6)** — Ajustar a seção "invista" existente: `id="localizacao"` +
       `kicker` + o **redesenho da Opção B** (endereço em destaque, link do
       Google Maps `maps.app.goo.gl/RFibC7xZ7KZx6cwQA`, e os 5 pontos de
       referência como lista de texto visível), conforme D5 travada em T0.
-- [ ] **T7 (AC7)** — Construir Banda CTA reaproveitando uma das 9 imagens da
-      Galeria (T5).
-- [ ] **T8 (AC8)** — Copiar `trifold-fachada.{jpg,webp}` do Vind Residence
+- [x] **T7 (AC7)** — Construir Banda CTA reaproveitando uma das 9 imagens da
+      Galeria (T5). → `galeria-05`, escolhida por luminância medida.
+- [x] **T8 (AC8)** — Copiar `trifold-fachada.{jpg,webp}` do Vind Residence
       para `landing-pages/yarden/assets/`; construir seção Sobre a Trifold com
       o texto confirmado em T0.
-- [ ] **T9 (AC9)** — Adicionar `.fnav` ao footer existente.
-- [ ] **T10 (AC10, AC11)** — Revisão final: nenhuma linha do `<script>` de
+- [x] **T9 (AC9)** — Adicionar `.fnav` ao footer existente.
+- [x] **T10 (AC10, AC11)** — Revisão final: nenhuma linha do `<script>` de
       tracking tocada; nenhuma cor/fonte/logo fora do `:root` já existente.
-- [ ] **T11 (AC12)** — Confirmar que nenhuma estrutura de Depoimentos foi
+      → provado por comparação byte a byte com `HEAD` (ver Dev Agent Record).
+- [x] **T11 (AC12)** — Confirmar que nenhuma estrutura de Depoimentos foi
       criada, nem placeholder.
-- [ ] **T11b (AC15)** — Rodar
+- [x] **T11b (AC15)** — Rodar
       `npx vitest run landing-pages/yarden/tracking-browser.test.ts` e obter
       **23/23 (ou mais) passando**. Baseline pré-story medido pelo @po: 23/23.
       Se acusar asset órfão/inexistente, corrigir a marcação (nunca o teste).
-- [ ] **T12 (AC13, AC14)** — Checklist manual completo (ver Testing) nos 3
+      → 23/23, arquivo NÃO modificado. As duas asserções foram provadas vivas
+      por mutação (asset órfão e referência inexistente reprovam de fato).
+- [x] **T12 (AC13, AC14)** — Checklist manual completo (ver Testing) nos 3
       breakpoints + confirmação de não-regressão dos 3 formulários.
-- [ ] **T13** — Atualizar `landing-pages/yarden/README.md` (contagem de
+      → automatizado com Playwright em vez de manual (mais confiável): âncoras,
+      overflow, lightbox, menu mobile e console comparado com o `HEAD`.
+- [x] **T13** — Atualizar `landing-pages/yarden/README.md` (contagem de
       assets, lista de seções) se a estrutura documentada lá ficar
       desatualizada. **Vai ficar:** o README hoje diz literalmente
       `assets/ # 13 arquivos: 5 imagens (jpg + webp cada) + 2 logos SVG + 1 PDF`
       — com as ~11 imagens novas da AC5/AC4/AC8 esse número muda
-      necessariamente. T13 não é condicional.
+      necessariamente. T13 não é condicional. → 13 → **35 arquivos**.
+- [x] **T14 (acrescentada pelo @dev)** — Suíte de testes das seções novas,
+      em arquivo NOVO (`secoes-institucionais.test.ts`) para não modificar os
+      dois testes existentes, como a story exige. 39 testes; todas as
+      asserções centrais provadas por mutação.
 
 ## Definition of Done
 
@@ -1165,6 +1179,7 @@ valem:
 
 | Date | Version | Description | Author |
 |------|---------|-------------|--------|
+| 2026-09-04 | 0.4 | **Implementação concluída — T1 a T13 fechadas, mais uma T14 que eu acrescentei (suíte de testes das seções novas). `Ready → Ready for Review`.** O que foi entregue em `landing-pages/yarden/`: header/nav fixo com os 5 links + CTA e menu mobile (AC1); "O Empreendimento" com os 6 números travados da Ficha Técnica e **sem stat de preço** (AC3); "Lazer" com os 6 chips travados e a foto do térreo (AC4); Galeria de 9 renders com lightbox e CTA (AC5); a seção "Invista no novo centro urbano de Maringá" redesenhada como `#localizacao`, com endereço literal, link oficial do Maps e os 5 pontos de referência como texto visível — o `alt` do mapa **continua** listando os marcos, a lista é acréscimo (AC6/D5-B); banda CTA reaproveitando `galeria-05` (AC7); "Sobre a Trifold" com texto e foto verbatim da landing irmã (AC8/D4-A); `.fnav` no rodapé (AC9). **As duas delegações do stakeholder foram exercidas com critério explícito, não por gosto:** os 9 arquivos da Galeria (D3) foram escolhidos por proporção-compatível-com-o-slot → paleta quente (o `Rooftop/Coworking`, único azul/turquesa do book, foi descartado por destoar do `:root`) → não-redundância com o que a página já mostra → correspondência com um chip da AC4; e o fundo da banda (D3.1) saiu de **medição de luminância das 9 com `PIL.ImageStat`**, não de olho: `galeria-05` é simultaneamente a mais escura (média 106,6 de 255) e a mais uniforme entre as escuras (desvio 49,0 contra 64,7 da fachada) — as duas propriedades que o texto branco precisa. Detalhamento arquivo por arquivo, com o motivo de cada escolha **e de cada descarte**, no Dev Agent Record. **A AC15 foi o eixo da implementação, e as 3 armadilhas que ela previa se confirmaram**: os pares `jpg+webp` novos vão todos por `<picture>` com as duas URLs em atributo, a foto do Lazer vai por `<picture>` posicionado com `object-fit:cover` (não por `background-image`), e a `trifold-fachada` é servida nos dois formatos. O único `background-image` da página é o da banda CTA — legítimo porque aponta para `galeria-05.jpg`, que a Galeria já referencia por atributo, e portanto não cria arquivo nenhum; há teste que verifica exatamente essa condição. **`assets/` foi de 13 para 35 arquivos, com zero órfão e zero referência inexistente**, e as duas asserções cruzadas do `tracking-browser.test.ts` foram **provadas vivas por mutação** (criar um `galeria-10.jpg` sem referência reprova; trocar `galeria-07.webp` por `galeria-77.webp` reprova) — o baseline de 23/23 do @po foi confirmado antes de qualquer alteração e o arquivo **não** foi modificado. **Dois defeitos que só a conferência visual pegaria, encontrados e corrigidos:** (i) copiar o `.g-wide{grid-column:span 2}` da landing irmã para o grid mobile de 2 colunas deixa uma **célula vazia de 170×310** no canto superior direito (o auto-placement não encaixa a 2ª foto ao lado da 1ª, que ocupa 2 linhas) — a landing do Vind Residence carrega esse buraco em produção, e é um **quarto** ponto, não previsto na story, em que "seguir o padrão do Vind" era a resposta errada; corrigido para `span 1` no breakpoint de 979.98px, com teste próprio; (ii) o parágrafo do "Sobre a Trifold" corria **por baixo** do botão flutuante de WhatsApp (texto até x=1360, botão a partir de x=1360) — corrigido com `max-width:62ch`, remedido em x=1208. **Zero regressão de tracking, provado por bytes e não por leitura:** os 3 blocos `<script>` anteriores (511, 6.359 e 8.243 bytes), o `<noscript>` do Pixel e os 3 `<form>` são **byte a byte idênticos** ao `HEAD`; o JS novo (nav + lightbox) vive num 4º bloco separado justamente para tornar isso verificável. Console do navegador comparado lado a lado (HEAD na porta 8098 vs. versão nova na 8099): 2 mensagens antes, 2 depois, a mesma — nenhum erro JS novo. **Conferência visual com Playwright a 1440×900 e 390×844, com número e não com impressão:** as 5 âncoras param com o topo da seção em y=72 contra um header de 67px/58px (a seção chega **abaixo** dele, nunca escondida); `scrollWidth == clientWidth` nos dois breakpoints; as 9 fotos carregaram e as 9 foram servidas como `.webp`; lightbox abre e fecha com `Escape`; menu mobile abre e fecha ao clicar no link. **Testes:** `landing-pages/yarden` foi de 50/50 para **89/89**, e os 39 testes novos moram em **arquivo novo** (`secoes-institucionais.test.ts`) porque a story proíbe modificar os dois `.ts` existentes — as asserções centrais deles foram submetidas a **16 mutações e capturaram todas as 16** (âncora quebrada, quadrado em slot largo, POIs removidos, Maps trocado por busca por nome, `rel="noopener"` removido, 7º chip, stat de preço importado, hex novo, galeria com 8 fotos, fundo da banda em arquivo exclusivo, texto do "Sobre" reescrito, `scroll-padding-top` removido, fundo do Lazer por CSS, `<source webp>` removido, seção de depoimentos criada, `.fnav` fora de lugar). **Não-regressão do resto do repo, com baseline medido:** a suíte inteira falha nos **mesmos 3 arquivos e nas mesmas 71 asserções** com e sem esta story (verificado com `git stash push -u -- landing-pages/yarden`, por pathspec, para não tocar o trabalho paralelo de outros agentes na árvore); `type-check` tem os mesmos 12 erros, **diff vazio**; `lint` 0 erros / 30 avisos, 8/8 tasks em cache. As 71 falhas e os 12 erros são do symlink `packages/web/node_modules/@trifold/{ai,shared}` da worktree, que resolve para o checkout principal — nenhum dos 3 arquivos tem relação com `landing-pages/`. `landing-pages/` está fora do `pnpm-workspace.yaml`, então o `lint` do turbo não o alcança (mesma situação da 86-12); o arquivo de teste novo foi conferido com `tsc --strict` sobre o `tsconfig.json` da raiz: **0 erros**. **Nada de copy inventado (Artigo IV):** cada texto novo é rastreável — números e chips à Ficha Técnica; o H2 do Lazer ("Lazer completo em dois níveis") é a **legenda do stat 5 da própria AC3**, aprovada pelo stakeholder; o parágrafo do Lazer é a paráfrase que a AC4 autoriza, e há teste que reprova as amenidades da landing irmã ("piscina aquecida", "spots bar", "coworking"), que são de outro prédio; a copy da banda reusa a linha literal já publicada em "Quer saber mais?"; e o "Sobre a Trifold" é comparado por igualdade estrita de string inteira. AC11 conferida por **inventário** de literais hex: zero cor nova, zero fonte nova, zero logo novo, os três com teste. **Fora de escopo respeitado:** nenhum arquivo fora de `landing-pages/yarden/` (a cópia da `trifold-fachada` é para dentro de `assets/`, a exceção que a DoD #5 permite), nada em `packages/web/`, nada em `trifold-design-system/`, nenhum evento CAPI novo, nenhum formulário novo, e nenhuma estrutura de Depoimentos — nem placeholder, nem comentário. Próximo passo: `@qa *qa-gate`. **Pendência que NÃO é desta story:** a URL `trifold.eng.br/yarden/` segue offline até o @devops concluir as tarefas T12/T13 de infraestrutura da 86-12 — nada aqui muda esse estado. | @dev (Dex) |
 | 2026-09-03 | 0.3 | **As 5 decisões de curadoria foram respondidas pelo stakeholder (lucas@trifold.eng.br) e estão travadas nos ACs. Status promovido `Draft → Ready` — o gate que a 0.2 declarou explicitamente como o único pendente caiu.** As 8 respostas (D1, D1.1, D1.2, D2, D3, D3.1, D4, D5) **seguiram todas a recomendação do @po** da validação 0.2. O que ficou travado, AC por AC: **D1 → AC3** — 6 stats, nesta ordem: 60 unidades · 83,66 m² de área privativa · 2 suítes e lavabo · 15 pavimentos · 2 subsolos + rooftop completo · 4 apartamentos por pavimento (todos citação literal da Ficha Técnica); **D1.1** = a área privativa vira **1 stat só com a maior metragem** (`83,66 m²`), mesma forma do Vind (`66,91 m²`), e não dois stats; **D1.2** = **NÃO existe stat de preço/entrada** — a Ficha não traz esse dado em nenhuma das 7 páginas e nenhum valor foi fornecido, então o "R$65mil entrada" do Vind **não** é importado (Artigo IV); descartados os candidatos (f) área do terreno e (g) área construída. **D2 → AC4** — 6 chips: Sports bar (rooftop) · Yoga · Brinquedoteca · Petcare · Espaço gourmet com piscina privativa · **"E muito mais"** como 6º coringa (mesmo padrão do Vind); os outros 19 candidatos, inclusive o ambíguo "cozinha", ficaram fora. **D3 → AC5** — curadoria por categoria: **1 Fachada + 3 Rooftop + 3 Térreo + 2 Decorado = 9**, com `[L]` (paisagem larga) obrigatório nos 2 slots `.g-wide` e `[Q]` admitida só no `.g-tall`, e **zero das 4 "Humanizadas"** (são plantas baixas, não ambientes — vão para uma story futura, se houver). A escolha dos **arquivos específicos** dentro dessas categorias/proporções foi **delegada ao @dev** pelo stakeholder — é autorização explícita, não ambiguidade; **D3.1 → AC7** também delegada ao @dev, por critério de contraste para texto branco. **D4 → AC8** — **Opção (A) verbatim**: kicker, H2 e parágrafo institucional copiados palavra por palavra do Vind Residence e a **mesma** foto `trifold-fachada.{jpg,webp}`; (B) foto nova e (C) texto novo descartadas, e o @dev segue proibido de reescrever texto institucional. **D5 → AC6** — **Opção (B) redesenho no padrão do Vind**: endereço em destaque literal da Ficha ("Rua Carlos Meneghetti, 168 — Gleba Itororó, Maringá"), link clicável para a URL oficial do Maps que a Ficha traz (`maps.app.goo.gl/RFibC7xZ7KZx6cwQA`, com `rel="noopener"`), e os **5 pontos de referência como lista de texto visível** (Catedral, Parque do Ingá, Av. JK, Bosque II, Av. Itororó) — hoje eles existem só no `alt` da imagem, invisíveis para leitor de tela e para busca; o `alt` continua como está, a lista é acréscimo. **Mantido o veto ao iframe do Google Maps** (a imagem de mapa própria do Yarden fica, e não cria asset novo). **Estimativa: 8 → 9 pontos (G)**, o `+1` exclusivamente pela Opção B da D5, exatamente como a nota do @po em D5 previa ("~1 ponto a mais"); nenhuma outra decisão mexeu no tamanho — a curadoria D1–D4 deixou de ser custo de descoberta em vez de virar escopo novo. *Rastreabilidade honesta: a base de 8 pontos vem do cabeçalho das versões 0.1/0.2, que não registraram a estimativa no Change Log; este commit é o primeiro do arquivo em git, então não há diff anterior para citar.* **Consertos de consistência aplicados nesta entrada** (auditoria @po: uma tentativa anterior editara só o cabeçalho e morreu antes de tocar o corpo): (i) o bloco "⛔ **Não iniciar implementação ainda** / está em `Draft` por decisão explícita" **contradizia frontalmente** o cabeçalho já em `Ready` — substituído por "✅ Implementação liberada", com a lista do que segue delegado ao @dev; (ii) AC3/AC4/AC5/AC6/AC7/AC8 ainda estavam com a linguagem de "fica em aberto — ver decisão D*" e, na AC6, com o menu "Opção A **ou** B" + "não decidir sozinho em modo YOLO" — todas reescritas com o texto definitivo; (iii) a seção "Decisões abertas — perguntas objetivas para o stakeholder" virou "**Decisões de curadoria — RESPONDIDAS e travadas**", a tabela "Resumo para levar ao stakeholder" virou tabela de **respostas**, e cada uma das 5 subseções D ganhou o cabeçalho "✅ RESPONDIDA" com a resposta no topo — o insumo (candidatos, citações da Ficha, inventário nominal dos 39 renders com proporção) **fica no arquivo como registro**, com a regra explícita de que **a AC vence** se divergir; (iv) as 3 referências cruzadas de Dev Notes ("para 'Decisões abertas' #1/#2/#3") ficaram penduradas numa seção renomeada — reapontadas para D1/D2/D3 e marcadas como insumo histórico, não como norma; (v) **Risco #1 (curadoria atrasa o início) marcado MITIGADO** e o cenário de PLACEHOLDER que ele autorizava foi **eliminado** — não há mais conteúdo sem texto definitivo, e o risco residual passou a ser o @dev implementar pelas tabelas de *candidatos* em vez das listas travadas; (vi) **T0 marcada `[x]`** com as 5 sub-respostas; (vii) T6 deixou de dizer "a Opção A ou B confirmada em T0" e passou a descrever a Opção B; (viii) DoD #1 marcada satisfeita, com a nota de que o @qa verifica **aderência** às decisões, não a existência delas. **Nada de escopo técnico mudou nesta entrada:** AC15 (a correção bloqueante da 0.2), o baseline de 23/23 do `tracking-browser.test.ts`, o teto de 330KB por asset e o "zero tracking novo" seguem exatamente como estavam. Próximo passo: `@dev *develop` — nenhum gate pendente. | @po (Pax) |
 | 2026-09-03 | 0.2 | **Validação @po (`*validate-story-draft`): GO, 9/10 — e a story permanece deliberadamente em `Draft`.** ⚠️ **Exceção consciente ao `story-lifecycle.md`**, que manda o @po promover `Draft → Ready` em veredito GO: as decisões de curadoria **D1–D5 seguem pendentes com o stakeholder** e duas delas podem **mudar o escopo material** da story (quais 9 fotos processar em D3 e se entra um stat de preço em D1.2, que hoje não tem fonte). Promover a `Ready` agora convidaria o @dev a começar e depois refazer trabalho de imagem/conteúdo. **Promover a `Ready` só depois das respostas de D1–D5** (checklist T0); nenhum outro gate está pendente. Correções aplicadas nesta validação, todas por conferência em fonte primária: **(1) CRÍTICO — acrescentada a AC15**: `landing-pages/yarden/tracking-browser.test.ts` roda nesta landing (`vitest.config.ts` da raiz inclui `landing-pages/**/*.test.ts`) e reprova **asset órfão**; seguir o padrão do Vind Residence nas AC4/AC5/AC7/AC8 (galeria como `<img src="…webp">` avulso e fundo de seção por CSS) deixaria os `.jpg` e os fundos sem referência HTML e **quebraria o teste** — comprovado por contraprova executada com o extrator copiado do próprio teste (3 cenários falham, o `<picture>` do Yarden passa); baseline pré-story medido: **23/23 passando**. A seção "Testing" da 0.1 dizia o oposto ("não há suíte automatizada", "não é esperado rodar `pnpm vitest`") e foi corrigida. **(2)** Inventário de renders remedido com `sips`: a 0.1 afirmava "todas paisagem, `.jpg` 4000×1818 / 6–9 MB, `.png` 3200×1802 / 6–8 MB" — errado nas três dimensões; o real é **22 paisagem 4000×1818 + 12 QUADRADAS 4000×4000 + 1 de 3966×2250**, `.jpg` de 2,9 a 18,2 MB, `.png` de 2945×1856 a 3200×2084 / 5,8–7,9 MB. Proporção anotada arquivo por arquivo em D3 (importa: quadrada em slot `.g-wide` perde ~55% da altura) e virou Risco #5. **(3)** Contagem da D2 corrigida de 24 para **25** candidatos — a lista enumerava 18 itens de térreo, não 17; a Ficha traz 17 literais e a story desdobra "piscina adulto e infantil com deck" em dois. **(4)** Acrescentado o 8º candidato de stat (**4 apartamentos por pavimento**), citação literal da Ficha que a 0.1 não ofereceu. **(5)** Acrescentado o "Resumo para levar ao stakeholder" — as 5 decisões (8 perguntas com as sub) em uma tabela única. **(6)** Corrigido o título "Convenção de assets (mesma do Vind Residence)" → é a convenção do **Yarden**; a do Vind quebra o teste. Confirmações independentes (o que a 0.1 afirmava e **está correto**): 39 imagens em 7 pastas com as quantidades exatas por pasta (41 arquivos − 2 `.DS_Store`); faixas de peso dos assets (Yarden 56–324KB, `galeria-*` do Vind 10–226KB, webp até 153KB, jpg 24–226KB); os 7 dados da Ficha Técnica (endereço, torre, apartamento, lazer, áreas, 60 unidades) e a **ausência de preço** nas 7 páginas; a URL oficial do Maps `maps.app.goo.gl/RFibC7xZ7KZx6cwQA`; a transcrição **verbatim** do "Sobre a Trifold" do Vind (kicker, H2 e parágrafo, palavra por palavra) e a URL do Maps do Vind; nav do Vind com 5 links + CTA e `scrollY > 60`; 6 chips com "E muito mais" no 6º; galeria de 9 fotos com 2 `.g-wide` + 1 `.g-tall`; `.band` reusando `galeria-03.webp`; 11 POIs; 3 depoimentos em vídeo; o Sobre do Vind ter CTA (a AC8 corretamente omite); estado atual do Yarden (4 seções, nenhum `<header>`, 3 formulários e os 6 campos, breakpoints 980/979.98/560, `scroll-behavior:smooth`, os 11 tokens de cor do `:root`, os 5 marcos no `alt` do mapa); a citação literal da linha do `README.md`; 86-12 em `InReview` com `landing-pages/yarden/` já em `main` (squash `86ea676a`). Registro do epic 86 conferido: 86-13 consta em `stories_added`, na tabela de stories e no Change Log 0.7. | @po (Pax) |
 | 2026-09-03 | 0.1 | Story criada a pedido do usuário: expandir a landing do Yarden para ter a mesma estrutura rica de seções da landing do Vind Residence (Overview/Stats, Lazer, Galeria, Sobre a Trifold, Nav, Banda CTA), preservando as 3 seções de conteúdo já existentes do Yarden (natureza, invista→localização, quer-saber-mais) e a infraestrutura de tracking da 86-12 intacta. Depoimentos ficou explicitamente fora de escopo (vídeos ainda não hospedados no YouTube). 5 decisões de curadoria/conteúdo deixadas abertas para o @po levar ao stakeholder (stats, chips de amenidades, 9 fotos da galeria, texto/foto de "Sobre a Trifold", profundidade do redesenho de "Localização"). Dados técnicos verificados na Ficha Técnica oficial (PDF) e inventário real de 39 renders no Google Drive (não 41, como estimado inicialmente). | @sm (River) |
@@ -1173,19 +1188,291 @@ valem:
 
 ### Agent Model Used
 
-_A preencher pelo @dev._
+Claude Opus 4.6 (`claude-opus-4-6-20260219`) — @dev (Dex), 2026-09-04.
 
 ### Debug Log References
 
-_A preencher pelo @dev._
+Baselines medidos **antes** de qualquer alteração, na worktree
+`.claude/worktrees/86-12-lancamento-mapa` (branch
+`fix/86-12-yarden-lancamento-mapa`):
+
+| Comando | Antes | Depois |
+|---|---|---|
+| `npx vitest run landing-pages/yarden/tracking-browser.test.ts` | **23/23** (confirma o baseline do @po) | **23/23**, arquivo não modificado |
+| `npx vitest run landing-pages/yarden` | 50/50 (2 arquivos) | **89/89** (3 arquivos) |
+| `npx vitest run landing-pages` | 64/64 | **103/103** |
+| `npx vitest run` (suíte inteira) | 71 falhas / 3 arquivos | **as MESMAS 71 falhas / os mesmos 3 arquivos** |
+| `npm run type-check` | 12 erros `TS` | **os mesmos 12**, diff vazio |
+| `npm run lint` | 0 erros, 30 avisos | **0 erros, 30 avisos** (8/8 tasks, FULL TURBO) |
+
+**As 71 falhas e os 12 erros de tipo são pré-existentes e do ambiente, não
+desta story** — e isso foi *provado*, não presumido: com
+`git stash push -u -- landing-pages/yarden` (pathspec, para não tocar no
+trabalho paralelo de outros agentes na árvore) os **mesmos 3 arquivos** e as
+**mesmas 71 falhas** aparecem sem nenhuma mudança minha, e o diff dos erros de
+`type-check` antes/depois é vazio. Causa: os symlinks
+`packages/web/node_modules/@trifold/{ai,shared}` apontam para `../../../ai`, que
+resolve para o checkout principal, não para a worktree — nenhum dos 3 arquivos
+tem qualquer relação com `landing-pages/`.
+
+`npm run lint` deu **FULL TURBO (8/8 em cache)**: `landing-pages/` está fora do
+`pnpm-workspace.yaml` (`packages/*`), então o turbo não o alcança — mesma
+situação do `tracking-browser.test.ts` que a 86-12 entregou. O arquivo de teste
+novo foi conferido com `tsc --strict` usando o `tsconfig.json` da raiz:
+**0 erros** (o `tracking-browser.test.ts` também).
+
+**Provas por mutação (carrasco declarado, executado — não afirmado).**
+As duas asserções cruzadas de asset da AC15 foram verificadas vivas:
+
+| Mutação | Resultado |
+|---|---|
+| criar `assets/galeria-10.jpg` sem referência | `tracking-browser.test.ts` reprova: `expected [ 'galeria-10.jpg' ] to deeply equal []` |
+| trocar `galeria-07.webp` por `galeria-77.webp` no HTML | reprova: `expected [ 'galeria-77.webp' ] to deeply equal []` |
+
+E as 39 asserções novas foram submetidas a **16 mutações**, todas capturadas
+(baseline 38 passed → 1 ou 2 failed em cada, e 38 passed de volta ao restaurar):
+âncora `#lazer` quebrada · quadrado no slot `.g-wide` · lista de POIs removida ·
+link do Maps trocado por busca por nome · `rel="noopener"` removido · 7º chip ·
+stat de preço importado da landing irmã · hex novo no CSS · galeria com 8 fotos ·
+fundo da banda apontando para arquivo exclusivo · texto do "Sobre" reescrito ·
+`scroll-padding-top` removido · fundo do Lazer virando `background-image` ·
+`<source webp>` removido de uma foto · seção de depoimentos criada · `.fnav`
+antes dos logos.
+
+**Prova de não-regressão de tracking (DoD #4), por comparação byte a byte com
+`git show HEAD:...`:**
+
+| Bloco | Idêntico? |
+|---|---|
+| `<script>` do Pixel base (511 bytes) | **sim** |
+| `<script>` de tracking do `<head>` (6.359 bytes) | **sim** |
+| `<script>` de captação/envio (8.243 bytes) | **sim** |
+| `<noscript>` do Pixel | **sim** |
+| `<form id="leadForm">` | **sim** |
+| `<form id="leadFormMobile">` | **sim** |
+| `<form id="leadFormSaber">` | **sim** |
+
+O JS novo (nav + lightbox) vive num **4º bloco `<script>` separado** exatamente
+para que o diff dos 3 anteriores fique em zero linha. Console do navegador
+comparado lado a lado (HEAD servido na porta 8098, versão nova na 8099):
+**2 mensagens antes, 2 depois, a mesma mensagem única** (aviso de
+*traffic permission* do Pixel) — zero erro JS novo.
+
+**Validação visual (Playwright/chromium, 1440×900 e 390×844).** Medido, não
+presumido:
+
+- **Âncoras (AC1):** as 5 param com o topo da seção em **y=72** nos dois
+  breakpoints, com o header medindo 67px (desktop) e 58px (mobile) — a seção
+  chega **abaixo** do header, nunca escondida atrás dele.
+- **Hero (AC2):** o header transparente não toca `.hero-brand` (y≈350 no
+  desktop, rodapé da foto no mobile) nem `.hero-form` (card começa em y≈180).
+- **Overflow horizontal:** `scrollWidth == clientWidth` nos dois breakpoints
+  (1440/1440 e 390/390).
+- **Galeria:** as 9 carregaram (`naturalWidth > 0`) e as 9 foram servidas como
+  `.webp` — o `<picture>` está negociando, e é isso que faz o `currentSrc` do
+  lightbox ampliar o webp em vez do jpg.
+- **Lightbox:** abre no clique e fecha com `Escape` nos dois breakpoints.
+- **Menu mobile:** abre no hambúrguer e **fecha ao clicar no link**.
+- **Sem `assets/*` em 404**: a única requisição falha é o proxy
+  `yarden.vercel.app/api/track`, bloqueado por CORS a partir de `localhost` —
+  idêntico ao baseline.
+
+**Dois defeitos encontrados na conferência visual e corrigidos** (nenhum dos
+dois apareceria numa leitura do código):
+
+1. **Célula vazia na galeria no mobile.** Copiar o `.g-wide{grid-column:span 2}`
+   da landing irmã para o grid de 2 colunas deixa um buraco de **170×310** no
+   canto superior direito: o auto-placement não encaixa a 2ª foto ao lado da 1ª
+   (que ocupa 2 linhas) e a empurra para a linha seguinte. Medido célula por
+   célula. Corrigido com `.g-wide{grid-column:span 1}` no breakpoint de 979.98px
+   — 1 alta (2 células) + 8 normais = 10 = 5 linhas × 2, sem sobra. **A landing
+   do Vind Residence carrega esse buraco em produção** (a 1ª figura dela também
+   é `.g-tall`); é mais um ponto em que "seguir o padrão do Vind" era a resposta
+   errada. Ficou com teste próprio.
+2. **Parágrafo do "Sobre a Trifold" por baixo do WhatsApp flutuante.** A linha
+   de texto ia até x=1360 e o botão fixo começa em x=1360. Corrigido com
+   `max-width:62ch`; remedido: texto termina em **x=1208**, botão em x=1360.
 
 ### Completion Notes List
 
-_A preencher pelo @dev._
+**Curadoria da Galeria (AC5/D3) — os 9 arquivos escolhidos e por quê.**
+A composição (1 Fachada + 3 Rooftop + 3 Térreo + 2 Decorado, zero Humanizadas)
+é a travada pelo stakeholder; a escolha dos arquivos era delegada. Critérios
+usados, em ordem: (a) proporção compatível com o slot, (b) **paleta quente**,
+para não brigar com o `:root` do Yarden (creme/marrom/tan), (c) não repetir o
+que a página já mostra, (d) preferência por ambiente que corresponde a um chip
+da AC4.
+
+| Slot | Arquivo | Nome no `assets/` | Proporção | Por quê |
+|---|---|---|---|---|
+| `.g-tall` | `Rooftop/Terraço Yarden.jpg` | `galeria-01` | `[Q]` 4000×4000 | é o slot que **sempre** recorta (nenhum render do book é retrato) e a quadrada é a que perde menos; a marca d'água fica na base e sobrevive ao recorte |
+| `.g-wide` | `Fachada/Fachada_2 Yarden.jpg` | `galeria-02` | `[L]` | a foto de maior peso comercial merece o slot largo; escolhida sobre a `Fachada_3` porque enquadra o prédio inteiro e a entrada centralizada, em vez de cortá-lo à esquerda |
+| normal | `Rooftop/Sport bar Yarden.jpg` | `galeria-03` | `[L]` | corresponde ao **chip 1** ("Sports bar (rooftop)") |
+| normal | `Rooftop/Pilates Yarden.jpg` | `galeria-04` | `[L]` | o ambiente de bem-estar mais próximo do **chip 2** ("Yoga"); madeira clara, casa com a paleta |
+| `.g-wide` | `Térreo/Piscina privativa gourmet Yarden.jpg` | `galeria-05` | `[L]` | corresponde ao **chip 5**, literal ("Espaço gourmet com piscina privativa"); cena noturna, o contraponto às fotos claras |
+| normal | `Térreo/Salão de Festas Yarden.jpg` | `galeria-06` | `[L]` | amenidade de alto valor percebido e a foto mais **clara** das 9 — equilibra o conjunto |
+| normal | `Térreo/Fireplace Yarden.jpg` | `galeria-07` | `[L]` | *fire place* é item literal da Ficha; céu de fim de tarde, dá variação de horário à galeria |
+| normal | `Decorado 1/Decorado 1_sala estar+cozinha Yarden.jpg` | `galeria-08` | `[L]` | mostra o living com cozinha integrada — o que a Ficha descreve como sala de estar + cozinha |
+| normal | `Decorado 1/Decorado 1_suite Yarden.jpg` | `galeria-09` | `[L]` | a suíte, que sustenta o stat "2 suítes"; **ambas do `Decorado 1`** de propósito: `Decorado 1` e `Decorado 2` têm acabamentos diferentes, e misturar os dois leria como dois apartamentos distintos |
+
+Descartadas com motivo explícito, não por acaso:
+- `Rooftop/Lounge` e `Térreo/Piscina` — orientação de não-redundância do @po: o
+  Hero já usa a piscina do rooftop e a seção "natureza" já usa um lounge gourmet.
+- `Térreo/Lazer` — **reservada** ao fundo da AC4.
+- `Rooftop/Coworking` — a única do book com paleta **azul/turquesa** (paredes,
+  cadeiras); ao lado das outras 8 destoava do `:root` quente do Yarden.
+- `Térreo/Espaço Kids` e `Rooftop/Sala de Reuniões` — quadradas, e o único slot
+  que aproveita quadrada já estava ocupado pela `Terraço`. Em slot normal
+  (1,61:1) uma quadrada perde ~38% da altura; com 7 paisagens disponíveis, não
+  havia motivo para pagar esse recorte.
+- As 4 `Humanizadas` — proibição explícita da AC5 (são plantas baixas).
+
+**Fundo da banda CTA (AC7/D3.1) — `galeria-05`, escolhida por medição.**
+A delegação pedia "critério de contraste"; em vez de decidir a olho, medi a
+luminância das 9 com `PIL.ImageStat`, na imagem inteira e na faixa central
+(onde o texto cai):
+
+| | média | desvio | faixa central |
+|---|---|---|---|
+| **`galeria-05`** (piscina privativa gourmet) | **106,6** | **49,0** | **111,3** |
+| `galeria-02` (fachada) | 127,0 | 64,7 | 123,6 |
+| `galeria-07` (fire place) | 127,2 | 58,8 | 132,6 |
+| `galeria-01` (terraço) | 140,1 | 69,0 | 145,1 |
+| as outras 5 | 155–165 | 43–52 | 147–174 |
+
+`galeria-05` é ao mesmo tempo a **mais escura** e a mais **uniforme** entre as
+escuras (desvio 49,0 contra 64,7 da fachada e 58,8 do fire place) — as duas
+propriedades que o texto branco sobreposto precisa. Confirmado no screenshot: o
+H2 e o parágrafo em branco leem limpo sobre o overlay.
+
+**Processamento das imagens.** `sips` do macOS **não** exporta WebP (`sips -s
+format webp` falha), e não há `cwebp`/ImageMagick na máquina — usei
+`PIL` 11.3.0 (tem WebP), com busca decrescente de qualidade até caber no
+orçamento em vez de chutar um número fixo por imagem. Larguras: 1200px para as
+paisagens (o slot mais largo renderiza a 693px — sobra folga para retina) e
+900px para a quadrada (slot de 340×454). Resultado: **maior jpg 197KB, maior
+webp 140KB**, ambos abaixo do teto de 330KB da AC5, e o webp é o mais leve do
+par em todas as 10 (há teste). Nota: a `lazer-terreo` a 1400px só caberia no
+alvo de webp com qualidade 56 (visivelmente borrada, é uma aérea densa de
+folhagem) — baixei para 1200px, onde cabe com q72.
+
+**Onde a story mandou NÃO seguir a landing irmã, e por quê importou.** Três
+pontos, todos previstos pela AC15 (e um quarto que descobri sozinho):
+1. galeria por `<img src="…webp">` avulso → deixaria os 9 `.jpg` órfãos;
+2. fundo de seção por `background-image` → deixaria `lazer-terreo.{jpg,webp}`
+   órfão (por isso a foto do Lazer vai por `<picture>` e é posicionada com
+   `object-fit:cover` numa caixa absoluta);
+3. `trifold-fachada` servida só em `.webp` → deixaria o `.jpg` copiado órfão;
+4. **(não previsto na story)** `.g-wide{grid-column:span 2}` no grid mobile de
+   2 colunas → célula vazia, ver Debug Log.
+O `background-image` da banda CTA é a **única** exceção legítima, exatamente
+como a AC7 previu: ele aponta para `galeria-05.jpg`, que a Galeria já referencia
+por atributo — então não cria arquivo nenhum. O teste novo verifica justamente
+essa condição (a URL do CSS tem de casar `galeria-\d\d` **e** existir como
+`src`/`srcset` na marcação).
+
+**Copy: nada inventado sobre o empreendimento (Artigo IV, DoD #3).** Rastreio de
+cada texto novo:
+- os 6 números e as 6 legendas: citação da Ficha Técnica, na ordem da AC3;
+- os 6 chips: itens literais da Ficha, texto exato da AC4;
+- H2 do Lazer "Lazer completo em dois níveis": é a **legenda do stat 5 da
+  própria AC3**, aprovada pelo stakeholder — não redação minha;
+- parágrafo do Lazer: paráfrase que a AC4 autoriza explicitamente, com "do
+  térreo ao rooftop" (os dois níveis da Ficha) no lugar das amenidades da
+  landing irmã; há teste que reprova "piscina aquecida", "spots bar" e
+  "coworking", que são amenidades do **outro** prédio;
+- Galeria: kicker/H2/parágrafo descrevem **o que a seção mostra** ("Renders
+  oficiais das áreas comuns — térreo e rooftop — e do apartamento decorado") +
+  a instrução funcional do lightbox. Sem adjetivação de marketing;
+- banda CTA: "Deixe seu contato e receba informações exclusivas" é **a linha
+  literal já publicada** na seção "Quer saber mais?" (86-12, transcrita do
+  mockup);
+- "Sobre a Trifold": verbatim, palavra por palavra (teste compara a string
+  inteira, normalizada, com igualdade estrita);
+- Localização: endereço e URL do Maps literais da Ficha; os 5 pontos são os
+  mesmos que já estavam no `alt` do mapa (que **continua** listando-os).
+- **Nenhum stat de preço** e nenhum dos candidatos descartados (área do terreno,
+  área construída, a segunda metragem privativa) — três testes dedicados.
+
+**AC11 conferida por inventário, não por confiança.** Extraí todos os literais
+hex do `<style>` (sem comentários) e comparei com os 11 do `:root`: os 6
+restantes (`#fff`, `#8c8c8c`, `#a9c6cf`, `#eeeeee`, `#ffd9d9`, `#25d366`) já
+existiam antes desta story. **Zero hex novo, zero fonte nova** (a única
+`family=` do arquivo continua sendo `Montserrat:wght@300;400;500;600;700`),
+**zero logo novo** (só os 2 SVGs de sempre). Os três viraram teste.
+
+**Decisões de implementação que a story não fixava:**
+- `[AUTO-DECISION]` `html{scroll-padding-top:72px}` em vez de
+  `scroll-margin-top` seção por seção → uma declaração cobre as 6 âncoras e as
+  futuras; a alternativa exigiria lembrar de repetir a regra a cada seção nova.
+- `[AUTO-DECISION]` JS novo em **4º bloco `<script>`** em vez de crescer o
+  script de captação → o DoD #4 pede que o diff daquele bloco fique em zero
+  linha, e um bloco separado torna isso verificável por comparação de bytes.
+- `[AUTO-DECISION]` `.lazer-txt .texto-secao{color:var(--marrom-escuro)}` → o
+  `--cinza-texto` padrão dos parágrafos sobre o fundo `--tan` são dois tons
+  médios, com contraste ruim; a página já usa marrom sobre creme na seção "Quer
+  saber mais?".
+- `[AUTO-DECISION]` nomes `galeria-01`…`galeria-09` literais (sem sufixo
+  descritivo) → é a convenção que a AC5 escreve textualmente.
+- `[AUTO-DECISION]` teste em arquivo **novo** em vez de crescer os dois
+  existentes → a story proíbe modificar `.ts` de teste; um arquivo novo entrega
+  a cobertura sem tocar em nenhum deles (e o `.vercelignore` já exclui
+  `*.test.ts`, então não vai para o deploy).
+- `[AUTO-DECISION]` `.fnav` com `flex:1 0 100%` (linha própria no rodapé) → numa
+  linha só com os 2 logos e o parágrafo de direitos, os 5 links estouravam a
+  largura. Ordem no DOM e visual seguem "entre os logos e os direitos", como a
+  AC9 pede; nada foi removido (há teste).
+
+**Fora de escopo, respeitado:** nenhum arquivo fora de `landing-pages/yarden/`
+(a única exceção permitida — a cópia de `trifold-fachada.{jpg,webp}` — é para
+**dentro** de `assets/`); zero mudança em `packages/web/`, em
+`trifold-design-system/` ou nos proxies `api/*`; nenhuma estrutura de
+Depoimentos, nem placeholder, nem comentário (teste dedicado, com marcadores
+específicos — a versão ingênua, que procurava só "depo", casava com "depois"
+dentro dos comentários de código).
 
 ### File List
 
-_A preencher pelo @dev._
+**Modificados**
+- `landing-pages/yarden/index.html` — 6 seções novas + redesenho da
+  Localização + `.fnav` no rodapé + lightbox + 4º bloco `<script>` (nav e
+  lightbox). Os 3 blocos `<script>` e os 3 `<form>` anteriores: byte a byte
+  idênticos ao `HEAD`.
+- `landing-pages/yarden/README.md` — contagem de assets 13 → 35, tabela de
+  origem das 16 imagens, o novo arquivo de teste na árvore e na tabela de
+  cobertura, e 3 itens novos em "Alterar o conteúdo depois" (curadoria travada,
+  proporção por slot da galeria, âncoras do nav).
+
+**Criados — código**
+- `landing-pages/yarden/secoes-institucionais.test.ts` — 39 testes das 6
+  seções novas (conteúdo travado, âncoras, proporção por slot, proibições).
+
+**Criados — assets** (20 arquivos gerados do book de renders + 2 copiados)
+| Arquivo | Origem | Dimensão | jpg | webp |
+|---|---|---|---|---|
+| `galeria-01.{jpg,webp}` | `Rooftop/Terraço Yarden.jpg` | 900×900 | 122KB | 75KB |
+| `galeria-02.{jpg,webp}` | `Fachada/Fachada_2 Yarden.jpg` | 1200×545 | 182KB | 135KB |
+| `galeria-03.{jpg,webp}` | `Rooftop/Sport bar Yarden.jpg` | 1200×545 | 86KB | 49KB |
+| `galeria-04.{jpg,webp}` | `Rooftop/Pilates Yarden.jpg` | 1200×545 | 77KB | 38KB |
+| `galeria-05.{jpg,webp}` | `Térreo/Piscina privativa gourmet Yarden.jpg` | 1200×545 | 156KB | 127KB |
+| `galeria-06.{jpg,webp}` | `Térreo/Salão de Festas Yarden.jpg` | 1200×545 | 100KB | 58KB |
+| `galeria-07.{jpg,webp}` | `Térreo/Fireplace Yarden.jpg` | 1200×545 | 151KB | 114KB |
+| `galeria-08.{jpg,webp}` | `Decorado 1/…sala estar+cozinha Yarden.jpg` | 1200×545 | 93KB | 55KB |
+| `galeria-09.{jpg,webp}` | `Decorado 1/Decorado 1_suite Yarden.jpg` | 1200×545 | 65KB | 28KB |
+| `lazer-terreo.{jpg,webp}` | `Térreo/Lazer Yarden.jpg` | 1200×545 | 197KB | 140KB |
+| `trifold-fachada.{jpg,webp}` | cópia de `vind-residence/assets/` (AC8) | 1000×750 | 111KB | 38KB |
+
+Todos ≤ 330KB (maior: 197KB), todos referenciados por `<picture>` com as duas
+URLs em atributo, e o `webp` mais leve que o `jpg` em todos os 11 pares.
+`assets/` passou de **13 para 35 arquivos** — zero órfão, zero referência
+inexistente (`tracking-browser.test.ts` verde).
+
+**Não modificados, de propósito**
+- `landing-pages/yarden/tracking-browser.test.ts` e
+  `landing-pages/yarden/api-proxy.test.ts` — a story exige que nenhum `.ts` de
+  teste existente seja alterado; os dois passam sem edição.
+- `landing-pages/yarden/api/lead.js` e `api/track.js` — esta story não toca
+  infraestrutura.
 
 ## QA Results
 
