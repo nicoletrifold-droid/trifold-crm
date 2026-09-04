@@ -41,3 +41,5 @@
 - [Commit de outro agente direto em main local](feedback_mover_commit_de_main_local_para_branch.md) — `switch -c` + `branch -f main`; `reset --hard` apaga o gate do @qa que ainda não foi commitado
 - [Story fatiada fica InProgress](feedback_story_fatiada_status_inprogress.md) — autorização é `next_action` + `must_fix: []` do gate, não o status; diga no PR o que a fatia NÃO conserta
 - [`.agents/` + skills-lock.json](project_agents_dir_skill_installer.md) — instalador de skill de terceiro (symlink em `.claude/skills/`); não é lixo nem escopo da branch — deixar untracked
+- [Provar que o deploy prod é o commit de merge](feedback_prove_prod_deploy_matches_merge_commit.md) — `vercel ls | grep` perde a coluna de status e trava polling; use `inspect`/REST v13 `meta.githubCommitSha`
+- [CHANGES_REQUESTED de bot não bloqueia](feedback_bot_changes_requested_nao_bloqueia.md) — checar `author` das reviews; o sinal que vale é `mergeStateStatus: CLEAN`
