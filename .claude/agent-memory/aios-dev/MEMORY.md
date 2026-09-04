@@ -11,7 +11,8 @@
 - [Filtro `-t` do vitest é regex](feedback_vitest_filtro_t_regex.md) — nome com `+` casa zero testes e dá falso verde com exit 0; confira `N passed`
 - [87-18 — tri-estado do slot](project_87_18_tri_estado_slot.md) — `SlotCheck` sem rede de compilador; a forma booleana oferta todo horário ocupado como livre
 - [Ordem das asserções na mutação](feedback_ordem_das_asercoes_na_mutacao.md) — a asserção que É a AC vai primeiro, senão o vermelho aponta para outra linha
-- [landing-pages/* runtime](project_landing_pages_runtime.md) — projetos Vercel standalone: sem bundler, deploy manual, um tracked e outro não, e o trap de IP via proxy
+- [landing-pages/* runtime](project_landing_pages_runtime.md) — projetos Vercel standalone: sem bundler, deploy manual, `npm run lint` não alcança, e como processar imagem aqui
+- [Landing irmã é referência, não molde](feedback_landing_irma_e_referencia_nao_molde.md) — 4 pontos medidos em que copiar o Vind Residence quebra o Yarden (3 reprovam no teste, 1 é buraco no grid)
 - [Carrasco declarado é afirmação testável](feedback_carrasco_declarado_e_afirmacao.md) — rode a mutação antes de escrever a frase; `try/catch` e `if (error)` são metades distintas
 - [Webhook WhatsApp: texto sintético vira fala do lead](project_webhook_whatsapp_texto_sintetico.md) — o `text` montado pelo webhook é enviado ao cliente pela Nicole; duas flags, não uma
 
