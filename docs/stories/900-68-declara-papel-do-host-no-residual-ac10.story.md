@@ -416,3 +416,118 @@ scripts/` lista **um único arquivo**: `app-url-fallback.test.ts`. Zero migratio
 ---
 
 ## QA Results
+
+### Review Date: 2026-09-04 — Rodada 1
+
+### Reviewed By: Quinn (@qa, Test Architect)
+
+**Veredito: PASS.** Commit avaliado: `9e0d87ce`, sobre `origin/main` = `19843658`
+(`git merge-base origin/main HEAD` = `19843658` — a branch está na ponta, não precisa rebase nem
+retarget). Escopo real conferido por `git diff origin/main HEAD --name-only`: fora de `docs/`,
+**um único arquivo** — `packages/web/src/lib/tenancy/app-url-fallback.test.ts` (+26/−5).
+
+#### Não confiei no relato — remedi
+
+- **Contraprova de que `main` está vermelha.** Escrevi a versão de `origin/main` do arquivo de
+  teste sobre esta árvore (byte a byte igual a `origin/main` em produção, provado) e rodei:
+  **EXIT=1**, `expected { …(7) } to deeply equal { …(6) }`, `+ "lib/tenancy/papel-do-host.ts": 1`.
+  Sem esta contraprova, o verde da branch poderia significar apenas "o teste não roda".
+- **A contagem `1` é a medida certa, medida por mim.** Não conferi o número pelo `grep`: subi a
+  contagem declarada para `2` e li o lado `Received` da assertion, que é o `ocorrenciasNoCodigo()`
+  real. Devolveu **1**. No cru são 4 ocorrências (linhas 42, 78, 104, 105); 3 em JSDoc, 1 em
+  código — a da linha 78, dentro de `HOSTS_DE_TENANT`.
+- **4 mutações de controle, todas EXIT 1**, todas restauradas e a restauração provada
+  (`shasum -c` OK, `git status --short -- packages/` **vazio**, `git diff --stat HEAD -- packages/`
+  **vazio**):
+
+| # | Mutação | Exit | O que ficou vermelho |
+|---|---|---|---|
+| M2 | Remover a sétima entrada (volta ao estado de `origin/main`) | **1** | 2 `it`s: `to have a length of 7 but got 6` **e** `{ …(7) } to deeply equal { …(6) }` |
+| M1 | Contagem declarada `1` → `2` | **1** | `- "lib/tenancy/papel-do-host.ts": 2` / `+ … : 1` |
+| C1 | Host nu em código num arquivo de produção **não declarado** (arquivo novo temporário) | **1** | `{ …(8) } to deeply equal { …(7) }`, `+ "lib/tenancy/_qa-900-68-temp.ts": 1` |
+| C2 | **Segunda** ocorrência em código num arquivo **já declarado** (`lib/notificacoes.ts`, declarado 1) | **1** | `- "lib/notificacoes.ts": 1` / `+ "lib/notificacoes.ts": 2` |
+
+  **C2 é a que importa, e eu a confirmei por conta própria:** o perdão continua sendo do **literal
+  declarado**, nunca do **arquivo**. A cegueira nº 3 do cabeçalho segue fechada depois desta story.
+
+#### A régua não foi enfraquecida (AC3) — conferido por leitura E por mutação
+
+`.toEqual` sobre o mapa inteiro (linha 247) **intacto**, não mudou uma letra no diff · contagem ao
+lado de cada nome **mantida** (sete entradas, sete números; nenhum arquivo perdoado sem número) ·
+`toBeGreaterThan(100)` (linha 235) **intacto** · `{arquivosComChamada: 24, chamadas: 30}` (linha
+266) **intactos**, fora de qualquer hunk · os **6** `it`s do detector (linhas 271, 275, 279, 290,
+294, 299) **intactos** · `fonte-scan.ts` **intacto** (`git diff --exit-code` = 0).
+
+#### Gates do CI (o check bloqueante é `pnpm type-check` / `pnpm lint` / `pnpm test`, conferido em `.github/workflows/ci.yml`)
+
+| Comando | Exit | Saída |
+|---|---|---|
+| `TURBO_FORCE=true pnpm type-check` | **0** | 8/8, `Cached: 0 cached, 8 total` — 23.8s |
+| `TURBO_FORCE=true pnpm lint` | **0** | 8/8, `Cached: 0 cached`; `✖ 30 problems (0 errors, 30 warnings)` |
+| `pnpm test` | **0** | `Test Files 324 passed (324)` / `Tests 4599 passed \| 6 expected fail (4605)` — 98.2s |
+| `npx vitest run app-url-fallback.test.ts` | **0** | 24 passed (24) |
+
+Cache hit não é evidência: forcei com `TURBO_FORCE=true` e confirmei `Cached: 0 cached` nos dois.
+Os 30 warnings do lint são **pré-existentes e de outros arquivos** — conferi a lista de arquivos
+citados no log e `app-url-fallback.test.ts` **não aparece nenhuma vez**. Confirmo também a leitura
+do @dev sobre os dois falsos vermelhos (`pnpm test --force` → `CACError`; `pnpm type-check --
+--force` → `TS5093`): nenhum é reprovação de código.
+
+#### AC4 — nenhum arquivo de produção tocado
+
+`git diff --exit-code origin/main HEAD -- papel-do-host.ts fonte-scan.ts app-url-fallback.ts` =
+**0**. Zero migration. Como produção é byte a byte igual a `origin/main`, não há comportamento de
+runtime que possa ter regredido.
+
+#### A decisão de desenho está certa — e verificada no código, não só na prosa
+
+`HOSTS_DE_TENANT` (papel-do-host.ts:77) tem **um único consumidor**: `hostsAdminDeclarados()`
+(linha 134, `HOSTS_DE_TENANT.includes(host)` na 140), que alimenta `decidirNoHostAdmin` (linha 162)
+a cada requisição. Do outro lado, `resolveAppUrlFallback` (app-url-fallback.ts:96) **lê env**
+(`falhaFechadaLigada()`) e **lança** `AppUrlIndisponivelError`. Rotear a denylist pelo resolver
+colocaria leitura de env e um caminho que lança dentro de uma guarda de segurança hoje estática e
+resolvida em import-time. Declarar era a saída correta; não reabri a decisão.
+
+#### Parecer sobre a [AUTO-DECISION] do @dev (linha 28: "seis" → "sete") — **CERTA, aprovada**
+
+A linha 28 é uma contagem **da lista declarada** ("Dois dos seis declarados"), a mesma classe de
+mentira aritmética que o AC1.1 existe para matar, no mesmo arquivo, e ficou falsa no instante em
+que a sétima entrada entrou. Pior: é justamente o parágrafo que **explica por que a contagem ao
+lado de cada nome existe** (cegueira nº 3) — deixá-la contando errado anularia metade do valor do
+AC1.1, cuja própria justificativa se aplica verbatim a ela. Verifiquei que a frase corrigida
+continua **verdadeira**: dois dos sete declarados (`lib/notificacoes.ts` e `billing-reminders`)
+seguem sendo os que hospedam sítios migrados. Custo: uma palavra em comentário, zero asserção,
+zero dado — não colide com o AC3, que proíbe enfraquecer régua, não corrigir prosa.
+
+#### Parecer sobre a linha 14 ("sete arquivos a mais") — **DEIXAR COMO ESTÁ**
+
+O @dev acertou em não mexer. Aquele "sete" não é contagem do mapa: é o número retórico do
+argumento das linhas 6-7 do mesmo cabeçalho ("alcançar 21 dos 28 sítios e esquecer 7"). É
+rastreável e não ficou falso com esta story. E o risco que o AC1.1 protege é alguém **apagar uma
+entrada** porque o cabeçalho discorda do mapa — a linha 14 não afirma nada sobre quantas entradas o
+mapa tem, então não pode induzir esse erro. Registrado como **DOC-001 (low, não bloqueante)**:
+numa story futura de prosa, remover o numeral ("fica verde com arquivos a mais que ninguém
+migrou"). Não vale inflar o diff de um P0 nem gastar outra rodada de gate por uma palavra.
+
+#### Os 7 checks
+
+| # | Check | Resultado |
+|---|---|---|
+| 1 | Code review | **PASS** — um arquivo de teste, diff legível, comentário da entrada nova no padrão das outras 6 e factualmente verdadeiro |
+| 2 | Unit tests | **PASS** — 324 arquivos / 4599 passed + 6 expected fail, exit 0; alvo 24/24; 4 mutações provam que o teste é capaz de reprovar |
+| 3 | Acceptance criteria | **PASS** — AC1, AC1.1, AC2, AC3, AC4, AC5 todos MET, cada um verificado por mim |
+| 4 | No regressions | **PASS** — produção byte a byte igual a `origin/main`; suíte inteira verde |
+| 5 | Performance | **PASS** — nenhuma mudança de runtime; uma chave a mais no mapa é O(1) |
+| 6 | Security | **PASS** — nenhuma superfície nova; a saída escolhida **preserva** a denylist estática em import-time |
+| 7 | Documentation | **PASS** — JSDoc e cabeçalho atualizados e verdadeiros; DOC-001 (low) registrado |
+
+#### Recomendação
+
+**MERGEAR IMEDIATAMENTE**, base `main`, sem empilhamento (a branch está na ponta de `origin/main`).
+Enquanto isso não mergear, o check bloqueante segue vermelho por um motivo que não é o PR de
+ninguém, e o sinal de CI de todo PR aberto — inclusive o **#570** — segue cego. `Ready for Review`
+→ `Done` após o merge por @devops. O corpo de PR sugerido está no campo `corpo_do_pr` do gate.
+
+### Gate Status
+
+Gate: PASS → `docs/qa/gates/900.68-declara-papel-do-host-no-residual-ac10.yml`
