@@ -1,0 +1,885 @@
+schema: 1
+storyId: "87-12"
+story: "docs/stories/87-12-handoff-le-fato-de-agenda-no-formato-novo.story.md"
+title: "Quality Gate — bloco A: o resumo do corretor lê o fato de agenda no formato novo"
+epic: 87
+gate: PASS
+verdict: PASS
+review_round: 2
+gate_round_1: CONCERNS
+reviewed_by: "@qa (Quinn)"
+reviewed_at: "2026-08-16 (R1) · 2026-08-16 (R2)"
+branch: "story/87-12-handoff-agenda-formato-novo"
+commit_avaliado_r2: "fe74894a"
+base: "origin/main 199a7a84"
+pr: 429
+escopo_avaliado: "BLOCO A apenas (AC1–AC7). Bloco B (T5–T7, AC9–AC13) não iniciado e NÃO avaliado."
+
+status_reason: >
+  **Reproduzi tudo do zero — 16 mutações minhas, sempre na suíte inteira da raiz — e o núcleo do que
+  o @dev entregou é sólido.** As três coisas que ele trouxe se confirmam: **(1)** a mutação da AC3-iv
+  ao pé da letra derruba **ZERO** testes (medi: 2417 passed), e a decomposição dele em M3b (1 vermelho)
+  e M3c (2 vermelhos) preserva a conclusão da AC inteira; **(2)** a guarda `origem !== "lead"` era
+  **órfã**, e provei nos DOIS sentidos — com o teste desta story, 1 vermelho; com a árvore de
+  `origin/main`, **2411 passed, zero vermelhos**; **(3)** o achatamento da `citacao` é **correção
+  necessária, não mudança de comportamento fora de escopo** — reproduzi o modo de falha com uma
+  mensagem REAL de produção e o resultado é pior do que ele descreveu.
+  As réguas fecham sem margem: baseline `origin/main` medido por mim = **188 arquivos / 2411 passed /
+  6 expected fail**; com o diff = **188 / 2417 / 6** (+6 `it`, um por teste novo). `tsc --noEmit`
+  **0** em `packages/ai` e **0** em `packages/web`; lint **0 errors / 23 warnings**;
+  `npm run prompts:check` **verde** (gate permanente do epic 87). O diff é de **3 arquivos**, todos em
+  `packages/ai/src/flows/`, e **nenhuma linha de #427 ou #428** entrou — conferido por conjunto de
+  arquivos contra a API do GitHub: os dois PRs tocam `haiku-enrichment.ts`, `enrich-leads/route.ts`,
+  `chat/pipeline.ts` e `prompts/collected-data.ts`, **disjuntos** deste diff. Superfície pública de
+  `@trifold/ai` **inalterada** (asserção executada, não lida). Nenhuma escrita em banco, em ambiente
+  nenhum — só `SELECT` em produção.
+  **O que não fecha são quatro coisas, nenhuma delas defeito de comportamento.**
+  **(1) A contagem de vermelhos da M2 está errada.** O @dev publicou *"`1 failed` — só
+  `AC2-(i)/Rita`"*. Medi **duas vezes**: são **2 failed** — cai também o `citação MULTILINHA`, que
+  herda `data_absoluta` do `AGENDA_RITA` e afirma a linha inteira. A assimetria que a AC2-iii exige
+  (Ronaldo **não** cai) sobrevive intacta, então a conclusão da AC fica de pé — mas o número colado é
+  o único artefato que esta casa aceita como prova, e ele está errado. **É o quarto gate seguido deste
+  epic com contagem de vermelho furada.**
+  **(2) O Achado nº 7 subconta a família.** Não é *uma* guarda órfã, são pelo menos **duas**: mutei a
+  sub-expressão `!o.citacao.trim()` e ela é órfã pelo MESMO mecanismo (0 vermelhos em `main`, 1
+  vermelho agora). O `AC3 (fail-closed)` que ele escreveu resgata as duas — o achado é **melhor** do
+  que ele publicou, e o texto do Achado precisa dizer *"as guardas de forma"*, não *"a guarda `origem`"*.
+  **(3) Uma TERCEIRA guarda continua sem vermelho de teste, mesmo depois desta story.** Removi
+  `if (typeof o.ancorado_em !== "string" || typeof o.expira_em !== "string") return null` e a suíte
+  ficou **verde: 2417 passed, zero vermelhos**. Quem pega é o `tsc` (2× TS2322), não um teste. E o
+  risco é maior aqui do que em qualquer outro consumidor: **`handoff` é o único chamador de
+  `parseAgendaState` sem TTL a jusante**, então um estado sem âncora nenhuma **imprimiria ao corretor**
+  — provei: `- Disponibilidade para visita: "sexta de manha" - nas palavras do lead, nao e visita marcada`.
+  **(4) Três referências de linha ERRADAS no docstring que vai para produção.** O @dev pegou o
+  deslocamento da `87-5 A` no arquivo dele (138 → 153) e **não** o pegou no arquivo que ele cita:
+  `chat/pipeline.ts:760` (real **821**), `:991` (real **1064**), `:738-741` (real **~800**). Erram por
+  60–73 linhas. É comentário, não comportamento — mas é exatamente a classe *"o próximo leitor procura
+  no lugar errado"*, e num epic cujo docstring é a trilha de auditoria.
+
+status_reason_r2: >
+  **As QUATRO ressalvas do round 1 estão fechadas, e fechadas por medição minha, não por relato.**
+  A régua eu recalibrei antes de tocar em qualquer mutação, porque no re-gate da 87-11 o número que
+  me chegou vinha contaminado por trabalho não commitado de outra frente: `git status --porcelain --
+  packages/` veio **VAZIO**, logo a árvore de trabalho **É** `fe74894a` byte a byte, e o que eu medir
+  aqui é o que está no PR. Medi: **188 arquivos · 2418 passed · 6 expected fail**. Bate com o número
+  que me foi passado — desta vez sem divergência, e agora sei *por que* não há.
+  **(1) A guarda de âncora tem vermelho ATRIBUÍDO, provado nos dois sentidos.** M7 (remover a guarda,
+  com o `it` novo) ⇒ **1 vermelho**, e é exatamente `AC3 (fail-closed/ÂNCORA)`, em `handoff.test.ts`.
+  M7-sem-o-`it`-novo (remover a guarda **e** o `it`) ⇒ **2417 passed, ZERO vermelhos** — reproduzi o
+  controle do @dev tal como ele o publicou. E acrescentei o terceiro sentido, M7-órfã (`origin/main` +
+  guarda removida) ⇒ **2411 passed, zero vermelhos**. **Issue QA-3 do round 1: FECHADA.**
+  **(2) Os cinco ponteiros do docstring estão CERTOS, conferidos por `awk` sobre
+  `git show origin/main:<path>`, nunca por deslocamento inferido.** `:821` = `stripLegacyAgendaKeys`;
+  `:1064` = `writeAgendaState(cd, null)`; `:799-803` = `readAgendaState` + o apagamento do vencido;
+  `:1298` = onde o `finalData` nasce; `:1326` = onde o resumo é montado. Os cinco, exatos.
+  **E a divergência que ele declarou: o @DEV ESTÁ CERTO e eu estava impreciso.** `awk '/citacao:/'`
+  sobre `origin/main` devolve **exatamente duas linhas: 958 e 1048**. As `955` e `1047` que eu dera por
+  corretas no R1 são `const st = buildAgendaState({` — a linha que **abre** a chamada. A frase do
+  docstring é *"passam a mensagem do turno como `citacao`"*, e o ponteiro certo para essa afirmação é
+  o da atribuição. Não era erro factual meu (a linha existe e é a chamada), mas era o ponteiro menos
+  preciso, e num epic cujo docstring é trilha de auditoria isso importa. **Correção dele aceita.**
+  **Issue QA-4: FECHADA.**
+  **(3) A M2 são 2, confirmado.** Medi duas vezes, determinístico: `AC2-(i) par-ouro/Rita` **e**
+  `citação MULTILINHA`. O mecanismo que ele explicou está no código e eu o li: `handoff.test.ts:391`
+  monta `{ ...AGENDA_RITA, citacao: … }`, **herda `data_absoluta` por spread**, e `:396-398` afirma a
+  linha inteira com `toBe` incluindo o `(dia 2026-08-18)`. **A assimetria da AC2-iii SOBREVIVE:
+  `AC2-(ii)/Ronaldo` NÃO cai.** **Issues QA-1 e QA-2: FECHADAS.**
+  **(4) Produção intocada.** `md5` dos 6 arquivos idêntico ao snapshot pré-QA depois de 15 mutações;
+  `git status -- packages/` vazio. Escopo: em `agenda-state.ts` há **exatamente UMA** linha
+  não-comentário alterada — a palavra `export`; em `handoff.ts`, 1 linha trocada + 1 import + 1 função
+  de 6 linhas. **Nada de #427 nem de #428** — o diff é dos mesmos 3 arquivos e `merge-base` = `199a7a84`.
+  Nenhuma escrita em banco; nesta rodada não toquei em produção nem para `SELECT`.
+  **O que EU trouxe de novo, aplicando a lição da A6 da 87-11 — e é um achado, não um defeito.**
+  A guarda de âncora é uma **disjunção** `if (A || B)`, e as **duas** fixtures do `it` novo fazem
+  **A e B verdadeiros ao mesmo tempo**. Consequência medida: remover a guarda inteira acende o
+  vermelho, mas **cada metade, sozinha, não acende nada** — e duas dessas mutações **sobrevivem
+  também ao `tsc`**. Provei a consequência em vez de conjecturá-la: com `expira_em` enfraquecido
+  (suíte verde, `tsc` 0), um estado **sem validade legível** é admitido e **IMPRESSO ao corretor**.
+  É a mesma assimetria que o docstring do próprio @dev nomeia — por `readAgendaState` o `Date.parse`
+  mascara em `null`; no `handoff`, que é o único chamador sem TTL a jusante, não há máscara.
+  **Isolei sítio a sítio, como mandava a lição, e o resultado é o OPOSTO da 87-11:** os **três**
+  chamadores de `parseAgendaState` têm cobertura própria, em arquivos distintos (M8 = 2 vermelhos em
+  `handoff.test.ts`; M9 = 1 e M10 = 3 em `agenda-state.test.ts`). **O mascaramento aqui não é por
+  sítio — é dentro do helper, entre sub-expressões da mesma linha.** Mecanismo diferente da A6;
+  registro a diferença para ninguém colar o rótulo errado.
+  **Por que PASS e não CONCERNS.** As quatro ressalvas do R1 caíram, todas verificadas por medição
+  independente; **cada número que o @dev publicou nesta rodada bate com o meu, inclusive os dois
+  controles**; não há defeito de comportamento; a superfície de produção é uma palavra, uma linha e
+  uma função de seis linhas; as cinco réguas estão verdes medidas por mim; e o docstring que vai a
+  produção está exato nos **doze** ponteiros que conferi. O achado novo (QA-6) **não contradiz
+  nenhuma afirmação publicada** — a tabela da story diz que a guarda `:183` passou de 0 para 1
+  vermelho, e isso é **verdade**, eu medi. Ele é uma camada mais funda de um item que o próprio @dev
+  já roteou para o `W1-2d`. Segurar o gate por uma profundidade que ninguém alegou ter coberto seria
+  mover a trave — ainda mais tendo eu autorizado o deploy no R1 com um registro de evidência
+  estritamente PIOR que o de hoje.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 1. Réguas — medidas por mim, não herdadas
+# ─────────────────────────────────────────────────────────────────────────────
+reguas:
+  metodo: >
+    Baseline medido substituindo os 3 arquivos do diff pelas versões de `origin/main`
+    (`git show origin/main:<path>`), rodando, e restaurando. `md5` conferido no fim: os 5 arquivos
+    mutáveis voltaram byte a byte. `git status` em `packages/` = exatamente os 3 modificados do diff,
+    zero arquivos novos.
+  # [R2] `medidas:` acrescentado — sem esta chave a lista abaixo pendurava direto no mapa e o
+  # arquivo NÃO fazia parse de YAML. Defeito do meu próprio R1, corrigido aqui.
+  medidas:
+  - regua: "npx vitest run (RAIZ, suíte inteira)"
+    baseline_origin_main: "188 arquivos · 2411 passed · 6 expected fail"
+    com_o_diff: "188 arquivos · 2417 passed · 6 expected fail"
+    declarado_pelo_dev: "188 / 2411 → 188 / 2417"
+    veredito: "✅ idêntico. +6 testes = os 6 `it` novos, um a um"
+  - regua: "npx tsc --noEmit -p packages/ai"
+    medido: "0 erros (exit 0)"
+    veredito: "✅"
+  - regua: "npx tsc --noEmit -p packages/web"
+    medido: "0 erros (exit 0)"
+    veredito: "✅"
+  - regua: "npm run lint (turbo)"
+    medido: "0 errors / 23 warnings"
+    veredito: "✅ igual ao baseline. `packages/ai` não tem eslint (script `lint` = `tsc --noEmit`)"
+  - regua: "npm run prompts:check"
+    medido: "✅ agent_prompts == snapshot (7 slugs)"
+    veredito: "✅ gate permanente do epic 87 — verde"
+  - regua: "npx tsc na RAIZ"
+    veredito: "NÃO É GATE, conforme instruído. Não rodado."
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 2. Contenção dos PRs abertos — #427 e #428
+# ─────────────────────────────────────────────────────────────────────────────
+contencao_prs_abertos:
+  metodo: "gh pr view <n> --json files, cruzado com `git diff --name-only origin/main`"
+  pr_427_deploy_b_da_87_5:
+    arquivos: ["packages/ai/src/flows/haiku-enrichment.ts", "packages/web/src/app/api/cron/enrich-leads/route.ts", "packages/web/src/app/api/cron/enrich-leads/route.test.ts"]
+    intersecao_com_este_diff: "VAZIA"
+  pr_428_87_11:
+    arquivos: ["packages/ai/src/chat/pipeline.ts", "packages/ai/src/prompts/collected-data.ts", "packages/ai/src/prompts/collected-data.test.ts", "packages/ai/src/chat/pipeline-collected-data.test.ts", "packages/ai/src/chat/pipeline-corretor-no-historico.test.ts"]
+    intersecao_com_este_diff: "VAZIA"
+  este_diff: ["packages/ai/src/flows/agenda-state.ts", "packages/ai/src/flows/handoff.ts", "packages/ai/src/flows/handoff.test.ts"]
+  merge_base: "199a7a84 (== origin/main). `git merge-base HEAD origin/main` confere."
+  veredito: "✅ CONFIRMADO. Nada de #427 nem de #428 neste diff, nem por arquivo nem por conteúdo."
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 3. As 16 mutações — cada uma aplicada, rodada na suíte INTEIRA, lida e revertida
+# ─────────────────────────────────────────────────────────────────────────────
+mutacoes:
+  nota: >
+    Harness próprio (`scratchpad/qa8712/mut.sh`): snapshot dos 5 arquivos → aplica em Python →
+    `npx vitest run` da raiz → colhe → restaura → confere `git diff --stat`. Nenhuma execução por
+    arquivo isolado; nenhum `--reporter=basic`.
+  # [R2] `lista:` acrescentado — mesmo defeito de YAML do bloco `reguas:`. Corrigido.
+  lista:
+
+  # --- as três coisas que o @dev trouxe ---
+  - id: M3a
+    o_que: "AC3-iv AO PÉ DA LETRA — `if (!st) return formatBoolean(collectedData.visit_availability)`"
+    dev_declarou: "ZERO caiu — a mutação da AC é inerte"
+    eu_medi: "188 passed · 2417 passed · 6 expected fail — ZERO vermelhos"
+    veredito: "✅ CONFIRMADO. `formatBoolean` mapeia qualquer string para `nao informado`, que é o que o código correto imprime: o fallback é INDISTINGUÍVEL do acerto. Se ele tivesse colado sem rodar, teria publicado um vermelho inexistente."
+  - id: M3b
+    o_que: "fallback DEPOIS que IMPRIME o legado — `if (!st) return String(cd.visit_availability ?? \"nao informado\")`"
+    dev_declarou: "1 failed — AC3 positivo/negativo"
+    eu_medi: "1 failed — `AC3 — controle POSITIVO e controle NEGATIVO, no mesmo teste`"
+    veredito: "✅ idêntico"
+  - id: M3c
+    o_que: "legado ANTES do `agenda_state` (precedência invertida)"
+    dev_declarou: "2 failed — negativa + anti-colinearidade"
+    eu_medi: "2 failed — `AC3 — POSITIVO e NEGATIVO` + `AC3 (anti-colinearidade)`"
+    veredito: "✅ idêntico. É este o vermelho que o texto da AC3-iv queria. **A conclusão da AC sobrevive inteira; só a forma da mutação estava errada.** A decisão de separar a anti-colinearidade num `it` próprio é o que faz M3b e M3c terem contagens diferentes — sem ela, os dois dariam '1 teste' e a distinção sumiria. Desenho correto."
+  - id: M5
+    o_que: "remover `if (o.origem !== \"lead\") return null` de `parseAgendaState` — COM os testes desta story"
+    dev_declarou: "1 failed — só `AC3 (fail-closed)`"
+    eu_medi: "1 failed — `AC3 (fail-closed)`"
+    veredito: "✅ idêntico"
+  - id: M5-órfã
+    o_que: "🔬 MEU CONTROLE — mesma remoção + `handoff.ts`/`handoff.test.ts` de `origin/main` (sem os testes desta story)"
+    eu_medi: "188 passed · **2411 passed · ZERO vermelhos**"
+    veredito: "✅ **A ORFANDADE ESTÁ PROVADA NOS DOIS SENTIDOS.** Sem o teste desta story a guarda não tinha vermelho nenhum em 2411 testes; com ele, tem. `agenda-state.test.ts:99` de fato não a alcança: o caso entra por `readAgendaState` com `expira_em: \"y\"`, `Date.parse` → `NaN`, o TTL devolve `null` primeiro. Achado nº 7 CONFIRMADO — e é o décimo caso da família."
+  - id: M6
+    o_que: "remover o achatamento `st.citacao.replace(/\\s+/g,\" \").trim()` (volta ao desenho literal do §1)"
+    dev_declarou: "1 failed — só `citação MULTILINHA`"
+    eu_medi: "1 failed — `citação MULTILINHA`"
+    veredito: "✅ idêntico. E o par-ouro fica verde: o achatamento não mexe no formato ratificado."
+
+  # --- o que eu desconfiaria ---
+  - id: M2
+    o_que: "AC2-iii — `st.data_absoluta ? … : \"\"` vira `\"\"` fixo"
+    dev_declarou: "**1 failed — só `AC2-(i) par-ouro/Rita`**"
+    eu_medi: "🔴 **2 failed** — `AC2-(i) par-ouro/Rita` **E** `citação MULTILINHA`. Rodado DUAS vezes, determinístico."
+    causa: "o `it` da multilinha usa `{ ...AGENDA_RITA, citacao: … }`, herda `data_absoluta: \"2026-08-18\"` e afirma a linha inteira byte a byte — some o `(dia 2026-08-18)`, cai junto."
+    veredito: "⚠️ **NÚMERO PUBLICADO ERRADO.** A substância da AC2-iii sobrevive — o assimétrico é `Rita cai / Ronaldo NÃO cai`, e Ronaldo de fato não cai. Mas o vermelho colado é o artefato de prova desta casa, e está furado."
+  - id: M4a
+    o_que: "árvore `origin/main`, remover `has_down_payment: true` da fixture, `toContain(\"sim\")` intacto"
+    dev_declarou: "2411 passed, zero vermelhos"
+    eu_medi: "188 passed · 2411 passed · zero vermelhos"
+    veredito: "✅ colinearidade real, direção 1"
+  - id: M4b
+    o_que: "árvore `origin/main`, remover `visit_availability: true` em vez do outro"
+    dev_declarou: "2411 passed, zero vermelhos"
+    eu_medi: "188 passed · 2411 passed · zero vermelhos"
+    veredito: "✅ **cega nas DUAS direções — reproduzido.** É a razão mecânica dos 4 meses de silêncio, e ela está medida, não conjecturada."
+  - id: M4
+    o_que: "árvore da branch, remover `has_down_payment: true`, agora com `toContain(\"Entrada disponivel: sim\")`"
+    dev_declarou: "1 failed"
+    eu_medi: "1 failed — `returns formatted summary string with all sections`"
+    veredito: "✅ **as duas direções da AC4 fecham.** A mesma mutação que era verde em `main` é vermelha com a asserção ancorada."
+
+  # --- as minhas, que ninguém pediu ---
+  - id: M5b
+    o_que: "🔬 MEU — mutar a SUB-EXPRESSÃO `|| !o.citacao.trim()` da guarda de citação (não a constante, a sub-expressão)"
+    eu_medi: "1 failed — `AC3 (fail-closed)`"
+    veredito: "🆕 a guarda de citação não-vazia também é resgatada pelo teste novo"
+  - id: M5b-órfã
+    o_que: "🔬 MEU CONTROLE — mesma mutação na árvore de `origin/main`"
+    eu_medi: "**2411 passed · ZERO vermelhos**"
+    veredito: "🔴 **ACHADO NOVO: a família de guardas órfãs tem pelo menos DUAS, não uma.** `agenda-state.test.ts` esconde `citação vazia` atrás do MESMO `expira_em: \"y\"`. O Achado nº 7 subconta. Corre a favor do @dev — o `AC3 (fail-closed)` dele resgata as duas de uma vez — mas o texto tem de dizer *as guardas de forma*, não *a guarda `origem`*."
+  - id: M5c
+    o_que: "🔬 MEU — remover `if (typeof o.ancorado_em !== \"string\" || typeof o.expira_em !== \"string\") return null`, COM os testes desta story presentes"
+    eu_medi: "188 passed · **2417 passed · ZERO vermelhos**"
+    rede_que_pega: "`npx tsc --noEmit -p packages/ai` ⇒ 2 erros `TS2322: Type 'unknown' is not assignable to type 'string'` (agenda-state.ts:212,213)"
+    consequencia_provada: "com a guarda fora, `generateHandoffSummary({ agenda_state: { citacao: \"sexta de manha\", origem: \"lead\" } })` imprime `- Disponibilidade para visita: \"sexta de manha\" - nas palavras do lead, nao e visita marcada`"
+    veredito: "🔴 **ACHADO NOVO: a TERCEIRA guarda continua sem vermelho de TESTE mesmo depois desta story.** Quem a segura é o compilador, e o compilador pega a REMOÇÃO — não pegaria um enfraquecimento que ainda devolvesse `string`. Risco baixo por causa do gate `tsc` (AC7), mas o consumidor mais exposto é justamente o desta story: **`handoff` é o único chamador de `parseAgendaState` sem TTL a jusante** — todos os outros passam por `readAgendaState`, que mascara a falha em `null`."
+  - id: MLABEL
+    o_que: "🔬 MEU — remover o rótulo obrigatório ` - nas palavras do lead, nao e visita marcada`"
+    eu_medi: "3 failed — AC2-(i), AC2-(ii) e MULTILINHA"
+    veredito: "✅ o rótulo do Risco 1 está ancorado em três testes. Não é decorativo."
+  - id: MASPAS
+    o_que: "🔬 MEU — remover as aspas que delimitam a citação"
+    eu_medi: "3 failed — AC2-(i), AC2-(ii) e MULTILINHA"
+    veredito: "✅ a forma é byte a byte de verdade"
+  - id: MREDE
+    o_que: "🔬 MEU — injetar uma linha intrusa no bloco `INTERESSE:` (simula vazamento de diff)"
+    eu_medi: "2 failed — `pipeline-historico-cauda.test.ts > conversa curta: o resumo é byte a byte o do HEAD` + MULTILINHA"
+    veredito: "✅ **a rede de não-regressão da AC5 é VIVA, não decorativa.** Provei que ela fica vermelha, em vez de assumir que ficaria. `pipeline-historico-cauda.test.ts` e `config-surfaces.test.ts` com **0 linhas de diff** (confirmado por `git diff --stat`)."
+  - id: AC6-controle
+    o_que: "🔬 MEU — `hasAgendaFact` devolve `false` incondicionalmente (mata o mecanismo que a AC6 mede)"
+    eu_medi: "`com=50 sem=50 legado=50 origemNicole=50` — o delta de 20 COLAPSA"
+    veredito: "✅ **é isto que prova que a régua da AC6 não está saturada.** Sem este controle, `70/50/70` idêntico nas duas árvores seria compatível com um instrumento morto."
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 4. AC a AC — verificado, não lido
+# ─────────────────────────────────────────────────────────────────────────────
+acceptance_criteria:
+  - ac: AC1
+    veredito: PASS
+    prova: >
+      `grep -n "visit_availability" packages/ai/src/flows/handoff.ts` ⇒ **2 linhas, AMBAS dentro do
+      docstring** (`:185`, `:187`), **zero fora de comentário**. `grep -c
+      "agenda_state|parseAgendaState|AGENDA_STATE_KEY"` ⇒ **5**. `parseAgendaState` é `export` e é o
+      MESMO símbolo que `readAgendaState`/`hasAgendaFact` já usam — conferido: o corpo da função é
+      **byte a byte idêntico** ao de `origin/main` (comparação programática), e o único `[+/-]`
+      não-comentário do arquivo inteiro é a palavra `export`. `formatBoolean` fica e serve
+      `has_down_payment` (`:154`).
+  - ac: AC2
+    veredito: PASS
+    prova: >
+      As duas fixtures conferidas **byte a byte contra produção** por mim, chave a chave, via
+      Management API (`SELECT`): Rita e Ronaldo batem em TODOS os 9 campos, incluindo os ISO de
+      `expira_em`/`ancorado_em`. Saídas: `- Disponibilidade para visita: "Terça" (dia 2026-08-18) -
+      nas palavras do lead, nao e visita marcada` e `- Disponibilidade para visita: "3ª feira às
+      17:30" - nas palavras do lead, nao e visita marcada` (sem `(dia `). Vermelho assimétrico M2
+      reproduzido — **com a ressalva da contagem** (Issue QA-1): Ronaldo NÃO cai, que é o que a
+      AC2-iii exige; mas caem 2, não 1.
+  - ac: AC3
+    veredito: PASS
+    prova: >
+      Positivo + negativo num `it`, anti-colinearidade em `it` próprio, mais `fail-closed`. A fixture
+      negativa é da lead **Kharina** e é **byte a byte a de produção**: `md5
+      1d573d679d69be7f2c41f9bdeaeda0fd` nos dois lados, 104 caracteres. O `toHaveLength(104)` que
+      trava a fixture é boa prática — se alguém parafrasear, o teste avisa. **A AC3-iv não vale como
+      escrita** (M3a, zero vermelhos) e a substituição por M3b/M3c está correta e medida.
+  - ac: AC4
+    veredito: PASS
+    prova: "M4a (0 vermelhos) + M4b (0 vermelhos) em `origin/main`, e M4 (1 vermelho) na branch. As duas direções da colinearidade, mais o par que fecha o argumento. Reproduzido integralmente."
+  - ac: AC5
+    veredito: PASS
+    prova: >
+      `git diff --stat origin/main` em `pipeline-historico-cauda.test.ts` e `config-surfaces.test.ts`
+      ⇒ **vazio**. O literal de 23 linhas contém `"- Disponibilidade para visita: nao informado"` e a
+      fixture é `{ name: "Ana" }` — sem `agenda_state`, logo o ramo `if (!st)` a mantém idêntica.
+      **E provei que a rede é viva** (MREDE): uma linha intrusa a derruba.
+  - ac: AC6
+    veredito: PASS
+    prova: >
+      Refeito por mim nas duas árvores, com fixture própria: **`com=70 · sem=50 · legado=70 ·
+      origemNicole=50`, IDÊNTICO em `origin/main` e na branch.** `qualification.ts` com 0 linhas de
+      diff, e o corpo de `parseAgendaState` byte a byte igual (só a palavra `export` mudou), então o
+      score não TEM como mudar. **Acrescentei o controle que faltava:** matando `hasAgendaFact` o
+      resultado vira `50/50/50/50` — a régua discrimina, não está saturada. Bônus: `origemNicole=50`
+      mostra que o score já aplica a mesma regra de admissão que o novo leitor.
+  - ac: AC7
+    veredito: PASS
+    prova: >
+      Suíte verde (188/2417/6). `tsc` **0** em `ai` e **0** em `web`. Ciclo: `handoff → agenda-state`
+      é o ÚNICO import de valor; `agenda-state → visit-slot` e `visit-slot → agenda-state` são os
+      dois `import type`, apagados na compilação. Conferido lendo os `^import` dos três arquivos.
+  - ac: AC8
+    veredito: PENDENTE
+    prova: >
+      Janela de produção, pós-deploy. **Baseline reconferido por mim hoje, 16/08, contra produção:
+      `handoff_fmt = 14 · nao_informado = 14 · com_citacao = 0 · sim = 0`.** Nasce inconclusiva por
+      desenho (`n < 5`), e isso está declarado na própria AC. Não é critério de aceite deste gate.
+  - ac: "AC9–AC13"
+    veredito: NAO_AVALIADO
+    prova: "Bloco B não iniciado. Fora do escopo deste gate por instrução explícita."
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 5. O desvio deliberado: o achatamento da citação — JULGADO
+# ─────────────────────────────────────────────────────────────────────────────
+achatamento_da_citacao:
+  pergunta: "correção necessária ou mudança de comportamento fora de escopo?"
+  veredito: "🟢 **CORREÇÃO NECESSÁRIA. E o @dev sub-argumentou o próprio caso.**"
+  medicoes_minhas_em_producao:
+    metodo: "Management API, `SELECT` na população INTEIRA — sem o teto de 1.000 do PostgREST"
+    total_mensagens_role_user: 1876
+    com_quebra_de_linha: "57 (3,04 %)"
+    com_sequencia_de_2_ou_mais_espacos: "68 (3,63 %)"
+    com_espaco_nas_bordas: "**0** — o `.trim()` é INERTE em produção hoje"
+    seriam_alteradas_pelo_achatamento: "**99 (5,28 %)**"
+    divergencia_com_o_numero_publicado: >
+      O @dev publicou **3,5 % (35 de 1.000)**. Nos últimos 1.000 por `created_at` eu medi **25**; nos
+      primeiros 1.000, **33**. A amostra de 1.000 do PostgREST não é aleatória e não é ordenada — o
+      número dele é de uma sub-amostra de ordem física. **O valor populacional é 3,04 %, e a direção
+      dele está certa.** Registro a divergência com o método, como manda a casa.
+    denominador_que_importa_mais: >
+      🔴 `citacao` **não é qualquer mensagem** — é a mensagem que dispara a pendência de agenda.
+      Medi o proxy honesto (mensagens `role='user'` com token de dia/hora): **110 mensagens, 9
+      alteradas pelo achatamento = 8,18 %**, e 6 com quebra de linha. **É mais que o DOBRO do que ele
+      publicou, na população que de fato vira citação.**
+  modo_de_falha_reproduzido_com_dado_real:
+    mensagem: "`\"Esse mesmo \\nvamos deixar pra segunda.\"` — mensagem REAL de produção, `role='user'`"
+    sem_achatamento: |
+      INTERESSE:
+      ...
+      - Disponibilidade para visita: "Esse mesmo
+      vamos deixar pra segunda." (dia 2026-08-18) - nas palavras do lead, nao e visita marcada
+    com_achatamento: |
+      - Disponibilidade para visita: "Esse mesmo vamos deixar pra segunda." (dia 2026-08-18) - nas palavras do lead, nao e visita marcada
+    pior_caso_que_ele_nao_mediu: >
+      🔴 Com `\n\n` na citação (e mensagens assim EXISTEM em produção — medi), o resumo ganha uma
+      **linha em branco DENTRO do bloco `INTERESSE:`** — e a linha em branco é o **separador de bloco**
+      deste formato. Reproduzi: o bloco `INTERESSE:` fica truncado e o resto da citação vira um bloco
+      órfão sem cabeçalho. Não é uma linha a mais: é **quebra estrutural**. E ela se propaga, porque o
+      `ai_summary` volta ao prompt da Nicole (`loader.ts:196-203`, Risco 3).
+    conclusao: >
+      É exatamente o *"resumo malformado"* do **gatilho (a) de rollback desta própria story**.
+      Achatar é trabalho do formatador. **Dentro de escopo:** o achatamento vive apenas dentro de
+      `formatDisponibilidade`, a única linha que esta story cria; o bloco `MENSAGENS DO LEAD` não foi
+      tocado (comportamento anterior, Achado nº 8, corretamente cortado); e o dado gravado continua
+      íntegro para auditoria.
+  o_par_ouro_e_robusto_ou_e_sorte:
+    veredito: "🟢 **ROBUSTO, e verificado — não aceito no relato.**"
+    provas:
+      - "`\"Terça\"` e `\"3ª feira às 17:30\"`: nenhuma sequência de 2+ espaços, nenhum `\\n`, nenhuma borda — o achatamento é IDENTIDADE nas duas. Conferido no valor de produção, não na fixture."
+      - "As bordas: **0 de 1876** mensagens `role='user'` têm espaço nas bordas, então o `.trim()` é inerte na população inteira. Não há caso vivo em que ele mude alguma coisa."
+      - "M6 (remover o achatamento) deixa **o par-ouro verde** e derruba **só** o `it` multilinha: as duas provas são independentes por construção, não por coincidência de fixture."
+    ressalva_menor: >
+      Para os ~8 % de citações com espaço irregular, o corretor lê um texto **normalizado** sob um
+      rótulo que diz *"nas palavras do lead"*. É estritamente melhor que um bloco quebrado, o dado
+      cru fica no banco, e não vale mudança — mas fica registrado.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 6. Superfície pública, linha 153, mocks
+# ─────────────────────────────────────────────────────────────────────────────
+verificacoes_pedidas:
+  superficie_publica:
+    veredito: "🟢 **INALTERADA — asserção EXECUTADA, não lida.**"
+    prova: >
+      `packages/ai/src/flows/index.ts` com **0 linhas de diff** e sem `export *` de `agenda-state`
+      (lista nominal de 12 símbolos, `parseAgendaState` não está nela). `packages/ai/src/index.ts`
+      faz `export * from "./flows"`. Rodei um teste descartável que importa os dois barris e afirma
+      `expect(Object.keys(...)).not.toContain("parseAgendaState")` — **passou nos dois**. Arquivo
+      removido depois; `git status` limpo.
+    ressalva: >
+      `@trifold/ai` não tem campo `exports` no `package.json` (`main: src/index.ts`), então um
+      **deep import** `.../flows/agenda-state` sempre foi possível para qualquer símbolo exportado do
+      módulo. A contenção do Risco 4 é por **convenção de barril + docstring**, como o @dev escreveu —
+      não por tipo nem por empacotamento. Está declarado no código; não é regressão desta story.
+  a_linha_e_153_nao_138:
+    veredito: "🟡 **CONFIRMADO o deslocamento; a documentação está PARCIALMENTE atualizada.**"
+    medido: >
+      `24800872` (HEAD do parecer do @po) ⇒ linha **138**. `origin/main` `199a7a84` ⇒ linha **153**
+      (`formatBoolean` de 160 ⇒ 175). Quem moveu: `6b760887`, a **87-5 deploy A** (#426), mergeada em
+      15/08 **depois** do parecer do @po.
+    o_que_esta_certo: "A **T2** da story registra explicitamente *\"a linha é a **153** em `origin/main`, não a 138\"*, com a causa. Isso está correto e é exatamente o que se pedia."
+    o_que_continua_apontando_errado:
+      - "Story, bloco `> ### O defeito, em uma linha`: `handoff.ts:138` e `handoff.ts:160-164`"
+      - "Story, Dev Notes › Mapa de código: `handoff.ts:138`, `handoff.ts:160-164`, e as linhas de `pipeline.ts` (`738-741`, `759-760`, `1223`, `1251`, `1513`) — reais hoje: **800**, **821**, **1298**, **1326**, **1597**"
+      - "Story §6 do Context, tabela de leitores: `flows/handoff.ts:138`"
+      - "`docs/qa/po-validation-87-12.md` M12: linha 138 — **datado e correto no HEAD dele**, não é erro do @po"
+      - "🔴 `epic-87-*.md` (4 lugares): `handoff.ts:138`"
+    severidade: "Baixa para a story (a T2 corrige e é o que o @dev leu). **Média para o docstring que vai a produção** — ver Issue QA-4."
+  mock_que_aceite_qualquer_filtro:
+    veredito: "🟢 **CLASSE NÃO APLICÁVEL a este diff — verificado, não presumido.**"
+    prova: >
+      `grep` por `vi.mock|vi.fn|mockResolved|mockReturn` em `handoff.test.ts` e `agenda-state.test.ts`
+      ⇒ **NENHUM**. Os dois arquivos importam funções puras e afirmam sobre a string montada.
+      `generateHandoffSummary` não tem relógio, I/O nem modelo — não há por onde um mock permissivo
+      engolir predicado. O harness `turno()` de `pipeline-historico-cauda.test.ts` tem fakes, mas
+      aquele arquivo está com **0 linhas de diff** e eu provei que ele fica vermelho (MREDE).
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 7. Reconferência de produção — SOMENTE `SELECT`
+# ─────────────────────────────────────────────────────────────────────────────
+producao:
+  projeto: "dsopqkqjkmhytudaaolv (produção), Management API, **exclusivamente `SELECT`**"
+  ddl_executado: "NENHUM, em ambiente nenhum. Nenhum INSERT/UPDATE/DELETE."
+  medicoes:
+    - o_que: "tipo de `visit_availability`"
+      valor: "com_va **56** · string **56** · boolean **0** · com_agenda_state **2** · total **284**"
+      nota: "total subiu de 279 (15/08) para 284 — 5 conversas novas. As 56 e as 2 não se moveram."
+    - o_que: "as duas linhas com `agenda_state`"
+      valor: "Rita (15/08 12:31) e Ronaldo (10/08 00:30) — **idênticas às fixtures, campo a campo**"
+    - o_que: "a E5 no dado, não no argumento"
+      valor: "Rita: `expira_em 2026-08-17T12:20:47.409Z` × `data_absoluta 2026-08-18`"
+      nota: "🔴 **O estado VENCE ANTES do dia para o qual ele aponta.** Confirmado em produção por mim hoje. Hoje, 16/08, ele ainda está vigente — por menos de 24 h."
+    - o_que: "fixture negativa (Kharina)"
+      valor: "104 caracteres, `md5 1d573d679d69be7f2c41f9bdeaeda0fd` — **igual ao da fixture**"
+    - o_que: "baseline da AC8"
+      valor: "handoff_fmt **14** · nao_informado **14** · com_citacao **0** · sim **0**"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 8. O que a story NÃO compra — o carimbo que o gate tinha de dar
+# ─────────────────────────────────────────────────────────────────────────────
+teto_de_valor:
+  carimbo: >
+    🟢 **CONFIRMO, e confirmo que está escrito onde o próximo leitor tropeça.** O campo **não passa a
+    informar**; passa a **poder** informar. `"nao informado"` seguirá sendo a saída na maioria dos
+    handoffs — **e na maioria delas continuará sendo a saída CERTA**, porque em **8 de 9** casos com
+    conteúdo (crosstab do @po, emenda E2) o que estava na chave era fala da própria Nicole.
+  onde_esta_escrito:
+    - "🟢 **`packages/ai/src/flows/handoff.ts`, docstring de `formatDisponibilidade`, bloco `⚠️ TETO DE VALOR, declarado para que ninguém prometa o contrário`** — este é o lugar certo: é o código, não um documento que ninguém reabre. **Conferido: está lá, com o par `expira 17/08` × `aponta 18/08` e com a limpeza ao agendar.**"
+    - "Story, Context §3, emenda E5 do @po"
+    - "Story, Dev Agent Record, seção *O que esta story NÃO comprou — para ninguém prometer ao Marcos*"
+    - "Parecer do @po, §7"
+  os_tres_estrangulamentos_reconferidos:
+    - "**TTL de 48 h** e o estado vence antes do dia — medido no dado hoje (Rita)."
+    - "**Limpo quando a visita é agendada** — `writeAgendaState(cd, null)` existe em `chat/pipeline.ts:1064` (o docstring diz `:991`, ver Issue QA-4). E o resumo **não tem nenhuma outra linha sobre visita** — confirmei lendo a função inteira: `appointments` não é mencionado. É o Achado nº 5, corretamente empurrado para o `W1-2d`."
+    - "**O handoff tem de disparar nessa janela** — 14 all-time, nenhum desde 04/08."
+  recomendacao: "O texto ao Marcos não pode ser *\"o campo passa a informar\"*. Tem de ser *\"o campo deixa de ser constante\"*. Está correto na story; que fique correto também na descrição do PR."
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 9. Issues
+# ─────────────────────────────────────────────────────────────────────────────
+issues:
+  - id: QA-1
+    severidade: medium
+    categoria: tests
+    titulo: "A contagem de vermelhos da M2 está errada: são 2, não 1"
+    detalhe: >
+      A Dev Agent Record publica *"`1 failed` — só `AC2-(i) par-ouro/Rita`"*. Medi duas vezes, na
+      suíte inteira da raiz: **2 failed** — cai também `citação MULTILINHA`, porque ele herda
+      `data_absoluta` de `AGENDA_RITA` e afirma a linha byte a byte. **A substância da AC2-iii
+      sobrevive** (o assimétrico é Rita×Ronaldo, e Ronaldo não cai). Mas nesta casa o vermelho colado
+      é a prova, e este está furado. É a **quarta rodada seguida do epic 87** em que a contagem de
+      vermelhos publicada diverge da medida.
+      **Não bloqueia o deploy.**
+    recomendacao: "Corrigir a linha da M2 na tabela da Dev Agent Record e no Change Log para `2 failed — AC2-(i)/Rita + citação MULTILINHA`, mantendo a leitura correta do assimétrico (Ronaldo NÃO cai)."
+  - id: QA-2
+    severidade: low
+    categoria: docs
+    titulo: "Achado nº 7 subconta a família de guardas órfãs — são ≥2, e o teste novo resgata as duas"
+    detalhe: >
+      Medi: a sub-expressão `!o.citacao.trim()` da guarda de citação também é órfã em `origin/main`
+      (0 vermelhos em 2411) e passa a ter vermelho com o `AC3 (fail-closed)` desta story. O mecanismo
+      é o mesmo: `agenda-state.test.ts` esconde os dois casos atrás do `expira_em: "y"`, e o TTL
+      devolve `null` antes de a guarda ser alcançada. **Corre a favor do @dev.**
+    recomendacao: "Reescrever o Achado nº 7 como *as guardas de FORMA de `parseAgendaState` (citação não-vazia e `origem === 'lead'`) nunca tiveram vermelho*, com os dois números. Confirmo o encaminhamento: consertar `agenda-state.test.ts` é item próprio (candidato ao `W1-2d`), não escopo desta story."
+  - id: QA-3
+    severidade: low
+    categoria: tests
+    titulo: "Uma terceira guarda de `parseAgendaState` continua sem vermelho de teste — quem a segura é o `tsc`"
+    detalhe: >
+      Remover `if (typeof o.ancorado_em !== "string" || typeof o.expira_em !== "string") return null`
+      deixa a suíte **verde em 2417 testes**, mesmo com os testes desta story. O `tsc` pega (2×
+      TS2322), então há rede — mas ela pega a REMOÇÃO, não um enfraquecimento que ainda devolvesse
+      `string`. **Importa mais aqui do que em qualquer outro lugar:** `handoff` é o único chamador de
+      `parseAgendaState` sem TTL a jusante, e provei que sem a guarda um estado sem âncora nenhuma
+      **imprime ao corretor**.
+    recomendacao: "Anexar ao Achado nº 7 / `W1-2d`. Um `it` de 3 linhas em `handoff.test.ts` ou em `agenda-state.test.ts` fecharia. **Não exijo nesta story** — T1 é uma palavra e a fronteira está corretamente desenhada."
+  - id: QA-4
+    severidade: low
+    categoria: docs
+    titulo: "🔴 Três referências de linha ERRADAS no docstring que VAI PARA PRODUÇÃO"
+    detalhe: >
+      Em `packages/ai/src/flows/handoff.ts`, dentro da docstring de `formatDisponibilidade`:
+      `chat/pipeline.ts:760` (afirma ser `stripLegacyAgendaKeys`; a linha 760 é `},`, o real é **821**);
+      `chat/pipeline.ts:991` (afirma ser `writeAgendaState(cd, null)`; a 991 é um comentário
+      `// CANCELAR`, o real é **1064**); `chat/pipeline.ts:738-741` (afirma ser a leitura+apagamento do
+      vencido; 738-741 é montagem de contexto de prompt, o real é `readAgendaState` em **~800**).
+      Erram por 60–73 linhas. **Estavam certas no `HEAD 24800872`; a `87-5 A` (#426) deslocou
+      `pipeline.ts`.** O @dev pegou o deslocamento no arquivo dele (138→153) e não no que ele cita.
+      Conferidas e **CORRETAS**: `chat/pipeline.ts:955`, `:1047`, `qualification.ts:356`,
+      `leads/[id]/page.tsx:199-206`, `agenda-state.ts:108-126`.
+    recomendacao: >
+      Corrigir os três números **antes de o @devops abrir o PR** — é edição só de comentário, zero
+      comportamento, e a suíte roda em 5 s. Aproveitar para atualizar o Mapa de código da story
+      (`handoff.ts:138`→153, `:160-164`→175-179, e as cinco linhas de `pipeline.ts`).
+  - id: QA-5
+    severidade: low
+    categoria: docs
+    titulo: "O rótulo falso da 87-12 no mapa do epic continua aberto"
+    detalhe: >
+      `epic-87-nicole-confiabilidade-contexto.md:86` ainda diz *'hotfix da W1-2b (87-4):
+      handoff.ts:138 …'*. O `blame` de 31/03/2026 (`a5e29d70`) está confirmado pelo @sm, pelo @po e
+      por mim — **não é hotfix de regressão**, e a linha não é mais a 138. O pedido ao @pm está no fim
+      da story. Registro aqui porque ele já atravessou três documentos sem ser executado.
+    recomendacao: "@pm — aplicar as três correções listadas no fim da story (rótulo, `stories_planned`, `215`→`231`). Fora do escopo do @qa."
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 10. O que NÃO foi verificado — declarado
+# ─────────────────────────────────────────────────────────────────────────────
+nao_verificavel:
+  - item: "AC8 — janela de observação de 24 h"
+    razao: "É pós-deploy. Baseline reconferido por mim hoje (14/14/0/0). **Nasce inconclusiva por desenho** (`n < 5`; 14 handoffs all-time, nenhum desde 04/08) e não é critério de aceite deste gate."
+  - item: "AC9–AC13 — bloco B"
+    razao: "Não iniciado. Fora do escopo por instrução. **Registro a premissa derrubada pelo @po (E4): os 27 leads NÃO caem na migration** — a AC13 proíbe tocar `leads`, os dois escritores de `qualification_status` exigem conversa recente, e a população é dormente. **O benefício real e imediato do bloco B é o painel (45 leads exibindo fala da Nicole no campo de disponibilidade), não o score.** O aviso ao Marcos tem de usar esse texto."
+  - item: "Comportamento em produção do resumo novo"
+    razao: "Nenhum handoff disparou desde 04/08. Não há como observar a linha nova antes do deploy. **A prova desta story é a AC2/AC3, e ela é forte** — `generateHandoffSummary` é função pura de montagem de texto, sem relógio e sem I/O; é a primeira story desta onda com prova executável de verdade em vez de *'não verificável'*."
+  - item: "Efeito da realimentação `ai_summary` → prompt (Risco 3)"
+    razao: "`loader.ts:196-203` faz o resumo voltar ao contexto da Nicole. Aceito e declarado na story. **Não é mensurável antes do primeiro handoff com citação**, e o sítio 2 (`lead-memory.ts:79`) é escopo da AC6-b da 87-10."
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 11. Higiene
+# ─────────────────────────────────────────────────────────────────────────────
+higiene:
+  arvore_restaurada: "✅ `md5` dos 5 arquivos mutáveis idêntico ao snapshot pré-QA (handoff.ts `9be1d1c1…`, handoff.test.ts `54e1d1e7…`, agenda-state.ts `b0650ba4…`, agenda-state.test.ts `b60d8513…`, qualification.ts `0a75a8a4…`)"
+  arquivos_temporarios: "✅ 4 arquivos de teste descartáveis criados e removidos; `git status -- packages/` = exatamente os 3 do diff, zero arquivos novos"
+  suite_final: "✅ 188 arquivos · 2417 passed · 6 expected fail"
+  tsc_final: "✅ ai = 0 · web = 0"
+  escrita_em_banco: "NENHUMA. Só `SELECT` em produção."
+  commits_ou_push: "NENHUM. @qa não commita."
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 12. Decisão
+# ─────────────────────────────────────────────────────────────────────────────
+decisao:
+  gate: CONCERNS
+  deploy_do_bloco_A: AUTORIZADO
+  justificativa: >
+    Nenhuma das quatro ressalvas é defeito de comportamento. O código está correto, os testes
+    discriminam de verdade (16 mutações minhas, com controles nos dois sentidos onde importa), as
+    redes de não-regressão são vivas e provadas, a superfície pública não mudou, o score não se move,
+    e o desvio deliberado do desenho é a decisão certa com o número a favor — mais a favor do que o
+    @dev mediu. **O que puxa para CONCERNS é evidência e documentação:** um vermelho publicado com o
+    número errado (QA-1), um achado subcontado (QA-2), uma guarda que segue sem vermelho de teste
+    (QA-3) e três ponteiros errados num docstring que vai para produção (QA-4).
+  antes_do_PR:
+    - "QA-4 — corrigir os três números de `chat/pipeline.ts` no docstring de `formatDisponibilidade` (760→821, 991→1064, 738-741→~800). Edição de comentário; rodar a suíte depois."
+    - "QA-1 e QA-2 — corrigir a contagem da M2 e o texto do Achado nº 7 na Dev Agent Record."
+  depois_do_PR:
+    - "@devops: PR a partir de `199a7a84`, **sem levar #427 nem #428**. Marco zero da janela de 24 h."
+    - "@qa: AC8 em 24 h, contra o baseline `nao_informado 14 · com_citacao 0`. **Registrar inclusive se inconclusivo** — e ele será."
+    - "@data-engineer: bloco B só depois da janela, e com os 56 `id` reconferidos."
+  proxima_etapa: "@devops *push (bloco A)"
+
+assinatura: "@qa (Quinn) · 2026-08-16 · reprodução integral, 16 mutações, produção somente-leitura"
+
+# =============================================================================
+# ROUND 2 — re-gate focado no que o @dev mudou DEPOIS do gate do round 1
+# =============================================================================
+round_2:
+  escopo: >
+    Re-gate FOCADO. Não reabri as três confirmações do R1 (AC3-iv inerte por função absorvente, as
+    guardas órfãs do curto-circuito de TTL, o achatamento), nem o carimbo do teto de valor, nem o
+    bloco B. Não avaliei #427 nem #428 e não os trouxe para a árvore.
+  delta_desde_o_gate_r1: >
+    `md5` prova o recorte: `agenda-state.ts` (`b0650ba4…`), `agenda-state.test.ts` (`b60d8513…`) e
+    `qualification.ts` (`0a75a8a4…`) estão **idênticos ao snapshot do R1**. Só `handoff.ts`
+    (`9be1d1c1…` → `358f0bc1…`) e `handoff.test.ts` (`54e1d1e7…` → `9b46ec3e…`) mudaram. É
+    exatamente onde o `it` novo e os ponteiros do docstring vivem — nada mais se moveu.
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # 13. Recalibração da régua — feita ANTES de qualquer mutação
+  # ───────────────────────────────────────────────────────────────────────────
+  recalibracao_da_regua:
+    por_que: >
+      No re-gate da 87-11 o número que me chegou estava contaminado por trabalho não commitado de
+      outra frente, e a divergência acabou sendo a PROVA de que nada tinha vazado. Repeti o
+      procedimento aqui antes de tocar em qualquer coisa.
+    metodo: >
+      `git status --porcelain -- packages/` ⇒ **VAZIO**. Logo a árvore de trabalho é `fe74894a` byte a
+      byte no que importa, e medir aqui é medir o PR. (Fora de `packages/` há só `.claude/`, `docs/`
+      e `.gitignore` — nenhum arquivo que a suíte importe.) `git merge-base HEAD origin/main` =
+      `199a7a84`. `git diff --name-status origin/main -- packages/` = **os mesmos 3 arquivos**.
+    medido_por_mim:
+      arvore_do_pr: "188 arquivos · **2418 passed** · 6 expected fail"
+      origin_main: "188 arquivos · **2411 passed** · 6 expected fail (remedido nesta rodada trocando os 3 arquivos por `git show origin/main:<path>`)"
+      delta: "+7 = os 7 `it` do `describe(\"Story 87-12\")`, um a um"
+      divergencia_com_o_numero_recebido: "**NENHUMA.** 2.418 confirmado. Diferente da 87-11 — e agora com a causa conhecida: não há trabalho não commitado em `packages/`."
+    contencao_prs_abertos: "✅ #427 e #428 NÃO avaliados e NÃO trazidos. Conjunto de arquivos do diff inalterado desde o R1 (3 arquivos, todos `packages/ai/src/flows/`), disjunto dos dois PRs."
+    demais_reguas:
+      - { regua: "npx tsc --noEmit -p packages/ai", medido: "0 erros (exit 0)", veredito: "✅" }
+      - { regua: "npx tsc --noEmit -p packages/web", medido: "0 erros (exit 0)", veredito: "✅" }
+      - { regua: "npm run lint (turbo)", medido: "**0 errors / 23 warnings**", veredito: "✅ igual ao declarado" }
+      - { regua: "npm run prompts:check", medido: "✅ agent_prompts == snapshot (7 slugs)", veredito: "✅ gate permanente do epic 87 — verde" }
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # 14. Item 1 — a guarda de âncora tem vermelho ATRIBUÍDO?
+  # ───────────────────────────────────────────────────────────────────────────
+  item_1_vermelho_atribuido:
+    veredito: "🟢 **SIM, e provado nos TRÊS sentidos. Issue QA-3 do R1: FECHADA.**"
+    mutacoes:
+      - id: M7
+        o_que: "remover a guarda de âncora inteira (`if (typeof o.ancorado_em !== \"string\" || typeof o.expira_em !== \"string\") return null`), com o `it` novo presente"
+        dev_declarou: "1 failed — `AC3 (fail-closed/ÂNCORA)`"
+        eu_medi: "**1 failed** · 2417 passed · 6 expected fail — `handoff.test.ts > Story 87-12 > AC3 (fail-closed/ÂNCORA)`"
+        veredito: "✅ idêntico"
+      - id: M7-sem-o-it-novo
+        o_que: "**controle de atribuição** — remover a guarda **E** o `it` novo (linhas 419-443 de `handoff.test.ts`), mantendo todo o resto"
+        dev_declarou: "2417 passed, zero vermelhos"
+        eu_medi: "**188 arquivos · 2417 passed · 6 expected fail · ZERO vermelhos**"
+        veredito: "✅ **idêntico. O vermelho da M7 é ATRIBUÍDO ao `it` novo, não presumido.** Sem este controle, '1 vermelho' seria compatível com um teste antigo passando por ali por acaso."
+      - id: M7-órfã
+        o_que: "🔬 MEU TERCEIRO SENTIDO — árvore de `origin/main` (3 arquivos trocados) + guarda de âncora removida"
+        eu_medi: "**2411 passed · zero vermelhos**"
+        veredito: "✅ a terceira guarda também nasceu órfã. A orfandade e o resgate ficam provados nas duas pontas."
+    ponteiros_de_linha_da_story: "✅ conferido: em `origin/main` as guardas estão MESMO em `agenda-state.ts:181` (`citacao`), `:182` (`origem`) e `:183` (âncora). A tabela do Achado nº 7 aponta certo."
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # 15. Item 2 — os cinco ponteiros, por `awk` sobre `git show origin/main:`
+  # ───────────────────────────────────────────────────────────────────────────
+  item_2_ponteiros_do_docstring:
+    metodo: >
+      `git show origin/main:packages/ai/src/chat/pipeline.ts` → arquivo → `awk 'NR>=x && NR<=y'`.
+      **Nenhum deslocamento inferido.** `md5` do `pipeline.ts` de `origin/main` == o da árvore
+      (`e4f3df64…`): o arquivo NÃO é tocado por este PR, então as duas referências coincidem.
+    os_cinco_que_o_dev_corrigiu:
+      - { ponteiro: "chat/pipeline.ts:821", afirma: "stripLegacyAgendaKeys", linha_real: "`const chavesLegadas = stripLegacyAgendaKeys(collectedData as Record<string, unknown>)`", veredito: "✅ EXATO (era 760)" }
+      - { ponteiro: "chat/pipeline.ts:1064", afirma: "writeAgendaState(cd, null) ao agendar", linha_real: "`writeAgendaState(cd, null)`, sob `if (day && time)` — 'resolve e limpa pendência'", veredito: "✅ EXATO (era 991)" }
+      - { ponteiro: "chat/pipeline.ts:799-803", afirma: "leitura + apagamento do vencido", linha_real: "`799 const nowAgenda` · `800 readAgendaState(...)` · `802 if (agendaRead.expired)` · `803 writeAgendaState(..., null)`", veredito: "✅ EXATO, e o intervalo fecha certinho (era 738-741)" }
+      - { ponteiro: "chat/pipeline.ts:1298", afirma: "onde o finalData nasce", linha_real: "`const finalData: Record<string, unknown> = { ...aiExtracted, name: … }`", veredito: "✅ EXATO — e este eu NÃO tinha cobrado no R1 (era 1223)" }
+      - { ponteiro: "chat/pipeline.ts:1326", afirma: "onde o resumo é montado", linha_real: "`handoffSummary = generateHandoffSummary(finalData, allMessages)`", veredito: "✅ EXATO — também não cobrado no R1 (era 1251)" }
+    a_divergencia_declarada_pelo_dev:
+      disputa: "Eu, no R1, dei `:955` e `:1047` por CORRETAS. O @dev diz que elas apontam para a linha que ABRE a chamada, e que o `citacao:` está em **958** e **1048**."
+      medicao: >
+        `awk '/citacao:/' ` sobre `origin/main:chat/pipeline.ts` devolve **EXATAMENTE DUAS LINHAS:
+        958 e 1048**. `awk '/buildAgendaState/'` devolve 35 (import), **955** e **1047** — e as duas
+        são `const st = buildAgendaState({`.
+      julgamento: >
+        🟢 **O @DEV ESTÁ CERTO.** A frase do docstring é *"`chat/pipeline.ts:958` e `:1048` passam a
+        mensagem do turno como `citacao`"* — a afirmação é sobre **onde a `citacao` é passada**, e o
+        ponteiro que serve a essa afirmação é o da atribuição, não o da abertura da chamada. O meu
+        carimbo do R1 não era erro factual (955/1047 existem e são a chamada), mas era o ponteiro
+        **menos preciso** para o que a frase diz. Num epic em que o docstring é a trilha de
+        auditoria, a diferença de 3 linhas é justamente a classe *"o próximo leitor procura no lugar
+        errado"*. **Correção dele aceita; meu R1 corrigido aqui.**
+    outros_sete_que_reconferi_por_conta_propria:
+      - { ponteiro: "qualification.ts:356", linha_real: "`citacao: aiResponse,`", veredito: "✅" }
+      - { ponteiro: "qualification.ts:323-337", afirma: "as dayKeywords literais", linha_real: "`323 const dayKeywords = [` … `337 \"vou passar\", \"vou aí\", \"vou ai\",`", veredito: "✅ o intervalo cobre `dayKeywords` + `visitIntentKeywords`, que é o que a régua estreita usa" }
+      - { ponteiro: "memory/loader.ts:196-203", afirma: "ai_summary volta como fallback de L1", linha_real: "`196 if (!l1Snapshot && aiSummaryFallback) {` … `203 }`", veredito: "✅ EXATO — é o Risco 3, e o intervalo fecha no `}`" }
+      - { ponteiro: "agenda-state.ts:108-126", afirma: "os campos reservados do W1-2c", linha_real: "`108 // ─── Reservados pela Story do item W1-2c` … `126 afirmado_pela_nicole?: string | null`", veredito: "✅ EXATO nas DUAS versões — o diff da story só acrescenta linhas ABAIXO de 126, então o bloco não deslocou" }
+      - { ponteiro: "leads/[id]/page.tsx:199-206", afirma: "o painel, que NÃO confere origem", linha_real: "`199 const agendaCitacao = (() => {` … `206 })()`, e o `205` é o `return cd(\"visit_availability\")`", veredito: "✅ EXATO" }
+      - ressalva_menor: >
+          🟡 **Existem DOIS `leads/[id]/page.tsx`** no repo: `packages/web/src/app/broker/…` e
+          `packages/web/src/app/dashboard/…`. O docstring escreve o path abreviado, e só o
+          **`dashboard`** casa (o `broker` não menciona `agenda_state` em lugar nenhum). A story usa
+          o path completo `dashboard/leads/[id]/page.tsx:205` e está certa; só o docstring de
+          `agenda-state.ts:183` abrevia. Ambiguidade cosmética, não erro — registro e não cobro.
+    veredito: "🟢 **Issue QA-4 do R1: FECHADA.** Doze ponteiros conferidos por `awk`, doze exatos."
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # 16. Item 3 — a M2 são 2, e a assimetria sobrevive?
+  # ───────────────────────────────────────────────────────────────────────────
+  item_3_m2:
+    mutacao: "`const dia = st.data_absoluta ? ` (dia ${st.data_absoluta})` : \"\"` vira `const dia = \"\"`"
+    eu_medi: "**2 failed** · 2416 passed — `AC2-(i) par-ouro/Rita` **+** `citação MULTILINHA`. **Rodado DUAS vezes (M2 e M2bis), byte a byte idêntico: determinístico.**"
+    mecanismo_conferido_no_codigo: >
+      ✅ Confirmado por leitura, não aceito no relato. `handoff.test.ts:391` monta
+      `const multilinha = { ...AGENDA_RITA, citacao: "Qual zona?\nvista pra rua." }` — **herda
+      `data_absoluta: "2026-08-18"` por spread** — e `:396-398` afirma a linha inteira com `toBe`,
+      incluindo o literal `(dia 2026-08-18)`. Sumindo o sufixo, o `toBe` quebra. É estrutural.
+    assimetria_ac2_iii: "🟢 **SOBREVIVE INTACTA.** `AC2-(ii) par-ouro/Ronaldo` **NÃO** aparece na lista de vermelhos, nas duas execuções. O que a AC2-iii exige é `Rita cai / Ronaldo não cai`, e é isso que se mede."
+    veredito: "🟢 **Issues QA-1 e QA-2 do R1: FECHADAS.** O número publicado agora é o número medido, e a leitura da AC continua correta."
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # 17. Item 4 — produção intocada
+  # ───────────────────────────────────────────────────────────────────────────
+  item_4_producao_intocada:
+    md5_pos_15_mutacoes: "✅ **IDÊNTICO ao snapshot pré-QA-R2**, `diff` limpo nos 6 arquivos: `handoff.ts 358f0bc1…` · `handoff.test.ts 9b46ec3e…` · `agenda-state.ts b0650ba4…` · `agenda-state.test.ts b60d8513…` · `qualification.ts 0a75a8a4…` · `chat/pipeline.ts e4f3df64…`"
+    git_status: "✅ `git status --porcelain -- packages/` **VAZIO**. Um arquivo de demonstração foi criado e removido; nada sobrou."
+    linhas_de_producao_fora_de_comentario:
+      agenda_state_ts: "**UMA** linha: `function parseAgendaState` → `export function parseAgendaState`. Zero linhas de corpo. (Removidas: 1, a mesma assinatura sem `export`.)"
+      handoff_ts: "**NOVE** linhas: 1 import, 1 `lines.push` trocado, e a função `formatDisponibilidade` (assinatura + 5 linhas de corpo + `}`). (Removidas: 1, o `lines.push` do `formatBoolean`.)"
+      handoff_test_ts: "só teste"
+      fora_dos_3_arquivos: "**NENHUMA.** `git diff --name-status origin/main -- packages/` = exatamente os 3."
+    banco: "**NENHUM acesso a produção nesta rodada** — nem `SELECT`. As medições de produção do R1 (população de mensagens, fixtures Rita/Ronaldo/Kharina, baseline da AC8) não foram reabertas por serem fora do escopo deste re-gate."
+    veredito: "🟢 **INTOCADA.**"
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # 18. 🔴 O que EU trouxe — a lição da A6 da 87-11 aplicada aqui
+  # ───────────────────────────────────────────────────────────────────────────
+  achado_novo_r2:
+    titulo: "As DUAS metades da guarda de âncora, e a metade irmã da guarda de citação, estão INDIVIDUALMENTE sem vermelho — e duas dessas mutações sobrevivem também ao `tsc`"
+    a_licao_que_apliquei: >
+      Na 87-11 o buraco era: `truncar()` tem três SÍTIOS e a mutação alterava a **constante
+      compartilhada**, acendendo os três juntos e mascarando um sem cobertura. Procurei a mesma
+      classe aqui — e encontrei **um mecanismo diferente com o mesmo efeito**.
+    isolamento_por_sitio_primeiro:
+      pergunta: "`parseAgendaState` tem três chamadores. Alguma mutação acende vários sítios de uma vez e mascara um sem cobertura?"
+      metodo: "mutei o **SÍTIO DE CHAMADA**, não o helper — cada chamador perde a regra de admissão, um de cada vez"
+      medicoes:
+        - { id: M8, sitio: "`formatDisponibilidade` (handoff) — `parseAgendaState(cd[KEY])` → cast permissivo", eu_medi: "**2 vermelhos**, ambos em `handoff.test.ts`: `AC3 (fail-closed)` + `AC3 (fail-closed/ÂNCORA)`" }
+        - { id: M9, sitio: "`hasAgendaFact` (score de qualificação, peso 20)", eu_medi: "**1 vermelho** em `agenda-state.test.ts`: `objeto malformado no lugar do estado não conta`" }
+        - { id: M10, sitio: "`readAgendaState` (pipeline)", eu_medi: "**3 vermelhos** em `agenda-state.test.ts`: 2× `fonte` + `data_absoluta fora de YYYY-MM-DD`" }
+      veredito: >
+        🟢 **Os TRÊS sítios têm cobertura própria, em arquivos distintos.** É o **oposto** da 87-11:
+        aqui nenhum sítio se esconde atrás de outro. **Registro a diferença de mecanismo para que
+        ninguém cole o rótulo da A6 num achado que não é dela.**
+    onde_o_buraco_estava_de_verdade: >
+      🔴 Dentro do helper, **entre as sub-expressões da mesma linha**. A guarda de âncora é uma
+      **disjunção** `if (A || B) return null`, e as **duas** fixtures do `it` novo fazem **A e B
+      verdadeiros ao mesmo tempo**: `semAncora = { citacao, origem, fonte }` não tem `ancorado_em`
+      **nem** `expira_em`; `ancoraNaoString = { ...AGENDA_RITA, ancorado_em: <número>, expira_em:
+      <número> }` tem os **dois** como número. Com `A || B` sempre duplamente verdadeiro, apagar
+      **uma** das metades deixa a outra segurando o caso — e o teste fica **verde**.
+    tabela_das_mutacoes:
+      - { id: M7,  o_que: "guarda de âncora INTEIRA removida",                                   vitest: "**1 vermelho**",           tsc: "2× TS2322", leitura: "✅ é o vermelho que a story publica — e ele é real" }
+      - { id: M7a, o_que: "🔬 SÓ a metade `typeof o.ancorado_em !== \"string\"` removida",           vitest: "🔴 **2418 verdes, ZERO**", tsc: "1× TS2322", leitura: "órfã DE TESTE; o compilador ainda pega" }
+      - { id: M7b, o_que: "🔬 SÓ a metade `typeof o.expira_em !== \"string\"` removida",             vitest: "🔴 **2418 verdes, ZERO**", tsc: "1× TS2322", leitura: "órfã DE TESTE; o compilador ainda pega" }
+      - { id: M7c, o_que: "🔬 SÓ `ancorado_em` ENFRAQUECIDO — aceita número e coage p/ `string`",  vitest: "🔴 **2418 verdes, ZERO**", tsc: "🔴 **0 erros**", leitura: "🔴 **sobrevive às DUAS redes**" }
+      - { id: M7d, o_que: "🔬 SÓ `expira_em` ENFRAQUECIDO — aceita número e coage p/ `string`",    vitest: "🔴 **2418 verdes, ZERO**", tsc: "🔴 **0 erros**", leitura: "🔴 **sobrevive às DUAS redes, e tem consequência provada**" }
+      - { id: M11, o_que: "🔬 SÓ a metade `typeof o.citacao !== \"string\"` ENFRAQUECIDA (a IRMÃ do `!o.citacao.trim()`, que TEM vermelho)", vitest: "🔴 **2418 verdes, ZERO**", tsc: "🔴 **0 erros**", leitura: "🔴 nenhuma fixture da suíte inteira passa `citacao` não-`string`" }
+    consequencia_provada_nao_conjecturada: >
+      🔴 Sob **M7d** (suíte verde, `tsc` 0), rodei `generateHandoffSummary` com
+      `{ agenda_state: { citacao: "Terça", origem: "lead", …, ancorado_em: "2026-08-15T12:20:47.409Z",
+      expira_em: 1755431847409 } }` e a saída é:
+      `- Disponibilidade para visita: "Terça" (dia 2026-08-18) - nas palavras do lead, nao e visita marcada`.
+      **Um estado sem validade legível vai ao corretor.** E é exatamente a assimetria que o docstring
+      do próprio @dev nomeia: por `readAgendaState`, `Date.parse("1755431847409")` → `NaN` →
+      `isAgendaStateExpired` → `true` → `null`, **mascarado**; no `handoff`, que é o **único chamador
+      sem TTL a jusante**, não há máscara. O modo de falha do QA-3 do R1 sobrevive em forma mais fina.
+    a_contagem_certa: >
+      Não é *"3 guardas, 3 vermelhos"*. É **6 sub-expressões, 3 com vermelho próprio**:
+      `typeof citacao !== "string"` ❌ (M11) · `!citacao.trim()` ✅ (M5b, R1) ·
+      `origem !== "lead"` ✅ (M5, R1) · `typeof ancorado_em !== "string"` ❌ (M7a/M7c) ·
+      `typeof expira_em !== "string"` ❌ (M7b/M7d) · **a âncora como PAR** ✅ (M7).
+      A tabela da story **não mente** — ela mede a guarda, e a guarda passou de 0 para 1. Esta é uma
+      camada abaixo dela.
+    conserto: >
+      **Três linhas de fixture, zero linhas de produção.** Dissociar o que hoje vem colado:
+      trocar o `ancoraNaoString` (que tem os dois como número) por **dois** objetos —
+      `{ ...AGENDA_RITA, ancorado_em: 123 }` e `{ ...AGENDA_RITA, expira_em: 123 }` — e acrescentar
+      `{ ...AGENDA_RITA, citacao: 123 }`. Aí cada metade ganha vermelho próprio.
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # 19. Mutantes EQUIVALENTES e inertes — registrados para NÃO inflarem o achado
+  # ───────────────────────────────────────────────────────────────────────────
+  mutantes_equivalentes_e_inertes:
+    nota: >
+      Como na A8 da 87-11: um verde que é CORRETO não é órfão. Registro explicitamente para que
+      ninguém os some ao QA-6 e infle o achado.
+    casos:
+    - id: M13
+      o_que: "🔬 remover SÓ a sub-expressão `Array.isArray(raw)` da guarda de forma de `parseAgendaState` (pré-existente, não tocada por esta story)"
+      eu_medi: "2418 verdes, zero vermelhos"
+      classificacao: "🟢 **MUTANTE EQUIVALENTE — o verde está CERTO, não é buraco.**"
+      prova: >
+        `raw` vem de `collected_data[AGENDA_STATE_KEY]`, que é JSON parseado. Um array JSON só tem
+        índices numéricos, logo `o.citacao` é sempre `undefined`, logo
+        `typeof o.citacao !== "string"` já devolve `null` na guarda seguinte. **Não existe entrada
+        alcançável que distinga as duas versões.** É redundância defensiva legítima. **NÃO conta
+        como sub-expressão órfã.**
+    - id: M12
+      o_que: "🔬 remover SÓ o `.trim()` do achatamento em `formatDisponibilidade` (a vizinha do `.replace`)"
+      eu_medi: "2418 verdes, zero vermelhos"
+      classificacao: "🟡 **NÃO é equivalente, mas é INERTE — e o @dev DECLAROU isso no código, com o número.**"
+      prova: >
+        `replace(/\\s+/g," ")` colapsa a borda em UM espaço, então o `.trim()` ainda muda a saída
+        para citação com espaço nas bordas — o mutante não é equivalente. Mas o docstring diz, com a
+        medição: *"O `.trim()` é INERTE na população de hoje (0 de 1.877 mensagens têm espaço nas
+        bordas) — está aqui como fecho da normalização, não como conserto de caso vivo."*
+        **Minha medição CONFIRMA a declaração dele em vez de expor um buraco.** Verde honesto,
+        declarado onde o próximo leitor tropeça. **Não cobro.**
+    - id: M7a / M7b
+      nota: "🟡 Órfãs **de teste**, não de rede: o `tsc` ainda as pega (1× TS2322 cada). Só M7c/M7d/M11 escapam das duas. Contabilizo a diferença."
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # 20. Issues — estado no fim do round 2
+  # ───────────────────────────────────────────────────────────────────────────
+  issues_r2:
+    - id: QA-1
+      estado: "🟢 **RESOLVIDA**"
+      verificacao: "M2 e M2bis ⇒ `2 failed` (`AC2-(i)/Rita` + `citação MULTILINHA`), determinístico. Story linha 1075 e 1088-1097 publicam `2 failed`. Assimetria Rita×Ronaldo intacta."
+    - id: QA-2
+      estado: "🟢 **RESOLVIDA**"
+      verificacao: "Achado nº 7 recontado para **três** guardas de forma (story linhas 1119-1140), com os pares órfã×resgate para cada uma. Conferi que as linhas `:181`/`:182`/`:183` de `origin/main` correspondem às guardas nomeadas."
+    - id: QA-3
+      estado: "🟢 **RESOLVIDA** (e eu não a tinha exigido)"
+      verificacao: "M7 = 1 vermelho atribuído · M7-sem-o-`it`-novo = 2417 verdes · M7-órfã = 2411 verdes. Três sentidos."
+    - id: QA-4
+      estado: "🟢 **RESOLVIDA, e ampliada pelo @dev**"
+      verificacao: "Os 3 que cobrei (760→821, 991→1064, 738-741→799-803) + 2 que NÃO cobrei (1223→1298, 1251→1326), todos exatos por `awk`. E ele estava certo na disputa 955→958 / 1047→1048 — meu carimbo do R1 corrigido."
+    - id: QA-5
+      estado: "🟡 **CONTINUA ABERTA — fora do escopo do @qa**"
+      verificacao: "Rótulo falso da 87-12 no `epic-87-*.md`. Pedido ao @pm, inalterado desde o R1. Não é condição deste gate."
+    - id: QA-6
+      estado: "🆕 **NOVA — não bloqueante**"
+      severidade: low
+      categoria: tests
+      titulo: "As duas metades da guarda de âncora (e a metade `typeof` da guarda de citação) não têm vermelho próprio; duas dessas mutações passam também pelo `tsc`"
+      detalhe: >
+        A guarda de âncora é `if (A || B) return null` e as duas fixtures do `it` novo fazem A e B
+        verdadeiros JUNTOS. Remover a guarda inteira acende 1 vermelho (correto, e é o que a story
+        publica); remover ou enfraquecer **qualquer uma das metades** deixa **2418 verdes**, e as
+        versões enfraquecidas (M7c/M7d) passam pelo `tsc` com **0 erros**. Mesmo padrão em M11, na
+        metade `typeof o.citacao !== "string"`. **Provei a consequência:** sob M7d um estado com
+        `expira_em` numérico — sem validade legível — é **impresso ao corretor**, porque `handoff` é
+        o único chamador sem TTL a jusante.
+        **Não é defeito de comportamento; o código está correto como está escrito.** É risco de
+        regressão futura, na exata linha que esta story passou a consumir. E **não contradiz nenhuma
+        afirmação publicada**: a tabela da story mede a GUARDA, e a guarda de fato passou de 0 para 1.
+      recomendacao: >
+        **Não é condição deste gate.** Se o `handoff.test.ts` já estiver aberto para o PR, vale
+        gastar as 3 linhas agora (dissociar `ancoraNaoString` em dois objetos + um `citacao: 123`).
+        Caso contrário, anexar ao `W1-2d` junto com o conserto do `expira_em: "y"` de
+        `agenda-state.test.ts` — que o @dev já roteou para lá e que eu endosso.
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # 21. Higiene do round 2
+  # ───────────────────────────────────────────────────────────────────────────
+  higiene_r2:
+    mutacoes_aplicadas: "15 (M7, M7ctrl, M7-órfã, M7a, M7b, M7c, M7d, M8, M9, M10, M11, M12, M13, M2, M2bis) + 2 baselines + 1 demo de consequência"
+    metodo: "harness próprio em `scratchpad/qa8712r2/mut.sh` — snapshot dos 5 arquivos mutáveis → aplica em Python (com `assert` de contagem de ocorrência) → `npx vitest run` da **raiz, suíte inteira** → colhe → restaura → `diff` de `md5`. Nenhuma execução por arquivo isolado para contagem de vermelho."
+    arvore_restaurada: "✅ `md5` dos 6 arquivos idêntico ao snapshot pré-QA-R2; `diff` limpo"
+    arquivos_temporarios: "✅ 1 arquivo de demonstração criado e removido; `git status -- packages/` vazio"
+    suite_final: "✅ 188 arquivos · 2418 passed · 6 expected fail"
+    tsc_final: "✅ ai = 0 · web = 0"
+    lint_final: "✅ 0 errors / 23 warnings"
+    prompts_check: "✅ verde"
+    escrita_em_banco: "NENHUMA. Nesta rodada, nem `SELECT`."
+    commits_ou_push: "NENHUM. @qa não commita."
+    prs_abertos: "#427 e #428 NÃO avaliados, NÃO trazidos para a árvore."
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # 22. Decisão do round 2
+  # ───────────────────────────────────────────────────────────────────────────
+  decisao_r2:
+    gate: PASS
+    gate_anterior: CONCERNS
+    deploy_do_bloco_A: AUTORIZADO
+    justificativa: >
+      **CONCERNS → PASS.** As quatro ressalvas do round 1 caíram, todas fechadas por medição minha e
+      não por relato: a contagem da M2 (QA-1), o Achado nº 7 recontado (QA-2), o vermelho atribuído
+      da guarda de âncora nos três sentidos (QA-3) e os ponteiros do docstring (QA-4) — os três que
+      cobrei, mais dois que não cobrei, mais a disputa que o @dev ganhou. **Cada número que ele
+      publicou nesta rodada bate com o meu, inclusive os dois controles.** Não há defeito de
+      comportamento; a superfície de produção é uma palavra (`export`), uma linha trocada e uma
+      função de seis linhas; as cinco réguas estão verdes medidas por mim (2418/2411, `tsc` 0/0,
+      lint 0 errors, `prompts:check` verde); e o docstring que vai a produção está exato nos doze
+      ponteiros que conferi por `awk`.
+      **O QA-6 não segura o gate.** Não é defeito, não contradiz nada publicado, e é uma camada
+      abaixo de um item que o próprio @dev já roteou para o `W1-2d`. Segurar por uma profundidade que
+      ninguém alegou ter coberto seria mover a trave — ainda mais tendo eu autorizado o deploy no R1
+      com um registro de evidência estritamente pior que o de hoje.
+    antes_do_PR: "**NADA É CONDIÇÃO.** Opcional e barato: as 3 linhas do QA-6, se o `handoff.test.ts` já estiver aberto."
+    depois_do_PR:
+      - "@devops: PR #429 a partir de `199a7a84`, **sem levar #427 nem #428**. Marco zero da janela de 24 h."
+      - "@qa: AC8 em 24 h contra o baseline `nao_informado 14 · com_citacao 0`. **Registrar inclusive se inconclusivo** — e ele será (`n < 5` por desenho)."
+      - "@data-engineer: bloco B só depois da janela, e com os 56 `id` reconferidos."
+      - "@pm: QA-5 (rótulo falso no mapa do epic) — quarto documento em que atravessa sem execução."
+      - "`W1-2d`: QA-6 + o conserto do `expira_em: \"y\"` em `agenda-state.test.ts`."
+    proxima_etapa: "@devops *push (bloco A)"
+
+assinatura_r2: "@qa (Quinn) · 2026-08-16 · round 2 · régua recalibrada antes de mutar · 15 mutações + 2 baselines · árvore restaurada byte a byte · zero acesso a banco"
