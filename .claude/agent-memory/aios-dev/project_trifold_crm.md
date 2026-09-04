@@ -19,4 +19,10 @@ Trifold CRM is the project hosted at /Users/marcos/trifold-crm. The Next.js web 
 - Brindes module: `brindes_destinatarios.cliente_id` (migration 042) added as nullable FK with `ON DELETE SET NULL` and partial index `WHERE cliente_id IS NOT NULL`
 - CI (`.github/workflows/ci.yml`) roda exatamente três gates, todos da raiz: `pnpm type-check` (turbo), `pnpm lint` (turbo) e `pnpm test` (vitest run). Reproduzir os três antes de dar uma story por pronta.
 - `tsc --noEmit` em `packages/web` estoura o heap default do Node (~2GB) — rodar com `NODE_OPTIONS="--max-old-space-size=8192"`, ou via `turbo type-check`, que já passa. Baseline de lint: 0 erros / 30 warnings pré-existentes.
+- **Forçar cache nos gates: `TURBO_FORCE=true pnpm type-check` / `pnpm lint`.** Duas formas parecidas
+  saem **exit 1 sem que haja defeito nenhum**, e é exatamente o falso vermelho que se confunde com
+  reprovação: (a) `pnpm test --force` → `CACError: Unknown option --force`, porque o `test` da raiz é
+  `vitest run` DIRETO, sem turbo — não tem cache para forçar, rode limpo; (b) `pnpm type-check -- --force`
+  → `error TS5093`, porque o `--` entrega o `--force` ao `tsc`, não ao turbo. Confira `Cached: 0 cached`
+  na saída do turbo como prova de que o cache foi realmente ignorado. Ver [[validacao-exit-code]].
 - Projetos fora do workspace pnpm: ver [[landing-pages-runtime]]

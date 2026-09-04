@@ -24,5 +24,17 @@ mantendo ambos os lados → rodar o gate **depois** do merge, não antes (a base
 sem `--force`. Depois do push, confirme que o preview ficou `READY` **com SHA igual ao
 `headRefOid`** do PR: é isso que prova que a falha anterior era herança da base e não do PR.
 
+**Se a árvore principal estiver suja, faça o merge em worktree destacado.** Memória de agente
+não commitada em `.claude/agent-memory/aios-*/MEMORY.md` **bloqueia o `git checkout`** da branch do
+PR (o mesmo arquivo está modificado localmente E difere entre os branches). Não use `stash`,
+`clean` nem `checkout -f`: `git worktree add <scratchpad>/wt-<pr> <branch>` → `git merge
+origin/main` lá dentro → `git push` → `git worktree remove`. A árvore principal fica **byte a byte
+como estava** (confira com `git status --short` antes e depois), e as memórias seguem intactas para
+o `chore(memory)` posterior. Medido no PR #570 em 2026-09-04.
+
+**Prova de que o merge é puro, sem edição manual:** `git rev-parse HEAD^{tree}` do commit de merge
+tem que ser **igual** à árvore que `git merge-tree --write-tree <base> <branch>` calcula sozinho.
+Se bater, não houve evil merge — e vale mais que ler o diff.
+
 Relacionado: [[force-push-vs-merge-main]] (que trata do caso oposto — nunca sobrescrever `main`),
 [[quality-gate-signals]], [[status-story-via-branch-pr]].

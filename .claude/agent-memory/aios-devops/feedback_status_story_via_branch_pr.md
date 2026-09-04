@@ -20,8 +20,15 @@ nenhum check de PR, e some do rastro de revisão. O repo já tinha a convenção
   `git checkout -b docs/<story>-done` → editar a story → PR → squash-merge.
 - O status `Done` do repo é `**Status:** Done` na linha 3, com o parentético de evidência:
   SHA do squash, `uid` do deployment, `target=production`, `readyState=READY` e horário.
-- **Não apagar a branch remota** depois do merge — o repo preserva branch mergeada (103 remotas em
-  2026-08-24), então `gh pr merge --squash` **sem** `--delete-branch`.
+- **Não apagar a branch remota** depois do merge: `gh pr merge --squash` **sem** `--delete-branch`.
+  **Correção de 2026-09-04 — isso é instrução do Marcos, NÃO convenção observável do repo.**
+  Eu vinha afirmando "o repo preserva branch mergeada"; medi e é falso: dos **últimos 60 PRs
+  mergeados**, 26 têm a branch remota **viva** e **34 foram apagadas**, e a mistura vale até no
+  intervalo recente (#568 e #564 apagados entre #569–#575 vivos; #547–#559 apagados em bloco).
+  Consequência prática: se alguém pedir "limpe as branches já mergeadas", **não** responda "a
+  convenção do repo é preservar" — responda que não há convenção medível, que a instrução vigente
+  é preservar, e **não apague sem confirmação explícita** (é operação irreversível no remoto e a
+  autorização para *mergear* não cobre *apagar*). 141 remotas em 2026-09-04.
 - Se houver memória de agente para gravar na mesma leva, **empacote no mesmo PR** da virada de
   status em vez de abrir um terceiro PR: o Marcos prefere um PR agrupado a vários pequenos quando o
   escopo é o mesmo.

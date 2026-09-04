@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
-// Run with: node --env-file=packages/web/.env.local packages/web/scripts/pipeline-diag.mjs
+// Run with: node --env-file=packages/web/.env.producao.local packages/web/scripts/pipeline-diag.mjs   (produção)
+// Contra o banco de teste, troque por --env-file=packages/web/.env.development
 
 const supa = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,

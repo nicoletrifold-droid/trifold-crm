@@ -48,3 +48,25 @@ resolver o bug de deploy.
   em {data}" com evidência numérica, "Decisão de desenho" explicando alternativas descartadas, ACs
   em checklist com nome curto + descrição, Tasks/Subtasks referenciando ACs, Dev Notes explicando o
   "porquê" de decisões não óbvias.
+
+## Story 900-69 (Draft, 2026-09-04) — scripts do Sienge com `.env.local` morto
+- Dois scripts nascidos DEPOIS da 900-3b (`scripts/sienge-recto-liquido-check.ts`,
+  `scripts/sienge-conciliar-extrato-pdf.ts`, ambos da Story 75-370) sobraram fora da migração dos
+  12 carregadores ad hoc para `resolverAmbiente()` — continuavam com `loadEnv(...
+  "../packages/web/.env.local")` literal, arquivo que não existe mais.
+- **Decisão travada (Opção 1, não delegada ao @dev):** trocar o literal por
+  `.env.producao.local`, SEM migrar para `resolverAmbiente()` — os dois scripts são só-leitura e
+  só fazem sentido contra produção por desenho (não há credencial de Sienge de teste em lugar
+  nenhum do repo), então as guardas de `resolverAmbiente()` (TRIFOLD_ENV/ALLOW_PROD) não
+  protegeriam nada aqui. Gatilho para reabrir a decisão: se algum dos dois ganhar um caminho de
+  escrita no Supabase.
+- **Achado:** `sienge-conciliar-extrato-pdf.ts` não usa Supabase (nenhum `createClient`), apesar
+  do cabeçalho dizer que usa — cabeçalho copiado do script irmão, não corrigido nesta story
+  (é prosa, não caminho quebrado).
+- **Achado incluído no escopo (mesmo defeito, fix trivial):**
+  `packages/web/scripts/pipeline-diag.mjs:2` também cita `.env.local` no comentário de uso, e
+  `node --env-file=<inexistente>` **recusa iniciar** (`not found`) — não é só comentário morto,
+  é comando que quebra. Entrou como AC5.
+- **Achado fora do escopo:** `scripts/dump-agent-prompts.ts` (linhas 29/81/86) ainda cita
+  `.env.local` em prosa/JSDoc, mas o código (`loadCredentials()`) já usa `resolverAmbiente()` de
+  fato (migrado na 900-3b) — é só comentário desatualizado, não caminho quebrado.

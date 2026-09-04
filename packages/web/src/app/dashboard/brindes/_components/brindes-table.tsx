@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { Plus, Upload, CalendarDays, ChevronLeft, ChevronRight, Pencil, Trash2, Printer, Package } from "lucide-react"
 import { DateSelector } from "./date-selector"
@@ -11,6 +11,7 @@ import { DatasModal } from "./datas-modal"
 import { TiposModal } from "./tipos-modal"
 import { ImportModal } from "./import-modal"
 import { PrintModal } from "./print-modal"
+import { buildTamanhoOptions } from "./brinde-tamanho"
 import type { BrindeTipo, DataComemorativa, Destinatario, Entrega, EntregaStatus } from "./types"
 import { ScrollableX } from "@web/components/ui/scrollable-x"
 
@@ -22,7 +23,7 @@ interface BrindesTableProps {
 
 const TIPO_LABEL: Record<string, string> = { mae: "Mãe", pai: "Pai", outro: "Outro" }
 
-const EMPTY_FILTERS: BrindesFilters = { obra_nome: "", tipo: "", nome: "", cidade: "", estado: "" }
+const EMPTY_FILTERS: BrindesFilters = { obra_nome: "", tipo: "", nome: "", cidade: "", estado: "", tamanho: "" }
 
 export function BrindesTable({ datas, tipos: initialTipos, obraOptions }: BrindesTableProps) {
   const [tipos, setTipos] = useState(initialTipos)
@@ -48,6 +49,10 @@ export function BrindesTable({ datas, tipos: initialTipos, obraOptions }: Brinde
   const [deleteConfirm, setDeleteConfirm] = useState<Destinatario | null>(null)
   const [deleting, setDeleting] = useState(false)
 
+  // Story 75-372: opções do filtro de tamanho vêm do catálogo em estado (`tipos`), que
+  // `fetchTipos` reatualiza ao fechar o modal "Gerenciar Tipos" — sem nova chamada.
+  const tamanhoOptions = useMemo(() => buildTamanhoOptions(tipos), [tipos])
+
   const fetchTipos = useCallback(async () => {
     const res = await fetch("/api/brindes/tipos")
     if (res.ok) {
@@ -65,6 +70,7 @@ export function BrindesTable({ datas, tipos: initialTipos, obraOptions }: Brinde
       if (filters.nome) params.set("nome", filters.nome)
       if (filters.cidade) params.set("cidade", filters.cidade)
       if (filters.estado) params.set("estado", filters.estado)
+      if (filters.tamanho) params.set("tamanho", filters.tamanho)
 
       const res = await fetch(`/api/brindes/destinatarios?${params}`)
       if (res.ok) {
@@ -164,7 +170,7 @@ export function BrindesTable({ datas, tipos: initialTipos, obraOptions }: Brinde
       </div>
 
       {/* Filters */}
-      <BrindesFilterBar filters={filters} onFiltersChange={setFilters} obraOptions={obraOptions} />
+      <BrindesFilterBar filters={filters} onFiltersChange={setFilters} obraOptions={obraOptions} tamanhoOptions={tamanhoOptions} />
 
       {/* Table */}
       <div className="rounded-lg bg-white shadow-sm dark:bg-stone-900 dark:ring-1 dark:ring-stone-800">

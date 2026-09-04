@@ -25,6 +25,12 @@ export interface Destinatario {
   cliente_id: string | null
   created_at: string
   updated_at: string
+  /**
+   * Story 75-372: embed do catálogo trazido por `brinde_tipo_id` na listagem
+   * (`GET /api/brindes/destinatarios`). Mesmo shape de `Entrega.brindes_tipos`.
+   * `null` quando o destinatário não tem brinde definido no cadastro.
+   */
+  brindes_tipos: { nome: string; tamanho: string | null; cor: string | null } | null
 }
 
 export type EntregaStatus = "pendente" | "entregue" | "nao_encontrado"
