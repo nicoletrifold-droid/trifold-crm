@@ -1,7 +1,7 @@
 # SM Agent Memory — River
 
 ## Memory Index (structured files)
-- [Epic 900 — SaaS Multi-Tenant / Isolamento](project_epic900.md) — 900-1..900-15; hotfix 900-15 (2026-08-24): docs/ fora do build Vercel travava produção; codegen preserva lista derivada de snapshot
+- [Epic 900 — SaaS Multi-Tenant / Isolamento](project_epic900.md) — 900-1..900-68; 900-69 (Draft 2026-09-04): scripts Sienge com .env.local morto, decisão trocar literal (não migrar resolverAmbiente)
 - [Epic 51 — Google Ads Marketing API](project_epic51.md) — 5 stories criadas; PM review aplicado; decisões técnicas cravadas; pronto para @po validar
 - [Epic 52 — Agente CRM Read-Only](project_epic52.md) — 52-1/52-4 em Review (QA CONCERNS, runtime pendente); 52-2 v0.5 Ready (contrato sincronizado: funil=RPC p_days, log_pii_access 5 args, NULL spend=sem midia)
 - [Epic 75 — Cron claim/anti-duplicata](project_epic75_cron_claim.md) — padrão claim-run.ts (75-352): RUN-only vs RUN+item, fail-open do helper vs fail-closed do chamador, intervalo mínimo escalado
@@ -70,6 +70,7 @@
 - Story 75-208 (Draft 2026-07-29): Meta Ads — atribuição e nomenclatura, follow-up do fix `leads_meta` (commit 97bc71d0, soma leads formulário + messaging_conversations_started). 3 itens: (1) renomear label "CPL"→"Custo por resultado" em campaign-funnel.tsx/campaign-detail-client.tsx + campaigns-meta-client.tsx (achado extra: mesmo dado, mesmo label desalinhado); achado documentado (AC1.3, não obrigatório): adsets/creatives/placement calculam cpl só com insight.leads, sem somar mensagens — decisão de @po se entra no escopo. (2) incluir broker_sponsored na visão Ads — bloqueado por decisão de @po (AC2.1: card separado vs inclusão condicional por utm vs não incluir), maioria sem atribuição de campanha (2/14 com utm, 0/14 campaign_id). (3) persistir campaign_id no metadata CTWA via buildCtwaMetadata() (ctwa-metadata.ts) — achado crítico: usar meta_campaigns.meta_campaign_id (não o id UUID interno), pois dual-join dos endpoints compara metadata->>campaign_id contra meta_campaign_id. Sem migration. Sem CodeRabbit (disabled, padrão do projeto).
 
 ## Story Numbering Tracker
+- Epic 900 (SaaS/ambiente): última é 900-69 (Draft 2026-09-04, scripts Sienge). Próxima livre: 900-70.
 - Epic 75 (CRM core): numeração alta em uso — 75-371 (pipeline gate/default único, InReview) é a última antes de 75-372 (criada 2026-09-04 — Brindes: tamanho/quantidade/filtro no relatório impresso, Draft, ticket Samara). Próxima livre: 75-373. (Nota: 75-208 e vizinhas são de um lote anterior, já ultrapassado — sempre confirmar com `ls docs/stories/` antes de numerar.)
 - Next story after 21.3: 21.4 or novo epic
 - Epic 20: stories 20-1a, 20-1b, 20-2, 20-3 (Portal do Cliente)

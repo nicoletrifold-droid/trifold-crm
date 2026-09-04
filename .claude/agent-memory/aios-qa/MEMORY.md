@@ -75,7 +75,7 @@
 - [Webhook do WhatsApp — armadilhas de QA](project_webhook_whatsapp_qa_patterns.md) — texto sintético vira turno do lead na Nicole; trigger 038 já cuida de last_message_at; snapshot é de prod; gate:tenancy suja a árvore
 - [Baseline do trifold-design-system](project_trifold_design_system_baseline.md) — `.dc.html` untracked de propósito: baseline é a produção via `curl`, não o git; sem lint/typecheck; falso positivo de `{{ }}`
 - [Relatório impresso de brindes](project_relatorio_impresso_brindes.md) — único `document.write` da app: XSS same-origin real (fechado na 75-373, 2 furos medidos); A4 útil = 673,5px (viewport 734, não 794)
-- [.env.local desta máquina aponta produção](project_env_local_desta_maquina_aponta_producao.md) — existe, com service-role de prod, e vence tudo no Next; `.env.development` não existe e `build:teste` sai 1
+- [Layout de env deste checkout](project_layout_de_env_deste_checkout.md) — RESOLVIDO 04/09: `.env.local` do web morreu (é `.env.producao.local`); o `.env.local` da RAIZ é outro arquivo (só `VERCEL_OIDC_TOKEN`)
 
 ## Método de QA
 
@@ -83,3 +83,5 @@
 - [A ponte do client não provada](feedback_ponte_do_client_nao_provada.md) — teste do `.eq()` + medição por URL crua deixam o supabase-js sem prova; feche capturando a URL real com `fetch` falso
 - [Mutação de alcance acrescenta sítio](feedback_mutacao_de_alcance_acrescenta_sitio.md) — remover escape prova presença; só ACRESCENTAR sítio novo prova alcance; `startsWith("marcador(")` nunca prova suficiência
 - [Réguas declarativas (AC10 do host nu)](project_reguas_declarativas_ac10.md) — colisão entre PRs deixa main vermelha sem culpa de PR; medir contagem mutando o declarado, não replicando o scanner; `TURBO_FORCE=true`
+- [Sentinela de exit prova carregamento](feedback_sentinela_de_exit_prova_carregamento.md) — `process.on('exit')` via `NODE_OPTIONS` mede o arquivo REAL; `tsx` imprime 3 linhas e só uma vale
+- [scripts/ da raiz sem gate estático](project_scripts_da_raiz_sem_gate_estatico.md) — nem `tsc` nem eslint alcançam `scripts/*.ts`; "gates verdes" não cobrem nada ali

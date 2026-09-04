@@ -6,7 +6,11 @@
   migrou 12 carregadores dotenv ad hoc para `scripts/lib/db-env.ts`).
 - **Story:** 900-69 — próximo número livre da faixa 900 (confirmado via `ls docs/stories/`;
   último era `900-68`, Done).
-- **Status:** Ready for Review
+- **Status:** Done (PR #575 squash-mergeado em `main` em 2026-09-04 às 14:47Z — `008a0b47`; a árvore
+  do squash é byte-idêntica à da branch, `008a0b47^{tree}` = `c66d60d6^{tree}` = `fc02d899`. A CI de
+  `main` nesse commit fechou `success`: `type-check · lint · test` SUCCESS e `gate de tenancy
+  (não-bloqueante)` SUCCESS, run `33885740680`; `migrations deste PR` sai `skipped` em evento de
+  push, como sempre)
 - **Tipo:** Bug fix (dívida técnica, dois scripts sobraram fora da migração da `900-3b` porque
   nasceram depois dela, na Story `75-370`).
 - **Priority:** P3 — não bloqueia ninguém. Os dois scripts são de uso manual (conciliação
@@ -427,6 +431,8 @@ commit.
 |---|---|---|
 | 2026-09-04 | @sm (River) | Criação da story — Draft |
 | 2026-09-04 | @dev (Dex) | Implementação dos ACs 1-6 (troca do literal em 2 scripts + 2 comentários). AC2 medido antes/depois (5 → 3 variáveis). Gates: lint, type-check e `pnpm test` em exit 0. Status Draft → Ready for Review. |
+| 2026-09-04 | @qa (Quinn) | Gate **PASS**, rodada 1 — 7/7 checks, 6 ACs medidos com controle negativo próprio no mesmo `__dirname`. Zero chamada à API do Sienge. 3 ressalvas `low` (DOC-001, MNT-001, DOC-002), nenhuma bloqueante. |
+| 2026-09-04 | @devops (Gage) | PR #575 aberto com o `corpo_do_pr` do gate, CI verde (7/7 checks, `mergeStateStatus: CLEAN`) e squash-mergeado em `008a0b47`. CI de `main` confirmada verde (run `33885740680`). Status Ready for Review → **Done**. |
 
 ---
 
