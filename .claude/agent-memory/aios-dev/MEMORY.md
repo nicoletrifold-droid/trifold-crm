@@ -15,7 +15,8 @@
 - [Carrasco declarado é afirmação testável](feedback_carrasco_declarado_e_afirmacao.md) — rode a mutação antes de escrever a frase; `try/catch` e `if (error)` são metades distintas
 - [Webhook WhatsApp: texto sintético vira fala do lead](project_webhook_whatsapp_texto_sintetico.md) — o `text` montado pelo webhook é enviado ao cliente pela Nicole; duas flags, não uma
 - [Prova de filtro e de layout](feedback_prova_de_filtro_e_de_layout.md) — `.eq` em embed sem `!inner` não filtra nada; A4 se mede, não se olha
-- [Sem ambiente de teste neste checkout](project_env_sem_ambiente_de_teste.md) — `packages/web/.env.local` aponta para PRODUÇÃO, contra o que o CLAUDE.md diz
+- [Layout de env deste checkout](project_env_sem_ambiente_de_teste.md) — `packages/web/.env.local` morreu (virou `.env.producao.local`); o `.env.local` da raiz é outro arquivo
+- [Credencial de Sienge só existe em produção](project_credencial_sienge_so_producao.md) — sem sandbox, cota de 1.000/dia; prove carregamento pela lista de variáveis faltando, não por chamada
 - [Nota de dívida calibrada](feedback_nota_de_divida_calibrada.md) — mecânica sem consequência+pré-condições subdimensiona; meça o alcance antes de dizer "fora de alcance"
 - [Réguas declarativas de tenancy](project_reguas_declarativas_tenancy.md) — host nu em qualquer arquivo de `packages/web/src` deixa main vermelha; declarar com motivo, nunca afrouxar
 - [Fail-closed muda de polaridade](feedback_fail_closed_muda_de_polaridade.md) — o `""` do recorte reprova `toContain` mas APROVA `toEqual([])`; sinal de vida não é opcional
