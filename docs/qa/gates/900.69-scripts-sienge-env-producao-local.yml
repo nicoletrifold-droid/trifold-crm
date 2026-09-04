@@ -1,0 +1,348 @@
+schema: 1
+story: "900-69"
+story_title: "Scripts do Sienge apontam para packages/web/.env.local, que não existe mais"
+gate: PASS
+status_reason: >-
+  Os 6 ACs se sustentam em medição própria, incluindo a prova central do AC2 (5 → 3 variáveis
+  faltando) com controle negativo rodado a partir da versão de `origin/main` no mesmo `__dirname`.
+  O escopo é o declarado — 3 arquivos, +7/−6, nenhuma linha de lógica, nenhum arquivo de env
+  tocado ou commitado — e a varredura do repositório não encontrou nenhum outro leitor vivo de
+  `packages/web/.env.local`. As 3 ressalvas são de registro/dívida pré-existente, severidade low.
+reviewer: "Quinn (Test Architect)"
+rodadas: 1
+updated: "2026-09-04T14:35:00Z"
+branch: "fix/900-69-scripts-sienge-env-producao-local"
+base: "a839de64"
+commits_revisados: ["8f2b4b2b", "11cefc9d"]
+po_pulado: >-
+  Sim, deliberadamente (fluxo mínimo @dev → @qa → @devops para correção XS; a decisão de desenho
+  veio fechada do @sm). Não reabri a decisão de não migrar para `resolverAmbiente()` — e registro
+  que o gatilho documentado para reabri-la (algum dos dois scripts ganhar caminho de ESCRITA no
+  Supabase) continua não acionado: nenhum dos dois tem `insert`/`update`/`upsert`/`delete`.
+
+restricao_de_custo_respeitada:
+  regra: "Zero chamada à API do Sienge (cota de 1.000/dia, já esteve em 84%)."
+  como_garanti: >-
+    Antes de rodar qualquer script, medi `grep -c '^SIENGE' packages/web/.env.producao.local` → `0`
+    e `env | grep -cE '^(SIENGE_|NEXT_PUBLIC_SUPABASE_URL|SUPABASE_SERVICE_ROLE_KEY)'` → `0`
+    (shell sem contaminação). Com `SIENGE_*` ausente, os dois scripts saem no filtro de `REQUIRED`,
+    que é anterior à construção do `baseUrl` e a qualquer `fetch`. Nenhuma requisição partiu.
+  producao: "Nada escrito em produção. O único banco lido de ponta a ponta foi o de TESTE."
+
+sete_checks:
+  - id: 1
+    check: "Code review — padrões, legibilidade, manutenibilidade"
+    resultado: PASS
+    nota: >-
+      Troca de literal em chamada preexistente, mais reescrita de 2 comentários. `loadEnv` intocada
+      (corpo byte-idêntico entre os dois scripts, sha256 `c39f38dc…`), `REQUIRED` intocado
+      (`diff` exit 0 nos dois arquivos), chamada na mesma linha (72 e 71) e arquivos com o mesmo
+      número de linhas de antes (376 e 465). Duplicação do `loadEnv` entre os dois scripts segue
+      lá — declarada fora de escopo pela story, e concordo: seria refactor, não fix.
+  - id: 2
+    check: "Testes unitários — cobertura adequada, todos passando"
+    resultado: PASS
+    nota: >-
+      Não há (nem cabe) teste unitário para estes 3 arquivos; a verificação é operacional e foi
+      executada. Suíte completa reexecutada fresca: 327 arquivos, 4633 passed | 6 expected fail,
+      EXIT=0 — bate exatamente com o relatado pelo @dev. Subconjunto `scripts/` (o único com
+      relação concebível com a mudança, inclui `gitignore-env.test.ts` e `db-env.test.ts`):
+      8 arquivos, 144 testes, EXIT=0.
+  - id: 3
+    check: "Acceptance criteria — todos atendidos"
+    resultado: PASS
+    nota: "AC1 a AC6 medidos um a um — ver `evidencia_reproduzida_pelo_qa`."
+  - id: 4
+    check: "Sem regressões"
+    resultado: PASS
+    nota: >-
+      Ninguém importa os 3 arquivos (grep no repo: só menções em prosa/JSDoc e num gate antigo).
+      `sienge-conciliar-extrato-pdf.ts` mantém a mesma mensagem residual de 3 variáveis (EXIT=1),
+      como o AC3 previa. `pipeline-diag.mjs` roda de ponta a ponta contra o banco de TESTE, EXIT=0.
+  - id: 5
+    check: "Performance"
+    resultado: N/A
+    nota: "Uma leitura de arquivo local a mais/menos em script manual. Sem dimensão de performance."
+  - id: 6
+    check: "Segurança — básico OWASP"
+    resultado: PASS
+    nota: >-
+      Nenhum segredo entra no repositório: `git ls-files` só rastreia `.env.example` e
+      `packages/web/.env.development.example`; `git check-ignore -v --no-index` confirma que
+      `packages/web/.env.producao.local`, `.env.development`, `.env.local`, `.env.producao` e
+      `.env.teste` estão todos ignorados; e o teste `scripts/gitignore-env.test.ts` (que guarda
+      isso) passou. A mudança não amplia superfície: o script já lia um arquivo de produção com
+      service-role no mesmo ponto do fluxo — mudou o nome do arquivo, não o alcance. Nenhum valor
+      de env foi impresso durante esta revisão (só nomes de chave e booleanos).
+  - id: 7
+    check: "Documentação atualizada se necessário"
+    resultado: PASS
+    nota: >-
+      `CLAUDE.md` já descrevia o mundo pós-rename; `scripts/README.md` mantém, de propósito, as
+      instruções de reversão citando `.env.local`. Duas ressalvas de registro em `top_issues`.
+
+evidencia_reproduzida_pelo_qa:
+  escopo_do_diff:
+    comando: "git diff origin/main...HEAD --shortstat -- scripts packages"
+    medido: "3 files changed, 7 insertions(+), 6 deletions(-)"
+    por_arquivo:
+      "packages/web/scripts/pipeline-diag.mjs": "+2 −1"
+      "scripts/sienge-conciliar-extrato-pdf.ts": "+1 −1"
+      "scripts/sienge-recto-liquido-check.ts": "+4 −4"
+    commits: >-
+      `8f2b4b2b` = os 3 arquivos + a story (4 arquivos). `11cefc9d` = só memória do @dev
+      (3 arquivos). A separação que o @dev prometeu se confirma: o commit do fix não tem memória
+      e o commit de memória não tem código.
+  ac1:
+    linha_da_chamada: "antes 72 / depois 72 (recto-liquido); antes 71 / depois 71 (conciliar)"
+    tamanho_dos_arquivos: "376 → 376 e 465 → 465 linhas"
+    required_intocado: "diff do bloco `const REQUIRED` antes/depois → EXIT=0 nos dois arquivos"
+    confere: true
+  ac2:
+    seguranca: "grep -c '^SIENGE' packages/web/.env.producao.local → 0 (script para antes da rede)"
+    depois_HEAD:
+      comando: "npx tsx scripts/sienge-recto-liquido-check.ts"
+      saida: "Faltam variáveis de ambiente: SIENGE_SUBDOMAIN, SIENGE_USERNAME, SIENGE_PASSWORD"
+      exit: 1
+    antes_controle_negativo:
+      como: >-
+        `git show origin/main:scripts/sienge-recto-liquido-check.ts > scripts/__qa900-69-baseline.ts`
+        — a versão pré-fix rodada de dentro de `scripts/`, para ter o MESMO `__dirname` (a única
+        forma de o caminho relativo significar a mesma coisa). Conferido que o arquivo temporário
+        continha `.env.local` na linha 72 antes de rodar.
+      saida: >-
+        Faltam variáveis de ambiente: SIENGE_SUBDOMAIN, SIENGE_USERNAME, SIENGE_PASSWORD,
+        NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+      exit: 1
+    o_que_isso_prova: >-
+      5 → 3 é mudança de FORMA da saída, não de contagem de chamadas: as duas variáveis do Supabase
+      saíram da lista de faltantes, o que só acontece se o arquivo foi encontrado E as duas chaves
+      têm valor não-vazio (o filtro é `!process.env[k]`, então valor vazio reprovaria igual).
+      Contaminação de shell descartada antes: as 5 variáveis não existiam no ambiente.
+    confere: true
+  ac3:
+    prova_a_identidade_bytes:
+      loadEnv: >-
+        Corpo da função extraído dos dois arquivos e comparado; normalizei APENAS a anotação de
+        retorno (`: boolean`, presente num e não no outro) — sha256 igual nos dois:
+        `c39f38dcd28673b706dc2281327f3e823b2e4239c5a8532e4d656ba3bd6a4e72`.
+      linha_da_chamada: >-
+        `loadEnv(resolve(__dirname, "../packages/web/.env.producao.local"))` byte-idêntica nos dois
+        arquivos (sha256 `036aa2586a64621abed91144fbe8c98fd0dcb35562b549dceff5cc3e55d0fff0`), e os
+        dois moram em `scripts/` ⇒ mesmo `__dirname`. Logo a medição do AC2 transfere para este
+        script sem hipótese adicional.
+    prova_b_runtime_sem_copia:
+      tecnica: >-
+        Sentinela via `NODE_OPTIONS="--import file://…/sentinel.mjs"` registrando
+        `process.on('exit', …)` — roda contra o ARQUIVO REAL, não uma cópia nem uma sonda
+        redigitada, e o handler dispara mesmo com `process.exit(1)`.
+      medido_HEAD: "SENTINEL SUPA_URL_SET=true SRK_SET=true (no processo que emitiu a mensagem do script)"
+      controle_negativo: "mesma sentinela na versão de origin/main → SUPA_URL_SET=false SRK_SET=false"
+      armadilha_registrada: >-
+        O `tsx` gera processos filhos: a sentinela imprime 3 linhas por execução e só uma é do
+        processo que rodou o script. Quem ler só a última conclui `false` e erra o veredito.
+    test_r: "test -r packages/web/.env.producao.local → EXIT=0"
+    confere: true
+  ac4:
+    metodo: >-
+      Comentário das linhas 69-71 extraído antes (de `origin/main`) e depois, desdobrado em linha
+      única e com o nome do arquivo mascarado. As duas strings são IDÊNTICAS ⇒ só a quebra de linha
+      e o nome do arquivo mudaram; a explicação da causa raiz ("variáveis marcadas como 'sensitive'
+      na Vercel voltam vazias no `env pull` (é o caso da service role key), e o que já veio do
+      --env-file não é sobrescrito") está preservada palavra por palavra.
+    confere: true
+  ac5:
+    boot_dos_caminhos:
+      "node --env-file=packages/web/.env.producao.local": "EXIT=0"
+      "node --env-file=packages/web/.env.development": "EXIT=0"
+      "node --env-file=packages/web/.env.local (antigo)": "node: packages/web/.env.local: not found — EXIT=9"
+    alternativa_de_teste_e_real: >-
+      `.env.development` tem as DUAS variáveis que o script exige, com valor não-vazio
+      (URL_SET=true SRK_SET=true) — o comentário não documenta comando aspiracional.
+    ponta_a_ponta: "node --env-file=packages/web/.env.development packages/web/scripts/pipeline-diag.mjs → EXIT=0, 99 linhas, banco de TESTE"
+    confere: true
+  ac6:
+    outras_linhas: "Nenhuma. O diff dos 3 arquivos é integralmente atribuível aos ACs 1, 4 e 5."
+    arquivos_de_env: >-
+      Nenhum tocado e nenhum commitado. `git diff origin/main...HEAD --name-only | grep env`
+      devolve apenas 2 caminhos, ambos `.md` (a story e uma memória do @dev) — zero arquivo de env.
+      Li arquivos de env somente para contar/nomear chaves e booleanos, nunca valores.
+    varredura_de_completude:
+      comando: "grep -rn 'env\\.local' . (excluindo node_modules/.git/.next/docs/.aios-core/.claude)"
+      resultado: >-
+        Zero leitor VIVO de `packages/web/.env.local` sobrando. O que resta: `.gitignore:47`
+        (correto, mantém o nome ignorado), `bin/modules/env-config.js:276` (gerador de `.gitignore`
+        do framework, string de saída), `scripts/README.md:52-61` (instruções de REVERSÃO, citam o
+        nome antigo de propósito), `packages/web/src/lib/env.ts:11` (mensagem de erro — ver
+        DOC-002) e ~15 comentários históricos da 900-3b, já declarados fora de escopo pela story.
+    arvore_limpa: >-
+      `git status --short` mostra apenas as memórias não-commitadas de @devops e @sm (declaradas
+      como não-achado). Nenhuma sonda do @dev sobrou em `scripts/` (`ls | grep 'sonda|__qa|900-69'`
+      → nada) e os 3 arquivos temporários que eu criei (2 baselines + 1 sonda de lint) foram
+      removidos: `git status --porcelain -uall -- scripts packages/web/scripts` → vazio.
+    confere: true
+  gates:
+    reexecutados_por_mim:
+      "pnpm test (fresco, sem cache — vitest não cacheia)": "EXIT=0 · 327 arquivos · 4633 passed | 6 expected fail"
+      "npx vitest run scripts/": "EXIT=0 · 8 arquivos · 144 testes"
+      "npx eslint packages/web/scripts/pipeline-diag.mjs": "EXIT=0 · 1 entrada no relatório JSON · 0 errors, 0 warnings"
+    alcance_do_eslint_provado: >-
+      Não bastava exit 0 (poderia ser arquivo ignorado saindo verde). O relatório `-f json` traz 1
+      entrada com o `filePath` do arquivo, e uma sonda com erro real criada no MESMO diretório
+      produziu diagnóstico — o linter alcança `packages/web/scripts/*.mjs`. Sonda removida.
+    nao_reexecutados:
+      quais: "turbo lint, turbo type-check e turbo build (o @dev reporta EXIT=0 nos três, com TURBO_FORCE=true)"
+      justificativa_de_alcance: >-
+        Medido, não suposto: `pnpm type-check` e `pnpm lint` são `turbo <task>`, e a task só existe
+        em `packages/*` (ai, bot, db, shared, web) — a raiz não é workspace (`pnpm-workspace.yaml`:
+        `packages/*`), então `scripts/*.ts` NÃO passa por `tsc` nem por eslint em gate nenhum
+        (confirma a limitação (a) declarada pelo @dev). E o `include` de `packages/web/tsconfig.json`
+        lista `**/*.ts`, `**/*.tsx`, `**/*.mts` — sem `.mjs` —, então o `pipeline-diag.mjs` também
+        está fora do type-check. Somado a "ninguém importa os 3 arquivos", nenhuma das 3 mudanças é
+        alcançável por lint/type-check/build. O que os cobre é a execução real, que eu fiz.
+
+top_issues:
+  - id: "DOC-001"
+    severity: low
+    category: docs
+    finding: >-
+      A nota do AC6 no Dev Agent Record diz "o diff tem 5 linhas removidas e 6 adicionadas". O
+      medido é 6 removidas e 7 adicionadas (`--shortstat`: 3 files, +7 −6). Erro de contagem no
+      registro, não no código — a afirmação substantiva ("todas nos três arquivos e todas cobertas
+      pelos ACs") confere linha por linha.
+    suggested_action: >-
+      @devops: usar 7 inserções / 6 remoções no corpo do PR (já corrigido em `corpo_do_pr`). Não
+      exige nova rodada de @dev.
+  - id: "MNT-001"
+    severity: low
+    category: code
+    finding: >-
+      Dívida pré-existente, confirmada: `scripts/` na raiz não é coberto por `pnpm type-check` nem
+      por `pnpm lint` (a task do turbo só existe nos pacotes; a raiz não é workspace). São ~40
+      scripts operacionais, vários com service-role de produção, sem nenhum gate estático.
+    suggested_action: >-
+      Registrar no backlog uma task `type-check` na raiz (ou incluir `scripts/` num projeto tsc
+      próprio). Fora do escopo desta story — a mudança dela é um literal de string e foi verificada
+      por execução real, com controle negativo.
+  - id: "DOC-002"
+    severity: low
+    category: docs
+    finding: >-
+      `packages/web/src/lib/env.ts:11` ainda manda o operador "Check your .env.local file." —
+      arquivo que não existe mais neste layout. É a mesma família do AC5 (mensagem que aponta para
+      arquivo morto), mas não quebra processo nenhum (é texto de erro, e o Next segue aceitando um
+      `.env.local` se alguém criar).
+    suggested_action: "Backlog: trocar por `.env.development` (dev) / variável na Vercel (prod)."
+
+observacoes_nao_bloqueantes:
+  - >-
+    O comentário novo do `pipeline-diag.mjs` lista PRODUÇÃO como comando principal e teste como
+    alternativa — ordem prescrita pelo AC5 e semanticamente fiel ao que o `.env.local` era. Vale
+    saber que é o inverso do default do repositório (teste). Preferiria a ordem invertida, mas
+    inverter agora seria mudar o AC depois do fato, e o comentário rotula "(produção)"
+    explicitamente. Sem ação.
+  - >-
+    Nota do `.env.local` da RAIZ — medi: o arquivo existe, tem exatamente 1 variável
+    (`VERCEL_OIDC_TOKEN`, gerada pela CLI da Vercel) e `grep -ci supabase` → `0`. A afirmação de que
+    ele "aponta para o Supabase de teste" seria falsa — mas ela NÃO está em nenhum artefato
+    commitado desta branch: a memória do @dev
+    (`project_env_sem_ambiente_de_teste.md`) diz apenas "arquivo diferente, não é o que os scripts
+    antigos liam", que é exatamente verdade, e o alerta útil (`ls -a | grep env` responde outra
+    pergunta que `ls -a packages/web | grep env`) está bem colocado. **A memória do @dev não precisa
+    de correção**; a única melhoria opcional seria dizer o que o arquivo da raiz contém. Os links
+    `[[…]]` continuam íntegros apesar do `name:` ter mudado de `env-sem-ambiente-de-teste` para
+    `env-layout-deste-checkout` (grep: zero referência ao slug antigo).
+  - >-
+    Limitação (b) do @dev — o caminho feliz dos dois scripts (com `SIENGE_*` reais) não exercitado:
+    **aceito, e foi a decisão certa**. Exercitá-lo custaria cota da API contra dados reais da
+    empreendedora, e não provaria nada sobre esta mudança: a lacuna que o fix fecha é a do Supabase,
+    e ela é observável exatamente na lista de `REQUIRED` que muda de forma. Limitação (c) (não rodou
+    `pipeline-diag` contra produção) idem — rodar contra produção só para ver 99 linhas de dados
+    reais seria risco sem retorno.
+
+waiver: { active: false }
+
+merge:
+  recomendacao: "MERGEAR"
+  base: "main"
+  empilhamento: >-
+    NENHUM — a branch saiu de `a839de64` = `origin/main` no início da revisão. @devops: reconferir
+    `git merge-base origin/main HEAD` antes do push, caso main tenha andado.
+  recommended_status: "Ready for Review → Done, após o merge por @devops."
+
+corpo_do_pr: |
+  ## O que este PR faz
+  Os dois scripts de conciliação do Sienge liam `packages/web/.env.local` por caminho literal —
+  arquivo que foi renomeado para `packages/web/.env.producao.local`, completando nesta máquina o
+  desenho que a Story 900-3b já tinha estabelecido no código. Eles passam a ler o nome novo. Junto,
+  o comentário de uso do `pipeline-diag.mjs` para de documentar um comando que **não inicia**.
+
+  **3 arquivos, +7 −6, zero mudança de lógica** (um literal de caminho e dois comentários). Sem
+  migration, sem variável de ambiente nova, sem arquivo criado ou removido.
+
+  | Arquivo | Mudança |
+  |---|---|
+  | `scripts/sienge-recto-liquido-check.ts` | linha 72: caminho do `loadEnv`; linhas 69-71: comentário |
+  | `scripts/sienge-conciliar-extrato-pdf.ts` | linha 71: caminho do `loadEnv` |
+  | `packages/web/scripts/pipeline-diag.mjs` | linha 2: comentário de uso + linha nova com a alternativa de teste |
+
+  ## O defeito, medido
+  O `loadEnv()` dos scripts é `try { readFileSync } catch { return false }` — **engole o ENOENT** e
+  falha uma linha depois, numa mensagem que não menciona arquivo nenhum:
+
+  ```
+  Faltam variáveis de ambiente: SIENGE_SUBDOMAIN, SIENGE_USERNAME, SIENGE_PASSWORD, NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+  ```
+
+  Já o `pipeline-diag.mjs` documentava `node --env-file=packages/web/.env.local …`, e o Node
+  **recusa iniciar** com `--env-file` inexistente: `node: packages/web/.env.local: not found`,
+  **exit 9**. Não era comentário morto, era comando quebrado.
+
+  ## Por que trocar o literal e não migrar para `resolverAmbiente()`
+  Decisão do @sm, registrada na story e não reaberta no gate: os dois scripts são **só leitura** e
+  só fazem sentido contra produção **por desenho** (não existe credencial de Sienge de teste em
+  lugar nenhum do repositório, por decisão deliberada), e `resolverAmbiente()` não resolve
+  credencial de Sienge — a guarda `TRIFOLD_ALLOW_PROD=1` só é exigida quando `escreve: true` e nem
+  seria acionada. **Gatilho para reabrir, documentado:** se algum dos dois ganhar caminho de escrita
+  no Supabase. Verificado no gate que nenhum dos dois escreve hoje.
+
+  ## Evidência (QA, rodada 1 — PASS)
+  - **AC2, a prova central — mudança de FORMA da saída, com controle negativo:**
+    `DEPOIS` (HEAD) → `SIENGE_SUBDOMAIN, SIENGE_USERNAME, SIENGE_PASSWORD` (3), EXIT=1.
+    `ANTES` (versão de `origin/main` rodada de dentro de `scripts/`, mesmo `__dirname`) → as
+    **5** variáveis, EXIT=1. As duas do Supabase só saem da lista se o arquivo foi achado **e** as
+    chaves têm valor não-vazio (o filtro é `!process.env[k]`). Contaminação de shell descartada
+    antes: as 5 não existiam no ambiente.
+  - **AC3 sem sonda redigitada:** corpo do `loadEnv` byte-idêntico entre os dois scripts
+    (sha256 `c39f38dc…`) e linha de chamada byte-idêntica (sha256 `036aa258…`), ambos em
+    `scripts/` ⇒ a medição do AC2 transfere. Somado a isso, prova em runtime **contra o arquivo
+    real** via `process.on('exit')` injetado por `NODE_OPTIONS`: `SUPA_URL_SET=true SRK_SET=true`,
+    e `false/false` na versão de `origin/main`.
+  - **AC4 provado byte a byte:** com o nome do arquivo mascarado e as quebras de linha desfeitas, o
+    comentário antes e depois é a **mesma string** — a explicação da armadilha (`vercel env pull`
+    devolve variável `sensitive` **vazia, sem erro**) está preservada palavra por palavra.
+  - **AC5:** `--env-file` com `.env.producao.local` → EXIT=0; com `.env.development` → EXIT=0; com o
+    caminho antigo → EXIT=9 `not found`. A alternativa de teste é real (as duas variáveis exigidas
+    existem e não estão vazias) e o script rodou **de ponta a ponta** contra o banco de teste
+    (EXIT=0, 99 linhas).
+  - **AC6:** nenhum arquivo de env tocado ou commitado — `--name-only | grep env` devolve só 2
+    `.md`; `git check-ignore --no-index` confirma os 5 envs ignorados e `git ls-files` só rastreia
+    os `.example`. Varredura do repositório inteiro: **zero** leitor vivo de
+    `packages/web/.env.local` sobrando.
+  - **Gates:** `pnpm test` reexecutado fresco → **EXIT=0**, 327 arquivos, 4633 passed | 6 expected
+    fail (reproduz o número do @dev); `vitest run scripts/` → EXIT=0, 144 testes; `eslint` no
+    `.mjs` alterado → EXIT=0, 0 errors/0 warnings, com o alcance do linter provado por sonda.
+    `turbo lint/type-check/build` não foram reexecutados por mim: medi que `scripts/` da raiz está
+    fora de toda task do turbo (a raiz não é workspace) e que o `include` do tsconfig do web não
+    cobre `.mjs` — nenhuma das 3 mudanças é alcançável por eles. Quem cobre é a execução real.
+  - **Custo:** zero chamada à API do Sienge. Confirmado `grep -c '^SIENGE'
+    packages/web/.env.producao.local` → `0` antes de rodar, então os scripts param no filtro de
+    `REQUIRED`, anterior a qualquer `fetch`. Nada escrito em produção.
+
+  ## Ressalvas (todas `low`, nenhuma bloqueante)
+  `DOC-001` a nota do AC6 na story diz "5 removidas / 6 adicionadas"; o medido é **6 / 7** ·
+  `MNT-001` dívida pré-existente: `scripts/` da raiz não tem gate estático algum (backlog) ·
+  `DOC-002` `packages/web/src/lib/env.ts:11` ainda diz "Check your .env.local file." (backlog).
+
+  Gate: PASS → `docs/qa/gates/900.69-scripts-sienge-env-producao-local.yml`
+  Story: `docs/stories/900-69-scripts-sienge-apontam-para-env-local-morto.story.md`
