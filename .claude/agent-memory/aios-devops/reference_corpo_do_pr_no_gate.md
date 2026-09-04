@@ -16,6 +16,11 @@ afirma — o corpo do @qa já vem com os exit codes, as mutações e os residuai
 **How to apply:**
 - `grep -n "corpo_do_pr" docs/qa/gates/<story>.yml` **antes** de escrever qualquer corpo.
   Se existir, use como está (é a instrução) — não reescreva.
+- **Quando existe, use verbatim e confira o tamanho.** Medido em 2026-09-04 no gate da 900-69
+  (`docs/qa/gates/900.69-scripts-sienge-env-producao-local.yml`): `corpo_do_pr` com **5.202
+  chars**, exatamente o número que o spawn anunciou — bateu, então nada a compor. Extrair à mão
+  arrisca perder indentação do bloco `|`; o jeito seguro é um script que corta 2 espaços de cada
+  linha até o próximo campo de topo, gravar em arquivo e usar `gh pr create --body-file`.
 - **Nem todo gate tem o campo, mesmo quando o spawn afirma que tem.** Medido em 2026-09-04:
   o gate da 75-373 (PASS, 152 linhas) **não** tinha `corpo_do_pr` nem nada equivalente na
   story. Nesse caso, componha a partir de `status_reason` + `gates_reexecutados_sem_cache` +
