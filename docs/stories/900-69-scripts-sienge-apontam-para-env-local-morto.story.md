@@ -427,3 +427,129 @@ commit.
 |---|---|---|
 | 2026-09-04 | @sm (River) | Criação da story — Draft |
 | 2026-09-04 | @dev (Dex) | Implementação dos ACs 1-6 (troca do literal em 2 scripts + 2 comentários). AC2 medido antes/depois (5 → 3 variáveis). Gates: lint, type-check e `pnpm test` em exit 0. Status Draft → Ready for Review. |
+
+---
+
+## QA Results
+
+### Review Date: 2026-09-04
+
+### Reviewed By: Quinn (Test Architect)
+
+**Veredito: PASS** — rodada 1. Branch `fix/900-69-scripts-sienge-env-producao-local`, base
+`a839de64`, commits `8f2b4b2b` (fix + story) e `11cefc9d` (só memória). Escopo medido:
+**3 arquivos, +7 −6** (`git diff origin/main...HEAD --shortstat -- scripts packages`), nenhuma
+linha de lógica.
+
+**Restrição de custo respeitada:** zero chamada à API do Sienge. Conferi
+`grep -c '^SIENGE' packages/web/.env.producao.local` → `0` e
+`env | grep -cE '^(SIENGE_|NEXT_PUBLIC_SUPABASE_URL|SUPABASE_SERVICE_ROLE_KEY)'` → `0` antes de
+rodar qualquer coisa; com `SIENGE_*` ausente os dois scripts saem no filtro de `REQUIRED`, que é
+anterior ao `baseUrl` e a qualquer `fetch`. Nada escrito em produção; o único banco lido de ponta a
+ponta foi o de **teste**.
+
+### Os 7 checks
+
+| # | Check | Resultado |
+|---|---|---|
+| 1 | Code review | PASS — `loadEnv` e `REQUIRED` intocados, chamada na mesma linha, arquivos com o mesmo tamanho |
+| 2 | Testes | PASS — `pnpm test` fresco: **EXIT=0**, 327 arquivos, 4633 passed \| 6 expected fail; `vitest run scripts/`: EXIT=0, 144 testes |
+| 3 | Acceptance criteria | PASS — AC1 a AC6 medidos um a um |
+| 4 | Sem regressões | PASS — ninguém importa os 3 arquivos; mensagem do `conciliar` inalterada; `pipeline-diag` roda de ponta a ponta |
+| 5 | Performance | N/A |
+| 6 | Segurança | PASS — nenhum env rastreado além dos `.example`; 5 envs confirmados ignorados por `git check-ignore --no-index` |
+| 7 | Documentação | PASS — com 2 ressalvas `low` de registro |
+
+### Medições (exit codes)
+
+**AC1** — chamada em 72 (recto) e 71 (conciliar) **antes e depois**; arquivos com 376 e 465 linhas
+antes e depois; `diff` do bloco `const REQUIRED` antes/depois → **EXIT=0** nos dois.
+
+**AC2 — a prova central, confirmada com controle negativo próprio:**
+```
+DEPOIS (HEAD)                    Faltam variáveis de ambiente: SIENGE_SUBDOMAIN, SIENGE_USERNAME, SIENGE_PASSWORD                                              EXIT=1
+ANTES (origin/main, mesmo __dirname)  Faltam variáveis de ambiente: SIENGE_SUBDOMAIN, SIENGE_USERNAME, SIENGE_PASSWORD, NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY   EXIT=1
+```
+O "antes" não é relato reaproveitado: rodei `git show origin/main:scripts/sienge-recto-liquido-check.ts`
+gravado dentro de `scripts/` (mesmo `__dirname` — única forma de o caminho relativo significar a
+mesma coisa), conferindo que a linha 72 do temporário dizia `.env.local`. É mudança de **forma** da
+saída: as duas variáveis do Supabase só saem da lista de faltantes se o arquivo foi encontrado **e**
+as chaves têm valor não-vazio (o filtro é `!process.env[k]`). Contaminação de shell descartada
+antes de medir.
+
+**AC3 — duas provas independentes, nenhuma delas redigitando código:**
+1. Corpo do `loadEnv` byte-idêntico entre os dois scripts (sha256 `c39f38dc…`, normalizando apenas
+   a anotação `: boolean`) e linha de chamada byte-idêntica (sha256 `036aa258…`), ambos em
+   `scripts/` ⇒ a medição do AC2 transfere sem hipótese adicional.
+2. Runtime **contra o arquivo real**, sem cópia: sentinela `process.on('exit', …)` injetada por
+   `NODE_OPTIONS="--import …"` → `SUPA_URL_SET=true SRK_SET=true`; mesma sentinela na versão de
+   `origin/main` → `false/false`. (Armadilha: o `tsx` gera processos filhos e a sentinela imprime
+   3 linhas — só uma é do processo que rodou o script.)
+   `test -r packages/web/.env.producao.local` → **EXIT=0**.
+
+**AC4 — preservação provada byte a byte:** desdobrando as quebras de linha e mascarando o nome do
+arquivo, o comentário antes e depois é a **mesma string**. A explicação da causa raiz (`vercel env
+pull` devolve variável `sensitive` **vazia, sem erro**) está preservada palavra por palavra.
+
+**AC5** — `--env-file` com `.env.producao.local` → **EXIT=0**; com `.env.development` → **EXIT=0**;
+com o caminho antigo → **EXIT=9** (`node: packages/web/.env.local: not found`). A alternativa de
+teste documentada é real: `.env.development` tem as duas variáveis exigidas, não-vazias
+(`URL_SET=true SRK_SET=true`), e o script rodou de ponta a ponta contra teste (EXIT=0, 99 linhas).
+
+**AC6** — nenhuma outra linha; `--name-only | grep env` devolve só 2 `.md` (story + memória), zero
+arquivo de env; `git ls-files` só rastreia os `.example`. **Varredura de completude:** `grep -rn
+'env\.local'` no repositório inteiro → **zero leitor vivo** de `packages/web/.env.local` sobrando;
+o que resta é `.gitignore`, o gerador do framework, as instruções de reversão do `scripts/README.md`
+(de propósito), a mensagem de `env.ts` (DOC-002) e comentários históricos da 900-3b.
+
+**Árvore limpa:** nenhuma sonda do @dev sobrou em `scripts/`; os 3 temporários que **eu** criei
+(2 baselines + 1 sonda de lint) foram removidos e `git status --porcelain -uall -- scripts
+packages/web/scripts` sai **vazio**.
+
+**Gates não reexecutados, com justificativa de alcance medida:** `turbo lint`, `turbo type-check` e
+`turbo build`. `pnpm type-check`/`pnpm lint` são `turbo <task>` e a task só existe em `packages/*`
+— a raiz não é workspace, então **`scripts/*.ts` não passa por `tsc` nem por eslint em gate
+nenhum** (confirma a limitação (a) do @dev); e o `include` do `packages/web/tsconfig.json` lista
+`**/*.ts|tsx|mts`, **sem `.mjs`**. Somado a "ninguém importa os 3 arquivos", nenhuma das mudanças é
+alcançável por esses gates. O que as cobre é execução real — feita. Rodei ainda `eslint` no `.mjs`
+alterado (**EXIT=0**, 0 errors/0 warnings, 1 entrada no relatório JSON) com o **alcance do linter
+provado** por sonda com erro real no mesmo diretório.
+
+### Ressalvas (todas `low`, nenhuma bloqueante)
+
+- **DOC-001** (docs) — a nota do AC6 acima diz "5 linhas removidas e 6 adicionadas"; o medido é
+  **6 removidas e 7 adicionadas**. Erro de contagem no registro, não no código: a afirmação
+  substantiva confere linha por linha. @devops: o corpo do PR no gate já usa os números certos.
+- **MNT-001** (code) — dívida **pré-existente** confirmada: `scripts/` na raiz não tem gate
+  estático algum (nem `tsc`, nem eslint). São ~40 scripts operacionais, vários com service-role de
+  produção. Backlog, não desta story.
+- **DOC-002** (docs) — `packages/web/src/lib/env.ts:11` ainda manda "Check your .env.local file.".
+  Mesma família do AC5, mas não quebra processo (é texto de erro). Backlog.
+
+### Sobre a nota do `.env.local` da RAIZ
+
+Medi: o arquivo existe, tem **exatamente 1 variável** (`VERCEL_OIDC_TOKEN`, gerada pela CLI da
+Vercel) e `grep -ci supabase` → **0**. Dizer que ele "aponta para o Supabase de teste" seria falso —
+mas essa frase **não está em nenhum artefato commitado**: a memória do @dev
+(`project_env_sem_ambiente_de_teste.md`) afirma apenas "arquivo diferente, não é o que os scripts
+antigos liam", que é exatamente verdade, e o alerta útil (`ls -a | grep env` responde outra pergunta
+que `ls -a packages/web | grep env`) está no lugar certo. **A memória do @dev não precisa de
+correção**; a única melhoria opcional seria registrar o que o arquivo da raiz contém. Os links
+`[[…]]` seguem íntegros apesar do `name:` ter mudado de slug (zero referência ao slug antigo).
+
+### Sobre as limitações declaradas pelo @dev
+
+Caminho feliz dos scripts do Sienge não exercitado e `pipeline-diag` não rodado contra produção:
+**aceito, e foi a decisão certa** nos dois casos — custaria cota de API/leitura de dados reais e não
+provaria nada sobre esta mudança, cuja lacuna fechada (Supabase) é observável na lista de `REQUIRED`
+que muda de forma. A falta de cobertura estática de `scripts/` está registrada como MNT-001.
+
+### Gate Status
+
+Gate: PASS → `docs/qa/gates/900.69-scripts-sienge-env-producao-local.yml`
+
+**Recomendação:** mergear. Não há empilhamento (base = `origin/main` no início da revisão);
+@devops reconferir `git merge-base origin/main HEAD` antes do push. Status recomendado após o
+merge: **Done**.
+
+— Quinn, guardião da qualidade 🛡️
