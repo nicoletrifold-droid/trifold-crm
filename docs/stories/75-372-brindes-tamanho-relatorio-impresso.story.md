@@ -1,6 +1,6 @@
 # Story 75-372 — Brindes: tamanho e quantidade por item no relatório impresso
 
-**Status:** Ready for Review
+**Status:** InReview — gate CONCERNS (SEC-001 aceito como dívida, não bloqueante) · sem migration · aguardando push/PR do @devops
 **Tipo:** Melhoria (ticket de Suporte)
 **Epic:** Controle de Brindes (29)
 **Complexidade:** S
@@ -447,10 +447,41 @@ Convenção de estrutura confirmada: já existem **74** arquivos `*.test.ts` den
 `packages/web/src/app`, incluindo `route.test.ts` ao lado de `route.ts` — o teste novo segue o
 padrão do repositório, não inventa um.
 
-**Dívida técnica anotada (fora do escopo desta story):** `buildPrintHtml` interpola todos os
-campos de texto sem escapar HTML (`nome`, `obra_nome`, `observacao`, `cargo` e agora `brinde`).
-Não é regressão desta story — é o comportamento das 6 colunas que já existiam — e escapar só o
-campo novo criaria inconsistência sem fechar o vetor. Merece story própria.
+**Dívida técnica anotada — SEC-001 (MEDIUM), pré-existente e marginalmente ampliada por esta
+story; fora do escopo dela.** Nota reescrita em 04/09/2026 como follow-up do gate: a redação
+anterior ("interpola todos os campos de texto sem escapar HTML ... merece story própria")
+**subdimensionava** o problema, e o @qa mediu o alcance real.
+
+`buildPrintHtml` interpola cru os 6 campos de texto da linha
+(`print-modal.tsx:65,67,72,74,75,76` — `observacao`, `cargo`, `obra_nome`, `nome`,
+`buildEndereco(d)` e agora `buildBrinde(d)`). O impacto **não é cosmético**: o HTML vai para
+`window.open("", "_blank")` + `win.document.write(html)` (`:202,204`), e uma janela
+`about:blank` aberta por script **herda a origem do opener** — portanto `<script>` injetado
+executa **na origem da aplicação**, não num contexto neutro. Não há `httpOnly` em nenhum ponto
+de `packages/web/src` (é o default do Supabase SSR), logo o cookie `sb-*-auth-token` é legível
+por JS. A consequência concreta é **roubo da sessão de quem imprime o relatório**.
+
+Pré-condições que limitam a severidade: exige usuário **autenticado da mesma org**, com
+**permissão de escrita em brindes**, para gravar o payload num desses campos — **não há caminho
+anônimo nem externo**. Esta story não criou a classe do vetor (5 dos 6 campos já existiam);
+ampliou por uma porta, ao passar a levar `brindes_tipos` para o HTML.
+
+Por que não foi corrigido aqui: escapar só o campo novo não fecha o vetor, e escapar os 6
+campos legados extrapolaria os 3 itens aprovados no escopo.
+
+**Correção de mérito do @qa ao argumento original desta nota:** a alternativa **não** está fora
+de alcance. Re-medido por mim: `escapeHtml` não existe em `packages/web/src` (0 ocorrências), e
+`document.write` / `window.open("")` aparecem em **exatamente um arquivo** de toda a aplicação
+(este) — os outros 6 `window.open` recebem URL real. O conserto é um helper de ~4 linhas + 6
+call sites, no mesmo arquivo que esta story já edita.
+
+Duas correções de precisão no inventário do achado, para quem pegar o follow-up: o @qa citou 5
+linhas (`65,67,72,74,76`) para 6 campos — a sexta é a `:75` (`buildEndereco`); e existem mais
+duas interpolações cruas fora dessas 6, com valor de ataque diferente — `${titulo}` (`:57`, vem
+de `datas_comemorativas.nome`, gravável por outro usuário da org, mesma severidade) e os
+rótulos de filtro (`:81-82`, digitados pelo próprio operador que imprime, portanto self-XSS).
+
+Fica para **story de follow-up, ainda não aberta** — depende de decisão do Marcos.
 
 ### O que NÃO foi provado (sem maquiar)
 
@@ -467,7 +498,165 @@ campo novo criaria inconsistência sem fechar o vetor. Merece story própria.
 
 ## QA Results
 
-_(preenchido pelo @qa após o gate)_
+**Gate:** `*qa-gate` (7 checks) — @qa (Quinn), 04/09/2026
+**Branch/commit revisado:** `story/75-372-brindes-tamanho-relatorio` @ `3e2dcb4b` (9 arquivos, +801/−8)
+
+### Veredito: **CONCERNS**
+
+6 dos 7 checks PASS. O único não-PASS é Segurança, por **uma dívida pré-existente** que esta
+story herdou e ampliou por um lado (SEC-001, MEDIUM) — aceita como dívida, não como bloqueio,
+mas com a redação da nota corrigida e story de follow-up exigida.
+
+### Placar dos 7 checks
+
+| # | Check | Resultado | Base |
+|---|---|---|---|
+| 1 | Code review | **PASS** | ADAPT honesto; 1 único call site; nenhum literal de `Destinatario` |
+| 2 | Testes unitários | **PASS** | 12 testes; 7 de 8 mutações re-executadas pelo @qa mataram teste |
+| 3 | Acceptance criteria | **PASS** (7/7) | AC2 fechado end-to-end pelo @qa (ver "Ponte fechada") |
+| 4 | Sem regressão | **PASS** | 304 files / 3996 passed / 6 expected fail, exit 0, `--force` |
+| 5 | Performance | **PASS** | zero query extra; `!inner` só sob filtro |
+| 6 | Segurança | **CONCERNS** | SEC-001 (MEDIUM, pré-existente); tenancy do embed novo verificada OK |
+| 7 | Documentação | **PASS** | rastreável; não-provados declarados sem maquiagem |
+
+### Gates re-executados pelo @qa (sem cache)
+
+```
+pnpm type-check --force  → Tasks: 8 successful, 8 total       EXIT=0
+pnpm lint --force        → 30 problems (0 errors, 30 warnings) EXIT=0
+                           grep "brindes" na saída → EXIT=1 (zero ocorrências)
+pnpm test                → 304 passed | 3996 passed | 6 expected fail  EXIT=0
+```
+
+Os três números do @dev conferem. `--force` usado para que cache hit do turbo não seja
+confundido com evidência.
+
+### Ponte que faltava — fechada pelo @qa (AC2)
+
+O `route.test.ts` prova que a rota **chama** `.eq("brindes_tipos.tamanho", "M")`. As medições
+em produção provam que a **URL** `brindes_tipos.tamanho=eq.M` filtra de verdade. Ninguém havia
+provado o elo do meio: que o supabase-js traduz uma coisa na outra. Fechado com o client REAL
+do supabase-js e `fetch` capturado (sem rede, sem escrita):
+
+```
+COM ?tamanho=M >>> /rest/v1/brindes_destinatarios
+    ?select=*,brindes_tipos!inner(nome,tamanho,cor)&org_id=eq.org1
+    &brindes_tipos.tamanho=eq.M&order=obra_nome.asc,nome.asc&offset=0&limit=50
+SEM parâmetro  >>> /rest/v1/brindes_destinatarios
+    ?select=*,brindes_tipos(nome,tamanho,cor)&org_id=eq.org1
+    &order=obra_nome.asc,nome.asc&offset=0&limit=50     ← sem !inner, sem tamanho
+```
+
+São byte-a-byte as duas URLs que o @dev mediu devolvendo **10** e **200**. AC2 passa a ter
+prova de ponta a ponta. Arquivo de sondagem removido; árvore conferida limpa depois.
+
+### Mutação re-executada (não confiei no relato)
+
+`route.ts` — 3 mutações, cada uma com `EXIT=1` e 1 teste vermelho: `!inner` sempre / `!inner`
+nunca / `.eq` removido. `brinde-tamanho.ts` — 5 mutações: ordem alfabética (3 falhas), bucket
+removido (4), `push`→`unshift` (2), separador do `join` (1). **Uma sobreviveu** (TEST-001).
+Código restaurado e árvore verificada limpa após cada rodada.
+
+### Achados
+
+**SEC-001 — MEDIUM — `print-modal.tsx:65,67,72,74,76` — injeção de HTML (pré-existente, ampliada)**
+
+`buildPrintHtml` interpola cru `d.obra_nome`, `d.nome`, `d.cargo`, `d.observacao`,
+`buildEndereco(d)` e agora `buildBrinde(d)`. O alcance **não é cosmético**: o HTML vai para
+`window.open("", "_blank")` + `document.write()`, e um `about:blank` aberto por script herda a
+origem do opener — logo `<script>` injetado executa **na origem da aplicação**. Não há
+`httpOnly` em nenhum ponto de `packages/web/src` (default do Supabase SSR), então o cookie
+`sb-*-auth-token` é legível por JS: o payload rouba a sessão de quem imprime.
+
+Parecer sobre o argumento do @dev: **metade certo**. Certo que escapar só o campo novo não
+fecha nada. Errado que a alternativa esteja fora de alcance — `escapeHtml` não existe em
+`packages/web/src`, e `document.write` / `window.open("")` aparecem em **exatamente um arquivo**
+de toda a app. O conserto real é um helper de ~4 linhas + 6 call sites, tudo dentro do arquivo
+que esta story já edita.
+
+Esta story piorou? **Sim, marginalmente** — passa a alimentar o HTML com uma **tabela nova**
+(`brindes_tipos`, escrita gated por `org_id = user_org_id() AND (is_admin_or_supervisor() OR
+has_module_access('brindes'))`, mig 166:39-40). Mesma classe de vetor, uma porta a mais.
+
+Por que **não** é FAIL: é pré-existente; exige usuário **autenticado da mesma org** com acesso
+de escrita a brindes (nenhum caminho anônimo/externo); e escapar os 6 campos legados extrapola
+os 3 itens aprovados. **Aceito como dívida** — com duas condições: (a) a nota de dívida no Dev
+Agent Record diz só "interpola sem escapar HTML", o que soa cosmético e **subdimensiona** o
+impacto real (execução same-origin + cookie de sessão legível); (b) precisa de story própria
+nomeada, não de rodapé.
+
+**TEST-001 — LOW — `brinde-tamanho.ts:65`** — a metade `!t.nome` do guard sobrevive à mutação
+(`if (!t || !t.nome)` → `if (!t)` deixa 10/10 verde). Não é defeito: `brindes_tipos.nome` é
+`NOT NULL` (mig 036:9), então o ramo só dispara para string vazia. Código defensivo sem teste.
+
+**INFO-001 — `destinatarios/route.ts:5-9`** — o `GET` não tem `canAccess("brindes")` (o `POST`
+tem, em `:70`). **Pré-existente** — conferido contra `main`, idêntico. Quem barra de fato é a
+RLS. Não é achado desta story.
+
+**Tenancy do embed novo — verificada, sem vazamento.** `requireAuth` usa `createClient()` com
+**anon key + cookies** (`lib/supabase/server.ts:15-23`), logo RLS ativa; `brindes_tipos_select`
+é `org_id = public.user_org_id()` (mig 036:26-27). FK cruzando org não vaza: com `!inner` a
+linha desaparece, sem `!inner` o embed vem nulo e cai no bucket "Sem brinde definido".
+
+### Parecer sobre os 3 itens que o @dev declarou não ter provado
+
+**1. Interação em navegador — ACEITO como declarado (não bloqueia).**
+Reset de paginação conferido por código: `brindes-table.tsx:89` `useEffect(() => { setPage(1) },
+[filters])`, e todo `onChange` cria objeto `filters` novo (`{...filters, tamanho: ...}`) → o
+efeito dispara. Os 5 filtros antigos estão intactos nos três lugares (`route.ts:30-43`,
+`brindes-table.tsx:68-73`, `print-modal.tsx:167-172` e `186-191`). O select novo é
+byte-idêntico ao de "Estado" (`brindes-filter-bar.tsx:111-123` vs `125-137`). Risco residual
+baixo — mas vai como ressalva no PR.
+
+**2. Modo com data comemorativa e `entregasMap` populado — FECHADO pelo @qa.**
+Renderizei o `buildPrintHtml` **real** (não cópia) com `entregasMap` cheio — 200 entregas
+misturando `entregue`/`nao_encontrado`/`pendente` — em Chromium na largura útil real da A4:
+
+| Medida | Sem data | Com data + entregasMap cheio |
+|---|---|---|
+| `<th>` (7 colunas), último | Assinatura / Conferência | **Status** |
+| `.brinde` | **76,0px** | **76,0px** |
+| Largura da tabela | 673,5px | 673,5px |
+| Células fora da folha | **0** | **0** |
+| Células com texto cortado | **0** | **0** |
+| `.brinde` é a penúltima célula | sim | **sim** |
+| `—` / preenchidas | 164 / 36 | 164 / 36 |
+| `.resumo` no documento | 1, logo após `.filtros` | 1, logo após `.filtros` |
+
+Soma do resumo = 2+3+7+2+2+11+3+3+3+164 = **200** = linhas (AC5), "Sem brinde definido: 164"
+por último. E, mais forte que a medição: `buildBrinde(d: Destinatario)` (`print-modal.tsx:43`)
+**não recebe `entrega` como argumento** — divergência entrega × cadastro é impossível por
+assinatura, não por sorte. **AC4 satisfeito.** (673,5px conferem com os ~673px estimados na
+story e com os 672,5px do @dev; `.endereco` deu 147,4px na minha medição contra 137,2px na
+dele porque usei endereços sintéticos mais longos — os dois com 0 corte.)
+
+**3. Dívida do HTML não escapado — ver SEC-001.** Aceita como dívida; **não** aceita como
+rodapé. Redação a corrigir e story de follow-up a abrir.
+
+### Escopo — conferido, não extrapolou
+
+9 arquivos, exatamente os 3 itens aprovados. Zero migration, zero RLS/permissão, `package.json`
+intocado, nenhum arquivo fora de `brindes/`. `brinde-tamanho.ts` (novo) está coberto pela
+recomendação explícita do Dev Notes. AUTO-DECISION 8 (`.filtros` 8px→2px, `.resumo` 8px) é
+ajuste de 6px em regra existente, net-zero na altura do cabeçalho, declarado.
+
+### Pendências para o @dev (nenhuma bloqueante)
+
+1. Reescrever a nota de dívida técnica no Dev Agent Record: trocar "interpola sem escapar HTML"
+   por o que de fato acontece — `document.write` em janela `about:blank` **same-origin**, com
+   `sb-*-auth-token` legível por JS ⇒ roubo de sessão de quem imprime. Vetor exige usuário
+   autenticado da mesma org com escrita em brindes.
+2. Abrir story de follow-up: `escapeHtml()` aplicado aos **6** campos de `buildPrintHtml`
+   (único arquivo da app com `document.write`).
+3. Opcional (LOW): teste para o ramo `!t.nome`, ou remover a metade morta do guard.
+
+### CodeRabbit
+
+CLI **não executado** — por instrução do gate desta story; o gatilho que vale é o GitHub App no
+PR, e achado de bot não bloqueia merge neste repositório salvo defeito vital verificado no
+código.
+
+— Quinn, guardião da qualidade 🛡️
 
 ## Change Log
 
@@ -476,3 +665,5 @@ _(preenchido pelo @qa após o gate)_
 | 04/09/2026 | @sm (River) | Draft criado a partir do ticket da Samara (03/09/2026), escopo de 3 itens aprovado pelo Marcos. |
 | 04/09/2026 | @dev (Dex) | Implementação YOLO das T1–T6. 5 arquivos alterados + 3 criados (`brinde-tamanho.ts` e 2 arquivos de teste, 12 testes). Status Ready → Ready for Review. Contraprovas do T6 medidas em produção (somente leitura): `tamanho=M` → `total` 10; sem o parâmetro → `total` 200; e o controle sem `!inner` → 200, provando que o `!inner` condicional é o que faz o filtro valer. Invariante do AC5 medida sobre os 200 registros reais (soma = 200 = `records.length`). A4 medido em Chromium headless nos dois modos: 0 células fora da folha, 0 textos cortados, `.brinde` = 76,0px, `.endereco` cai para 137,2px (aperto previsto nos Riscos). 4 decisões autônomas registradas (nº 4 a 7). Não provado: interação em navegador (sem env de teste nem sessão) — declarado na seção "O que NÃO foi provado". |
 | 04/09/2026 | @po (Pax) | `*validate-story-draft`: **GO — 9/10**. Status Draft → Ready. As 3 AUTO-DECISIONS revisadas (1 aceita, 2 e 3 aceitas com ressalva). ACs endurecidos com evidência de código: AC3 (ordem determinística das opções + tamanho sem resultado não é bug), AC4 (célula própria — não `<span>` inline como cargo/observação —, posição antes do `statusCell` nos dois modos, largura 76px, fonte do dado = cadastro e nunca a entrega), AC5 (resumo fixado no cabeçalho, formato em linha corrida, invariante de soma), AC7 (critério objetivo de "não quebrou o A4"). T5 perdeu a prop ambígua (`filters` já chega ao `PrintModal`); T6 ganhou as contraprovas do `!inner` condicional. Riscos: + aperto de largura medido (~673px úteis, `endereco` cai para ~165px), + filtro com zero resultados, + divergência futura entrega × cadastro. Corrigido "8 do catálogo" → 5 tamanhos distintos. Escopo inalterado: 3 itens, sem migration, sem RLS. |
+| 04/09/2026 | @qa (Quinn) | `*qa-gate` (7 checks) — **CONCERNS**, 6/7 PASS. Único não-PASS: Segurança, por SEC-001 (MEDIUM, pré-existente e marginalmente ampliada). Aceita como dívida, não como bloqueio, com duas condições: redação da nota corrigida e story de follow-up nomeada. Fechou por conta própria a ponte do AC2 e o cenário com `entregasMap` populado (A4 remedido em Chromium: 0 corte, `.brinde` 76,0px, resumo = 200). TEST-001 (LOW) e INFO-001 (pré-existente) registrados. |
+| 04/09/2026 | @dev (Dex) | **Follow-up do gate — não é AC novo.** Pendência 1 do @qa atendida: nota de dívida do Dev Agent Record reescrita para o alcance real (execução same-origin via `about:blank` + `sb-*-auth-token` legível por JS ⇒ roubo da sessão de quem imprime), com as pré-condições que limitam a severidade (autenticado, mesma org, escrita em brindes; sem caminho anônimo) e a correção de mérito do @qa (o conserto é um helper de ~4 linhas + 6 call sites no mesmo arquivo — re-medido: `escapeHtml` com 0 ocorrências em `packages/web/src`, `document.write`/`window.open("")` em 1 único arquivo). Somei duas correções de inventário: a 6ª linha é a `:75` (`buildEndereco`), e há duas interpolações cruas fora das 6 (`${titulo}` na `:57`, mesma severidade; rótulos de filtro na `:81-82`, self-XSS). Zero mudança em código de aplicação, zero teste novo. Status Ready for Review → InReview. **Pendências 2 e 3 do @qa seguem abertas:** a story de follow-up do `escapeHtml()` **não** foi aberta (aguarda decisão do Marcos) e o teste do ramo `!t.nome` (TEST-001, LOW) não foi feito. |
