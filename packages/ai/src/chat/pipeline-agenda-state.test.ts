@@ -16,10 +16,10 @@
  */
 import { describe, it, expect, vi, afterEach } from "vitest"
 import type { SupabaseClient } from "@supabase/supabase-js"
-import type Anthropic from "@anthropic-ai/sdk"
 import { STAGE_IDS } from "@trifold/shared"
 import { processMessageWithMetadata } from "./pipeline"
 import { createFakeSupabase, type FakeSupabase, type Row } from "./__fixtures__/fake-supabase"
+import { criarAnthropicFake } from "./__fixtures__/anthropic-harness"
 import { buildAgendaState, TTL_AGENDA_STATE_HORAS, type AgendaState } from "../flows/agenda-state"
 
 const ORG = "org-1"
@@ -42,22 +42,6 @@ interface Turno {
   bloco: string
   eventos: Array<{ event_type: string; metadata?: Record<string, unknown> }>
   estado: Record<string, unknown>
-}
-
-function anthropicCapturando(box: { bloco: string }, resposta: string): Anthropic {
-  return {
-    messages: {
-      create: async (args: { messages: Array<{ role: string; content: unknown }> }) => {
-        const last = args.messages[args.messages.length - 1]!
-        const blocks = last.content as Array<{ type: string; text?: string }>
-        box.bloco = blocks.filter((b) => b.type === "text").map((b) => b.text ?? "").join("")
-        return {
-          content: [{ type: "text", text: resposta }],
-          usage: { input_tokens: 1, output_tokens: 1, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 },
-        }
-      },
-    },
-  } as unknown as Anthropic
 }
 
 function seed(collectedData: Row, opts?: { historicoDaNicole?: string; visitProposed?: boolean; appointments?: Row[] }) {
@@ -97,7 +81,6 @@ async function turno(input: {
   visitProposed?: boolean
   appointments?: Row[]
 }): Promise<Turno> {
-  const box = { bloco: "" }
   const eventos: Turno["eventos"] = []
   const fake = createFakeSupabase(
     seed(input.collectedData, {
@@ -106,9 +89,10 @@ async function turno(input: {
       appointments: input.appointments,
     })
   )
+  const { anthropic, captura } = criarAnthropicFake({ resposta: input.respostaDaNicole ?? "Certo!" })
   await processMessageWithMetadata({
     supabase: fake as unknown as SupabaseClient,
-    anthropic: anthropicCapturando(box, input.respostaDaNicole ?? "Certo!"),
+    anthropic,
     conversationId: CONVERSATION,
     message: input.mensagemDoLead,
     orgId: ORG,
@@ -116,7 +100,13 @@ async function turno(input: {
   })
   return {
     fake,
-    bloco: box.bloco,
+    // Story 88-2 — a fábrica local deste arquivo SOBRESCREVIA a captura a cada
+    // chamada; o que o salvava era a segunda chamada ESTOURAR: as auxiliares mandam
+    // `content` como string, e o `blocks.filter(...)` do mock chamava `.filter` numa
+    // string ⇒ `TypeError` ⇒ a Promise rejeita ⇒ o `.catch` do fire-and-forget
+    // engole. A proteção destas 25 leituras de `.bloco` era um erro engolido por
+    // outro arquivo. Agora é o RÓTULO: `resposta()` é a chamada com `system`.
+    bloco: captura.resposta().bloco,
     eventos,
     estado: (fake.table("conversation_state")[0]!.collected_data ?? {}) as Record<string, unknown>,
   }
