@@ -8,12 +8,26 @@ Destino **planejado**: projeto Vercel `yarden`, servido sob
 > T12/T13 da Story 86-12, pendentes — hoje `https://trifold.eng.br/yarden/`
 > não serve esta landing. Tudo abaixo descreve a configuração pretendida.
 
-> **Status do conteúdo:** definitivo. Copy, cores e imagens vêm do mockup
-> "Yarden LP v1" fornecido pelo stakeholder (Story 86-12 AC12 — conteúdo é
-> dependência externa, nada aqui é inventado); os arquivos de `assets/` são
-> recortes desse mesmo mockup. A página é indexável (não há `noindex`).
+> **Status do conteúdo:** definitivo. Copy, cores e imagens do Hero e das 3
+> seções originais vêm do mockup "Yarden LP v1" fornecido pelo stakeholder
+> (Story 86-12 AC12 — conteúdo é dependência externa, nada aqui é inventado);
+> esses arquivos de `assets/` são recortes desse mesmo mockup. A página é
+> indexável (não há `noindex`).
 > A **infraestrutura** por baixo é a mesma desde o início: formulário de captação
 > + Pixel Meta + CAPI com deduplicação browser↔servidor.
+
+> **Story 86-13 — seções institucionais.** A página ganhou 6 seções novas
+> (header/nav fixo, "O Empreendimento" com 6 números, "Lazer" com 6 chips,
+> Galeria de 9 fotos com lightbox, banda CTA e "Sobre a Trifold") e a seção
+> "Invista no novo centro urbano de Maringá" foi redesenhada como a seção de
+> Localização (`#localizacao`), com endereço, link do Google Maps e os 5 pontos
+> de referência como texto visível. **Zero tracking novo:** os 3 blocos
+> `<script>` da 86-12 e os 3 `<form>` seguem byte a byte iguais.
+> As fontes de conteúdo, todas externas: os números vêm da **Ficha Técnica
+> oficial** (`9-YAR FICHA TÉCNICA.pdf`), os chips são itens literais da mesma
+> Ficha, as 10 imagens novas são do **book de renders oficial** e o texto de
+> "Sobre a Trifold" é reuso verbatim da landing do Vind Residence (mesma
+> empresa, mesmo prédio).
 
 A landing WordPress antiga (`trifold.eng.br/y/`) não existe mais — retorna 404.
 Esta é uma landing nova, não uma migração.
@@ -22,14 +36,30 @@ Esta é uma landing nova, não uma migração.
 
 ```
 yarden/
-├── index.html               # página completa (CSS + JS inline)
-├── assets/                  # 13 arquivos: 5 imagens (jpg + webp cada) + 2 logos SVG + 1 PDF
-├── api/lead.js              # proxy do lead → POST /api/webhooks/landing-page do CRM
-├── api/track.js             # proxy dos eventos de topo de funil → .../landing-page/track
-├── api-proxy.test.ts        # testes dos dois proxies (fora de api/ de propósito)
-├── tracking-browser.test.ts # testes do tracking do browser + contrato do index.html
+├── index.html                     # página completa (CSS + JS inline)
+├── assets/                        # 35 arquivos: 16 imagens (jpg + webp cada) + 2 logos SVG + 1 PDF
+├── api/lead.js                    # proxy do lead → POST /api/webhooks/landing-page do CRM
+├── api/track.js                   # proxy dos eventos de topo de funil → .../landing-page/track
+├── api-proxy.test.ts              # testes dos dois proxies (fora de api/ de propósito)
+├── tracking-browser.test.ts       # testes do tracking do browser + contrato do index.html
+├── secoes-institucionais.test.ts  # conteúdo travado das 6 seções da 86-13 + âncoras do nav
 └── README.md
 ```
+
+As 16 imagens, por origem:
+
+| Grupo | Arquivos | Origem |
+|---|---|---|
+| Hero, natureza, mapa, família | `hero-piscina-rooftop{,-mobile}`, `interior-lounge-gourmet`, `mapa-gleba-itororo`, `familia-quer-saber-mais` | recortes do mockup "Yarden LP v1" (86-12) |
+| Galeria | `galeria-01` … `galeria-09` | book de renders oficial (86-13) |
+| Fundo da seção Lazer | `lazer-terreo` | book de renders oficial (86-13) |
+| Sede da Trifold | `trifold-fachada` | cópia do projeto `vind-residence` — mesmo prédio, mesma empresa (86-13 AC8) |
+
+`galeria-05` faz dupla função: além do slot largo da Galeria, é o
+`background-image` da banda CTA. Foi escolhida por contraste (é a de menor
+luminância média das 9) **e** porque reaproveitar uma foto já referenciada por
+atributo é o que impede um asset órfão — ver o item 2 de "Alterar o conteúdo
+depois".
 
 ## Como visualizar
 
@@ -110,6 +140,7 @@ Testes (rodam com `pnpm vitest run` na raiz do repo):
 |---|---|
 | `api-proxy.test.ts` | os dois proxies serverless: identidade da landing (`page`/`landing`), repasse de `client_ip`/`client_ua`, honeypot, CORS, autenticação no CRM |
 | `tracking-browser.test.ts` | contrato estático do `index.html` (ids dos campos, endpoints, live region, guarda de duplo submit, integridade de `assets/`) + helpers do browser: `visitor_id`, `fbc`/`fbp`/`fbclid`, degradação graciosa |
+| `secoes-institucionais.test.ts` | conteúdo travado por decisão do stakeholder (os 6 números, os 6 chips, o texto verbatim de "Sobre a Trifold", o link oficial do Maps, os 5 pontos de referência), âncoras do nav que existem de fato, proporção da imagem por slot da galeria (lida do JPEG no disco), e as proibições: nada de preço, nada de depoimentos, nada de hex/fonte/logo novos |
 
 Os dois ficam fora de `api/` de propósito — tudo dentro de `api/` vira função
 serverless no deploy.
@@ -149,6 +180,25 @@ Ao mexer no conteúdo:
    `CompleteRegistration` deve passar a disparar nela, e não junto com `Lead`.
 6. Não reintroduza `<meta name="robots" content="noindex">`: existia só enquanto
    o conteúdo era placeholder e manteria a landing definitiva fora do Google.
+7. **Os números de "O Empreendimento" e os chips de "Lazer" são curadoria
+   travada** (Story 86-13, decisões D1/D2 do stakeholder), com cada item
+   rastreável à Ficha Técnica. Em especial: **não existe stat de preço/entrada**
+   — a Ficha não traz o dado em nenhuma das 7 páginas, e o `R$65mil` da landing
+   do Vind Residence é de outro empreendimento. Há teste que reprova os dois
+   desvios.
+8. **A galeria tem proporção por slot.** Dos renders do book, 12 são quadrados
+   (4000×4000) e o resto é paisagem 4000×1818. Os 2 slots `.g-wide` só aceitam
+   paisagem — um quadrado ali perde ~55% da altura no recorte e o ambiente fica
+   irreconhecível. O `.g-tall` é o inverso (nenhum render é retrato, então o
+   quadrado é o que perde menos). O teste lê a proporção **do arquivo**, não do
+   atributo `width`/`height`. No grid de 2 colunas o `.g-wide` volta a 1 coluna:
+   com `span 2` o auto-placement deixa uma célula vazia no canto (a landing do
+   Vind Residence tem esse buraco em produção).
+9. **Toda âncora do nav precisa de um `id` de destino.** `href="#lazer"` sem
+   `id="lazer"` não gera erro nenhum — o clique só não sai do lugar. E o header
+   é `position:fixed`: quem adicionar seção nova herda o
+   `html{scroll-padding-top}`, que é o que impede a âncora de parar com o topo
+   da seção escondido atrás do header.
 
 ## Deploy
 
