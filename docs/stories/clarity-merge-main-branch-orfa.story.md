@@ -313,4 +313,69 @@ Os dois alvos de deploy do AC5 continuam pendentes e **independentes** — o `di
 _Artefatos locais não versionados e não incluídos no commit: `landing-pages/trifold-design-system/dist/`, `assets/`, `uploads/`, `.vercel/`, `.seo-metrics/` (todos gitignored)._
 
 ## QA Results
-_(a preencher pelo @qa)_
+
+### Review Date: 2026-09-04
+### Reviewed By: Quinn (Test Architect)
+### Alvo: `fix/clarity-merge-main-branch-orfa` @ `ab6b27e2` (worktree `.claude/worktrees/clarity-merge-main`), base `origin/main` @ `19843658`
+
+**Método:** re-execução própria de tudo que o Dev Record afirma, não leitura do relato. Toda evidência abaixo foi produzida por mim.
+
+#### 1. Isolamento do worktree — CONFIRMADO
+`git rev-list --left-right --count origin/main...HEAD` = `0  1` (exatamente 1 commit à frente, 0 atrás); merge-base == `origin/main` == `19843658`; `git status --short` no worktree **vazio**. A contaminação não foi arrastada, provado pelos dois lados: (a) **0** arquivos do diff em `packages/`; (b) na checkout principal os 3 arquivos da story estão **limpos** (`git status --short -- <os 3>` vazio), `HEAD` ainda em `b4e7c8d3` e `git log b4e7c8d3..HEAD` vazio — o @dev não editou nem commitou na working tree principal.
+
+#### 2. Diff limpo — CONFIRMADO
+3 arquivos de código, `+21/-4`, 100% Clarity. Mais `docs/stories/clarity-merge-main-branch-orfa.story.md` (arquivo novo; era untracked em `main`, sem conflito). Nada mais.
+
+#### 3. Token de CSP vs. colar o literal — avaliado, e a dúvida está resolvida empiricamente
+**Prova mais forte deste gate:** os 3 blobs em `HEAD` são **idênticos** aos da ponta da branch órfã `b4e7c8d3` — `Home.dc.html` `9d8784e2`, `vercel.json` `89df7433`, `index.html` `6e222413`. Reconstituição bit-a-bit da fonte de verdade de produção, sem cherry-pick.
+
+Corolário que fecha a preocupação do "revert silencioso": `HEAD` == ponta órfã **e** `HEAD` == `main` + 4 linhas de CSP ⇒ o `vercel.json` de `main` diferia da ponta órfã **apenas** nessas 4 linhas. `main` **não teve nenhuma evolução independente de CSP** para ser revertida. A distinção token-vs-literal era empiricamente inócua aqui.
+
+Paridade de literais: **7/7 blocos byte-a-byte** contra as Dev Notes (comparação de string exata em Node, não regex) — 3× `/vindresidence*`, 1× catch-all, e os 3× `/yarden*` batendo com o literal "não tocar". Estrutura: exatamente 3 blocos `/vindresidence*`, 3 `/yarden*`, 4 blocos com clarity. O JSON **não** foi reserializado (diff = 4 linhas, não reformatação).
+
+**Nenhum risco novo introduzido.** Duas correções ao raciocínio registrado (`DOC-002`, low): (a) com abort duro em qualquer divergência do valor de origem, o script **não se adapta** a uma CSP evoluída — ele se **recusa a rodar**; o benefício é *detecção* (fail-closed), não *preservação*. Fail-closed é de fato mais seguro que a colagem silenciosa, então a **decisão está correta, só a razão dada está errada**. (b) o script não foi commitado nem consta no File List, então as garantias que o Dev Record credita a ele não são auditáveis — irrelevante aqui porque verifiquei o artefato diretamente.
+
+#### 4. Assert de não-regressão do Yarden — reexecutado em 4 estados + 2 contraprovas
+Verde (exit 0) em: (1) fonte no worktree, (2) `dist/` do dry-run do @dev, (3) blob commitado (`git show HEAD:`), (4) `dist/` **remontado por mim**.
+**Contraprova A** (injetar `https://*.clarity.ms` no `script-src` de `/yarden/:path*`): exit **1** nomeando `/yarden/:path*`. O assert não passa por vacuidade.
+**Contraprova B (achado novo, `TEST-001`, low):** mutei o negative-lookahead do catch-all de `/((?!vindresidence|yarden).*)` para `/((?!vindresidence).*)` — o catch-all passa a capturar `/yarden/*` e a servir a CSP **com** clarity — e o assert continuou **verde**. Ele só olha blocos cujo `source` começa com `/yarden`, logo é mais estreito que a propriedade que promete garantir. **Não é defeito deste PR:** nenhuma linha `"source"` mudou no diff (`git diff origin/main HEAD -- vercel.json | grep '^[+-].*"source"'` vazio) e a CSP ao vivo de `/yarden/` segue sem clarity.
+
+#### 5. Dois alvos de deploy — documentados corretamente, mas com UMA lacuna real (`OPS-001`, medium)
+A story trata os dois alvos como independentes em todos os lugares certos (tabela "Convenção de Deploy", AC5 5a/5b, Task 4 4a/4b, Handoff). A justificativa do proxy é factualmente correta e eu confirmei o falso positivo: `vercel.json` reescreve `/vindresidence/` → `https://vind-residence.vercel.app/`, e produção em `vind-residence.vercel.app/` **já é byte-a-byte igual** ao `index.html` de `HEAD` — então `/vindresidence/` mostraria o Clarity independentemente de o 5b ter rodado.
+
+**Lacuna:** o AC5b manda publicar "a partir do mesmo checkout limpo pós-merge", mas a tabela afirma "(projeto já linkado via `.vercel/project.json`)". As duas frases se contradizem — `.vercel` é **gitignored nos dois projetos** (`vind-residence/.gitignore:1`, `trifold-design-system/.gitignore:16`), logo um checkout limpo **não tem vínculo nenhum**. Confirmado: o worktree desta story não tem `landing-pages/vind-residence/.vercel/project.json`. Os alvos falham de formas **opostas**:
+- `trifold-design-system` falha **fechado**: `deploy.sh` passo 1 aborta com o remédio exato. Protegido.
+- `vind-residence` falha **aberto**: `vercel deploy --prod --yes` sem vínculo **cria um projeto novo** com o nome da pasta — o modo de falha que o comentário do próprio `deploy.sh` documenta como "achado QA-1". Resultado: projeto Vercel órfão, `vind-residence.vercel.app` nunca republicado, e `/vindresidence/` seguindo 200 pelo proxy — **o erro passa em silêncio**, o mesmo modo de falha que originou esta story.
+
+**@devops, antes do AC5b:** `vercel link --yes --scope trifold-s-projects --project vind-residence` dentro da pasta, ou confirmar `.vercel/project.json` com `projectName: "vind-residence"` / `projectId: prj_bSyrklkya14GAfeXdOlUXdyntqWp`; depois do deploy, conferir via `npx vercel ls` que o deployment caiu **dentro** do projeto certo.
+
+#### 6. Lint / type-check N/A — claim correta, mas INCOMPLETA (`TEST-002`, low)
+Confirmado para lint e type-check: `pnpm-workspace.yaml` = `packages/*` só; `npx turbo ls` = 6 pacotes, todos em `packages/`; `pnpm lint` = `turbo lint` e `pnpm type-check` = `turbo type-check`; `trifold-design-system` sem `package.json`/eslint/tsconfig; **0** arquivos do diff em `packages/`. Rodá-los seria teatro — N/A legítimo.
+
+**Mas existe um gate que alcança `landing-pages/` e que o Dev Record declarou inexistente:** `vitest.config.ts` inclui explicitamente `"landing-pages/**/*.test.ts"` (linha da Story 86-11, para as funções serverless do vind-residence) e o `ci.yml` roda `pnpm test`. **Eu rodei:** `npx vitest run landing-pages/` → **3 arquivos, 64 testes, todos passando** (nenhum import de `@trifold/*`, logo sem patologia de symlink de worktree). Gate **verde** — a claim estava errada, o resultado está certo. Também confirmei que nenhum teste lê `vind-residence/index.html` (o contrato estático do `tracking-browser.test.ts` lê `landing-pages/yarden/index.html`, intocado aqui).
+
+Imprecisões factuais menores (`DOC-001`, low): `vind-residence/package.json` **não** tem `scripts: {}` — não tem chave `scripts` nenhuma; e o `ci.yml` roda **três** gates turbo (`type-check`, `lint`, `test`) mais o `tenancy-gate`, não "exatamente esses dois". Conclusão sobre lint/type-check não muda.
+
+#### 7. `./deploy.sh --dry-run` — reexecutado, verde, e com evidência mais forte que a relatada
+Passos 1–3 verdes: `assets/` (94 arquivos), `uploads/` (79), vendor do React, vínculo Vercel; **5/5 páginas pré-renderizadas**; gate pré-deploy aprovado; parou antes do passo 4 (**nada publicado**).
+- **Determinismo:** o `dist/` que remontei é byte-a-byte igual ao do @dev nos **14/14** arquivos.
+- **Deriva zero:** `dist/` remontado == **produção** byte-a-byte nas 5 rotas renderizadas (`/`, `/sobre-nos`, `/empreendimentos`, `/corporativas`, `/blog`) e em `support.js`. O deploy do design system é um **no-op de conteúdo** — exatamente o que o AC2 pede. Sem o risco de acoplamento "um deploy publica a pasta toda".
+- **CSP na rede, 4/4** byte-a-byte contra `HEAD`: `/` (200), `/y/` (404), `/vindresidence/` (200), `/yarden/` (200, sem clarity).
+- **Snippet** byte-a-byte (sha256 do bloco) em `trifold.eng.br/` e em `vind-residence.vercel.app/` **direto**; `projectId y0vgmebu2t` nos 4 artefatos.
+- **Sem duplicação no pipeline aditivo da 90-1:** `grep -c 'clarity.ms/tag' dist/Home.dc.html` = **1**; **0** nas outras 7 páginas; `<script src=...clarity...>` assado no `dist` = **0** — o prerender injeta só dentro de `<!--dc-prerender:start-->` no `<body>`, nunca no `<head>`.
+- **Segurança do wildcard, verificada empiricamente:** `curl https://www.clarity.ms/tag/y0vgmebu2t` (HTTP 200, 723 bytes) referencia **somente** `scripts.clarity.ms`, `c.clarity.ms` e `i.clarity.ms`; o apex nu (`//clarity.ms`) aparece **0** vezes. `https://*.clarity.ms` cobre os três e **não** concede o apex. Nenhuma diretiva `unsafe-*` nova; o `'unsafe-inline'` que o snippet inline exige já existia nos 4 blocos.
+
+**Débito confirmado como real:** meu dry-run adicionou **mais uma** sessão de bot ao projeto `y0vgmebu2t` (o Playwright carrega a Home de um servidor estático local e o snippet executa, alcançando `scripts.clarity.ms`). Segunda sessão conhecida desta story. Já registrado em Out of Scope.
+
+#### 8. File List — bate 1:1
+4 entradas, 4 arquivos no commit; contagens exatas (`Home.dc.html` +8, `vercel.json` +4/−4, `index.html` +9). O blob da story commitado é **idêntico** à cópia da checkout principal — sem split-brain entre o que o @devops vai mergear e o que foi revisado.
+
+#### Bônus — AC4 (deleção da branch órfã, decisão do @devops)
+Dos **33** arquivos que a branch órfã introduziu desde o merge-base `412eb2cf`: **24** são byte-a-byte idênticos a `origin/main`, **3** são os que este PR captura, e **6** divergem — nos 6 `main` está estritamente **à frente** (último toque em `main`: #553/#559/#528, todos posteriores ao último toque da branch). Spot-check do último trabalho substantivo da órfã (`49954854`, texto do checkbox de privacidade): `main` tem o mesmo texto envolvido em `<a href="assets/politica-de-privacidade.pdf">` — uma story posterior fechou o defeito `86.12-QA-002` em cima dele. **Deletar a branch depois deste merge não perde nada.** O achado #3 e o Out of Scope da story estão corretos.
+
+### Gate Status
+**Gate: CONCERNS** → `docs/qa/gates/clarity-merge-main-branch-orfa.yml`
+
+Implementação **provada correta** (blob byte-a-byte == fonte de verdade de produção; 7/7 literais; 4/4 CSP na rede; build determinístico; 64/64 testes). **Nada volta para o @dev.** CONCERNS por 1 achado medium operacional (`OPS-001` — o vínculo `.vercel` faz o AC5b falhar em silêncio num checkout limpo) e 5 low de registro/hardening. Merge liberado; `OPS-001` deve ser aplicado **antes** do AC5b.
+
+**Aprovar este gate não publica nada.** AC5a e AC5b são validação em produção e seguem abertos — manter a story em `InReview`/`Ready for Review`; `Done` é do @devops após verificar as duas URLs próprias (`https://trifold.eng.br/` e `https://vind-residence.vercel.app/`, nunca via `/vindresidence/`).
