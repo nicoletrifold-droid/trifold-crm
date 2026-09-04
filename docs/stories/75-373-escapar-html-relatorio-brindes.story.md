@@ -713,3 +713,157 @@ nenhuma AC.
 ---
 
 ## QA Results
+
+### Review Date: 2026-09-04
+
+### Reviewed By: Quinn (Test Architect & Quality Advisor)
+
+**Escopo revisado:** `git diff origin/main...HEAD` = 3 arquivos (`print-modal.tsx` modificado,
+`print-modal.test.ts` criado, esta story). Commit `4a25e17c`, pai `3b809946` = `origin/main` =
+merge commit do PR #570 (`MERGED` em 2026-09-04T13:18:29Z, confirmado por `gh pr view 570`).
+**AC8 satisfeita pela alternativa que ela mesma previa** — sem empilhamento, sem rebase contra
+alvo móvel, um único commit na branch.
+
+### Placar dos 7 checks
+
+| # | Check | Resultado | Base |
+|---|---|---|---|
+| 1 | Code review | **PASS** | Regra única "escapa no `${}`" cumprida em 8 dos 9 sítios; o 9º (`titulo`) na origem, como o AC3 crava. `buildEndereco`/`buildBrinde`/`describeFilters` byte a byte, só ganharam `export`. `escapeHtml` local ao arquivo (0 ocorrências fora dele), `&` primeiro, assinatura sem tolerância a nulo |
+| 2 | Testes unitários | **PASS** | 22 testes, exit 0. **6 mutações do @qa**: 4 exit 1 (vermelho correto, uma delas nomeando a expressão), 2 exit 0 que confirmam residuais declarados. Nenhuma asserção vacuosa |
+| 3 | Acceptance criteria | **PASS (9/9)** | AC1–AC9 verificadas uma a uma contra o código, não contra a narrativa |
+| 4 | Sem regressão | **PASS** | `327 files / 4633 passed \| 6 expected fail`, exit 0, `TURBO_FORCE=true`. Paridade de bytes contra `origin/main` **remedida pelo @qa** com contraprova |
+| 5 | Performance | **PASS** | 5 `.replace()` por chamada, ~10 chamadas por linha, dentro de um handler de clique. Zero query nova, zero mudança de fluxo |
+| 6 | Segurança | **PASS** | **SEC-001 fechado** — era o único não-PASS do gate da 75-372. Ver "SEC-001" abaixo |
+| 7 | Documentação | **PASS** | Os 5 não-provados declarados sem maquiagem; o motivo de cada perdão está **no código**, não só na story. Um deles (`TIPO_LABEL[d.tipo] ?? d.tipo`) tem uma segunda tranca que a story não citou — ver abaixo |
+
+### Gates re-executados pelo @qa, sem cache
+
+```
+TURBO_FORCE=true pnpm type-check → 8 successful, 8 total / Cached: 0 cached, 8 total   EXIT=0
+TURBO_FORCE=true pnpm lint       → 30 problems (0 errors, 30 warnings) / 0 cached      EXIT=0
+                                   grep print-modal na saída                          EXIT=1
+TURBO_FORCE=true pnpm test       → 327 files passed / 4633 passed | 6 expected fail    EXIT=0
+npx vitest run print-modal.test.ts → 22 passed (22)                                    EXIT=0
+```
+
+`0 cached, 8 total` nos dois: cache hit não é evidência. Os três números do @dev conferem.
+
+### As 6 mutações do @qa (árvore restaurada e provada: `git status --short -- packages/` vazio, sha256 de volta ao original)
+
+| # | O que sabotei | Exit | O que ficou vermelho |
+|---|---|---|---|
+| **QM1** | `${escapeHtml(resumo)}` → `${resumo}` — **sítio 9, diferente do que o @dev mutou** | **1** | régua da AC6 **nomeando**: `expected [ 'resumo' ] to deeply equal []`; + sítio 9, sítio 6 e o caso de duplo-escape. `4 failed \| 18 passed` |
+| **QM2** | `ABERTURA` → `"function buildPrintHtmlQueNaoExiste"` (reprodução da mutação (b)) | **1** | sinal de vida: `expected 0 to be greater than or equal to 25`. **E o `expect(naoCobertas).toEqual([])` ficou VERDE** — reproduzido, a propriedade se sustenta |
+| **QM3** | **sítio NOVO de dado cru**: `<td class="cep">${d.endereco_cep}</td>` | **1** | régua da AC6: `expected [ 'd.endereco_cep' ] to deeply equal []`. **É a promessa central da AC6 e nenhuma mutação do @dev a havia provado** — as dele removiam escape de sítio existente, esta acrescenta o sítio que "ainda não existe" |
+| **QM4** | sítio novo **escapado** em atributo **sem aspas**: `data-x=${escapeHtml(d.nome)}` | **0** | nada — régua VERDE (22/22) com o HTML emitindo `onmouseover=alert(1)` vivo. **Residual 1 do @dev confirmado por medição** |
+| **QM5** | drible por concatenação: `${escapeHtml(d.obra_nome) + (d.endereco_cep ?? "")}` | **0** | nada — régua VERDE com `d.endereco_cep` cru. **Residual 3 confirmado** |
+| **QM6** | sinal de vida declarado `25→26` e `23→24` | **1** | `expected 25 to be greater than or equal to 26` e `expected 23 to be greater than or equal to 24` — contagem **cravada em exatamente 25/23**, medida mutando o DECLARADO em vez de replicar o scanner |
+
+**QM2 é a mais importante e foi reproduzida como o @dev descreveu:** com o recorte sabotado, a
+asserção de cobertura fica **verde** porque recorte vazio tem zero interpolações. Só o sinal de
+vida reprova — e, achado meu, o `it` extra "nenhum perdão declarado está morto" **também**
+reprova, por mecanismo independente. A régua da AC6 **não** é falso verde; o veredito não muda.
+
+### Verificações independentes (não confiei nos números do @dev)
+
+**AC7 — paridade por bytes, remedida pelo @qa com contraprova.** Não aceitei o `sha256`
+`968bf963…` de palavra. Escrevi uma sonda temporária (criada, medida, **removida**) que compilou
+o `buildPrintHtml` de `origin/main` — cópia temporária com apenas `export` acrescentado, corpo
+intocado — ao lado do de `HEAD`, e comparou o `sha256` do HTML para dado limpo em **dois**
+cenários (sem data/sem filtros; com data + 2 filtros): **idêntico nos dois**. E a contraprova no
+mesmo arquivo: dado com `&`/`<` **diverge**, então a sonda é capaz de reprovar. `EXIT=0`.
+
+**AC9 — `brinde-tamanho.ts` intocado, por bytes.** `sha256` da árvore == `sha256` do blob de
+`origin/main` (`4725a29411efa123b1b7bafaf0efa44258161f738e77a2a645f4fcaa359951df`), e o
+`git diff origin/main...HEAD` dos 4 arquivos declarados intocados (`brinde-tamanho.ts`,
+`brinde-tamanho.test.ts`, `destinatarios/route.test.ts`, `fonte-scan.ts`) tem **0 bytes**.
+
+**Os 14 perdões auditados um a um.** O teste só exige motivo **não-vazio**, não motivo
+**correto** — então um perdão errado seria invisível. A única entrada que perdoa **dado cru** é
+`TIPO_LABEL[d.tipo] ?? d.tipo`, e ela está **dupla-trancada**: o `CHECK (tipo IN
+('mae','pai','outro'))` de `031_controle_brindes.sql:36` está intacto (o único `DROP CONSTRAINT`
+da família, `165:13`, é de `brindes_tipos`), **mais** validação de aplicação nos três endpoints
+de escrita (`destinatarios/route.ts:87`, `destinatarios/[id]/route.ts:31`,
+`import/route.ts:49`) — defesa que a story não citou. As outras 13 são fragmento já escapado
+(o dado dentro é medido à parte, e QM1 provou isso), dicionário de literais (`STATUS_LABEL` em
+`types.ts:61`, `TIPO_LABEL` em `print-modal.tsx:18`), número ou `Date` formatada.
+
+**Superfície de saída reconfirmada.** `document.write(` tem **1** sítio de código em toda a app
+(`print-modal.tsx:266`) e recebe **exclusivamente** a saída de `buildPrintHtml`. `escapeHtml`
+não existe fora deste arquivo. Nenhum `httpOnly` é imposto em `packages/web/src` — as 3
+ocorrências que o `grep` acha hoje são a **prosa dos comentários novos** desta story, não código;
+o `@supabase/ssr` não sobrepõe flags em `server.ts`/`middleware.ts`, então o cookie de sessão
+segue legível por JS. O modelo de ameaça da story está correto.
+
+### SEC-001 — pode ser considerado FECHADO
+
+**Sim, para a superfície de ataque que existe hoje**, e a afirmação está apoiada em três coisas
+distintas, não em "os testes passaram":
+
+1. **Cobertura completa do recorte**, provada por `.toEqual([])` sobre 23 expressões únicas com
+   sinal de vida cravado em 25/23 (QM6) — não sobra interpolação de dado sem escape.
+2. **A régua reprova sítio NOVO** (QM3), que é o que separa "consertei 9 lugares" de "fechei a
+   classe de defeito".
+3. **O caminho de saída é único e auditado** — um `document.write`, um produtor de HTML.
+
+**O que NÃO está fechado, e é honesto dizer:** escape de HTML não cobre atributo sem aspas nem
+contexto de URL. Isso está registrado como `SEC-002` (severidade **low**) porque **nenhum sítio
+de hoje está em atributo** — é falso-verde para o próximo autor, não vulnerabilidade viva. Não
+bloqueia, e nunca bloquearia esta story: exigir escape por contexto aqui seria trocar o escopo
+depois da entrega.
+
+### Parecer sobre os 5 não-provados do @dev
+
+1. **`next build` não rodado — ACEITO, com evidência que eu mesmo levantei.** Tentei rodar:
+   `pnpm --filter @trifold/web build:teste` sai **exit 1** porque `packages/web/.env.development`
+   não existe nesta máquina, e recusei um `next build` nu porque ele resolveria
+   `packages/web/.env.local`, que nesta máquina aponta para **produção** (ver ENV-001). No lugar,
+   duas medições: (a) o precedente está em `origin/main` e em produção —
+   `lancamentos/_components/lancamento-board.tsx:1` é `"use client"` e exporta `initials` (`:38`),
+   `avatarBg` (`:41`) e `formatDue` (`:59`); (b) **nenhuma aresta nova para código de servidor** —
+   o único importador de `print-modal` é `brindes-table.tsx:13`, ele mesmo `"use client"`, e os 4
+   exports novos têm **zero** consumidores fora do teste. O modo de falha que se teme (Server
+   Component importando função de módulo cliente e recebendo um client-reference proxy) é
+   **estruturalmente ausente**, não improvável. Suficiente.
+2. **Nada verificado em navegador — ACEITO, e a substituição é mais forte que o original.**
+   Paridade de bytes diz que a string entregue ao DOM é a mesma; um olhar em tela diria menos.
+   Remedi por conta própria, com contraprova (acima). Para o caso escapado, a propriedade
+   ("`&lt;script&gt;` renderiza como texto") é a especificação do HTML, não comportamento da app.
+3. **A régua prende presença, não suficiência de contexto — LIMITAÇÃO ACEITÁVEL, e virou
+   `SEC-002` (low).** Não é lacuna que precise de AC nesta story, por dois motivos: nenhum sítio
+   atual está em atributo, e a AC6 foi escrita e cravada pelo @po com este desenho. Mas eu
+   **medi** o furo (QM4: régua verde emitindo `onmouseover=alert(1)`), então ele vai para o
+   backlog como item com evidência, não como parágrafo numa story que será arquivada.
+4. **`startsWith("escapeHtml(")` driblável por concatenação — ACEITO como desenho, `TEST-002`
+   (low).** É a letra do AC6 item 3. Medido (QM5). Mesmo backlog do `SEC-002`: as duas se fecham
+   com a mesma mudança (exigir que a expressão **inteira** seja uma chamada de escape).
+5. **CodeRabbit CLI não executado — CORRETO.** O gatilho deste repositório é o GitHub App via
+   `.coderabbit.yaml`, que dispara no PR. Não rodei o CLI (instruído a não rodar, e é a política
+   certa: nesta máquina um review retroativo já morreu com `WebSocket closed`).
+
+### Os 2 `it` além das ACs — MANTER
+
+Não é escopo excedido, e agora tenho medição para dizer isso: em **QM2** o `it` "nenhum perdão
+declarado está morto" ficou **vermelho junto** com o sinal de vida, por mecanismo **independente**
+(os 14 perdões desapareceram do conjunto único). Ou seja, ele é um **segundo detector do recorte
+sabotado** — o modo de falha nº 1 dessa régua, o único que aprova tudo em silêncio. O outro `it`
+guarda a única propriedade que `Record<string, string>` não guarda (ele aceita `""`). 8 linhas por
+um detector redundante do pior modo de falha é preço bom. Não remover.
+
+### Achado FORA do escopo desta story — ENV-001 (alto, ambiente, não é defeito da 75-373)
+
+Encontrado por acidente ao tentar rodar o `next build`: **`packages/web/.env.local` existe nesta
+máquina** (807 bytes, 30/07 — anterior à Story 900-3b), aponta para o Supabase de **produção**
+(`dsopqkqjkmhytudaaolv`) e carrega `SUPABASE_SERVICE_ROLE_KEY`. `.env.local` **vence qualquer
+outro arquivo de env no Next**, e `packages/web/.env.development` **não existe** — então
+`pnpm dev` nesta máquina roda contra **produção**, exatamente o risco que o `CLAUDE.md` declara
+eliminado ("`.env.local` não existe mais"). **Nada a ver com esta story**; para o @devops.
+
+### Status recomendado
+
+`Ready for Review` → **Done** (transição de Status é do @dev/@devops; o @qa só escreve aqui).
+Liberado para `@devops *push` / PR contra `main`.
+
+### Gate Status
+
+Gate: PASS → docs/qa/gates/75-373-escapar-html-relatorio-brindes.yml
