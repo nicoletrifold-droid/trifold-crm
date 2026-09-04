@@ -137,6 +137,23 @@ export async function autoVincularClienteObra(
       <p style="margin:0 0 20px;font-size:14px;"><strong>Senha temporária:</strong> <code>${senhaTemporaria}</code></p>
       ${portalUrl ? renderButton("Acessar o portal", portalUrl) : ""}
       <p style="margin:20px 0 0;font-size:13px;color:#6b7280;">Recomendamos que você altere a senha no primeiro acesso.</p>`,
+      // Story 900-67 (AC7) — a AUSÊNCIA de `orgId` NESTE objeto é DELIBERADA, não esquecimento.
+      // Este é o único call site de `renderBaseLayout`/`renderPasswordActionEmail` do repositório
+      // que não passa a org, e `header-brand.test.ts` declara a exceção como um conjunto de UM
+      // elemento: completar a fiação aqui deixa a suíte VERMELHA de propósito.
+      // Concretamente: NÃO acrescente `orgId,` nem `orgId: orgId` a este objeto.
+      // Motivo: este e-mail passa `orgName: "Portal de Obras"`, que já não casava o regex antigo
+      // e por isso sempre renderizou TEXTO. A org que recebe este e-mail hoje é a própria Trifold;
+      // threadar o `orgId` real (que existe em escopo — parâmetro na linha 22, usado em
+      // `sendEmail` logo abaixo) faria `isMarcaTrifold` devolver `true` e trocaria o texto
+      // "Portal de Obras" pela LOGO da Trifold — mudando um e-mail da Trifold que hoje funciona.
+      // O programa de whitelabel proíbe exatamente isso: "com a org da Trifold, a saída é byte a
+      // byte igual à de hoje". Dar marca a esta org é trabalho da story futura da 900-64, com o
+      // conteúdo do branch de texto derivado de `organizations.name`/`logo_url`.
+      //
+      // O comentário fica DENTRO dos parênteses da chamada de propósito: é onde alguém editaria,
+      // e é o que torna o filtro de comentários da régua (`codigoDe`) carregador — sem ele, a
+      // palavra `orgId` desta prosa faria a varredura classificar o sítio como já fiado.
       { orgName: "Portal de Obras" }
     )
 

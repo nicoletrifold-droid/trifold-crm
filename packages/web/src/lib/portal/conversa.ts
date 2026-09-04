@@ -3,6 +3,7 @@ import "server-only"
 import type { createAdminClient } from "@web/lib/supabase/admin"
 import { sendEmail } from "@web/lib/email"
 import { sendPushToUser } from "@web/lib/server/push-service"
+import { tentarAppUrl } from "@web/lib/tenancy/app-url-fallback"
 
 type Admin = ReturnType<typeof createAdminClient>
 
@@ -82,8 +83,12 @@ export async function notifyEquipeNovaMensagem(
       .select("user_id")
       .eq("conversa_id", conversaId)
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://crm.trifold.eng.br"
-    const url = `${appUrl}/dashboard/mensagens`
+    // Story 900-66 (AC4) — o push e o e-mail deste aviso existem para levar a pessoa até a
+    // conversa: sem URL base, nenhum dos dois sai. `return` dentro do `try` best-effort que o
+    // arquivo já tem.
+    const base = tentarAppUrl(process.env.NEXT_PUBLIC_APP_URL, "lib/portal/conversa", { conversaId })
+    if (!base.ok) return
+    const url = `${base.url}/dashboard/mensagens`
     const title = `Nova mensagem de ${clienteNome}`
     const body = `${obraNome}: ${trecho.slice(0, 120)}`
 

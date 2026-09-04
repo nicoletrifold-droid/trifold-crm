@@ -113,6 +113,8 @@ describe("montarTilesDoPainel — o estado REAL de produção, reproduzido (QA-9
     status: "disconnected",
     config: {},
     secret_ref: null,
+    last_error: null,
+    last_check_at: null,
     updated_at: null,
   }))
 
@@ -167,5 +169,52 @@ describe("montarTilesDoPainel — o estado REAL de produção, reproduzido (QA-9
     const tiles = montarTilesDoPainel([], null)
     expect(tiles.map((t) => t.provider)).toEqual([...PROVIDERS_DO_PAINEL])
     expect(tiles.map((t) => t.provider)).not.toContain("google")
+  })
+
+  // ── Story 900-61 ──────────────────────────────────────────────────────────────────────────
+  it("as 2 colunas do diagnóstico ATRAVESSAM da linha para o tile", () => {
+    // A régua da projeção prende o dado ENTRANDO na página; esta prende a FIAÇÃO. Sem ela,
+    // trocar `l?.last_error` por `null` na montagem deixa a projeção intacta, o `tsc` em rc=0 e a
+    // tela de novo sem motivo nenhum — o defeito inteiro, com tudo verde.
+    const tiles = montarTilesDoPainel(
+      PRODUCAO_ORG_INTEGRATIONS.map((l) =>
+        l.provider === "sienge"
+          ? { ...l, status: "error", last_error: "network_error", last_check_at: "2026-09-01T10:00:00Z" }
+          : l,
+      ),
+      null,
+    )
+    expect(tiles.find((t) => t.provider === "sienge")).toMatchObject({
+      ultimoErro: "network_error",
+      ultimaChecagem: "2026-09-01T10:00:00Z",
+    })
+    // E o par negativo: quem não falhou não herda o erro do vizinho.
+    expect(tiles.find((t) => t.provider === "telegram")).toMatchObject({
+      ultimoErro: null,
+      ultimaChecagem: null,
+    })
+  })
+
+  it("o `/dashboard` não pede as 2 colunas — a ausência delas vira `null`, nunca `undefined`", () => {
+    // A projeção do cliente continua a antiga (AC5 só estende a de `/platform`), e a linha chega
+    // aqui por um `as unknown as`, que não verifica coluna nenhuma. `undefined` atravessando até o
+    // `.tsx` renderizaria "em erro desde undefined" no dia em que alguém trocasse a guarda.
+    const semAsColunas = [
+      { provider: "sienge", status: "error", config: {}, secret_ref: null, updated_at: null },
+    ] as unknown as LinhaDeIntegracaoDoPainel[]
+    expect(montarTilesDoPainel(semAsColunas, null).find((t) => t.provider === "sienge")).toMatchObject(
+      { ultimoErro: null, ultimaChecagem: null },
+    )
+  })
+
+  it("o tile de whatsapp nunca declara diagnóstico — a linha dele em org_integrations é ignorada", () => {
+    const comErroForjado = PRODUCAO_ORG_INTEGRATIONS.map((l) =>
+      l.provider === "whatsapp"
+        ? { ...l, status: "error", last_error: "token_invalid", last_check_at: "2026-09-01T10:00:00Z" }
+        : l,
+    )
+    expect(montarTilesDoPainel(comErroForjado, null).find((t) => t.provider === "whatsapp")).toMatchObject(
+      { ultimoErro: null, ultimaChecagem: null },
+    )
   })
 })

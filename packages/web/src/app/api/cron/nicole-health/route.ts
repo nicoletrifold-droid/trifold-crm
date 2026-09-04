@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { logEventOnce } from "@web/lib/logger"
+import { tentarAppUrl } from "@web/lib/tenancy/app-url-fallback"
 import {
   classificarErroIA,
   deveAlertar,
@@ -72,8 +73,6 @@ interface Agregado {
  */
 const EVENTO_LOOP = "NICOLE_LOOP_DETECTADO"
 
-/** Base do link que vai dentro do `{{1}}`. `APP_URL` nu não existe — produziria `undefined/…`. */
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://crm.trifold.eng.br"
 
 interface LoopAgregado {
   conversationId: string
@@ -361,7 +360,14 @@ export async function GET(request: NextRequest) {
     // "loop detectado NESTA conversa". Sem ele, trocamos um loop infinito por uma
     // conversa contida que ninguém acha: `handoff_reason` é escrito em 6 rotas de API
     // e lido em ZERO telas.
-    const link = `${APP_URL}/dashboard/conversas/${loop.conversationId}`
+    // Base do link que vai dentro do `{{1}}`. Story 900-66 (AC4): sem URL base este alerta
+    // não sai — o `{{1}}` é o link, e um `{{1}}` vazio derruba o template inteiro (lição da
+    // 75-356). Os demais loops do laço continuam sendo avaliados.
+    const baseLink = tentarAppUrl(process.env.NEXT_PUBLIC_APP_URL, "cron/nicole-health:loop", {
+      conversationId: loop.conversationId,
+    })
+    if (!baseLink.ok) continue
+    const link = `${baseLink.url}/dashboard/conversas/${loop.conversationId}`
 
     // QA-87-20-6 — o `{{1}}` era CONSTANTE nos dois casos, então o admin recebia a
     // mesma frase quer a Nicole tivesse sido contida, quer a contenção tivesse falhado.

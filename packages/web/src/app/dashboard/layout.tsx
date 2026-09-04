@@ -2,6 +2,16 @@ import { getServerUser } from "@web/lib/auth"
 import { createClient } from "@web/lib/supabase/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { can, getUserPermissions, podeVerMenuConfig, podeVerMenuCampanhas } from "@web/lib/permissions"
+// Story 900-56 (defeito da porta de entrada) — o CRM não tinha NENHUM caminho de ida para o
+// console `/platform`: zero links, e o layout de lá só oferece "← Voltar ao CRM". Quem opera a
+// plataforma caía no CRM e não tinha como sair dele.
+//
+// `@web/lib/platform` é a autoridade de plataforma que já existia (Story 75-314), e
+// deliberadamente NÃO é `lib/tenancy/platform-guard`/`platform-query`: aqueles dois são
+// proibidos em `app/dashboard/**` por `lib/tenancy/dashboard-platform-boundary.test.ts` (AC9 da
+// 900-51), porque carregam o caminho de LEITURA cross-org. Este só responde uma pergunta
+// booleana sobre a própria linha do usuário — nenhum dado de outra empresa atravessa.
+import { atalhoDoConsole, isPlatformAdmin } from "@web/lib/platform"
 import { getChatUnreadCount } from "@web/lib/chat/unread-count"
 import { getUpcomingAppointmentsCount } from "@web/lib/agenda/appointments-count"
 import { redirect } from "next/navigation"
@@ -246,6 +256,20 @@ export default async function DashboardLayout({
   // Story 75-104 — módulo Pastas (upload de documentos por link). Gate via matriz.
   const showPastas = Boolean(permissions["pastas"])
   const pastasItem = { href: "/dashboard/pastas", label: "Pastas", icon: <FolderClosed className={ICON_SIZE} /> }
+  // Story 900-64 — a marca da EMPRESA na barra lateral, no lugar da Trifold.
+  //
+  // INCONDICIONAL, diferente da leitura de `materiais_url` logo abaixo: aquela depende do módulo
+  // Materiais estar ligado, o logo tem de aparecer para toda org. `.maybeSingle()` e não
+  // `.single()` porque zero linhas NÃO é erro aqui — a leitura roda sempre e "sem linha" tem
+  // significado ("sem logo"); `.single()` devolveria `PGRST116` (HTTP 406) e poluiria o log com um
+  // erro que não é erro. Falha de leitura não trava a página: cai em `undefined`, que
+  // `resolveSidebarBrand` já trata como "sem logo customizado" — o estado seguro de hoje.
+  const { data: orgBrand } = await supabase
+    .from("organizations")
+    .select("name, logo_url")
+    .eq("id", user.orgId)
+    .maybeSingle()
+
   // Story 75-117 — módulo Central de Materiais (link externo p/ materiais de marketing).
   // Gate via matriz. URL configurável em organizations.settings.materiais_url; se vazia,
   // aponta p/ página interna de aviso (nunca link quebrado).
@@ -330,6 +354,9 @@ export default async function DashboardLayout({
         userName={user.name}
         userRole={user.role}
         basePath="/dashboard"
+        orgName={orgBrand?.name}
+        orgLogoUrl={orgBrand?.logo_url}
+        atalhoDoConsole={atalhoDoConsole(await isPlatformAdmin(user.id))}
         alertCount={alertCount ?? 0}
         liveBadges={[
           ...(permissions["chat"]

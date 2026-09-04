@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { renderBaseLayout, renderButton } from '../index'
+import { trifoldOrgId } from '@web/lib/tenancy/trifold-org'
+
+/** A URL do logo que só a Trifold real pode receber (Story 900-67). */
+const LOGO_TRIFOLD = 'https://crm.trifold.eng.br/logo-trifold-email.png'
 
 describe('renderBaseLayout', () => {
   it('returns HTML starting with <!DOCTYPE html>', () => {
@@ -32,12 +36,32 @@ describe('renderBaseLayout', () => {
 
   it('uses orgName option in header', () => {
     const html = renderBaseLayout('<p>Body</p>', { orgName: 'MinhaEmpresa' })
-    expect(html).toContain('MinhaEmpresa')
+    expect(html).toContain('>MinhaEmpresa</span>')
   })
 
-  it('falls back to Trifold when orgName is not provided', () => {
+  // Story 900-67 (AC10) — este `it` MUDOU DE SENTIDO, não foi apagado. Ele era o carrasco do
+  // defeito: afirmava que, sem `orgName`, o cabeçalho "cai para a Trifold". Cair para a marca do
+  // primeiro cliente quando não se sabe de quem é o e-mail é justamente o que a story corrige.
+  // A asserção antiga (`toContain('Trifold')`) também não alcançava o que dizia medir: a palavra
+  // "Trifold" aparece no rodapé e no texto do span, então ela ficava verde nos DOIS branches.
+  it('does NOT fall back to the Trifold logo when no orgId is provided', () => {
     const html = renderBaseLayout('<p>Body</p>')
-    expect(html).toContain('Trifold')
+    expect(html).not.toContain(LOGO_TRIFOLD)
+    expect(html).not.toContain('<img')
+  })
+
+  it('does NOT fall back to the Trifold logo for another org id', () => {
+    const html = renderBaseLayout('<p>Body</p>', {
+      orgName: 'Trifold Sandbox',
+      orgId: '11111111-2222-3333-4444-555555555555',
+    })
+    expect(html).not.toContain(LOGO_TRIFOLD)
+    expect(html).toContain('>Trifold Sandbox</span>')
+  })
+
+  it('renders the Trifold logo for the Trifold org id', () => {
+    const html = renderBaseLayout('<p>Body</p>', { orgName: 'Trifold', orgId: trifoldOrgId() })
+    expect(html).toContain(`<img src="${LOGO_TRIFOLD}" alt="Trifold"`)
   })
 
   it('includes unsubscribe link when unsubscribeUrl is provided', () => {

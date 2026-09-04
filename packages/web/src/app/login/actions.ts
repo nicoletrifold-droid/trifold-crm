@@ -13,6 +13,7 @@ import {
   recordPasswordResetAttempt,
 } from "@web/lib/auth/password-reset-throttle"
 import { logAudit } from "@web/lib/audit"
+import { tentarAppUrl } from "@web/lib/tenancy/app-url-fallback"
 
 export async function login(formData: FormData) {
   const supabase = await createClient()
@@ -43,9 +44,11 @@ export async function login(formData: FormData) {
   }
 
   // Need both the public.users.id (for cliente_obras lookup) and role.
+  // `is_platform_admin` entra aqui, e não numa segunda consulta, porque é a MESMA linha:
+  // uma consulta extra abriria a janela em que as duas leituras discordam.
   const { data: appUser } = await supabase
     .from("users")
-    .select("id, name, role, org_id")
+    .select("id, name, role, org_id, is_platform_admin")
     .eq("auth_id", user.id)
     .single()
 
@@ -65,7 +68,39 @@ export async function login(formData: FormData) {
 
   let destination: string
 
-  if (appUser?.role === "broker") {
+  // Story 900-56 (defeito da porta de entrada) — `is_platform_admin` vem ANTES de todos os
+  // ramos por `role`, e a ordem é decidida, não acidental.
+  //
+  // ## Por que a coluna é ortogonal ao `role`, e por que isso exige precedência declarada
+  //
+  // `users.role` diz o que a pessoa faz DENTRO de uma empresa; `users.is_platform_admin` diz
+  // que ela opera a plataforma, ACIMA das empresas (é a mesma autoridade da função SQL
+  // `is_platform_admin()` das policies do Epic 78, e de `lib/tenancy/platform-guard.ts`). Um
+  // valor não implica nada sobre o outro: um platform admin pode ter qualquer `role`, e sem
+  // ordem explícita o desfecho de quem casa dois ramos seria decidido pela ordem em que os
+  // `else if` foram escritos — que é acidente, não decisão.
+  //
+  // ## O que foi medido antes de escolher a ordem (2026-09-01, leitura pura nos dois bancos)
+  //
+  //   • teste (`xnxvygyfyyyzwhiuoehz`): 3 usuários, 1 com `is_platform_admin`, `role='admin'`.
+  //   • produção (`dsopqkqjkmhytudaaolv`): 113 usuários, 1 com `is_platform_admin`,
+  //     `role='admin'`.
+  //   • platform admins que TAMBÉM casam um ramo não-`/dashboard` (`broker`, `cliente`,
+  //     `obras`, `gerente-relacionamento`): **0** nos dois bancos.
+  //
+  // Ou seja: hoje a ordem não muda o destino de ninguém. Ela é escrita agora porque o dia em
+  // que mudar é o dia em que ninguém estará olhando.
+  //
+  // ## Por que a plataforma vence
+  //
+  // Porque o desfecho é RECUPERÁVEL num sentido só. De `/platform` existe `← Voltar ao CRM`,
+  // que leva ao `/dashboard` — e de lá o `role` volta a mandar. O caminho inverso é
+  // exatamente o defeito que esta mudança conserta: cair no CRM sem porta de volta ao painel.
+  // Escolher o lado com saída custa um clique a quem quer o CRM; escolher o outro custou um
+  // painel inalcançável.
+  if (appUser?.is_platform_admin === true) {
+    destination = "/platform"
+  } else if (appUser?.role === "broker") {
     destination = "/broker"
   } else if (appUser?.role === "cliente") {
     // Fetch up to 2 obras to decide: 1 → go directly, 2+ → selection screen.
@@ -123,11 +158,19 @@ export async function requestPasswordReset(
   // rota admin de senha do cliente e de brokers/route.ts) porque, em produção,
   // Server Actions recebem `origin` VAZIO e o link cairia em localhost. Em dev
   // local, defina NEXT_PUBLIC_SITE_URL=http://localhost:3000 no .env.development.
-  const baseUrl =
-    process.env.NEXT_PUBLIC_SITE_URL ??
-    headersList.get('origin') ??
-    process.env.NEXT_PUBLIC_APP_URL ??
-    'https://crm.trifold.eng.br'
+  // Story 900-66 — o sítio 28: a MESMA classe de fallback dos outros 27, invisível ao `grep` da
+  // story porque a cadeia é multilinha e o literal usava aspas simples. A precedência
+  // env → `origin` → env NÃO muda (o comentário acima diz por que ela existe); o que muda é só o
+  // último degrau, que era o literal da Trifold e agora é o resolver.
+  // Desfecho (AC4): sem URL base, o e-mail de recuperação NÃO é enviado — e a resposta continua
+  // sendo a genérica de sempre, porque revelar a diferença quebraria a anti-enumeração (AC3 da
+  // 75-139). Um link de recuperação para a marca errada é o pior desfecho possível aqui.
+  const base = tentarAppUrl(
+    process.env.NEXT_PUBLIC_SITE_URL ?? headersList.get('origin') ?? process.env.NEXT_PUBLIC_APP_URL,
+    'app/login/actions:requestPasswordReset'
+  )
+  if (!base.ok) return genericSuccess
+  const baseUrl = base.url
 
   const adminSupabase = createAdminClient() // AC5 — service-role, nunca client anônimo
 
@@ -178,11 +221,20 @@ export async function requestPasswordReset(
   // consome via verifyOtp({ token_hash, type }) e redireciona para `next`. [Story 75-139]
   const actionLink = `${baseUrl}/auth/callback?token_hash=${linkData.properties.hashed_token}&type=recovery&next=/reset-senha`
 
+  // Story 900-67 (AC4): UMA leitura de `org_id` serve o cabeçalho do e-mail E o `sendEmail`
+  // abaixo. Declarada aqui (antes era logo acima do `after()`) para que as duas não possam
+  // divergir — se o remetente é de uma org, a marca do cabeçalho tem de ser da mesma org.
+  // O `?? undefined` é o que já existia para o `sendEmail`; não é uma guarda nova (`users.org_id`
+  // é NOT NULL no banco), e `isMarcaTrifold(undefined)` é `false` — falha para o texto, não para
+  // a marca da Trifold.
+  const emailOrgId = appUser.org_id ?? undefined
+
   const { subject, html } = renderPasswordActionEmail({
     userName: appUser.name ?? 'usuário',
     actionLink,
     siteUrl: baseUrl,
     mode: 'reset',
+    orgId: emailOrgId,
   })
 
   // `after()` (Next 16, estável desde v15.1) agenda o envio para DEPOIS que a resposta
@@ -192,7 +244,6 @@ export async function requestPasswordReset(
   // round-trip ao Resend completar e o e-mail nunca era enviado (Story 75-139).
   // Como o trabalho roda após a resposta, a mitigação de timing side-channel da
   // anti-enumeração é preservada: a latência de resposta não vaza se o e-mail existe.
-  const emailOrgId = appUser.org_id ?? undefined
   const emailTo = appUser.email as string
   after(async () => {
     const res = await sendEmail({

@@ -4,8 +4,9 @@ import Link from "next/link"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
-import { MoreHorizontal } from "lucide-react"
+import { MoreHorizontal, ShieldCheck } from "lucide-react"
 import { LogoutButton } from "./logout-button"
+import { resolveSidebarBrand } from "./sidebar-nav-brand"
 import { ThemeToggle } from "@web/components/theme-toggle"
 
 export interface NavItem {
@@ -35,15 +36,66 @@ interface SidebarNavProps {
    * Falha de fetch mantém os últimos valores daquele endpoint (fail-open).
    */
   liveBadges?: Array<{ href: string; endpoint: string }>
+  /**
+   * Story 900-56 (defeito da porta de entrada) — o caminho de IDA do CRM para o console de
+   * plataforma. `null`/ausente = a pessoa não é platform admin e nada é renderizado.
+   *
+   * O par `{href,label}` chega PRONTO do servidor (`atalhoDoConsole()` em `lib/platform.ts`) em
+   * vez de um booleano com a rota escrita aqui. Este arquivo é `"use client"`: um literal
+   * `"/platform"` daqui viajaria no bundle de todo usuário logado, e esconder o item deixaria a
+   * rota descobrível assim mesmo. A forma é declarada inline, e não importada de
+   * `@web/lib/platform`, porque aquele módulo é `server-only` — só o TIPO poderia atravessar, e
+   * um `import` que só não quebra por ser `type` é uma linha a um caractere de virar defeito.
+   */
+  atalhoDoConsole?: { href: string; label: string } | null
+  /**
+   * Story 900-64 — a marca da EMPRESA no lugar da Trifold. As duas chegam do layout, que já
+   * conhece a org da sessão (`user.orgId`) e já lê `organizations` sob RLS.
+   *
+   * Opcionais de propósito: um chamador que não as passe (nenhum hoje; medido por
+   * `grep -rln "SidebarNav" packages/web/src/app` = `dashboard/layout.tsx` e `broker/layout.tsx`)
+   * continua vendo a marca da Trifold, que é o comportamento de HOJE.
+   *
+   * ⚠️ Fora de escopo, e continua dizendo Trifold para toda empresa: a tela de login (a org só é
+   * conhecida DEPOIS de autenticar — não há rota por empresa nem subdomínio) e os e-mails
+   * transacionais (10 pontos de chamada passam `orgName` literal, e `password-action.ts` tem a
+   * palavra escrita no assunto e no corpo). Ver as seções homônimas da story 900-64.
+   */
+  orgName?: string | null
+  orgLogoUrl?: string | null
 }
+
+/**
+ * As classes do logo, por superfície e por dono da marca.
+ *
+ * As duas de `TRIFOLD` são as strings de HOJE, byte a byte — o filtro monocromático foi pensado
+ * para a wordmark da Trifold e não pode ser aplicado ao logo colorido de um cliente (nem no tema
+ * escuro do celular, que é onde a primeira versão desta story deixava o defeito sobreviver).
+ *
+ * As duas de `CLIENTE` são TRAVA DE CAIXA, não estética. Medido: o contêiner do desktop é `h-20`
+ * (80 px), o do mobile é `h-14` (56 px), o `<Image>` declara `width={143}`/`width={24}`, e o
+ * preflight do Tailwind v4 aplica `img { height: auto }` — que vence o atributo `height`. Sem
+ * `max-h-*`, um logo de cliente QUADRADO renderiza 143×143 e estoura o cabeçalho, que não tem
+ * `overflow-hidden`. Com `w-auto` + `h-auto` + `max-h-*` + `max-w-*`, qualquer proporção cabe e o
+ * navegador preserva a razão de aspecto (CSS 2.1 §10.4 para elemento substituído).
+ */
+const CLASSES_LOGO_TRIFOLD_DESKTOP = "brightness-0 dark:brightness-0 dark:invert"
+const CLASSES_LOGO_TRIFOLD_MOBILE = "dark:brightness-0 dark:invert"
+const CLASSES_LOGO_CLIENTE_DESKTOP = "h-auto max-h-12 w-auto max-w-full object-contain"
+const CLASSES_LOGO_CLIENTE_MOBILE = "h-auto max-h-8 w-auto max-w-32 object-contain"
 
 /** Classe de background do badge numérico conforme `badgeTone`. */
 function badgeBg(item: NavItem): string {
   return item.badgeTone === "green" ? "bg-green-700" : "bg-orange-500"
 }
 
-export function SidebarNav({ items, userName, userRole, basePath, alertCount, liveBadges }: SidebarNavProps) {
+export function SidebarNav({ items, userName, userRole, basePath, alertCount, liveBadges, atalhoDoConsole, orgName, orgLogoUrl }: SidebarNavProps) {
   const pathname = usePathname()
+  // Story 900-64 — a imagem do cliente pode falhar (URL removida do balde, host fora do
+  // `remotePatterns`, rede). O desfecho declarado é a marca da Trifold, nunca espaço vazio: o
+  // `onError` liga esta chave e o helper devolve o fallback no render seguinte.
+  const [imgFailed, setImgFailed] = useState(false)
+  const brand = resolveSidebarBrand({ orgLogoUrl, orgName, imgFailed })
   // Story 63-18 — bottom sheet "Mais" (mobile).
   const [moreOpen, setMoreOpen] = useState(false)
   const sheetRef = useRef<HTMLDivElement>(null)
@@ -182,11 +234,12 @@ export function SidebarNav({ items, userName, userRole, basePath, alertCount, li
           {/* Logo */}
           <div className="flex h-20 shrink-0 items-center border-b border-stone-100 px-5 dark:border-stone-800">
             <Image
-              src="/logo-trifold.webp"
-              alt="Trifold"
+              src={brand.src}
+              alt={brand.alt}
               width={143}
               height={143}
-              className="brightness-0 dark:brightness-0 dark:invert"
+              className={brand.isCustom ? CLASSES_LOGO_CLIENTE_DESKTOP : CLASSES_LOGO_TRIFOLD_DESKTOP}
+              onError={() => setImgFailed(true)}
             />
           </div>
 
@@ -252,6 +305,18 @@ export function SidebarNav({ items, userName, userRole, basePath, alertCount, li
               </div>
               <ThemeToggle />
             </div>
+            {atalhoDoConsole && (
+              <Link
+                href={atalhoDoConsole.href}
+                data-atalho-console="sidebar"
+                className="mb-1 flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium text-amber-700 transition-all hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-500/10"
+              >
+                <span className="flex h-5 w-5 items-center justify-center">
+                  <ShieldCheck className="h-[18px] w-[18px]" />
+                </span>
+                <span className="flex-1">{atalhoDoConsole.label}</span>
+              </Link>
+            )}
             <LogoutButton />
           </div>
         </div>
@@ -261,15 +326,29 @@ export function SidebarNav({ items, userName, userRole, basePath, alertCount, li
       <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-stone-200 bg-white/95 px-4 backdrop-blur-sm lg:hidden dark:border-stone-800 dark:bg-stone-950/95">
         <div className="flex items-center gap-2">
           <Image
-            src="/logo-trifold.webp"
-            alt="Trifold"
+            src={brand.src}
+            alt={brand.alt}
             width={24}
             height={24}
-            className="dark:brightness-0 dark:invert"
+            className={brand.isCustom ? CLASSES_LOGO_CLIENTE_MOBILE : CLASSES_LOGO_TRIFOLD_MOBILE}
+            onError={() => setImgFailed(true)}
           />
-          <span className="text-sm font-semibold text-stone-900 dark:text-stone-100">Trifold</span>
+          {!brand.isCustom && (
+            <span className="text-sm font-semibold text-stone-900 dark:text-stone-100">Trifold</span>
+          )}
         </div>
         <div className="flex items-center gap-2">
+          {atalhoDoConsole && (
+            <Link
+              href={atalhoDoConsole.href}
+              data-atalho-console="mobile"
+              aria-label={atalhoDoConsole.label}
+              title={atalhoDoConsole.label}
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-amber-700 dark:text-amber-400"
+            >
+              <ShieldCheck className="h-[18px] w-[18px]" />
+            </Link>
+          )}
           <ThemeToggle />
           <LogoutButton />
           <div className="flex h-7 w-7 items-center justify-center rounded-full bg-orange-100 text-[10px] font-semibold text-orange-700 dark:bg-orange-500/20 dark:text-orange-300">

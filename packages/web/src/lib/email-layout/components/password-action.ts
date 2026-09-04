@@ -18,8 +18,15 @@ export function renderPasswordActionEmail(params: {
   actionLink: string
   siteUrl: string
   mode: "reset" | "create"
+  /**
+   * Story 900-67 (AC6) — o `organizations.id` do destinatário, repassado a `renderBaseLayout`
+   * para que o cabeçalho decida a marca por identidade e não pelo `orgName` literal abaixo
+   * ("Trifold CRM"), que casava `/trifold/i` para QUALQUER org. Os 6 chamadores desta função
+   * têm o valor em escopo e o passam.
+   */
+  orgId?: string | null
 }): { subject: string; html: string } {
-  const { userName, actionLink, siteUrl, mode } = params
+  const { userName, actionLink, siteUrl, mode, orgId } = params
   const isReset = mode === "reset"
 
   const subject = isReset
@@ -50,6 +57,7 @@ export function renderPasswordActionEmail(params: {
     `,
     {
       orgName: "Trifold CRM",
+      orgId,
       previewText: `${userName}, ${isReset ? "redefina" : "crie"} sua senha de acesso ao Trifold CRM`,
     }
   )

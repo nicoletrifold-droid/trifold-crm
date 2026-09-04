@@ -99,6 +99,33 @@ export const DEFINICOES_DE_PROVIDER: Readonly<Record<ProviderDoPainel, Definicao
   },
 }
 
+/**
+ * Story 900-57 — o rótulo e o TOM de um status de tile, num lugar só.
+ *
+ * Nasceu dentro de `integrations-panel.tsx`, onde ficava certo enquanto o painel era a única
+ * tela que mostrava status de integração. A `900-57` acrescenta uma segunda superfície (o card
+ * "Integrações" do Resumo da empresa), e duas traduções do mesmo `status` são o começo de duas
+ * telas do console discordando sobre o mesmo fato — que é literalmente o defeito QA-900-51-2.
+ *
+ * Devolve TOM, não classe: verde e vermelho valem nas duas paletas, mas o neutro depende de qual
+ * escala a superfície usa (`stone` no CRM do cliente, `slate` no console). Quem sabe a escala é
+ * quem renderiza.
+ */
+export type TomDoStatus = "ok" | "erro" | "neutro"
+
+const ROTULO_DE_STATUS: Readonly<Record<string, { texto: string; tom: TomDoStatus }>> = {
+  connected: { texto: "Conectado", tom: "ok" },
+  active: { texto: "Conectado", tom: "ok" },
+  error: { texto: "Com erro", tom: "erro" },
+  disconnected: { texto: "Não conectado", tom: "neutro" },
+  inactive: { texto: "Não conectado", tom: "neutro" },
+}
+
+/** Status desconhecido aparece com o próprio nome e tom neutro — nunca como "conectado". */
+export function rotuloDeStatusDoTile(status: string): { texto: string; tom: TomDoStatus } {
+  return ROTULO_DE_STATUS[status] ?? { texto: status, tom: "neutro" }
+}
+
 export function ehProviderDoPainel(valor: string): valor is ProviderDoPainel {
   return (PROVIDERS_DO_PAINEL as readonly string[]).includes(valor)
 }
@@ -201,6 +228,16 @@ export interface LinhaDeIntegracaoDoPainel {
   /** Ponteiro para o Vault. Só o booleano "existe" atravessa para a tela — nunca o valor. */
   secret_ref: string | null
   updated_at: string | null
+  /**
+   * Story 900-61 — o CÓDIGO do último erro e o instante da última verificação (migration `253`).
+   *
+   * Só a superfície de `/platform` os pede na projeção; o `/dashboard` continua com a projeção
+   * antiga e chega aqui com os dois `undefined`. Por isso `montarTilesDoPainel` normaliza com
+   * `?? null` em vez de confiar no tipo: a linha vem de um `as unknown as`, e um cast não
+   * verifica coluna nenhuma.
+   */
+  last_error: string | null
+  last_check_at: string | null
 }
 
 export interface TileDoPainel {
@@ -209,6 +246,10 @@ export interface TileDoPainel {
   config: Record<string, string | null>
   temSegredo: boolean
   atualizadoEm: string | null
+  /** Story 900-61 — o código do último erro. `null` = nunca falhou, ou já reconectou. */
+  ultimoErro: string | null
+  /** Story 900-61 — quando a integração foi verificada pela última vez. `null` = nunca. */
+  ultimaChecagem: string | null
 }
 
 export function montarTilesDoPainel(
@@ -222,7 +263,16 @@ export function montarTilesDoPainel(
       // A linha `whatsapp` de `org_integrations` é IGNORADA de propósito: ela é estruturalmente
       // inescrevível (CHECK da 247 + P0010) e fica `disconnected` para sempre. Lê-la era afirmar
       // "Não conectado" sobre um canal que, em produção, estava `active` com credencial.
-      return { provider, config: {}, ...derivarEstadoDoTileWhatsapp(linhaWhatsApp) }
+      // As duas colunas da 900-61 são de `org_integrations`, e para o WhatsApp aquela linha é a
+      // que esta função existe para IGNORAR. `whatsapp_config` não tem equivalente: declarar
+      // "em erro desde" a partir dela seria inventar o dado que a migration 253 não criou lá.
+      return {
+        provider,
+        config: {},
+        ultimoErro: null,
+        ultimaChecagem: null,
+        ...derivarEstadoDoTileWhatsapp(linhaWhatsApp),
+      }
     }
     const l = porProvider.get(provider)
     return {
@@ -231,6 +281,8 @@ export function montarTilesDoPainel(
       config: l?.config ?? {},
       temSegredo: (l?.secret_ref ?? null) !== null,
       atualizadoEm: l?.updated_at ?? null,
+      ultimoErro: l?.last_error ?? null,
+      ultimaChecagem: l?.last_check_at ?? null,
     }
   })
 }

@@ -1621,13 +1621,13 @@
     ]
   },
   "producao": {
-    "gerado_em": "2026-09-01T14:02:44.344Z",
+    "gerado_em": "2026-09-02T14:00:48.485Z",
     "projeto_ref": "dsopqkqjkmhytudaaolv",
     "totais": {
-      "aplicada": 273,
+      "aplicada": 275,
       "PENDENTE": 0,
       "ALTERADA-APÓS-APLICAR": 0,
-      "ÓRFÃ-no-banco": 0
+      "ÓRFÃ-no-banco": 1
     },
     "arquivos": [
       {
@@ -3264,8 +3264,26 @@
       },
       {
         "arquivo": "250_kanban_stages_default_unico.sql",
-        "estado": "aplicada",
+        "estado": "ÓRFÃ-no-banco",
         "sha256": "b9722f4439541f4e150c00541e9910e86a46e6118d85b3128357b48443d4ea60",
+        "via": "apply"
+      },
+      {
+        "arquivo": "251_pausar_retomar_empresa.sql",
+        "estado": "aplicada",
+        "sha256": "1d44e0917c39ee0085af647f3c9ab1cc39eda41f0e5dc4658f5bd735e57900e6",
+        "via": "apply"
+      },
+      {
+        "arquivo": "252_editar_dados_da_empresa.sql",
+        "estado": "aplicada",
+        "sha256": "6e962c17ca412e8e667b6d4cb16ca3a65e85f0ad437dc5dd31541cd425034cd1",
+        "via": "apply"
+      },
+      {
+        "arquivo": "253_diagnostico_integracao.sql",
+        "estado": "aplicada",
+        "sha256": "a1ecbc0da048bdf42fec071738f148ea3eb56955a1bff580cc7a0d7bfded5cb5",
         "via": "apply"
       }
     ]

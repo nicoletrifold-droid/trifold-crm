@@ -57,6 +57,16 @@ export default async function BrokerLayout({
     return item
   })
 
+  // Story 900-64 — a marca da EMPRESA na barra lateral, no lugar da Trifold. Mesma leitura,
+  // mesmas props e mesmas razões do `app/dashboard/layout.tsx`: INCONDICIONAL (o logo aparece para
+  // toda org, diferente do `materiais_url` logo abaixo), `.maybeSingle()` porque zero linhas não é
+  // erro, e falha de leitura cai em `undefined` — que o helper trata como "marca da Trifold".
+  const { data: orgBrand } = await supabase
+    .from("organizations")
+    .select("name, logo_url")
+    .eq("id", user.orgId)
+    .maybeSingle()
+
   // Story 75-117 — Central de Materiais (link externo). Gate pela matriz de Perfil
   // de Acesso (corretor liberado por padrão). URL em organizations.settings.materiais_url;
   // sem URL, o item não aparece no app do corretor (a config é feita no dashboard).
@@ -97,6 +107,8 @@ export default async function BrokerLayout({
         userName={user.name}
         userRole={user.role}
         basePath="/broker"
+        orgName={orgBrand?.name}
+        orgLogoUrl={orgBrand?.logo_url}
         liveBadges={[
           { href: "/broker/agenda", endpoint: "/api/broker/nav-counts" },
           { href: "/broker/chat", endpoint: "/api/broker/nav-counts" },

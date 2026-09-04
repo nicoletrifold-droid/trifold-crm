@@ -63,8 +63,29 @@ const allowlist = JSON.parse(readFileSync(CAMINHO_JSON, "utf-8"))
  * de `/platform/orgs/[id]/integracoes`. As rotas do CLIENTE (`app/api/configuracoes/integracoes/**`)
  * NÃO entram — elas usam o client RLS-scoped e as RPCs `_as_org`, e é esta régua que transforma
  * essa afirmação da AC8 em catraca em vez de promessa.
+ *
+ * Re-medido pela Story 900-60 (**242 → 243**): +1 em `plataforma`,
+ * `app/api/platform/orgs/[id]/route.ts` — a rota `PATCH` que pausa/retoma uma empresa. Ela chama
+ * a RPC `organization_set_active_as_platform` (migration 251), que é
+ * `GRANT EXECUTE … TO service_role`; a autorização acontece na rota (`getPlatformAdmin()`), não
+ * no SQL. O `UPDATE` mora na RPC, e não na rota, porque `orgs_ativas_depois` (AC10) só é verdade
+ * lido na MESMA transação do `UPDATE`.
+ *
+ * Re-medido pela Story 900-62 (**243 → 244**): +1 em `plataforma`,
+ * `app/api/platform/orgs/[id]/dados/route.ts` — o `PATCH` que edita nome/slug/contato/fiscal.
+ * Arquivo DISTINTO do da 900-60 de propósito (as duas stories entram em qualquer ordem, sem
+ * conflito de merge). Chama a RPC `org_details_update_as_platform` (migration 252). O `UPDATE`
+ * mora na RPC porque a trava otimista por `updated_at`, a detecção de no-op (AC4) e a linha de
+ * trilha precisam da MESMA transação — lida em duas viagens, a trava não trava.
+ *
+ * Re-medido pela Story 900-63 (**244 → 245**): +1 em `plataforma`,
+ * `app/api/platform/orgs/[id]/logo/route.ts` — o `POST`/`DELETE` que guarda e remove o logo de
+ * uma empresa. Aqui o client cru é exigido por DOIS efeitos, e não um: o bucket `org-logos` não
+ * tem policy de escrita para `anon`/`authenticated` (só `service_role` grava nele) **e** a RPC
+ * `org_logo_update_as_platform` (migration 254) é `GRANT EXECUTE … TO service_role`. A
+ * autorização acontece na rota (`getPlatformAdmin()`), não no SQL.
  */
-const TOTAL_ESPERADO = 242
+const TOTAL_ESPERADO = 245
 
 const REGRA = "aios/no-unscoped-admin-client"
 
@@ -247,7 +268,7 @@ describe("validarAllowlist — controle positivo: o arquivo REAL", () => {
 // ─────────────────────────────────────────────────────────────────────────────────────────────
 
 describe("ponte entre o JSON e o `PERMITIDOS` da regra ESLint", () => {
-  it("a união das 4 seções + `legado` soma 240", () => {
+  it("a união das 4 seções + `legado` soma `TOTAL_ESPERADO`", () => {
     const uniao = new Set([
       ...Object.keys(allowlist.plataforma),
       ...Object.keys(allowlist["itera-orgs"]),
@@ -258,7 +279,7 @@ describe("ponte entre o JSON e o `PERMITIDOS` da regra ESLint", () => {
     expect(uniao.size).toBe(TOTAL_ESPERADO)
   })
 
-  it("`PERMITIDOS` da regra ESLint tem exatamente as mesmas 240 entradas", () => {
+  it("`PERMITIDOS` da regra ESLint tem exatamente as mesmas entradas do JSON", () => {
     // Antes desta story `PERMITIDOS` lia só `legitimos` + `legado`: seriam 190 aqui, e 51 arquivos
     // teriam perdido a isenção em silêncio (correção B1). É esta asserção que fixa isso.
     expect(PERMITIDOS.size).toBe(TOTAL_ESPERADO)

@@ -43,3 +43,16 @@ brand_imgs/
 *.otf
 *.eot
 *.zip
+
+# ─── Story 90-1 (pré-renderização) ───────────────────────────────────────────
+# `dist/` é o BUILD-OUTPUT: `.dc.html`-fonte + `<div id="dc-prerender">` gerado
+# pelo snapshot. É o que sobe no deploy, e é sempre regenerado a partir dos
+# fontes — nunca editado à mão, nunca versionado. Os `.dc.html` da raiz seguem
+# sendo a única fonte editável/auditável.
+# (Já coberto pelo `dist/` do .gitignore da raiz do monorepo; explícito aqui
+# porque é ESTE arquivo que documenta o critério deste projeto.)
+dist/
+
+# Screenshots/CLS de baseline e "depois" da AC2 — artefato de verificação local,
+# pesado e não auditável em diff.
+.seo-metrics/

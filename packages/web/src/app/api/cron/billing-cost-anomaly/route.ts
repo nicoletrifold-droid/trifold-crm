@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { sendEmail } from "@web/lib/email"
 import { sendPushToUser } from "@web/lib/server/push-service"
+import { tentarAppUrl } from "@web/lib/tenancy/app-url-fallback"
 import { hojeSaoPaulo, toIsoDate, type SaoPauloDate } from "@web/lib/billing/reminder-schedule"
 import {
   mtdWindows,
@@ -27,7 +28,6 @@ import {
 
 export const dynamic = "force-dynamic"
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://crm.trifold.eng.br"
 
 // Código de erro Postgres para violação de UNIQUE (o dedup funcionando, não uma falha).
 const PG_UNIQUE_VIOLATION = "23505"
@@ -43,7 +43,9 @@ type AdminRow = { id: string; name: string | null; email: string | null }
 
 function buildMensagem(
   serviceName: string,
-  trigger: AnomalyTrigger
+  trigger: AnomalyTrigger,
+  /** Story 900-66 — base do link, resolvida pelo handler (que sabe abortar quando não há). */
+  appUrl: string
 ): { subject: string; pushTitle: string; pushBody: string; html: string } {
   const atualStr = formatMoeda(trigger.currency, trigger.mtdAtual)
   const refStr = formatMoeda(trigger.currency, trigger.mtdAnterior)
@@ -57,7 +59,7 @@ function buildMensagem(
       `<p>Olá,</p>` +
       `<p>O gasto acumulado do mês do serviço <strong>${serviceName}</strong> ` +
       `(<strong>${atualStr}</strong>) cruzou o limite absoluto configurado (${limiteStr}).</p>` +
-      `<p><a href="${APP_URL}/dashboard">Abrir o painel</a></p>`
+      `<p><a href="${appUrl}/dashboard">Abrir o painel</a></p>`
     return { subject, pushTitle, pushBody, html }
   }
 
@@ -73,7 +75,7 @@ function buildMensagem(
     `<p>O gasto acumulado do mês do serviço <strong>${serviceName}</strong> está ` +
     `<strong>${pctStr}</strong> acima do mesmo período do mês anterior.</p>` +
     `<p>Mês corrente (até ontem): <strong>${atualStr}</strong> · Mesmo período do mês anterior: ${refStr}</p>` +
-    `<p>Verifique se há uso fora do padrão. <a href="${APP_URL}/dashboard">Abrir o painel</a></p>`
+    `<p>Verifique se há uso fora do padrão. <a href="${appUrl}/dashboard">Abrir o painel</a></p>`
   return { subject, pushTitle, pushBody, html }
 }
 
@@ -97,6 +99,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ ok: true, skipped: "day_1_no_mtd_yet", hoje: toIsoDate(hoje) })
   }
   const { periodoAtual, atualInicio, atualFim, anteriorInicio, anteriorFim } = windows
+
+  // Story 900-66 (AC4) — quem não tem URL não envia. Antes do laço: a env é a mesma para todo
+  // serviço. Nenhum marcador de dedup é gravado, então o alerta volta a sair quando houver URL.
+  const base = tentarAppUrl(process.env.NEXT_PUBLIC_APP_URL, "cron/billing-cost-anomaly")
+  if (!base.ok) {
+    return NextResponse.json({ ok: true, dryRun, skipped: "app_url_indisponivel", hoje: toIsoDate(hoje) })
+  }
 
   // ── Serviços habilitados e com alerta ligado ──
   const { data: servicosRaw, error: svcErr } = await admin
@@ -230,7 +239,7 @@ export async function GET(request: NextRequest) {
       }
 
       // Marcador gravado → notificar (best-effort, .catch por canal/admin).
-      const { subject, pushTitle, pushBody, html } = buildMensagem(svc.name, trigger)
+      const { subject, pushTitle, pushBody, html } = buildMensagem(svc.name, trigger, base.url)
       for (const a of admins) {
         if (a.email) {
           pending.push(
@@ -244,7 +253,7 @@ export async function GET(request: NextRequest) {
           sendPushToUser(admin, a.id, {
             title: pushTitle,
             body: pushBody,
-            url: `${APP_URL}/dashboard`,
+            url: `${base.url}/dashboard`,
           }).catch((e: unknown) => {
             alertErrors++
             console.error("[billing-cost-anomaly] push:", a.id, e)
