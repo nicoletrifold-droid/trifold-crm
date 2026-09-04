@@ -891,7 +891,12 @@ function AdsetsTable({ adsets }: { adsets: MetaAdSetWithMetrics[] }) {
             <Th align="right">Cliques</Th>
             <Th align="right">CTR</Th>
             <Th align="right">Leads</Th>
-            <Th align="right">CPL</Th>
+            <Th
+              align="right"
+              title="Custo por resultado da Meta (spend ÷ leads de formulário + conversas por mensagem iniciadas)"
+            >
+              Custo/Resultado
+            </Th>
             <Th align="left">Qualidade</Th>
           </tr>
         </thead>
@@ -965,13 +970,16 @@ function AdsetsTable({ adsets }: { adsets: MetaAdSetWithMetrics[] }) {
 function Th({
   children,
   align,
+  title,
 }: {
   children: React.ReactNode
   align: "left" | "right"
+  title?: string
 }) {
   return (
     <th
-      className={`px-4 py-3 text-${align} text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-stone-400`}
+      title={title}
+      className={`px-4 py-3 text-${align} text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-stone-400${title ? " cursor-help" : ""}`}
     >
       {children}
     </th>
