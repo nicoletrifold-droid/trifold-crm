@@ -18,6 +18,10 @@ delas mudaram o conteúdo do gate.
    Um hit de cache NÃO é evidência de compilação — é evidência de que alguém já
    compilou aquele hash. Sempre `npx turbo type-check --force` e
    `npx turbo lint --force` num gate. Custo: ~45s e ~51s neste repo.
+   Pelos scripts da raiz, o que funciona é a **variável de ambiente**
+   `TURBO_FORCE=true pnpm type-check` / `pnpm lint` (prova: `Cached: 0 cached`);
+   `pnpm test --force` e `pnpm type-check -- --force` saem **exit 1** por
+   `CACError`/`TS5093` e são falsos vermelhos — ver [[reguas-declarativas-ac10]].
 
 2. **"O arquivo X não foi tocado" se prova com `git diff -- X` vazio**, não com
    grep nem com a palavra do @dev. Na 86-11 a alegação era que a proteção veio só

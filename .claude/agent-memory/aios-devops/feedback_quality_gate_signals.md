@@ -16,6 +16,17 @@ For trifold-crm, treat `cd packages/web && pnpm build` (i.e. `next build`) as th
 
 **Limite conhecido deste sinal (2026-08-24):** `pnpm build` local verde NÃO garante deploy verde. O build da Vercel usa `rootDirectory: packages/web` e respeita `packages/web/.vercelignore` (que exclui `docs`, `scripts`, `bin`, `.claude`), então um `import` que atravessa a fronteira do pacote compila local (o arquivo existe no working tree) e explode na Vercel. Caso real (resolvido em 2026-08-24 pela 900-14b): [[incidente-deploy-900-14b]]. Ao pushar, confira também o check `Vercel – trifold-crm` do PR, não só o CI do GitHub.
 
+**`turbo test` NÃO EXISTE neste repo (2026-09-04).** `npx turbo test` sai com
+`x Could not find task \`test\` in project` — nenhum `package.json` de pacote define o script.
+O `test` do CI é o `pnpm test` da **raiz**, que é `vitest run` direto (workspace inteiro, sem
+turbo). Ou seja: dos três comandos do job, só `type-check` e `lint` passam pelo turbo; `--force`
+não se aplica ao teste, e não há cache para desconfiar. Ler o erro do turbo como "o gate de teste
+quebrou" é falso negativo.
+
+**`${PIPESTATUS[0]}` sai VAZIO no zsh desta máquina** — o array é `$pipestatus` e é 1-indexado.
+Um gate que depende de `| tail` para ler exit code não mede nada. Remédio: redirecionar para
+arquivo e ler `$?` na linha seguinte, sem pipe.
+
 **Desde 2026-08-23 o repo tem CI de verdade** (`.github/workflows/ci.yml`, Story 900-1): job `type-check · lint · test` bloqueante + `gate de tenancy` não-bloqueante. O pre-push gate local deve espelhar os três comandos do job (`pnpm type-check`, `pnpm lint`, `pnpm test`) para não descobrir falha só no PR.
 
 **Duas armadilhas do gate local, aprendidas em 2026-08-24 (PR #492):**

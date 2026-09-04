@@ -74,9 +74,12 @@
 - [project_epic_86_qa_patterns.md](project_epic_86_qa_patterns.md) — Epic 86 (Pixel+CAPI) QA: 5 checks de tracking silencioso (cadeia de IP, ADAPT que muda superfície dos outros chamadores, hashing, PII em webhook_logs, dedup) + gotcha de rebase do trifold-design-system
 - [Webhook do WhatsApp — armadilhas de QA](project_webhook_whatsapp_qa_patterns.md) — texto sintético vira turno do lead na Nicole; trigger 038 já cuida de last_message_at; snapshot é de prod; gate:tenancy suja a árvore
 - [Baseline do trifold-design-system](project_trifold_design_system_baseline.md) — `.dc.html` untracked de propósito: baseline é a produção via `curl`, não o git; sem lint/typecheck; falso positivo de `{{ }}`
-- [Relatório impresso de brindes](project_relatorio_impresso_brindes.md) — único `document.write` da app: XSS same-origin real (cookie legível), não cosmético; A4 útil = 673,5px (viewport 734, não 794)
+- [Relatório impresso de brindes](project_relatorio_impresso_brindes.md) — único `document.write` da app: XSS same-origin real (fechado na 75-373, 2 furos medidos); A4 útil = 673,5px (viewport 734, não 794)
+- [.env.local desta máquina aponta produção](project_env_local_desta_maquina_aponta_producao.md) — existe, com service-role de prod, e vence tudo no Next; `.env.development` não existe e `build:teste` sai 1
 
 ## Método de QA
 
 - [feedback_reverificacao_focada.md](feedback_reverificacao_focada.md) — re-verificação de gate: `turbo --force` (cache hit não é evidência), `git diff` vazio prova "não tocado", teste vacuoso, `-t` do vitest é regex e zero match sai EXIT=0, metadata vem do `git`
 - [A ponte do client não provada](feedback_ponte_do_client_nao_provada.md) — teste do `.eq()` + medição por URL crua deixam o supabase-js sem prova; feche capturando a URL real com `fetch` falso
+- [Mutação de alcance acrescenta sítio](feedback_mutacao_de_alcance_acrescenta_sitio.md) — remover escape prova presença; só ACRESCENTAR sítio novo prova alcance; `startsWith("marcador(")` nunca prova suficiência
+- [Réguas declarativas (AC10 do host nu)](project_reguas_declarativas_ac10.md) — colisão entre PRs deixa main vermelha sem culpa de PR; medir contagem mutando o declarado, não replicando o scanner; `TURBO_FORCE=true`

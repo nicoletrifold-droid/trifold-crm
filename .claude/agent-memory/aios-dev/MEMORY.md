@@ -17,6 +17,9 @@
 - [Prova de filtro e de layout](feedback_prova_de_filtro_e_de_layout.md) — `.eq` em embed sem `!inner` não filtra nada; A4 se mede, não se olha
 - [Sem ambiente de teste neste checkout](project_env_sem_ambiente_de_teste.md) — `packages/web/.env.local` aponta para PRODUÇÃO, contra o que o CLAUDE.md diz
 - [Nota de dívida calibrada](feedback_nota_de_divida_calibrada.md) — mecânica sem consequência+pré-condições subdimensiona; meça o alcance antes de dizer "fora de alcance"
+- [Réguas declarativas de tenancy](project_reguas_declarativas_tenancy.md) — host nu em qualquer arquivo de `packages/web/src` deixa main vermelha; declarar com motivo, nunca afrouxar
+- [Fail-closed muda de polaridade](feedback_fail_closed_muda_de_polaridade.md) — o `""` do recorte reprova `toContain` mas APROVA `toEqual([])`; sinal de vida não é opcional
+- [Paridade provada por bytes](feedback_paridade_provada_por_bytes.md) — "no-op para o caso comum" se prova com sonda temporária + sha256, não lendo o diff
 
 ## Key Patterns
 
