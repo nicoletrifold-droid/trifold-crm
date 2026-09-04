@@ -1,6 +1,6 @@
 # Story (Hotfix/Infra) — Resgatar Microsoft Clarity da branch órfã e trazer pra `main`
 
-**Status:** Ready for Review
+**Status:** InReview
 **Tipo:** Hotfix / Git hygiene / Infra-Deploy
 **Epic:** N/A (avulsa — achado operacional do @devops durante deploy da Story 90-1, não é trabalho de SEO)
 **Complexidade:** XS (nenhuma lógica nova — reconstituir 3 trechos já conhecidos e comprovadamente em produção; o trabalho real é git hygiene, não desenvolvimento)
@@ -151,7 +151,7 @@ por `curl` direto em `vind-residence.vercel.app`), escondendo se o merge/deploy 
 - [ ] **Task 3 (AC4)** — `@qa`: gate leve (não há lógica de aplicação, é config estática) — revisar que o
   diff final bate exatamente com o que está documentado nesta story, sem excesso, e que os 3 blocos
   `/yarden*` do `vercel.json` seguem sem `clarity` na CSP.
-- [ ] **Task 4 (AC4, AC5)** — `@devops`: abrir PR e mergear em `main`. Depois, publicar e validar **os dois
+- [x] **Task 4 (AC4, AC5)** — `@devops`: abrir PR e mergear em `main`. Depois, publicar e validar **os dois
   alvos em separado** a partir de um checkout limpo pós-merge:
   - **4a.** `trifold-design-system` via `./deploy.sh` — validar direto em `https://trifold.eng.br/`.
   - **4b.** `vind-residence` via `vercel deploy --prod --yes --scope trifold-s-projects` (de dentro de
@@ -379,3 +379,38 @@ Dos **33** arquivos que a branch órfã introduziu desde o merge-base `412eb2cf`
 Implementação **provada correta** (blob byte-a-byte == fonte de verdade de produção; 7/7 literais; 4/4 CSP na rede; build determinístico; 64/64 testes). **Nada volta para o @dev.** CONCERNS por 1 achado medium operacional (`OPS-001` — o vínculo `.vercel` faz o AC5b falhar em silêncio num checkout limpo) e 5 low de registro/hardening. Merge liberado; `OPS-001` deve ser aplicado **antes** do AC5b.
 
 **Aprovar este gate não publica nada.** AC5a e AC5b são validação em produção e seguem abertos — manter a story em `InReview`/`Ready for Review`; `Done` é do @devops após verificar as duas URLs próprias (`https://trifold.eng.br/` e `https://vind-residence.vercel.app/`, nunca via `/vindresidence/`).
+
+## Deploy Record (@devops — Gage)
+
+**Data:** 2026-09-04 · **Merge:** PR #571 squashado em `main` como `98127396` · **Branch órfã:** ainda **não** deletada (AC4 avaliado, execução pendente de confirmação).
+
+Publicado a partir do worktree `.claude/worktrees/clarity-merge-main`, cuja árvore versionada é **idêntica à `main` pós-merge** (tree de `landing-pages` = `334d979e` nos dois; `git diff HEAD origin/main` vazio). Foi essa a checkout usada porque `assets/` (65 arquivos) e `uploads/` (79) são **gitignored** — um checkout recém-clonado não os tem e o passo 1 do `deploy.sh` aborta.
+
+### 4a — `trifold-design-system` (AC5a) — PUBLICADO
+`./deploy.sh` completo, 5/5 passos verdes. Deployment `dpl_CRsvdiuvfoEanDJvy6rLodUJumRL`, `readyState: READY`, `target: production`, aliasado para `https://trifold.eng.br`. As 5 rotas pré-renderizadas verificadas pelo passo 5 (`#dc-prerender` com texto em `/`, `/sobre-nos`, `/empreendimentos`, `/corporativas`, `/blog`).
+
+### 4b — `vind-residence` (AC5b) — PUBLICADO, com `OPS-001` aplicado
+**`OPS-001` se materializou:** `landing-pages/vind-residence/.vercel/project.json` estava **ausente** na checkout de publicação — exatamente o estado em que a CLI 54.6.1 falha *aberto* e cria um projeto novo. Mitigado antes de publicar:
+1. `vercel link --yes --scope trifold-s-projects --project vind-residence` → vinculou ao projeto **existente** (`prj_bSyrklkya14GAfeXdOlUXdyntqWp`).
+2. Deploy: `vercel deploy --prod --yes --scope trifold-s-projects` → `vind-residence-dhkdx9uz8`, READY, Production.
+3. **Prova de que não nasceu projeto novo:** `vercel project ls` devolveu **7 projetos antes e 7 depois** (sem `vind-residence-2`/`-1` etc.), e `vercel ls` mostra o deployment sob `trifold-s-projects/vind-residence`.
+
+Nota que corrige o `OPS-001`: a CLI instalada é a **54.6.1**. O comportamento *fail-closed* (`missing_scope`) só vale a partir da **v55** — o CodeRabbit citou a v55 no PR #571 para dizer que o risco não existia, mas nesta versão o risco era real.
+
+### Smoke test em produção — PASSA
+| Rota | HTTP | Clarity no HTML | CSP com `*.clarity.ms` |
+|---|---|---|---|
+| `https://trifold.eng.br/` | 200 | sim | sim |
+| `https://trifold.eng.br/vindresidence/` | 200 | sim | sim |
+| `https://trifold.eng.br/yarden/` | 200 | **não** (esperado) | **não** (esperado) |
+| `https://vind-residence.vercel.app/` (direto) | 200 | sim | n/a (projeto sem CSP própria) |
+
+Provas byte a byte, não só presença (produção **já** tinha o Clarity antes do deploy, então presença isolada não provaria nada):
+- `vind-residence.vercel.app/` servido == `landing-pages/vind-residence/index.html` mergeado, **arquivo inteiro** (sha256 `b420fc898adf0be5…`).
+- CSP na rede == literal do `vercel.json` mergeado em **6/6** rotas que servem conteúdo (`/`, `/blog`, `/vindresidence/`, `/vindresidence/:path*`, `/yarden/`, `/yarden/:path*`). Os paths sem barra final (`/vindresidence`, `/yarden`) respondem **307** e redirect não carrega CSP — comportamento pré-existente, com controle embutido: `/yarden`, rota **não tocada** por esta story, se comporta igual.
+- **Não-regressão do Yarden confirmada na rede:** os 3 blocos `/yarden*` seguem sem `clarity`.
+
+Ambos os deploys eram **no-op de conteúdo** por desenho — o objetivo era eliminar a divergência entre produção e o versionado, não mudar o site. É por isso que a prova relevante é "servido == fonte mergeada", e não "algo mudou".
+
+### Por que continua `InReview` e não `Done`
+`Done` é decisão do usuário. Segue em aberto: deleção da branch órfã `feat/86-12-yarden-conteudo-definitivo` (AC4 — o @qa provou que é seguro: dos 33 arquivos, 24 idênticos a `main`, 3 capturados por este PR, 6 onde `main` está à frente) e os débitos já registrados em Out of Scope (consentimento do Clarity, sessões de bot do Playwright).
