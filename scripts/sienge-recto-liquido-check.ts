@@ -66,10 +66,10 @@ if (envFile && !loadEnv(resolve(envFile))) {
   console.error(`Não consegui ler o env em ${envFile}`)
   process.exit(1)
 }
-// Sempre complementa com o .env.local: variáveis marcadas como "sensitive" na
-// Vercel voltam vazias no `env pull` (é o caso da service role key), e o que já
-// veio do --env-file não é sobrescrito.
-loadEnv(resolve(__dirname, "../packages/web/.env.local"))
+// Sempre complementa com o .env.producao.local: variáveis marcadas como
+// "sensitive" na Vercel voltam vazias no `env pull` (é o caso da service role
+// key), e o que já veio do --env-file não é sobrescrito.
+loadEnv(resolve(__dirname, "../packages/web/.env.producao.local"))
 
 const REQUIRED = [
   "SIENGE_SUBDOMAIN",
