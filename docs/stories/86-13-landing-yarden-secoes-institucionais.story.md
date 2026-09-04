@@ -1,0 +1,1192 @@
+# Story 86-13 — Landing do Yarden: seções institucionais completas (Overview, Lazer, Galeria, Sobre a Trifold, Nav, Banda CTA)
+
+**Status:** Ready (validação @po **GO 9/10**; as 5 decisões de curadoria
+**D1–D5 foram respondidas pelo stakeholder em 2026-09-03** e estão travadas nos
+ACs — ver Change Log 0.3. Nenhum gate pendente: implementação liberada)
+**Epic:** 86 — Conversions API (CAPI) e Rastreamento Meta
+**Executor:** @dev (Dex)
+**Quality Gate:** @qa (Quinn) — `*qa-gate` ao fim da implementação
+**Prioridade:** P2 (mesma razão da 86-12: não há tráfego pago ativo apontando para
+`trifold.eng.br/yarden/` hoje, e a URL segue offline enquanto as tarefas T12/T13
+de infraestrutura da 86-12 não forem concluídas por @devops — ver
+`docs/stories/epics/epic-86-meta-capi-tracking.md`)
+**Estimativa:** **9 pontos (G)** — era 8 no cabeçalho da 0.2 (o Change Log 0.2
+não registrou estimativa), **+1 ponto pela D5**, que o
+stakeholder confirmou na **Opção B** (redesenho da seção de Localização no
+padrão do Vind: endereço em destaque, link do Maps e os 5 pontos de referência
+como lista visível). O resto da conta continua: conteúdo+layout de 6 seções
+novas e processamento de imagens reais (recorte/otimização de até 11 fotos),
+sem nenhum código server-side novo. A curadoria (D1–D4) deixou de ser custo de
+descoberta — está travada nos ACs.
+**Depende de:** 86-12 (o `landing-pages/yarden/index.html` atual — Hero, Pixel/
+CAPI, 3 formulários, footer — já está em `main`, squash `86ea676a`; esta story
+constrói em cima dele. A 86-12 segue `InReview`/não-`Done` por pendência de
+infraestrutura (T12/T13), mas isso **não bloqueia** o trabalho desta story, que
+é só conteúdo dentro do mesmo diretório)
+
+> ## ✅ Implementação liberada — as 5 decisões estão travadas
+>
+> A validação @po de 2026-09-03 deu **GO (9/10)**, e o gate que mantinha a story
+> em `Draft` **caiu**: o stakeholder (lucas@trifold.eng.br) respondeu **D1–D5 em
+> 2026-09-03**, todas seguindo as recomendações do @po. As respostas estão
+> **travadas no corpo das ACs** (AC3, AC4, AC5, AC6, AC7, AC8) e registradas no
+> checklist **T0** e no Change Log 0.3. `Draft → Ready` feito. Nenhum outro gate
+> pendente.
+>
+> **O que o @dev ainda decide sozinho** (delegado explicitamente pelo
+> stakeholder, não é ambiguidade): **quais arquivos específicos** de render
+> entram na Galeria dentro das categorias e proporções fixadas na AC5/D3, e
+> **qual das 9 vira o fundo da banda CTA** (AC7/D3.1), por critério de
+> contraste. Tudo o mais é conteúdo travado — não reabrir.
+>
+> **Antes de codar, ler a AC15** — é a correção bloqueante desta validação e ela
+> contradiz de propósito o "copie o padrão do Vind Residence".
+
+**Não confundir com 86-12:** esta story **não adiciona tracking novo**. Zero
+evento CAPI novo, zero formulário novo, zero mudança em
+`packages/web/src/lib/meta/*` ou nas rotas `/api/webhooks/landing-page/*`. É
+puramente HTML/CSS/imagens dentro de `landing-pages/yarden/`.
+
+## Story
+
+**As a** time de marketing/vendas da Trifold,
+**I want** a landing do Yarden ter a mesma riqueza de seções institucionais e de
+produto que a landing do Vind Residence (visão geral com números, lazer,
+galeria de fotos, localização, prova institucional da construtora),
+**so that** um visitante que chega à landing do Yarden receba informação
+suficiente para se cadastrar, com o mesmo padrão de qualidade já validado no
+Vind Residence — hoje a página do Yarden só tem Hero + 2 blocos de texto curtos
++ um segundo formulário, sem nenhuma das seções de produto que a irmã tem.
+
+## Contexto — por que esta story existe
+
+O usuário (lucas@trifold.eng.br) pediu explicitamente para replicar, na landing
+do Yarden, a MESMA estrutura de seções da landing do Vind Residence
+(`landing-pages/vind-residence/index.html`, em produção em
+`https://trifold.eng.br/vindresidence/`), preenchida com conteúdo real do
+Yarden (dados da Ficha Técnica oficial, renders reais do empreendimento) e a
+identidade visual já estabelecida do Yarden (cores/fontes/logo já presentes no
+`:root` do `index.html` atual — nada disso deve mudar).
+
+A 86-12 entregou a base: Hero com foto+formulário, Pixel+CAPI completos, e só
+duas seções de conteúdo próprias do Yarden ("Onde a natureza encontra a
+sofisticação" e "Invista no novo centro urbano de Maringá") mais um segundo
+formulário ("Quer saber mais?") e o rodapé. Essas quatro peças **já existem e
+não são recriadas aqui** — ver "Descoberta" abaixo para o inventário exato.
+
+## Descoberta (verificado lendo o código e os documentos-fonte, não presumido)
+
+### O que já existe em `landing-pages/yarden/index.html` hoje
+
+Lido diretamente do arquivo antes de escrever esta story:
+
+1. `<head>`: Pixel base code (dataset `1337310707164669`), script de tracking
+   vanilla (`visitor_id`, `fbc`/`fbp`/`fbclid`, `TrifoldTracking`), Google
+   Fonts (Montserrat, `display=optional`), e o bloco `:root` com toda a
+   paleta/tipografia do Yarden.
+2. `<section class="hero" id="cadastro">` — foto de piscina do rooftop
+   (`assets/hero-piscina-rooftop*.{jpg,webp}`), marca "LANÇAMENTO | yarden"
+   sobreposta, e o formulário `#leadForm` (versão desktop sobreposta à foto) +
+   `#leadFormMobile` (versão mobile em fluxo, mesma marcação).
+3. `<section class="split split--natureza">` — "Onde a natureza encontra a
+   sofisticação", texto + foto `assets/interior-lounge-gourmet.{jpg,webp}`.
+   **Sem `id` próprio hoje.**
+4. `<section class="split split--invista">` — "Invista no novo centro urbano
+   de Maringá", foto `assets/mapa-gleba-itororo.{jpg,webp}` (mapa com pins dos
+   pontos de referência, alt-text já lista os marcos) + texto sobre a Gleba
+   Itororó. **É, na prática, a seção de localização do Yarden hoje — mas sem
+   `id="localizacao"`, sem `kicker`, e sem lista de pontos de interesse
+   separada (os marcos estão só no `alt` da imagem).**
+5. `<section class="saber" id="saber-mais">` — "Quer saber mais?", terceiro
+   formulário (`#leadFormSaber`), fundo `--tan`, foto
+   `assets/familia-quer-saber-mais.{jpg,webp}`.
+6. `<footer>` — logos Trifold + Yarden centralizados, texto de direitos com
+   link para a política de privacidade. **Sem nav de links** (só os 2 logos e
+   o texto).
+7. WhatsApp flutuante (`.wa-float`) e o script final com `CONFIG`,
+   `ligarFormulario` (chamado 3x, um por formulário) e o listener de
+   `InitiateCheckout` no primeiro foco de qualquer um dos 6 campos de
+   nome/whats.
+8. **Não existe `<header>`/nav nenhum.** Nenhum menu, nenhuma âncora de
+   navegação, nenhum comportamento de scroll no header — porque não há header.
+
+### O que a landing do Vind Residence tem, por seção (lido do código-fonte)
+
+| # | Seção (classe/`id`) | Conteúdo |
+|---|---|---|
+| 1 | `header.nav` | Logo + 5 links âncora (`#empreendimento`, `#lazer`, `#galeria`, `#localizacao`, `#sobre`) + botão CTA "Cadastre-se" (`#cadastro`). Fixo, transparente no topo, ganha fundo sólido (`--verde-escuro`) quando `scrollY > 60`. Hambúrguer mobile abre painel lateral. |
+| 2 | `.hero#cadastro` | **Já existe equivalente no Yarden — não recriar.** |
+| 3 | `.overview#empreendimento` | kicker + H2 (nome do empreendimento) + localização curta + grid `.stats` com 5 números grandes + legenda. Fundo `--verde-escuro` sólido. |
+| 4 | `.amen#lazer` | kicker + H2 + parágrafo + `.chips` (6 pills) + foto de fundo em split. |
+| 5 | `.section.center#galeria` | kicker + H2 + parágrafo + `.gallery-grid` de 9 fotos (mix `.g-tall`/`.g-wide`) + CTA "Agende sua visita". |
+| 6 | `.loc-sec#localizacao` | **Já existe equivalente mais simples no Yarden — dentro da seção "invista".** No Vind: mapa (iframe sob demanda) + endereço + lista `.poi` de 11 pontos de interesse. |
+| 7 | `.band` (sem id) | Faixa estreita com foto de fundo fixa, H2 + parágrafo curto + 1 CTA. Fica entre Localização e Depoimentos. |
+| 8 | `.depo.section#depoimentos` | 3 vídeos do YouTube (thumbnail → iframe ao clicar). **Fora de escopo desta story — ver "Fora de escopo".** |
+| 9 | `.section#sobre` | kicker "Sobre a Trifold" + H2 + parágrafo institucional sobre a empresa (fundada 2019, atuante desde 1997) + foto da sede (`trifold-fachada.webp`) + 1 CTA. |
+| 10 | `footer` | Logo + `.fnav` com os mesmos 5 links do nav + copyright. **Yarden já tem footer, mas sem `.fnav`.** |
+
+### Dados reais do Yarden (Ficha Técnica oficial, lida integralmente para esta
+story — `Ficha Técnica/9-YAR FICHA TÉCNICA.pdf`, Google Drive do stakeholder)
+
+- **Endereço:** Rua Carlos Meneghetti, 168 – Gleba Itororó.
+- **Torre:** 2 subsolos, térreo com pé direito ampliado, 15 pavimentos tipo com
+  4 apartamentos por pavimento, rooftop.
+- **Apartamento:** 2 suítes e lavabo OU 2 quartos + 1 suíte + 1 banheiro
+  social; sala de jantar, estar, cozinha, lavanderia, sacada com churrasqueira.
+- **Lazer (térreo):** boulevard mirante, *fire place*, piscina adulto e
+  infantil com deck, *playground*, brinquedoteca, *market*, cozinha e salão de
+  festas e terraço, *delivery*, *beautyroom*, *petplace*, *petcare*, praça de
+  convivência, miniquadra, bicicletário, espaço gourmet, espaço gourmet com
+  piscina privativa.
+- **Rooftop:** *sports bar*, *lounge*, coworking com sala para reuniões,
+  terraço, pilates, academia, yoga.
+- **Área do terreno:** 1.344,00m². **Área construída total:** 6.128,96m².
+  **Número de apartamentos:** 60 unidades.
+- **Área privativa:** 83,66m² e 79,81m². **Garagem:** 11,25m² (1 vaga) /
+  22,50m² (2 vagas). **Área total:** 126,41m² (1 vaga) / 141,40m² (2 vagas).
+- **Não há dado de preço/entrada na Ficha Técnica** — ao contrário do card do
+  Vind Residence (que tem um stat "R$65mil entrada"), não existe fonte
+  verificada de preço para o Yarden. **Não inventar um valor** (Artigo IV). Se
+  o stakeholder quiser um stat de preço, é dado que só ele pode fornecer —
+  fora do escopo desta story até isso acontecer.
+
+### Inventário real dos renders (Google Drive, `Empreendimentos/Yarden/Book/RENDERS/`)
+
+Contado agora, arquivo por arquivo (o pedido original mencionava "41 arquivos";
+a contagem real, excluindo os 2 `.DS_Store` que não são imagens, é **39**):
+
+| Pasta | Qtde | Arquivos |
+|---|---|---|
+| Decorado 1 | 5 | quarto, sala estar, sala estar-3, sala estar+cozinha, suíte |
+| Decorado 2 | 5 | cozinha, quarto, sacada, sala estar+cozinha, suíte |
+| Fachada | 2 | Fachada_2, Fachada_3 |
+| Humanizadas | 4 | tipo 1, tipo 2, tipo 3, tipo 4 (⚠️ são **plantas** humanizadas, não ambientes — ver D3) |
+| Rooftop | 8 | Coworking, Fitness, Lounge, Pilates, Sala de Jogos, Sala de Reuniões, Sport bar, Terraço |
+| Subsolo 1 | 1 | Car Wash |
+| Térreo | 14 | Beauty Room, Espaço Bikes, Espaço Kids, Estar, Fireplace, Gourmet, Lazer, Market, Mini Quadra Poliesportiva, Pet place, Piscina Infantil, Piscina privativa gourmet, Piscina, Salão de Festas |
+
+Caminho completo de cada pasta:
+`/Users/lucasprado/Library/CloudStorage/GoogleDrive-lupradogomes@gmail.com/Meu Drive/TRIFOLD/Empreendimentos/Yarden/Book/RENDERS/{pasta}/{arquivo}`
+
+**Confirmado pelo @po na validação de 2026-09-03** (contagem refeita arquivo por
+arquivo com `find`): 39 imagens em 7 pastas, com as quantidades por pasta
+exatamente como na tabela acima. 41 arquivos no total, dos quais 2 são
+`.DS_Store` (o da raiz e o de `Decorado 1/`) — daí os "41" do pedido original.
+35 `.jpg` + 4 `.png` (as 4 `.png` são as Humanizadas).
+
+⚠️ **Proporção: NÃO são todas paisagem 16:7.** Medido com `sips` arquivo por
+arquivo nesta validação (a versão 0.1 desta story afirmava "todas paisagem,
+`.jpg` a 4000×1818 / 6–9 MB, `.png` a 3200×1802 / 6–8 MB" — **incorreto nas três
+dimensões**). O real:
+
+| Proporção | Qtde | Dimensão | Observação |
+|---|---|---|---|
+| Paisagem larga (~2,2:1) | 22 | 4000×1818 | encaixa bem em `.g-wide` |
+| **Quadrada (1:1)** | **12** | 4000×4000 | **corta muito num slot `.g-wide`** |
+| Paisagem 16:9 | 1 | 3966×2250 | `Térreo/Gourmet Yarden.jpg` |
+| `.png` (Humanizadas) | 4 | 2945×1856 a 3200×2084 | proporção irregular entre si |
+
+Peso real dos arquivos: `.jpg` de **2,9 MB a 18,2 MB** (não 6–9 MB; a mais
+pesada é `Térreo/Piscina Infantil Yarden.jpg`, 18,2 MB); `.png` de **5,8 MB a
+7,9 MB**.
+
+**Por que isso importa para a AC5:** o grid da galeria alterna slots
+`.g-wide`/`.g-tall`, e uma origem quadrada num slot largo perde ~55% da altura
+no recorte. A proporção de cada arquivo está anotada na decisão **D3**, para a
+escolha das 9 já sair compatível com o slot. **A lista nominal completa, com
+caminho relativo e proporção de cada arquivo agrupado por categoria, está em
+D3** (é o insumo que o stakeholder precisa para escolher as 9 da galeria).
+
+## Decisão de escopo — ordem das seções na página (AUTO-DECISION)
+
+**[AUTO-DECISION]** Onde encaixar as 6 seções novas em relação às 3 seções de
+conteúdo que já existem (natureza, invista, quer-saber-mais) → a ordem final da
+página passa a ser:
+
+1. Header/Nav (novo)
+2. Hero `#cadastro` (existente, sem mudança de conteúdo)
+3. Overview/Stats `#empreendimento` (novo)
+4. "Onde a natureza encontra a sofisticação" (existente, sem `id`)
+5. Lazer `#lazer` (novo)
+6. Galeria `#galeria` (novo)
+7. "Invista no novo centro urbano de Maringá" → ganha `id="localizacao"` e o
+   redesenho completo da AC6 (D5 travado na **Opção B**)
+8. Banda CTA (novo, sem `id`)
+9. Sobre a Trifold `#sobre` (novo)
+10. "Quer saber mais?" `#saber-mais` (existente, sem mudança de conteúdo)
+11. Footer (existente + nav de links)
+
+**Reason:** (a) nenhuma seção existente é removida ou tem seu conteúdo
+alterado — só ganham posição/`id`/estilo de cabeçalho quando fizer sentido;
+(b) agrupamento temático: "natureza" funciona como ponte emocional entre os
+números (Overview) e o lazer, já que fala de bem-estar; "invista" já fala de
+localização/Gleba Itororó, então vira a própria seção de Localização em vez de
+ficar solta; (c) terminar em "Quer saber mais?" (um formulário) em vez de
+"Sobre a Trifold" (como o Vind termina) é uma escolha melhor de conversão dado
+que o Yarden já tem esse formulário funcionando em produção — não faz sentido
+mover o CTA final institucional para depois dele.
+
+## Acceptance Criteria
+
+### AC1 — Header/Nav fixo (novo, ADAPT do padrão do Vind Residence)
+
+Adicionar `<header>` fixo no topo do `index.html` do Yarden:
+
+- Logo: `assets/logo-yarden-creme.svg` (já existe, não criar um novo).
+- Links âncora: Empreendimento (`#empreendimento`), Lazer (`#lazer`), Galeria
+  (`#galeria`), Localização (`#localizacao`), A Trifold (`#sobre`) — mesmos 5
+  links do Vind Residence, mesma ordem.
+- Botão CTA "Cadastre-se" → `#cadastro`.
+- Comportamento: transparente sobre o Hero; ganha fundo sólido quando
+  `scrollY > 60` (mesmo limiar do Vind). **[AUTO-DECISION]** cor do fundo ao
+  rolar = `--marrom` (não `--navy`): é a cor mais associada à marca no restante
+  da página (card do hero, títulos, botões da seção "Quer saber mais"),
+  reforçando identidade ao rolar, enquanto `--navy` fica reservado ao rodapé.
+- Menu mobile: hambúrguer (`&#9776;`, `aria-label="Menu"`) abre painel lateral
+  com os mesmos 5 links + CTA; fecha ao clicar em qualquer link. Reusar a
+  MESMA lógica JS do Vind (`nav.classList.toggle('scrolled', ...)`, toggle de
+  `.open`, fechar ao clicar em link dentro do painel), renomeando classes para
+  o padrão de nomes em português já usado no CSS do Yarden.
+- `z-index` acima de qualquer conteúdo do Hero (mesmo valor do Vind, 50), sem
+  sobrepor `.hero-brand`/`.hero-form`.
+- Ancoragem de scroll: aplicar `scroll-margin-top` (ou `html{scroll-padding-top}`)
+  equivalente à altura do header nas seções-alvo das âncoras, para que o clique
+  no nav não esconda o topo da seção atrás do header fixo.
+
+### AC2 — Hero permanece intacto, só validado contra o nav novo
+
+Nenhuma mudança de conteúdo/copy/imagem do Hero. Validar visualmente (desktop
+e mobile) que o header novo não sobrepõe `.hero-brand` nem `.hero-form`/
+`.hero-form--estatico` em nenhum breakpoint. Nenhuma AC de conteúdo aqui — é
+checagem de não-regressão visual.
+
+### AC3 — Seção Overview/Stats (`#empreendimento`, nova)
+
+- kicker (rótulo curto maiúsculo, ex. "O empreendimento") + H2 "Yarden" +
+  linha de localização curta (ex. "Maringá · Gleba Itororó") + grid de stats
+  (número grande + legenda).
+- **Os 6 stats estão TRAVADOS** (D1/D1.1/D1.2 respondidas pelo stakeholder em
+  2026-09-03, pacote recomendado pelo @po). São exatamente estes, nesta ordem:
+
+  | # | Número grande | Legenda | Fonte literal na Ficha Técnica |
+  |---|---|---|---|
+  | 1 | **60** | unidades | "NÚMERO DE APARTAMENTOS: 60 unidades" |
+  | 2 | **83,66 m²** | de área privativa | "ÁREA PRIVATIVA: 83,66m² e 79,81m²" — **só a maior**, 1 stat único (D1.1) |
+  | 3 | **2 suítes** | e lavabo | "TIPO DE APARTAMENTO: 2 suítes e lavabo…" |
+  | 4 | **15** | pavimentos | "TIPO DE TORRE: … 15 pavimentos tipo…" |
+  | 5 | **2 subsolos + rooftop** | lazer completo em dois níveis | "TIPO DE TORRE: 2 subsolos … rooftop" |
+  | 6 | **4** | apartamentos por pavimento | "TIPO DE TORRE: … com 4 apartamentos por pavimento…" |
+
+- **D1.1 travado:** a área privativa vira **1 stat só, com a maior metragem**
+  (`83,66 m²`) — mesma forma do Vind Residence (`<div class="big">66,91 m²</div>`).
+  **Não** criar dois stats nem escrever "83,66 e 79,81 m²" no número grande.
+- **D1.2 travado: NÃO existe stat de preço/entrada nesta seção.** A Ficha
+  Técnica não traz preço em nenhuma das 7 páginas e o stakeholder não forneceu
+  valor. O @dev está **proibido** de inventar um (Artigo IV) e de importar o
+  "R$65mil entrada" do Vind Residence, que é dado de outro empreendimento.
+- Não usar os candidatos descartados nesta curadoria (área do terreno
+  1.344 m² e área construída 6.129 m²) — ficaram fora por decisão, não por
+  falta de fonte.
+- Fundo `--navy` sólido (reforça a paleta já usada no rodapé; não introduz cor
+  nova). Números em `--branco` ou `--creme`, legendas em tom mais claro/opaco.
+- Grid responsivo: múltiplas colunas no desktop, reduzindo para 2 e depois 1
+  nos breakpoints já existentes do Yarden (não criar breakpoint novo).
+
+### AC4 — Seção Lazer/Amenidades (`#lazer`, nova)
+
+- kicker + H2 + parágrafo curto + os **6 chips travados** + imagem de fundo em
+  layout split (texto de um lado, foto do outro — mesma técnica do `.amen` do
+  Vind, adaptada aos nomes de classe do Yarden).
+- **Os 6 chips estão TRAVADOS** (D2 respondida pelo stakeholder em 2026-09-03,
+  pacote recomendado pelo @po). São exatamente estes, nesta ordem:
+
+  1. **Sports bar (rooftop)** — "sports bar" é item literal da Ficha, listado
+     sob o cabeçalho "Rooftop"; o "(rooftop)" só explicita esse nível, e é o
+     texto que o stakeholder aprovou. Não é métrica nem amenidade inventada.
+  2. **Yoga** — item literal do rooftop.
+  3. **Brinquedoteca** — item literal do térreo.
+  4. **Petcare** — item literal do térreo.
+  5. **Espaço gourmet com piscina privativa** — item literal do térreo.
+  6. **E muito mais** — coringa de fechamento, mesmo padrão do 6º chip do Vind
+     Residence (lá o texto é literalmente "E muito mais").
+
+- **Nenhum outro chip.** Não acrescentar, não trocar por sinônimo, não expandir
+  para 7+. Os 19 candidatos restantes da D2 ficaram fora por decisão de
+  curadoria — em especial "cozinha", que o @po recomendou não usar como chip
+  isolado.
+- Imagem de fundo: **[AUTO-DECISION]** `Térreo/Lazer Yarden.jpg` — nome do
+  arquivo já corresponde ao propósito da seção, e evita repetir a foto de
+  piscina já usada no Hero. Proporção `[L]` (4000×1818), 8,8 MB na origem —
+  comprimir conforme AC5. ⚠️ **Servir via `<picture>`/`<img>` na marcação, não
+  só por `background-image` no CSS — ver AC15**, ou o par vira asset órfão e o
+  teste automatizado reprova.
+- Parágrafo: pode parafrasear o tom do Vind ("Desfrute de momentos com toda a
+  família...") adaptando ao Yarden, mas sem citar nenhuma amenidade que não
+  esteja na Ficha Técnica.
+
+### AC5 — Galeria (`#galeria`, nova)
+
+- kicker + H2 + parágrafo + grid de exatamente 9 fotos reais do Yarden,
+  variando tamanho (`.g-tall`/`.g-wide`, mesma técnica do Vind) + CTA "Agende
+  sua visita" → `#cadastro`.
+- **A curadoria está TRAVADA na composição por categoria** (D3 respondida pelo
+  stakeholder em 2026-09-03, curadoria recomendada pelo @po). As 9 fotos são,
+  obrigatoriamente:
+
+  | Categoria | Quantidade |
+  |---|---|
+  | Fachada | **1** |
+  | Rooftop | **3** |
+  | Térreo | **3** |
+  | Decorado (1 ou 2, à escolha do @dev) | **2** |
+  | Humanizadas | **0 — proibido** |
+  | Subsolo 1 (Car Wash) | 0 (não escolhido) |
+
+- **As 4 "Humanizadas" são plantas baixas, não ambientes — NÃO entram na
+  galeria** (decisão explícita do stakeholder, conforme recomendação do @po).
+- **Delegado ao @dev pelo stakeholder:** escolher os **arquivos específicos**
+  dentro dessas categorias e nessas proporções, a partir do inventário nominal
+  de D3. Isto é autorização explícita — não é decisão em aberto e não precisa
+  voltar ao @po.
+- **Restrição técnica de proporção (vinculante):** os **2 slots `.g-wide`
+  recebem obrigatoriamente imagens `[L]`** (paisagem larga 4000×1818); o slot
+  `.g-tall` é o único que aproveita bem uma `[Q]` (quadrada 4000×4000). Nenhuma
+  `[Q]` em slot largo — perde ~55% da altura no recorte (Risco #5).
+- **Evitar redundância visual** (orientação do @po, mantida): o Hero já usa a
+  piscina do rooftop e a seção "natureza" já usa um lounge gourmet — preferir
+  não repetir `Rooftop/Lounge` nem `Térreo/Piscina`. E `Térreo/Lazer Yarden.jpg`
+  **já está reservada** para o fundo da AC4: os 3 Térreo da galeria saem dos
+  outros 13 arquivos da pasta.
+- Processamento: converter os JPGs originais (alta resolução) para o par
+  jpg+webp já otimizado, seguindo a convenção de nome já em uso
+  (`galeria-01.{jpg,webp}` … `galeria-09.{jpg,webp}`), **cada par servido via
+  `<picture>` com as duas URLs em atributo (AC15)** — não no padrão
+  `<img src="…webp">` avulso da galeria do Vind, que deixaria os 9 `.jpg`
+  órfãos e reprovaria o teste. Em tamanho de arquivo
+  na mesma ordem de grandeza dos assets já existentes. **Faixas medidas pelo
+  @po nesta validação** (não estimadas): os assets atuais do Yarden
+  (`landing-pages/yarden/assets/*`) vão de **56KB a 324KB**; os da galeria do
+  Vind Residence (`landing-pages/vind-residence/assets/galeria-*`) são bem mais
+  leves, de **10KB a 226KB** (webp entre 10KB e 153KB, jpg entre 24KB e 226KB).
+  **Alvo desta story: ≤ 330KB por arquivo, preferindo a faixa do Vind
+  (webp abaixo de ~150KB)** — o teto de 330KB é o que o Yarden já pratica no
+  seu asset mais pesado (`hero-piscina-rooftop.jpg`), não uma meta a perseguir.
+- Lightbox ao clicar: reusar o comportamento do Vind (`.lb`, `.lb.open`, clique
+  fora fecha, `Escape` fecha), adaptado aos nomes de classe do Yarden.
+
+### AC6 — Seção "Invista..." vira a seção de Localização (`id="localizacao"`)
+
+A seção `.split.split--invista` existente ganha `id="localizacao"` e um
+`kicker` consistente com as demais seções novas (ela já usa `.titulo-secao`/
+`.texto-secao`, então herda a tipografia automaticamente — só falta o
+`kicker`, hoje ausente nela e em "natureza"/"quer saber mais").
+
+**D5 TRAVADO na Opção B — redesenho no padrão do Vind Residence** (respondida
+pelo stakeholder em 2026-09-03, conforme recomendação do @po; é a decisão que
+elevou a estimativa de 8 para 9 pontos). Além do `id` + `kicker`, é
+**obrigatório**:
+
+- **Endereço em destaque**, literal da Ficha Técnica: "Rua Carlos Meneghetti,
+  168 — Gleba Itororó, Maringá". Não parafrasear, não abreviar o logradouro.
+- **Link clicável "Ver no Google Maps"** apontando para a URL oficial que a
+  Ficha Técnica traz: `https://maps.app.goo.gl/RFibC7xZ7KZx6cwQA`. Usar
+  exatamente essa — **não** montar uma busca por nome/coordenada (o Vind usa o
+  mesmo formato, `maps.app.goo.gl/2nHahagzSPaDA11CA`). Link externo com
+  `target="_blank"` + `rel="noopener"`.
+- **Os 5 pontos de referência como lista de TEXTO VISÍVEL** (não só dentro do
+  `alt` da imagem, que é o estado de hoje): **Catedral · Parque do Ingá ·
+  Av. JK · Bosque II · Av. Itororó** — os mesmos 5 que já constam no `alt` do
+  `mapa-gleba-itororo`, equivalentes ao `.poi` do Vind (lá são 11). Duas
+  colunas no desktop, coluna única no mobile, dentro dos breakpoints já
+  existentes (AC13).
+- O `alt` da imagem do mapa **continua** listando os marcos — a lista visível
+  é acréscimo, não substituição (o ganho de acessibilidade/SEO é o motivo da
+  Opção B).
+- **Não** replicar o mapa interativo em iframe sob demanda do Vind
+  (`#mapCard` → Google Maps embed): o Yarden já tem uma imagem de mapa própria
+  com os pins desenhados, que é melhor de performance e não adiciona um
+  terceiro domínio ao CSP. **Manter a imagem atual** — e ela já é referenciada
+  por `<picture>`, então não cria nenhum asset novo (AC15).
+- **Opção A (mínima) está descartada.** Só `id` + `kicker` não satisfaz a AC6.
+
+O texto e a foto atuais da seção "Invista no novo centro urbano de Maringá"
+**não mudam** — o redesenho é acréscimo de estrutura ao redor deles.
+
+### AC7 — Banda CTA (nova, sem `id`)
+
+Faixa estreita entre a seção de Localização (AC6) e Sobre a Trifold (AC8), com
+H2 curto + parágrafo + 1 CTA → `#cadastro`. Fundo: foto com overlay escuro
+(`background-attachment:fixed` no desktop, `scroll` no mobile — mesma técnica
+do `.band` do Vind, **confirmada pelo @po** na regra `.band` de
+`vind-residence/index.html` e no override `@media` que troca para `scroll`).
+⚠️ Aqui o `background-image` por CSS **é aceitável justamente porque nenhum
+asset novo é criado** — a foto já está referenciada por `<picture>` na Galeria,
+então não há órfão (AC15). **Não** introduzir um arquivo exclusivo desta banda.
+A foto de fundo é uma reaproveitada das 9 da Galeria (AC5) — não cria asset
+novo. **D3.1 travado: o stakeholder delegou a escolha ao @dev**, pelo critério
+de contraste para texto branco sobreposto (precisa de área "calma"), dentre as
+9 confirmadas na AC5. É o mesmo critério que o Vind usa ao reaproveitar
+`galeria-03.webp` no seu `.band` (verificado pelo @po em
+`vind-residence/index.html`, regra `.band`). **Não** introduzir um arquivo
+exclusivo desta banda e **não** reabrir esta decisão com o @po — a delegação é
+explícita.
+
+### AC8 — Seção Sobre a Trifold (`#sobre`, nova)
+
+- kicker "Sobre a Trifold" + H2 "Referência no conceito de morar bem" (mesmo
+  texto do Vind — é sobre a empresa, não sobre o empreendimento) + parágrafo
+  institucional + foto da sede.
+- **D4 TRAVADO na Opção (A) — reuso VERBATIM de texto E foto** do Vind
+  Residence (respondida pelo stakeholder em 2026-09-03, conforme recomendação
+  do @po: mesma empresa, mesmo prédio, texto já publicado em produção). O
+  parágrafo é copiado **palavra por palavra** da transcrição em D4 —
+  começa em "Fundada em 2019 com a união de uma equipe experiente" e termina em
+  "que reúnem alta qualidade.". O @dev **não reescreve, não resume e não
+  adapta** o texto institucional (Artigo IV). As Opções (B) foto nova e (C)
+  texto novo estão descartadas.
+- Foto da sede: **conforme D4(A)**, reusar o MESMO arquivo já existente em
+  `landing-pages/vind-residence/assets/trifold-fachada.{jpg,webp}` (copiar
+  para `landing-pages/yarden/assets/`) — é o mesmo prédio, a mesma empresa;
+  não há motivo para gerar/buscar uma foto nova (REUSE, Artigo IV). Tamanhos
+  conferidos pelo @po: `.jpg` 114KB, `.webp` 39KB — já dentro do alvo da AC5,
+  **não precisa de reprocessamento**. ⚠️ Se copiar os dois, **os dois** têm de
+  ser referenciados via `<picture>` (AC15); o Vind serve só o `.webp`, e imitar
+  isso deixaria o `.jpg` órfão. **Foto nova está descartada** — D4 ficou em (A),
+  então é este arquivo, sem reprocessamento.
+- Sem CTA próprio nesta seção (diferente do Vind): a seção seguinte já é
+  "Quer saber mais?", um formulário — um segundo CTA aqui seria redundante.
+
+### AC9 — Footer com nav de links
+
+Adicionar ao `<footer>` existente uma lista de links equivalente ao `.fnav` do
+Vind (Empreendimento, Lazer, Galeria, Localização, Cadastre-se), inserida
+entre os logos e o parágrafo de direitos autorais — sem remover nada do que já
+existe (logos, texto de direitos, link de política).
+
+### AC10 — Nenhuma mudança na infraestrutura de tracking (reforço)
+
+- Nenhum evento CAPI novo, nenhum formulário novo, nenhum `event_id` novo.
+  `TrifoldTracking`, `ligarFormulario`, o array `FORMULARIOS` e os 3 `<form>`
+  existentes (`leadForm`, `leadFormMobile`, `leadFormSaber`) permanecem
+  exatamente como estão — nenhuma linha do `<script>` de tracking do `<head>`
+  nem do script final de envio é alterada.
+- Todo CTA das seções novas aponta para `#cadastro` (âncora HTML padrão; o
+  `html{scroll-behavior:smooth}` já existente cuida do scroll suave — nenhum
+  JS novo necessário para isso).
+- O nav (AC1) não dispara nenhum evento de tracking próprio — é só navegação.
+
+### AC11 — Identidade visual: zero cor/fonte/logo novos
+
+Todas as cores das seções novas vêm exclusivamente das variáveis já
+declaradas em `:root` do `index.html` atual: `--creme`, `--marrom`,
+`--marrom-escuro`, `--tan`, `--navy`, `--dourado`, `--dourado-tinta`,
+`--cinza-texto`, `--branco`, `--preto`, `--erro`. Nenhum novo valor hex,
+nenhuma nova fonte (`--fonte`/`--fonte-serif` continuam Montserrat/Georgia),
+nenhum logo novo — só `assets/logo-yarden-creme.svg` e
+`assets/logo-trifold-branco.svg`, já existentes.
+
+### AC12 — Fora de escopo: seção de Depoimentos (explícito)
+
+**Não construir** a seção de depoimentos em vídeo — nem a estrutura, nem um
+placeholder, nem um comentário "em breve" no HTML. Os vídeos reais do Yarden
+ainda não estão hospedados no YouTube (dependência externa do usuário, ainda
+sem link). Quando os links existirem, uma story futura replica `.depo` do
+Vind Residence. Se o @dev tocar em algo adjacente por engano, reverter e
+registrar no Dev Agent Record.
+
+### AC13 — Responsividade e acessibilidade mínima
+
+- Toda seção nova tem contraparte mobile coerente com os breakpoints JÁ
+  definidos no Yarden (`min-width:980px` e `max-width:979.98px`, com reforço
+  em `max-width:560px` se necessário) — não introduzir breakpoints novos sem
+  necessidade clara.
+- Imagens novas com `alt` descritivo (nunca vazio/genérico), `loading="lazy"`
+  e `decoding="async"` — nenhuma imagem nova está acima da dobra, então
+  nenhuma precisa de `fetchpriority="high"`.
+- Nav mobile com `aria-label="Menu"` no botão hambúrguer, foco visível ao
+  tabular pelos links, fecha ao clicar em link (mesmo padrão do Vind).
+
+### AC14 — Sem regressão nos 3 formulários/tracking existentes
+
+Após todas as mudanças, os 3 formulários continuam funcionando exatamente
+como antes: `ligarFormulario` é chamado para os mesmos 3 pares
+(`leadForm`/`formMsg`, `leadFormMobile`/`formMsgMobile`,
+`leadFormSaber`/`formMsgSaber`), `InitiateCheckout` dispara uma única vez no
+primeiro foco de qualquer um dos 6 campos de nome/whats, `PageView`/
+`ViewContent` disparam no carregamento. Validar manualmente com
+`python3 -m http.server` (mesmo runtime sem bundler da 86-12) + console do
+navegador limpo de erros JS novos.
+
+**Além do manual, esta AC tem guarda automático** (achado do @po nesta
+validação — ver AC15): `tracking-browser.test.ts` já verifica os ids dos campos,
+a live region, a trava de duplo submit e os dois endpoints do proxy. Rodá-lo é
+mais barato e mais confiável do que a inspeção manual desses pontos.
+
+### AC15 — Integridade de assets: todo arquivo novo REFERENCIADO POR ATRIBUTO HTML
+
+> ⚠️ **AC acrescentada pelo @po na validação de 2026-09-03.** É a única correção
+> bloqueante que esta validação encontrou, e ela contradiz parcialmente o
+> "seguir o padrão do Vind Residence" das AC4/AC5/AC7/AC8.
+
+Existe um teste automatizado **que roda nesta landing** e que reprova esta
+story se ela for implementada no padrão do Vind:
+`landing-pages/yarden/tracking-browser.test.ts`, incluído pelo
+`vitest.config.ts` da raiz via `include: ["landing-pages/**/*.test.ts"]`
+(verificado pelo @po; baseline medido hoje: **23/23 passando**).
+
+Ele faz duas asserções cruzadas sobre `landing-pages/yarden/assets/`:
+
+1. `expect(inexistentes).toEqual([])` — toda referência do HTML existe no disco.
+2. `expect(orfaos).toEqual([])` — **todo arquivo do disco é referenciado pelo
+   HTML.** Um asset não referenciado reprova o teste.
+
+E o extrator de referências dele lê **somente atributos HTML**:
+`/(?:src|srcset|href|content)="([^"]*)"/g`. Consequência: **uma imagem
+referenciada apenas por `background-image` no CSS é invisível para o teste e
+conta como órfã.**
+
+**Contraprova executada pelo @po** (extrator copiado literalmente do teste):
+
+| Cenário | Resultado |
+|---|---|
+| Fundo de seção via CSS `url('assets/lazer-*.jpg')` (técnica do `.amen`/`.band` do Vind) | **FALHA** — os 2 arquivos ficam órfãos |
+| Galeria no padrão do Vind (`<img src="assets/galeria-01.webp">`, par `.jpg` no disco) | **FALHA** — o `.jpg` fica órfão |
+| `trifold-fachada` servido só em `.webp` com o par `.jpg` copiado | **FALHA** — o `.jpg` fica órfão |
+| Mesmo asset via `<picture>` + `<source srcset>` + `<img src>` (padrão atual do Yarden) | **PASSA** |
+
+**Portanto, obrigatório:**
+
+- Todo par `jpg+webp` novo é servido via `<picture>` com **as duas** URLs em
+  atributo (`<source srcset="assets/x.webp">` + `<img src="assets/x.jpg">`) —
+  o padrão que o `index.html` do Yarden já usa em `interior-lounge-gourmet`,
+  `mapa-gleba-itororo` e `familia-quer-saber-mais`. **Não** copiar o
+  `<img src="…webp">` avulso da galeria do Vind.
+- **AC4 (fundo do Lazer)** e **AC7 (fundo da banda)**: se a imagem for aplicada
+  por CSS `background-image`, ela **não pode** existir como arquivo próprio em
+  `assets/` sem referência HTML. Duas saídas válidas: (i) usar `<img>`/
+  `<picture>` na marcação (o `.split` do Yarden já faz assim) e posicionar por
+  CSS; ou (ii) **reusar um arquivo que já esteja referenciado em outro ponto do
+  HTML** — o que a AC7 já prevê, ao reaproveitar uma das 9 da Galeria, e que por
+  isso **não cria asset novo nenhum**.
+- Não copiar nenhum arquivo cujo nome contenha `vind-residence`/`vindresidence`:
+  há asserção específica contra isso. `trifold-fachada.*` é seguro — o nome não
+  casa com o padrão.
+- Se um par `jpg+webp` for gerado e depois descartado na curadoria, **apagar os
+  dois arquivos** do diretório; sobra de curadoria também é órfã.
+
+## Decisões de curadoria — RESPONDIDAS e travadas (2026-09-03)
+
+> **Como usar esta seção.** Eram 5 decisões de curadoria de conteúdo que o @dev
+> não podia resolver sozinho (mesmo padrão de T0 na 86-12). **O stakeholder
+> (lucas@trifold.eng.br) respondeu todas em 2026-09-03**, e as respostas foram
+> **travadas no corpo das ACs** — que são a fonte normativa para a
+> implementação. Esta seção fica no arquivo como **registro da decisão e do
+> insumo** (candidatos, citações da Ficha Técnica, inventário nominal dos
+> renders), não como pergunta pendente.
+>
+> Todos os candidatos foram **conferidos pelo @po na validação** contra a fonte
+> primária (Ficha Técnica em PDF e os arquivos de render no Google Drive) —
+> nada aqui é estimado.
+>
+> **Onde cada resposta está travada:** D1→AC3, D2→AC4, D3→AC5, D3.1→AC7,
+> D4→AC8, D5→AC6. Se AC e esta seção divergirem em algum detalhe, **a AC
+> vence** — e é bug de story, reportar ao @po.
+
+### 📋 As 5 decisões e as respostas do stakeholder (em uma tela)
+
+Perguntas organizadas pelo @po em 2026-09-03; respostas colhidas no mesmo dia.
+**Todas as 8 respostas seguiram a recomendação do @po.** O detalhe completo do
+insumo de cada uma está nas seções D1–D5 abaixo.
+
+| # | Pergunta | ✅ Resposta do stakeholder | Travada em |
+|---|---|---|---|
+| **D1** | Quais números destacar em "O empreendimento"? | **Pacote recomendado, 6 stats:** 60 unidades · 83,66 m² de área privativa · 2 suítes e lavabo · 15 pavimentos · 2 subsolos + rooftop completo · 4 apartamentos por pavimento | AC3 |
+| **D1.1** | A área privativa tem 2 metragens — 1 stat, 2 stats, ou só a maior? | **Só a maior (83,66 m²), 1 stat único** — mesma forma do Vind | AC3 |
+| **D1.2** | Quer um stat de preço/entrada, como o Vind tem? | **NÃO.** A Ficha Técnica não tem esse dado em nenhuma das 7 páginas e nenhum valor foi fornecido — nada de preço na página | AC3 |
+| **D2** | Quais amenidades viram os chips de "Lazer"? | **Pacote recomendado, 6 chips:** Sports bar (rooftop) · Yoga · Brinquedoteca · Petcare · Espaço gourmet com piscina privativa · **"E muito mais"** como 6º | AC4 |
+| **D3** | Quais 9 fotos entram na Galeria? | **Curadoria recomendada:** 1 Fachada + 3 Rooftop + 3 Térreo + 2 Decorado = 9, priorizando `[L]` nos 2 slots `.g-wide`, **SEM as 4 "Humanizadas"** (são plantas baixas). **Arquivos específicos delegados ao @dev** dentro dessas categorias/proporções | AC5 |
+| **D3.1** | Qual das 9 vira o fundo da banda CTA? | **Delegado ao @dev**, por critério de contraste | AC7 |
+| **D4** | "Sobre a Trifold": reusar o texto do Vind ou variar? | **(A) verbatim** — texto **E** foto idênticos ao Vind Residence | AC8 |
+| **D5** | Quanto mudar a seção "Localização"? | **(B) redesenho no padrão do Vind** — endereço em destaque + link clicável do Google Maps + os 5 pontos de referência como lista de texto visível. **É a decisão que mudou a estimativa: 8 → 9 pontos** | AC6 |
+
+**O que ficou explicitamente delegado ao @dev** (autorização do stakeholder, não
+ambiguidade): os arquivos específicos das 9 fotos (D3) e o fundo da banda CTA
+(D3.1). **O que ficou explicitamente proibido:** stat de preço (D1.2, sem
+fonte — Artigo IV), plantas humanizadas na galeria (D3), texto institucional
+reescrito (D4).
+
+---
+
+### D1 — Quais stats destacar na seção Overview? ✅ RESPONDIDA (travada na AC3)
+
+> ✅ **Resposta (2026-09-03):** os 6 stats do pacote recomendado — **(a) 60
+> unidades, (b) 83,66 m² só a maior metragem, (c) 2 suítes e lavabo, (d) 15
+> pavimentos, (e) 2 subsolos + rooftop, (h) 4 apartamentos por pavimento**,
+> nessa ordem. Descartados: (f) área do terreno e (g) área construída.
+> **D1.1** = 1 stat único com a maior metragem. **D1.2** = **sem stat de
+> preço**. Texto normativo: **AC3**.
+
+**Pergunta original:** dos 8 candidatos abaixo, quais **5 ou 6** devem virar os
+números grandes da seção "O empreendimento"? E como ordená-los?
+
+Todos os 8 foram reconferidos pelo @po em 2026-09-03 contra o texto extraído do
+PDF — cada um é **citação literal** da Ficha:
+
+| # | Stat (número grande) | Legenda sugerida | Fonte na Ficha |
+|---|---|---|---|
+| a | **60** | unidades | "NÚMERO DE APARTAMENTOS: 60 unidades" |
+| b | **83,66 m² e 79,81 m²** | de área privativa | "ÁREA PRIVATIVA: 83,66m² e 79,81m²" |
+| c | **2 suítes** | e lavabo | "TIPO DE APARTAMENTO: 2 suítes e lavabo…" |
+| d | **15** | pavimentos tipo | "TIPO DE TORRE: … 15 pavimentos tipo…" |
+| e | **2 subsolos + rooftop** | lazer completo em dois níveis | "TIPO DE TORRE: 2 subsolos … rooftop" |
+| f | **1.344 m²** | de área de terreno | "ÁREA DO TERRENO: 1.344,00m²" |
+| g | **6.129 m²** | de área construída | "ÁREA CONSTRUÍDA TOTAL: 6.128,96m²" |
+| h | **4** | apartamentos por pavimento | "TIPO DE TORRE: … com 4 apartamentos por pavimento…" |
+
+> **(h) foi acrescentado pelo @po nesta validação** — está literalmente na Ficha
+> (na mesma linha que originou (d) e (e)) e a 0.1 não o havia oferecido. É o
+> candidato que melhor comunica exclusividade/baixa densidade, então vale estar
+> na mesa. Não é recomendação vinculante.
+
+**Sub-pergunta (D1.1):** o candidato **(b)** tem duas metragens. Vira **um**
+stat com as duas ("83,66 e 79,81 m²"), **dois** stats separados, ou só a maior
+("83,66 m²")? No Vind Residence o equivalente é um stat único — **confirmado
+pelo @po** em `vind-residence/index.html`: `<div class="big">66,91 m²</div>`
+com legenda "de área privativa".
+
+**Sub-pergunta (D1.2):** o Vind Residence tem um stat de preço — **confirmado
+pelo @po**: `<div class="big">R$65mil</div>` com legenda "entrada".
+**A Ficha Técnica do Yarden não traz preço nem valor de entrada** — o @po
+extraiu e leu o texto das 7 páginas do PDF nesta validação; as únicas grandezas
+numéricas do documento são áreas, contagens (60 unidades, 15 pavimentos, 4
+apartamentos/pavimento, 2 subsolos) e códigos de acabamento/louça. **Não há
+preço em nenhuma página.** Se o stakeholder quiser um stat assim no Yarden,
+**ele precisa fornecer o valor**; o @dev está proibido de inventar um
+(Artigo IV). Quer um stat de preço? Se sim, qual valor?
+
+---
+
+### D2 — Quais amenidades virar chips na seção Lazer? ✅ RESPONDIDA (travada na AC4)
+
+> ✅ **Resposta (2026-09-03):** o pacote recomendado pelo @po, 6 chips —
+> **Sports bar (rooftop) · Yoga · Brinquedoteca · Petcare · Espaço gourmet com
+> piscina privativa · "E muito mais"** (6º, mesmo padrão do Vind). Os outros 19
+> candidatos ficaram fora. Texto normativo: **AC4**.
+
+**Pergunta original:** dos **25** candidatos abaixo (todos da Ficha Técnica), quais
+**5 ou 6** devem virar os chips da seção "Lazer"? No Vind Residence são 6, e o
+sexto é o coringa "E muito mais" (**confirmado pelo @po** lendo
+`vind-residence/index.html`: 6 `.chip`, o último literalmente "E muito mais") —
+vale repetir esse padrão aqui?
+
+> **Correção de contagem (@po, 2026-09-03).** A versão 0.1 dizia "24
+> candidatos (17 térreo + 7 rooftop)", mas a lista enumerada tem **18** itens de
+> térreo, não 17 — o total correto é **25**. A origem da divergência: a Ficha
+> Técnica traz **17 itens literais** de lazer de térreo, e a story desdobra
+> "piscina adulto e infantil com deck" em dois candidatos (ver nota ¹), o que
+> leva a 18. Os dois números estão certos em contextos diferentes: **17 = itens
+> da fonte; 18 = candidatos oferecidos aqui.**
+
+**Térreo (18 candidatos, de 17 itens literais da Ficha):** boulevard mirante ·
+fire place · piscina adulto\* · piscina infantil com deck\* · playground ·
+brinquedoteca · market · cozinha† · salão de festas e terraço · delivery ·
+beautyroom · petplace · petcare · praça de convivência · miniquadra ·
+bicicletário · espaço gourmet · espaço gourmet com piscina privativa
+
+**Rooftop (7):** sports bar · lounge · coworking com sala para reuniões ·
+terraço · pilates · academia · yoga
+
+> \* A Ficha traz "piscina adulto **e** infantil com deck" como item único — a
+> separação em dois é paráfrase do @sm, não citação literal.
+> † "Cozinha" aparece na lista de lazer da Ficha entre "market" e "salão de
+> festas", provavelmente a cozinha de apoio do salão. **Recomendação do @po:
+> não usar como chip isolado** — lê mal numa vitrine de lazer.
+
+**Recomendação do @po (não vinculante):** os chips que melhor diferenciam o
+Yarden são os que o Vind **não** tem — *rooftop* com sports bar, yoga,
+brinquedoteca, petcare, e o "espaço gourmet com piscina privativa".
+
+---
+
+### D3 — Quais 9 fotos usar na Galeria? ✅ RESPONDIDA (travada na AC5 e AC7)
+
+> ✅ **Resposta (2026-09-03):** a curadoria recomendada pelo @po —
+> **1 Fachada + 3 Rooftop + 3 Térreo + 2 Decorado = 9**, com `[L]` (paisagem
+> larga) nos 2 slots `.g-wide` e **sem nenhuma das 4 "Humanizadas"** (são
+> plantas baixas, não ambientes). **A escolha dos arquivos específicos dentro
+> dessas categorias/proporções foi delegada ao @dev pelo stakeholder** — o
+> inventário abaixo é o insumo dessa escolha, não uma pergunta pendente.
+> **D3.1** (qual das 9 vira o fundo da banda CTA) também **delegada ao @dev**,
+> por contraste. Texto normativo: **AC5** e **AC7**.
+
+**Pergunta original:** quais **9** dos 39 renders abaixo entram na galeria, e em
+que ordem? (A ordem importa: o grid alterna tamanhos — 2 fotos ficam largas
+`.g-wide` e 1 fica alta `.g-tall`, como no Vind.)
+
+Inventário **completo e conferido pelo @po em 2026-09-03** (39 arquivos; os 2
+`.DS_Store` do diretório não são imagens). Caminho relativo à pasta base
+`…/TRIFOLD/Empreendimentos/Yarden/Book/RENDERS/`. Todos vão precisar de
+compressão (ver AC5).
+
+**Legenda de proporção** (medida com `sips`, arquivo por arquivo):
+`[L]` = paisagem larga 4000×1818 (~2,2:1) · `[Q]` = **quadrada 4000×4000** ·
+`[W]` = 16:9 (3966×2250). Um `[Q]` num slot `.g-wide` perde ~55% da altura no
+recorte — prefira `[L]` para os 2 slots largos.
+
+**Fachada (2)**
+- `Fachada/Fachada_2 Yarden.jpg` `[L]` — 8,7 MB
+- `Fachada/Fachada_3 Yarden.jpg` `[L]` — 8,6 MB
+
+**Térreo (14)**
+- `Térreo/Beauty Room Yarden.jpg` `[Q]` — 7,4 MB
+- `Térreo/Espaço Bikes Yarden.jpg` `[L]` — 5,5 MB
+- `Térreo/Espaço Kids Yarden.jpg` `[Q]` — 9,3 MB
+- `Térreo/Estar Yarden.jpg` `[L]` — 4,2 MB
+- `Térreo/Fireplace Yarden.jpg` `[L]` — 6,8 MB
+- `Térreo/Gourmet Yarden.jpg` `[W]` — 7,6 MB
+- `Térreo/Lazer Yarden.jpg` `[L]` — 8,8 MB — **já reservada** para o fundo da seção Lazer (AC4)
+- `Térreo/Market Yarden.jpg` `[L]` — 5,0 MB
+- `Térreo/Mini Quadra Poliesportiva Yarden.jpg` `[L]` — 3,6 MB
+- `Térreo/Pet place Yarden.jpg` `[Q]` — 12,0 MB
+- `Térreo/Piscina Infantil Yarden.jpg` `[Q]` — 18,2 MB (a mais pesada do book)
+- `Térreo/Piscina privativa gourmet Yarden.jpg` `[L]` — 8,5 MB
+- `Térreo/Piscina Yarden.jpg` `[L]` — 8,5 MB
+- `Térreo/Salão de Festas Yarden.jpg` `[L]` — 5,3 MB
+
+**Rooftop (8)**
+- `Rooftop/Coworking Yarden.jpg` `[L]` — 3,8 MB
+- `Rooftop/Fitness Yarden.jpg` `[L]` — 3,5 MB
+- `Rooftop/Lounge Yarden.jpg` `[L]` — 6,2 MB
+- `Rooftop/Pilates Yarden.jpg` `[L]` — 3,9 MB
+- `Rooftop/Sala de Jogos Yarden.jpg` `[L]` — 4,2 MB
+- `Rooftop/Sala de Reuniões Yarden.jpg` `[Q]` — 6,3 MB
+- `Rooftop/Sport bar Yarden.jpg` `[L]` — 5,8 MB
+- `Rooftop/Terraço Yarden.jpg` `[Q]` — 11,8 MB
+
+**Decorado 1 (5)** — apartamento decorado, opção 1
+- `Decorado 1/Decorado 1_quarto Yarden.jpg` `[Q]` — 8,6 MB
+- `Decorado 1/Decorado 1_sala estar Yarden.jpg` `[Q]` — 11,7 MB
+- `Decorado 1/Decorado 1_sala estar-3 Yarden.jpg` `[L]` — 4,3 MB
+- `Decorado 1/Decorado 1_sala estar+cozinha Yarden.jpg` `[L]` — 3,9 MB
+- `Decorado 1/Decorado 1_suite Yarden.jpg` `[L]` — 3,5 MB
+
+**Decorado 2 (5)** — apartamento decorado, opção 2
+- `Decorado 2/Decorado 2_cozinha Yarden.jpg` `[Q]` — 6,7 MB
+- `Decorado 2/Decorado 2_quarto Yarden.jpg` `[Q]` — 5,4 MB
+- `Decorado 2/Decorado 2_sacada Yarden.jpg` `[Q]` — 5,2 MB
+- `Decorado 2/Decorado 2_sala estar + cozinha Yarden.jpg` `[L]` — 3,4 MB
+- `Decorado 2/Decorado 2_suite Yarden.jpg` `[Q]` — 8,5 MB
+
+**Humanizadas (4)** — ⚠️ **são PLANTAS humanizadas, não ambientes.** O @po
+abriu a `tipo 1` para conferir: é planta baixa vista de cima, com os rótulos
+SUÍTE / SUÍTE MASTER / SALA / COZINHA / VARANDA GOURMET / LAVABO / ÁREA
+TÉCNICA. **Recomendação do @po: NÃO misturar na galeria de ambientes** (a
+galeria do Vind é 100% ambiente; planta baixa num lightbox de fotos quebra a
+leitura). Se o stakeholder quiser plantas na página, isso é uma **seção
+própria** e fica **fora do escopo desta story**. São também as únicas de
+proporção irregular entre si (não servem para um grid uniforme):
+- `Humanizadas/Humanizada Final tipo 1.png` — 3200×1802, 6,7 MB
+- `Humanizadas/Humanizada Final tipo 2.png` — 3029×2060, 7,9 MB
+- `Humanizadas/Humanizada Final tipo 3.png` — 2945×1856, 5,8 MB
+- `Humanizadas/Humanizada Final tipo 4.png` — 3200×2084, 7,1 MB
+
+**Subsolo 1 (1)**
+- `Subsolo 1/Car Wash Yarden.jpg` `[L]` — 2,9 MB (a mais leve do book)
+
+**Recomendação de variedade do @po (não vinculante):** 1 Fachada + 3 Rooftop +
+3 Térreo + 2 Decorado. Evitar repetir visualmente o que já está na página:
+o Hero já usa a piscina do rooftop e a seção "natureza" já usa um lounge
+gourmet — então `Rooftop/Lounge` e `Térreo/Piscina` podem ficar redundantes.
+
+**Recomendação de proporção do @po (não vinculante, mas técnica):** os 2 slots
+`.g-wide` devem receber `[L]` (paisagem larga) e o slot `.g-tall` é o único que
+aproveita bem uma `[Q]` (quadrada) — de todo o book, **nenhuma imagem é
+retrato**, então o slot alto sempre vai recortar; uma `[Q]` é a que perde menos
+ali. As 6 fotos de slot normal aceitam qualquer proporção. Se a escolha do
+stakeholder cair em `[Q]` para um slot largo, o @dev deve sinalizar em vez de
+recortar no escuro.
+
+**Sub-pergunta (D3.1):** dentre as 9 escolhidas, qual serve de **fundo da banda
+CTA** (AC7)? Precisa de área "calma" para texto branco sobreposto. Se o
+stakeholder não opinar, o @dev escolhe pelo critério de contraste (AC7 já
+autoriza).
+
+---
+
+### D4 — "Sobre a Trifold": reusar o texto do Vind ou variar? ✅ RESPONDIDA (travada na AC8)
+
+> ✅ **Resposta (2026-09-03):** **Opção (A) — reuso verbatim de texto E foto**,
+> conforme recomendação do @po. Kicker, H2 e parágrafo são copiados palavra por
+> palavra da transcrição abaixo, e a foto é o mesmo
+> `trifold-fachada.{jpg,webp}` do Vind. Opções (B) e (C) descartadas. Texto
+> normativo: **AC8**.
+
+**Pergunta original:** a seção institucional do Vind Residence tem este conteúdo exato:
+
+- **Kicker:** "Sobre a Trifold"
+- **H2:** "Referência no conceito de morar bem"
+- **Parágrafo:** *"Fundada em 2019 com a união de uma equipe experiente —
+  atuante em conjunto no mercado desde 1997 — a Trifold trabalha na
+  orçamentação e execução de obras residenciais, comerciais, industriais e
+  hospitalares, além da incorporação e execução de empreendimentos próprios
+  que reúnem alta qualidade."*
+- **Foto:** `trifold-fachada.{jpg,webp}` (sede da Trifold)
+
+**Opções:**
+- **(A)** Reusar **tudo verbatim** — é a mesma empresa, o mesmo prédio, e o
+  texto já está publicado em produção no Vind Residence. *Default do @po.*
+- **(B)** Mesmo texto, **foto diferente** (stakeholder fornece).
+- **(C)** **Texto variado** para o Yarden (stakeholder fornece a nova redação —
+  o @dev não pode reescrever texto institucional por conta própria, Artigo IV).
+
+---
+
+### D5 — Quanto mudar a seção de Localização? ✅ RESPONDIDA (travada na AC6)
+
+> ✅ **Resposta (2026-09-03):** **Opção (B) — redesenho no padrão do Vind**,
+> conforme recomendação do @po: endereço em destaque, link clicável para o
+> Google Maps (URL oficial da Ficha) e os 5 pontos de referência como lista de
+> texto visível. Opção (A) descartada. **Esta é a única das 5 decisões que
+> mexeu na estimativa: 8 → 9 pontos.** Texto normativo: **AC6**.
+
+**Pergunta original:** hoje o Yarden tem a seção "Invista no novo centro urbano de
+Maringá" (foto do mapa + texto sobre a Gleba Itororó). Os pontos de referência
+existem **só no `alt` da imagem** (Catedral, Parque do Ingá, Av. JK, Bosque II,
+Av. Itororó) — não são visíveis para quem lê a página.
+
+**Opções:**
+- **(A) Mínima** — só ganha `id="localizacao"` (para a âncora do nav
+  funcionar) + um `kicker` "Localização". Conteúdo e imagem intactos.
+- **(B) Redesenho no padrão do Vind** — além do (A), o endereço em destaque
+  ("📍 Rua Carlos Meneghetti, 168 — Gleba Itororó, Maringá", da Ficha Técnica)
+  + link "Ver no Google Maps" (a Ficha traz a URL) + os 5 pontos de referência
+  como lista visível em duas colunas. Mais trabalho, mas é a estrutura que o
+  Vind usa (lá são 11 pontos).
+
+**Nota do @po:** a Opção B tem um ganho real de SEO/acessibilidade — hoje os
+pontos de referência são invisíveis para leitor de tela e para busca. Mas é a
+única das 5 decisões que **muda a estimativa** da story (~1 ponto a mais).
+
+## Fora de escopo (explícito, não inventar na implementação)
+
+- Seção de Depoimentos (AC12).
+- Qualquer mudança em `packages/web/*`, nas rotas de tracking, ou em
+  `landing-pages/trifold-design-system/vercel.json` — esta story não toca
+  infraestrutura nem CAPI.
+- Qualquer mudança nos 3 formulários existentes além de, no máximo, novos
+  `id`s de campos DENTRO dos formulários **não é esperada** — nenhum AC pede
+  isso; se algo exigir tocar nos formulários, é sinal de que a story saiu do
+  escopo e deve ser escalada, não decidida sozinha.
+- Preço/valor de entrada do Yarden (não há dado verificado — ver D1.2).
+- **Seção de plantas do apartamento.** As 4 "Humanizadas" do book são plantas
+  baixas humanizadas (confirmado pelo @po abrindo o arquivo `tipo 1`), não
+  ambientes. Publicá-las exige uma seção própria com tratamento próprio
+  (zoom/legenda por tipologia) — **não é esta story**, e elas não entram na
+  galeria da AC5.
+- Criar projeto Vercel, mexer em DNS ou em qualquer coisa de T12/T13 — essa
+  pendência é da 86-12, não desta story.
+
+## Riscos
+
+1. ~~**Curadoria (D1–D3) pode atrasar o início da implementação.**~~
+   **MITIGADO em 2026-09-03:** o stakeholder respondeu D1–D5 e as respostas
+   estão travadas nas ACs (ver Change Log 0.3). Não há mais espera de curadoria,
+   e **não existe cenário de PLACEHOLDER** nesta story — todo conteúdo já tem
+   texto definitivo. Risco residual: o @dev implementar a partir das tabelas de
+   *candidatos* das seções D1/D2 em vez das listas travadas das AC3/AC4 — as
+   seções D são registro/insumo, **a AC é a norma**.
+2. **Processamento de imagem é trabalho manual** (recorte/otimização de até
+   11 fotos: 9 galeria + 1 lazer + 1 sobre-a-trifold, sendo a última já
+   reusada). Pode exceder a estimativa se as imagens de origem exigirem
+   tratamento extra (as `Humanizadas/*.png` são bem mais pesadas que os
+   `.jpg` das demais pastas).
+3. **Header fixo pode colidir com o `.hero-brand`/`.hero-form` em telas muito
+   baixas** (notebooks com pouca altura) — validar visualmente, não só por
+   largura.
+4. **(acrescentado pelo @po, 2026-09-03) Seguir o padrão do Vind Residence "ao
+   pé da letra" reprova o teste automatizado desta landing.** As AC4/AC5/AC7/
+   AC8 mandam adaptar o Vind, e o Vind serve imagem de galeria como
+   `<img src="…webp">` avulso e fundos de seção por CSS — os dois modos deixam
+   arquivos órfãos em `assets/`, e `tracking-browser.test.ts` reprova órfão.
+   Mitigado pela **AC15**, que fixa a convenção do Yarden (`<picture>` com as
+   duas URLs) e foi confirmada por contraprova executada, não por leitura.
+   Risco residual: o @dev copiar o trecho do Vind por conveniência sem ler a
+   AC15.
+5. **(acrescentado pelo @po) 12 dos 35 renders são quadrados (4000×4000).**
+   Se a curadoria da D3 escolher uma foto quadrada para um dos 2 slots
+   `.g-wide`, o recorte come ~55% da altura e o ambiente fica irreconhecível.
+   Mitigado anotando a proporção de cada arquivo em D3; o @dev deve sinalizar
+   em vez de recortar no escuro.
+
+## Dev Notes
+
+### Mapa de reuso (verificado nesta sessão)
+
+| Fonte | O que oferece | Uso nesta story |
+|---|---|---|
+| `landing-pages/vind-residence/index.html` | Estrutura/CSS/comportamento de `header.nav`, `.overview`/`.stats`, `.amen`/`.chips`, `.gallery-grid`+lightbox, `.loc-sec`+`.poi`, `.band`, `.about`/Sobre, `.fnav` | **Referência de estrutura e comportamento** (ADAPT) — não copiar nomes de classe literalmente; seguir a convenção de classes em português já usada no `index.html` do Yarden (`.titulo-secao`, `.texto-secao`, `.saber`, `.check`, `.hero-form`, etc.) |
+| `landing-pages/yarden/index.html` (atual) | `:root` com paleta/tipografia, os 3 formulários + tracking, Hero, footer | **Base sobre a qual esta story constrói** — nenhuma variável de cor/fonte nova |
+| `landing-pages/vind-residence/assets/trifold-fachada.{jpg,webp}` | Foto da sede da Trifold | **REUSE direto (AC8)** — copiar para `landing-pages/yarden/assets/` |
+| Ficha Técnica (PDF) | Dados factuais do empreendimento | Fonte única de verdade para stats (AC3) e chips (AC4) — nada fora dela |
+| Renders reais (Google Drive) | 39 fotos do book do Yarden | Fonte única de imagens novas (AC4 fundo, AC5 galeria) — nenhuma imagem de banco de imagens genérico |
+
+### Candidatos de stats (Ficha Técnica — insumo da D1, JÁ DECIDIDA)
+
+> ⚠️ Esta é a lista de **candidatos** que foi levada ao stakeholder. Os 6 stats
+> efetivamente aprovados estão na **AC3** — implementar por lá, não por aqui.
+
+
+- 60 unidades
+- 83,66m² e 79,81m² de área privativa (duas metragens — decidir se vira 1 ou 2
+  stats)
+- 2 suítes e lavabo (tipo de apartamento)
+- 15 pavimentos tipo
+- 2 subsolos + rooftop completo
+- Área do terreno: 1.344,00m²
+- Área construída total: 6.128,96m²
+
+### Candidatos de amenidades/chips (Ficha Técnica — insumo da D2, JÁ DECIDIDA)
+
+> ⚠️ Lista de **candidatos**. Os 6 chips aprovados estão na **AC4** —
+> implementar por lá.
+
+
+**25 candidatos no total** (18 de térreo + 7 de rooftop), conferidos pelo @po
+contra o PDF na validação de 2026-09-03 — a Ficha traz **17** itens literais de
+térreo e a story desdobra um deles em dois (ver D2 e a nota ¹). Cada item abaixo
+aparece **literalmente** na Ficha Técnica, com duas exceções sinalizadas:
+
+Térreo (17): boulevard mirante · *fire place* · piscina adulto¹ · piscina
+infantil com deck¹ · *playground* · brinquedoteca · *market* · cozinha ·
+salão de festas e terraço · *delivery* · *beautyroom* · *petplace* ·
+*petcare* · praça de convivência · miniquadra · bicicletário · espaço
+gourmet · espaço gourmet com piscina privativa.
+
+Rooftop (7): *sports bar* · *lounge* · coworking com sala para reuniões ·
+terraço · pilates · academia · yoga.
+
+> ¹ **Paráfrase, não citação literal.** A Ficha Técnica traz um único item,
+> "piscina adulto e infantil com deck". A separação em dois candidatos é
+> defensável (as pastas de render têm `Térreo/Piscina Yarden.jpg` e
+> `Térreo/Piscina Infantil Yarden.jpg` separadas), mas o @dev deve saber que
+> está parafraseando — não são dois itens da fonte.
+>
+> Note também que o item "cozinha" da Ficha é ambíguo em contexto de lazer
+> (aparece entre "*market*" e "salão de festas e terraço", provavelmente a
+> cozinha de apoio do salão). **Não usar como chip isolado** sem confirmação —
+> um chip "Cozinha" numa lista de lazer lê mal.
+
+### Inventário completo de renders (insumo da D3 — composição JÁ DECIDIDA)
+
+Ver tabela em "Descoberta" acima e a lista nominal com proporções em **D3** —
+39 arquivos em 7 pastas. Caminho base:
+`.../Empreendimentos/Yarden/Book/RENDERS/{pasta}/{arquivo}`.
+
+A **composição** da galeria está travada na **AC5** (1 Fachada + 3 Rooftop +
+3 Térreo + 2 Decorado, zero Humanizadas, `[L]` nos slots largos); a escolha dos
+**arquivos** dentro disso é do @dev, por delegação do stakeholder.
+
+### Convenção de assets a seguir (a do YARDEN, não a do Vind)
+
+> **Correção do @po (2026-09-03).** A 0.1 intitulava esta seção "mesma do Vind
+> Residence". **Não é.** A galeria do Vind serve `<img src="assets/galeria-01.webp">`
+> avulso, com o par `.jpg` no disco sem referência — o que no Yarden reprova
+> `tracking-browser.test.ts` (asset órfão, ver AC15). A convenção a seguir é a
+> que o próprio Yarden já pratica.
+
+- Toda imagem de conteúdo (galeria, fundos de seção) vai como par
+  `nome.jpg` + `nome.webp`, servidos via `<picture>` com `<source type="image/webp">`
+  **e as duas URLs em atributo HTML** (mesmo padrão já usado em
+  `interior-lounge-gourmet`, `mapa-gleba-itororo`, `familia-quer-saber-mais` no
+  `index.html` atual do Yarden). Ver AC15 — é requisito, não estilo.
+- Nomes de arquivo descritivos em português, kebab-case, sem espaço (ex.:
+  `galeria-01.jpg`, `lazer-piscina.jpg` — não copiar os nomes originais dos
+  renders, que têm espaços e "Yarden" repetido).
+- Tamanho de arquivo alvo: **≤ 330KB por arquivo**, preferindo a faixa mais
+  leve do Vind Residence (webp abaixo de ~150KB). Medições feitas pelo @po na
+  validação: assets atuais do Yarden 56KB–324KB; `galeria-*` do Vind
+  10KB–226KB. Não subir os JPGs originais em alta resolução sem compressão.
+
+### Testing
+
+> ⚠️ **Correção do @po (2026-09-03).** A 0.1 afirmava que "não há suíte
+> automatizada a rodar/atualizar para esta story" e que "não é esperado rodar
+> `pnpm vitest`". **Isso está errado, e era o risco mais concreto da story.**
+> `landing-pages/yarden/tracking-browser.test.ts` roda nesta landing —
+> `vitest.config.ts` da raiz tem `include: ["landing-pages/**/*.test.ts"]` — e
+> ele valida exatamente o que esta story mais faz: **mexer em `assets/`**.
+> Rodar é obrigatório (ver AC15).
+
+**Passo automatizado (obrigatório, antes e depois):**
+
+```bash
+# na raiz do repo
+npx vitest run landing-pages/yarden/tracking-browser.test.ts
+```
+
+- **Baseline medido pelo @po em 2026-09-03, antes desta story: 23/23 passando
+  (exit 0).** Qualquer falha depois da implementação é regressão introduzida
+  aqui, não ruído pré-existente.
+- Ele cobre: par HTML↔`assets/` nos dois sentidos (inexistente e órfão), ids
+  dos campos dos 3 formulários, live region, trava de duplo submit, os dois
+  endpoints do proxy, o id do Pixel e a ausência de `console.log` do payload.
+  É o guarda automático das AC14 e AC15.
+- `landing-pages/yarden/api-proxy.test.ts` **não lê o `index.html`**
+  (verificado) — não é afetado por esta story, mas roda junto de graça.
+
+**Validação manual (o layout em si não tem teste automatizado):** mesmo runtime
+da 86-12 — `cd landing-pages/yarden && python3 -m http.server 8080`.
+- Checklist manual (por breakpoint: desktop >980px, mobile <980px, e
+  <560px):
+  - Nav: aparece transparente no topo do Hero, ganha fundo `--marrom` após
+    60px de scroll, hambúrguer mobile abre/fecha corretamente, cliques nas
+    âncoras levam à seção certa sem escondê-la atrás do header fixo.
+  - Todas as 6 seções novas renderizam com as cores/fontes/logo corretos (só
+    variáveis já existentes) e sem overflow horizontal.
+  - Galeria: lightbox abre ao clicar em qualquer uma das 9 fotos, fecha com
+    Esc/clique fora/botão X.
+  - Console do navegador sem erros JS novos (comparar antes/depois desta
+    story).
+  - Os 3 formulários continuam enviando normalmente (ou, sem backend local,
+    ao menos disparando as chamadas esperadas — confirmar via aba Network que
+    `fetch` para `CONFIG.leadEndpoint`/`TRACK_ENDPOINT` continua idêntico ao
+    de antes desta story).
+  - `InitiateCheckout` dispara uma única vez ao focar qualquer um dos 6 campos
+    de nome/whats (verificar via `console.log` temporário ou Meta Pixel
+    Helper — remover antes de finalizar).
+- **Nenhum arquivo `.ts` de teste deve ser MODIFICADO** por esta story: os dois
+  testes existentes já passam e continuam válidos sem alteração (o extrator de
+  assets é dinâmico — lê o diretório com `readdirSync`, não tem contagem
+  fixa —, então 11 assets novos **referenciados** passam sem tocar no teste).
+  Se o @dev sentir necessidade de editar `tracking-browser.test.ts` para fazer
+  a story passar, isso é sinal de que a implementação violou a AC15, não de que
+  o teste está errado. Escalar em vez de afrouxar a asserção.
+
+## 🤖 CodeRabbit Integration
+
+> **CodeRabbit Integration**: Disabled
+>
+> CodeRabbit CLI is not enabled in `core-config.yaml`.
+> Quality validation will use manual review process only.
+> To enable, set `coderabbit_integration.enabled: true` in core-config.yaml
+
+## Tasks / Subtasks
+
+- [x] **T0 (CONCLUÍDA em 2026-09-03 — era bloqueante para AC3/AC4/AC5/AC6/AC7/
+      AC8)** — @po levou ao stakeholder as decisões **D1 a D5** e registrou as
+      respostas nesta story: cada resposta está travada na AC correspondente, e
+      a seção "Decisões de curadoria" virou registro. **Nada de curadoria
+      pendente para o @dev.**
+      - [x] D1 respondida (6 stats do Overview; D1.1 = só a maior metragem;
+            D1.2 = **sem stat de preço**) → AC3 travada
+      - [x] D2 respondida (6 chips: sports bar, yoga, brinquedoteca, petcare,
+            espaço gourmet com piscina privativa, "E muito mais") → AC4 travada
+      - [x] D3 respondida (composição 1 Fachada + 3 Rooftop + 3 Térreo +
+            2 Decorado, sem Humanizadas; arquivos e D3.1 delegados ao @dev) →
+            AC5 e AC7 travadas
+      - [x] D4 respondida (**(A) verbatim** — texto e foto do Vind) → AC8 travada
+      - [x] D5 respondida (**(B) redesenho**) → AC6 travada **e estimativa
+            confirmada em 9 pontos** (8 + 1 pela Opção B)
+- [ ] **T1 (AC1)** — Criar `<header class="nav">` fixo com logo + 5 links +
+      CTA; JS de scroll (`scrolled` no fundo) e toggle mobile; ajustar
+      `scroll-margin-top`/`scroll-padding-top` nas seções-alvo.
+- [ ] **T2 (AC2)** — Validar visualmente (todos os breakpoints) que o nav novo
+      não sobrepõe o Hero existente.
+- [ ] **T3 (AC3)** — Construir seção Overview/Stats (`#empreendimento`) com os
+      stats confirmados em T0.
+- [ ] **T4 (AC4)** — Construir seção Lazer (`#lazer`) com os chips confirmados
+      em T0 + imagem de fundo `Térreo/Lazer Yarden.jpg` processada.
+- [ ] **T5 (AC5)** — Processar as 9 imagens da Galeria confirmadas em T0
+      (redimensionar/otimizar para jpg+webp, nomear `galeria-01..09`),
+      construir `.gallery-grid` + lightbox + CTA.
+- [ ] **T6 (AC6)** — Ajustar a seção "invista" existente: `id="localizacao"` +
+      `kicker` + o **redesenho da Opção B** (endereço em destaque, link do
+      Google Maps `maps.app.goo.gl/RFibC7xZ7KZx6cwQA`, e os 5 pontos de
+      referência como lista de texto visível), conforme D5 travada em T0.
+- [ ] **T7 (AC7)** — Construir Banda CTA reaproveitando uma das 9 imagens da
+      Galeria (T5).
+- [ ] **T8 (AC8)** — Copiar `trifold-fachada.{jpg,webp}` do Vind Residence
+      para `landing-pages/yarden/assets/`; construir seção Sobre a Trifold com
+      o texto confirmado em T0.
+- [ ] **T9 (AC9)** — Adicionar `.fnav` ao footer existente.
+- [ ] **T10 (AC10, AC11)** — Revisão final: nenhuma linha do `<script>` de
+      tracking tocada; nenhuma cor/fonte/logo fora do `:root` já existente.
+- [ ] **T11 (AC12)** — Confirmar que nenhuma estrutura de Depoimentos foi
+      criada, nem placeholder.
+- [ ] **T11b (AC15)** — Rodar
+      `npx vitest run landing-pages/yarden/tracking-browser.test.ts` e obter
+      **23/23 (ou mais) passando**. Baseline pré-story medido pelo @po: 23/23.
+      Se acusar asset órfão/inexistente, corrigir a marcação (nunca o teste).
+- [ ] **T12 (AC13, AC14)** — Checklist manual completo (ver Testing) nos 3
+      breakpoints + confirmação de não-regressão dos 3 formulários.
+- [ ] **T13** — Atualizar `landing-pages/yarden/README.md` (contagem de
+      assets, lista de seções) se a estrutura documentada lá ficar
+      desatualizada. **Vai ficar:** o README hoje diz literalmente
+      `assets/ # 13 arquivos: 5 imagens (jpg + webp cada) + 2 logos SVG + 1 PDF`
+      — com as ~11 imagens novas da AC5/AC4/AC8 esse número muda
+      necessariamente. T13 não é condicional.
+
+## Definition of Done
+
+A story está pronta para o gate do @qa quando **todas** as condições abaixo
+valem:
+
+1. ✅ **D1–D5 respondidas** pelo stakeholder e registradas nesta story —
+   **satisfeita em 2026-09-03** (T0 concluída, respostas travadas em
+   AC3/AC4/AC5/AC6/AC7/AC8, cada uma rastreável à Ficha Técnica ou ao
+   inventário de renders). O que o @qa verifica aqui é que a implementação
+   **seguiu** as decisões travadas — não que elas existam.
+2. **AC1 a AC15 satisfeitas**, cada uma verificada pelo checklist manual de
+   "Testing" nos 3 breakpoints (>980px, <980px, <560px).
+3. **Zero dado inventado** (Artigo IV): todo número da seção Overview e todo
+   chip da seção Lazer cita a Ficha Técnica; nenhum texto de marketing novo
+   sobre o empreendimento foi escrito pelo @dev sem fonte.
+4. **Zero regressão de tracking:** `git diff` do `index.html` não mostra
+   nenhuma linha alterada no `<script>` de tracking do `<head>` nem no script
+   final de envio; os 3 formulários continuam com os mesmos `id`s e as mesmas
+   3 chamadas de `ligarFormulario`; console do navegador sem erro JS novo.
+5. **Zero arquivo fora de `landing-pages/yarden/`** no File List — em especial
+   nada em `packages/web/`, nada em `landing-pages/trifold-design-system/`.
+   Única exceção permitida: a cópia de `trifold-fachada.{jpg,webp}` **para
+   dentro** de `landing-pages/yarden/assets/` (AC8).
+6. **Nenhuma estrutura de Depoimentos** criada, nem placeholder, nem
+   comentário (AC12).
+7. **Assets novos comprimidos** para ≤ 330KB por arquivo, em pares jpg+webp
+   servidos via `<picture>` (AC5).
+8. **`npx vitest run landing-pages/yarden/tracking-browser.test.ts` verde**,
+   com **zero asset órfão e zero referência inexistente** (AC15). Baseline
+   pré-story: 23/23. Nenhum arquivo `.test.ts` modificado.
+9. **`README.md` do Yarden atualizado** (T13) — a contagem de assets muda; hoje
+   a linha diz `13 arquivos: 5 imagens (jpg + webp cada) + 2 logos SVG + 1 PDF`
+   (citação verificada pelo @po, e os 13 arquivos conferem no diretório).
+10. **Dev Agent Record preenchido:** Agent Model, Completion Notes e File List.
+
+## Change Log
+
+| Date | Version | Description | Author |
+|------|---------|-------------|--------|
+| 2026-09-03 | 0.3 | **As 5 decisões de curadoria foram respondidas pelo stakeholder (lucas@trifold.eng.br) e estão travadas nos ACs. Status promovido `Draft → Ready` — o gate que a 0.2 declarou explicitamente como o único pendente caiu.** As 8 respostas (D1, D1.1, D1.2, D2, D3, D3.1, D4, D5) **seguiram todas a recomendação do @po** da validação 0.2. O que ficou travado, AC por AC: **D1 → AC3** — 6 stats, nesta ordem: 60 unidades · 83,66 m² de área privativa · 2 suítes e lavabo · 15 pavimentos · 2 subsolos + rooftop completo · 4 apartamentos por pavimento (todos citação literal da Ficha Técnica); **D1.1** = a área privativa vira **1 stat só com a maior metragem** (`83,66 m²`), mesma forma do Vind (`66,91 m²`), e não dois stats; **D1.2** = **NÃO existe stat de preço/entrada** — a Ficha não traz esse dado em nenhuma das 7 páginas e nenhum valor foi fornecido, então o "R$65mil entrada" do Vind **não** é importado (Artigo IV); descartados os candidatos (f) área do terreno e (g) área construída. **D2 → AC4** — 6 chips: Sports bar (rooftop) · Yoga · Brinquedoteca · Petcare · Espaço gourmet com piscina privativa · **"E muito mais"** como 6º coringa (mesmo padrão do Vind); os outros 19 candidatos, inclusive o ambíguo "cozinha", ficaram fora. **D3 → AC5** — curadoria por categoria: **1 Fachada + 3 Rooftop + 3 Térreo + 2 Decorado = 9**, com `[L]` (paisagem larga) obrigatório nos 2 slots `.g-wide` e `[Q]` admitida só no `.g-tall`, e **zero das 4 "Humanizadas"** (são plantas baixas, não ambientes — vão para uma story futura, se houver). A escolha dos **arquivos específicos** dentro dessas categorias/proporções foi **delegada ao @dev** pelo stakeholder — é autorização explícita, não ambiguidade; **D3.1 → AC7** também delegada ao @dev, por critério de contraste para texto branco. **D4 → AC8** — **Opção (A) verbatim**: kicker, H2 e parágrafo institucional copiados palavra por palavra do Vind Residence e a **mesma** foto `trifold-fachada.{jpg,webp}`; (B) foto nova e (C) texto novo descartadas, e o @dev segue proibido de reescrever texto institucional. **D5 → AC6** — **Opção (B) redesenho no padrão do Vind**: endereço em destaque literal da Ficha ("Rua Carlos Meneghetti, 168 — Gleba Itororó, Maringá"), link clicável para a URL oficial do Maps que a Ficha traz (`maps.app.goo.gl/RFibC7xZ7KZx6cwQA`, com `rel="noopener"`), e os **5 pontos de referência como lista de texto visível** (Catedral, Parque do Ingá, Av. JK, Bosque II, Av. Itororó) — hoje eles existem só no `alt` da imagem, invisíveis para leitor de tela e para busca; o `alt` continua como está, a lista é acréscimo. **Mantido o veto ao iframe do Google Maps** (a imagem de mapa própria do Yarden fica, e não cria asset novo). **Estimativa: 8 → 9 pontos (G)**, o `+1` exclusivamente pela Opção B da D5, exatamente como a nota do @po em D5 previa ("~1 ponto a mais"); nenhuma outra decisão mexeu no tamanho — a curadoria D1–D4 deixou de ser custo de descoberta em vez de virar escopo novo. *Rastreabilidade honesta: a base de 8 pontos vem do cabeçalho das versões 0.1/0.2, que não registraram a estimativa no Change Log; este commit é o primeiro do arquivo em git, então não há diff anterior para citar.* **Consertos de consistência aplicados nesta entrada** (auditoria @po: uma tentativa anterior editara só o cabeçalho e morreu antes de tocar o corpo): (i) o bloco "⛔ **Não iniciar implementação ainda** / está em `Draft` por decisão explícita" **contradizia frontalmente** o cabeçalho já em `Ready` — substituído por "✅ Implementação liberada", com a lista do que segue delegado ao @dev; (ii) AC3/AC4/AC5/AC6/AC7/AC8 ainda estavam com a linguagem de "fica em aberto — ver decisão D*" e, na AC6, com o menu "Opção A **ou** B" + "não decidir sozinho em modo YOLO" — todas reescritas com o texto definitivo; (iii) a seção "Decisões abertas — perguntas objetivas para o stakeholder" virou "**Decisões de curadoria — RESPONDIDAS e travadas**", a tabela "Resumo para levar ao stakeholder" virou tabela de **respostas**, e cada uma das 5 subseções D ganhou o cabeçalho "✅ RESPONDIDA" com a resposta no topo — o insumo (candidatos, citações da Ficha, inventário nominal dos 39 renders com proporção) **fica no arquivo como registro**, com a regra explícita de que **a AC vence** se divergir; (iv) as 3 referências cruzadas de Dev Notes ("para 'Decisões abertas' #1/#2/#3") ficaram penduradas numa seção renomeada — reapontadas para D1/D2/D3 e marcadas como insumo histórico, não como norma; (v) **Risco #1 (curadoria atrasa o início) marcado MITIGADO** e o cenário de PLACEHOLDER que ele autorizava foi **eliminado** — não há mais conteúdo sem texto definitivo, e o risco residual passou a ser o @dev implementar pelas tabelas de *candidatos* em vez das listas travadas; (vi) **T0 marcada `[x]`** com as 5 sub-respostas; (vii) T6 deixou de dizer "a Opção A ou B confirmada em T0" e passou a descrever a Opção B; (viii) DoD #1 marcada satisfeita, com a nota de que o @qa verifica **aderência** às decisões, não a existência delas. **Nada de escopo técnico mudou nesta entrada:** AC15 (a correção bloqueante da 0.2), o baseline de 23/23 do `tracking-browser.test.ts`, o teto de 330KB por asset e o "zero tracking novo" seguem exatamente como estavam. Próximo passo: `@dev *develop` — nenhum gate pendente. | @po (Pax) |
+| 2026-09-03 | 0.2 | **Validação @po (`*validate-story-draft`): GO, 9/10 — e a story permanece deliberadamente em `Draft`.** ⚠️ **Exceção consciente ao `story-lifecycle.md`**, que manda o @po promover `Draft → Ready` em veredito GO: as decisões de curadoria **D1–D5 seguem pendentes com o stakeholder** e duas delas podem **mudar o escopo material** da story (quais 9 fotos processar em D3 e se entra um stat de preço em D1.2, que hoje não tem fonte). Promover a `Ready` agora convidaria o @dev a começar e depois refazer trabalho de imagem/conteúdo. **Promover a `Ready` só depois das respostas de D1–D5** (checklist T0); nenhum outro gate está pendente. Correções aplicadas nesta validação, todas por conferência em fonte primária: **(1) CRÍTICO — acrescentada a AC15**: `landing-pages/yarden/tracking-browser.test.ts` roda nesta landing (`vitest.config.ts` da raiz inclui `landing-pages/**/*.test.ts`) e reprova **asset órfão**; seguir o padrão do Vind Residence nas AC4/AC5/AC7/AC8 (galeria como `<img src="…webp">` avulso e fundo de seção por CSS) deixaria os `.jpg` e os fundos sem referência HTML e **quebraria o teste** — comprovado por contraprova executada com o extrator copiado do próprio teste (3 cenários falham, o `<picture>` do Yarden passa); baseline pré-story medido: **23/23 passando**. A seção "Testing" da 0.1 dizia o oposto ("não há suíte automatizada", "não é esperado rodar `pnpm vitest`") e foi corrigida. **(2)** Inventário de renders remedido com `sips`: a 0.1 afirmava "todas paisagem, `.jpg` 4000×1818 / 6–9 MB, `.png` 3200×1802 / 6–8 MB" — errado nas três dimensões; o real é **22 paisagem 4000×1818 + 12 QUADRADAS 4000×4000 + 1 de 3966×2250**, `.jpg` de 2,9 a 18,2 MB, `.png` de 2945×1856 a 3200×2084 / 5,8–7,9 MB. Proporção anotada arquivo por arquivo em D3 (importa: quadrada em slot `.g-wide` perde ~55% da altura) e virou Risco #5. **(3)** Contagem da D2 corrigida de 24 para **25** candidatos — a lista enumerava 18 itens de térreo, não 17; a Ficha traz 17 literais e a story desdobra "piscina adulto e infantil com deck" em dois. **(4)** Acrescentado o 8º candidato de stat (**4 apartamentos por pavimento**), citação literal da Ficha que a 0.1 não ofereceu. **(5)** Acrescentado o "Resumo para levar ao stakeholder" — as 5 decisões (8 perguntas com as sub) em uma tabela única. **(6)** Corrigido o título "Convenção de assets (mesma do Vind Residence)" → é a convenção do **Yarden**; a do Vind quebra o teste. Confirmações independentes (o que a 0.1 afirmava e **está correto**): 39 imagens em 7 pastas com as quantidades exatas por pasta (41 arquivos − 2 `.DS_Store`); faixas de peso dos assets (Yarden 56–324KB, `galeria-*` do Vind 10–226KB, webp até 153KB, jpg 24–226KB); os 7 dados da Ficha Técnica (endereço, torre, apartamento, lazer, áreas, 60 unidades) e a **ausência de preço** nas 7 páginas; a URL oficial do Maps `maps.app.goo.gl/RFibC7xZ7KZx6cwQA`; a transcrição **verbatim** do "Sobre a Trifold" do Vind (kicker, H2 e parágrafo, palavra por palavra) e a URL do Maps do Vind; nav do Vind com 5 links + CTA e `scrollY > 60`; 6 chips com "E muito mais" no 6º; galeria de 9 fotos com 2 `.g-wide` + 1 `.g-tall`; `.band` reusando `galeria-03.webp`; 11 POIs; 3 depoimentos em vídeo; o Sobre do Vind ter CTA (a AC8 corretamente omite); estado atual do Yarden (4 seções, nenhum `<header>`, 3 formulários e os 6 campos, breakpoints 980/979.98/560, `scroll-behavior:smooth`, os 11 tokens de cor do `:root`, os 5 marcos no `alt` do mapa); a citação literal da linha do `README.md`; 86-12 em `InReview` com `landing-pages/yarden/` já em `main` (squash `86ea676a`). Registro do epic 86 conferido: 86-13 consta em `stories_added`, na tabela de stories e no Change Log 0.7. | @po (Pax) |
+| 2026-09-03 | 0.1 | Story criada a pedido do usuário: expandir a landing do Yarden para ter a mesma estrutura rica de seções da landing do Vind Residence (Overview/Stats, Lazer, Galeria, Sobre a Trifold, Nav, Banda CTA), preservando as 3 seções de conteúdo já existentes do Yarden (natureza, invista→localização, quer-saber-mais) e a infraestrutura de tracking da 86-12 intacta. Depoimentos ficou explicitamente fora de escopo (vídeos ainda não hospedados no YouTube). 5 decisões de curadoria/conteúdo deixadas abertas para o @po levar ao stakeholder (stats, chips de amenidades, 9 fotos da galeria, texto/foto de "Sobre a Trifold", profundidade do redesenho de "Localização"). Dados técnicos verificados na Ficha Técnica oficial (PDF) e inventário real de 39 renders no Google Drive (não 41, como estimado inicialmente). | @sm (River) |
+
+## Dev Agent Record
+
+### Agent Model Used
+
+_A preencher pelo @dev._
+
+### Debug Log References
+
+_A preencher pelo @dev._
+
+### Completion Notes List
+
+_A preencher pelo @dev._
+
+### File List
+
+_A preencher pelo @dev._
+
+## QA Results
+
+_A preencher pelo @qa após a implementação._
