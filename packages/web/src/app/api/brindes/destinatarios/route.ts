@@ -9,10 +9,23 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url)
 
+  // Story 75-372: o tamanho do brinde vem do catálogo (`brindes_tipos`) pelo
+  // `brinde_tipo_id` do cadastro. O embed é left join por padrão — só vira `!inner`
+  // quando o filtro de tamanho está ativo, porque `!inner` exclui quem tem a FK nula
+  // (hoje 164 dos 200 destinatários) e isso mudaria o comportamento default da lista.
+  const tamanho = searchParams.get("tamanho")
+  const selectCols = tamanho
+    ? "*, brindes_tipos!inner(nome, tamanho, cor)"
+    : "*, brindes_tipos(nome, tamanho, cor)"
+
   let query = supabase
     .from("brindes_destinatarios")
-    .select("*", { count: "exact" })
+    .select(selectCols, { count: "exact" })
     .eq("org_id", appUser.org_id)
+
+  // Igualdade exata contra o valor cadastrado no catálogo — as opções do select da tela
+  // vêm de `brindes_tipos.tamanho`, nunca de digitação livre.
+  if (tamanho) query = query.eq("brindes_tipos.tamanho", tamanho)
 
   const obraNome = searchParams.get("obra_nome")
   if (obraNome) query = query.ilike("obra_nome", `%${obraNome}%`)

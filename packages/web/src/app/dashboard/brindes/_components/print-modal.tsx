@@ -5,6 +5,7 @@ import { Printer, X } from "lucide-react"
 import type { BrindesFilters } from "./brindes-filter-bar"
 import type { DataComemorativa, Destinatario, Entrega } from "./types"
 import { STATUS_LABEL } from "./types"
+import { formatResumoBrindes } from "./brinde-tamanho"
 
 interface PrintModalProps {
   filters: BrindesFilters
@@ -28,6 +29,21 @@ function buildEndereco(d: Destinatario): string {
     d.endereco_cep && `CEP ${d.endereco_cep}`,
   ].filter(Boolean)
   return parts.join(", ") || "—"
+}
+
+/**
+ * Story 75-372 — conteúdo da célula "Brinde / Tamanho".
+ *
+ * A fonte é SEMPRE o cadastro (`brindes_destinatarios.brinde_tipo_id` → embed
+ * `brindes_tipos`), nunca `brindes_entregas.brinde_tipo_id`, mesmo quando há data
+ * comemorativa selecionada e `entregasMap` está populado. Hoje as duas fontes não
+ * divergem (nenhuma entrega tem `brinde_tipo_id`); no dia em que divergirem, o impresso
+ * mostra o brinde previsto no cadastro — decisão registrada no AC4 e nos Riscos.
+ */
+function buildBrinde(d: Destinatario): string {
+  const t = d.brindes_tipos
+  if (!t || !t.nome) return "—"
+  return t.tamanho ? `${t.nome} · ${t.tamanho}` : t.nome
 }
 
 function buildPrintHtml(
@@ -57,6 +73,7 @@ function buildPrintHtml(
         <td class="tipo">${TIPO_LABEL[d.tipo] ?? d.tipo}</td>
         <td class="nome">${d.nome}${cargo}${observacao}</td>
         <td class="endereco">${buildEndereco(d)}</td>
+        <td class="brinde">${buildBrinde(d)}</td>
         ${statusCell}
       </tr>`
   }).join("")
@@ -64,6 +81,11 @@ function buildPrintHtml(
   const filtrosInfo = activeFilters.length > 0
     ? `<p class="filtros">Filtros: ${activeFilters.join(" | ")}</p>`
     : `<p class="filtros">Sem filtros aplicados — todos os registros</p>`
+
+  // AC5: agregado em cliente sobre os registros já carregados — sem query extra. A soma
+  // das entradas é exatamente `records.length` (mesmo número do rodapé).
+  const resumo = formatResumoBrindes(records)
+  const resumoInfo = resumo ? `<p class="resumo">Resumo: ${resumo}</p>` : ""
 
   const statusHeader = hasDate ? "Status" : "Assinatura / Conferência"
 
@@ -78,7 +100,8 @@ function buildPrintHtml(
     .cabecalho { margin-bottom: 10px; }
     h1 { font-size: 14pt; font-weight: bold; margin-bottom: 2px; }
     .meta { font-size: 8pt; color: #555; margin-bottom: 2px; }
-    .filtros { font-size: 8pt; color: #777; margin-bottom: 8px; font-style: italic; }
+    .filtros { font-size: 8pt; color: #777; margin-bottom: 2px; font-style: italic; }
+    .resumo { font-size: 8pt; color: #555; margin-bottom: 8px; }
     table { width: 100%; border-collapse: collapse; }
     th { background: #f0f0f0; font-size: 8pt; font-weight: bold; padding: 5px 6px; text-align: left; border: 1px solid #ccc; }
     td { padding: 4px 6px; border: 1px solid #ddd; vertical-align: top; font-size: 9pt; }
@@ -91,6 +114,7 @@ function buildPrintHtml(
     .obs { color: #e06b00; font-size: 8pt; }
     .cargo { color: #555; font-size: 8pt; font-style: italic; }
     .endereco { color: #444; font-size: 8.5pt; }
+    .brinde { width: 76px; font-size: 8.5pt; }
     .status { width: 80px; text-align: center; }
     .assinatura { width: 110px; }
     .linha-assinatura { border-bottom: 1px solid #aaa; margin: 10px 4px 2px; }
@@ -106,6 +130,7 @@ function buildPrintHtml(
     <h1>${titulo}</h1>
     <p class="meta">Gerado em ${hoje} &nbsp;|&nbsp; ${records.length} destinatário(s)</p>
     ${filtrosInfo}
+    ${resumoInfo}
   </div>
   <table>
     <thead>
@@ -115,6 +140,7 @@ function buildPrintHtml(
         <th class="tipo">Tipo</th>
         <th class="nome">Nome</th>
         <th class="endereco">Endereço</th>
+        <th class="brinde">Brinde / Tamanho</th>
         <th class="status">${statusHeader}</th>
       </tr>
     </thead>
@@ -143,6 +169,7 @@ export function PrintModal({ filters, datas, selectedDateId, entregasMap, onClos
     if (filters.nome) labels.push(`Nome: ${filters.nome}`)
     if (filters.cidade) labels.push(`Cidade: ${filters.cidade}`)
     if (filters.estado) labels.push(`UF: ${filters.estado}`)
+    if (filters.tamanho) labels.push(`Tamanho: ${filters.tamanho}`)
     return labels
   }
 
@@ -159,6 +186,7 @@ export function PrintModal({ filters, datas, selectedDateId, entregasMap, onClos
         if (filters.nome) params.set("nome", filters.nome)
         if (filters.cidade) params.set("cidade", filters.cidade)
         if (filters.estado) params.set("estado", filters.estado)
+        if (filters.tamanho) params.set("tamanho", filters.tamanho)
       }
 
       const res = await fetch(`/api/brindes/destinatarios?${params}`)
