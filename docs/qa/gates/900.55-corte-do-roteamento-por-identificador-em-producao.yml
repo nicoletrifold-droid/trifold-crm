@@ -1,0 +1,999 @@
+schema: 1
+story: "900.55"
+story_title: "O corte para roteamento por identificador em produção, ANTES de a 2ª empresa existir"
+gate: PASS   # rodada 1 = CONCERNS; rodada 2 (delta no fim deste arquivo) = PASS
+reviewer: "Quinn (Test Architect)"
+updated: "2026-08-31T16:55:00Z"   # 16:40Z = fim da rodada 2; 16:55Z = ajuste pós-rodada 2 (ver `ajuste_pos_rodada_2`)
+base: "árvore não commitada sobre `a7cbfc35` (branch `story/900-55-corte-roteamento-identificador`)"
+escopo_revisado: >-
+  Task 0, Task 1 e Task 5 — o único escopo que o @dev executou. Tasks 2, 3.1 e 4 são do @devops,
+  não foram executadas, e este gate NÃO as libera: três das concerns abaixo são forward-gates
+  delas.
+
+status_reason: >-
+  **A AC1 está fechada e provada, e o corte que ela protege continua sendo P0 legítimo.** Reproduzi
+  as 6 mutações, cada uma com `tsc --noEmit` rc=0 medido ANTES de contar o vermelho, e os conjuntos
+  de morte saem DISJUNTOS nos três pares de sentido oposto (M1{1}×M2{2}, M3{3}×M3r{8},
+  M5{1}×M6{4}) — é isso, e não o número de vermelhos, que prova que o teste distingue em vez de
+  reagir. O conserto do instrumento é carga, não decoração: sob o fake antigo (M4) a AC1 volta a
+  ser insatisfazível, exatamente como o @dev descreveu. Réguas reconferidas por mim: suíte
+  **296 arquivos / 3900 passed / 6 xfail / rc=0**, baseline na MESMA árvore com os 6 arquivos
+  guardados **296 / 3886 / 6** — **+14, xfail inalterado**; `turbo lint --force` 0 erros
+  (30 warnings, **nenhum** nos 6 arquivos tocados); `turbo type-check --force` 8/8;
+  `build` de `packages/web` rc=0. Produção remedida por mim, só agregados: `whatsapp` **115/115
+  `divergiu=false`** (já cruzou o `n ≥ 100` da AC3), `meta_ads` 3/3 `divergiu=null`,
+  `platform_audit_log` 0, `WEBHOOK_ORG_UNRESOLVED` 7d = 0. As DUAS correções que o @dev fez à
+  story estão certas e eu as confirmei **no objeto vivo**, não no arquivo.
+  **O que segura o gate não é o código — é o que o @devops vai ler a seguir.** Três achados:
+  (1) o nível `error` da AC1 **não tem consumidor que o entregue a um humano** — o único leitor de
+  `level='error'` filtra por `classificarErroIA(message)` e descarta esta mensagem; o runbook §1 o
+  chama de "alarme" e a AC7 se apoia nisso, que é o mesmo pecado que a AC1 conserta um nível acima;
+  (2) o runbook §2 afirma uma **"Decisão do dono do produto (registrada 2026-08-31)"** que a
+  própria story mantém como pergunta ABERTA com a Task 2.1 desmarcada, e cuja única ocorrência em
+  todo o `docs/` é a linha que a usa — e ela autoriza um token real da Meta a entrar no Vault de
+  produção; (3) a perda de `landing_page` cai sobre a **Trifold**, não só sobre a empresa nova, e
+  começa no minuto do onboarding, não no do flip.
+  Nenhuma delas quebra código. Todas são forward-gates das Tasks 2/4. **A AC1 pode mergear agora**,
+  como a própria story prevê.
+
+rodadas:
+  - data: "2026-08-31"
+    rodada: 1
+    base: "árvore não commitada sobre a7cbfc35"
+    gate: CONCERNS
+    concerns: 3
+    observacoes: 4
+    defeitos_vivos: 0
+    regressoes: 0
+  - data: "2026-08-31"
+    rodada: 2
+    base: "mesma árvore; @dev e @po fecharam as 3 concerns"
+    gate: PASS
+    concerns_fechadas: 3
+    concerns_novas: 0
+    observacoes_novas: 1
+    defeitos_vivos: 0
+    regressoes: 0
+    nota: "ver a seção `delta_rodada_2` no fim deste arquivo"
+
+# ═════════════════════════════════════════════════════════════════════════════
+# ⚠️ PRECEDÊNCIA ENTRE RODADAS — leia ANTES de agir sobre qualquer estado deste arquivo
+# ═════════════════════════════════════════════════════════════════════════════
+precedencia:
+  regra: >-
+    Onde a **raiz** deste arquivo (seções 1-10, escritas na **rodada 1**, gate `CONCERNS`) e a
+    seção **`delta_rodada_2`** (fim do arquivo, gate `PASS`) divergirem sobre o **estado** de uma
+    tarefa, de uma AC ou de uma concern, **vale a rodada 2** — é posterior, datada e tem veredito
+    próprio. A raiz fica **preservada como registro histórico, não apagada**: os estados anteriores
+    existiram, valeram enquanto valeram, e a auditoria precisa poder reconstruir **quando cada um
+    caiu**.
+  onde_esta_o_estado_autoritativo:
+    execucao: "`decisao_rodada_2.o_que_o_devops_executa_agora` — é a ordem vigente para o @devops."
+    por_ac: "`decisao_rodada_2.ac_status_atualizado` — substitui a seção `acs` da raiz onde houver divergência."
+    concerns: "`delta_rodada_2.concerns_reabertas` — QA-900-55-1, -2 e -6 estão **fechadas**."
+  por_que_esta_nota_existe: >-
+    Em 2026-08-31 este arquivo afirmou **dois estados sobre a MESMA tarefa**: a raiz dizia que a
+    Task 2 estava "BLOQUEADA" e o `delta_rodada_2` dizia que estava "DESBLOQUEADA". Quem lesse só a
+    raiz não executava; quem lesse só o delta executava. O @devops recusou a Task 2 apoiado na raiz
+    — **e recusou certo**: o defeito era do gate, não dele. É a mesma classe de defeito que a AC1
+    desta story conserta um nível abaixo (um artefato que afirma um estado que ninguém verificou),
+    agora no documento que **autoriza execução em produção** — por isso não é cosmético.
+  o_que_esta_passada_NAO_mudou: >-
+    Nenhum veredito (`gate: PASS`, rodada 1 `CONCERNS`), nenhuma severidade, nenhuma concern
+    existente. Só alinhamento de estado, com o anterior preservado e datado, mais uma observação
+    nova registrada em `ajuste_pos_rodada_2`.
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 1. RÉGUAS — MEDIDAS POR MIM, NÃO HERDADAS DO DEV AGENT RECORD
+# ═════════════════════════════════════════════════════════════════════════════
+reguas:
+  suite_com_as_mudancas:
+    comando: "pnpm test"
+    resultado: "296 arquivos / 3900 passed + 6 expected fail (3906) / rc=0"
+  suite_baseline:
+    metodo: >-
+      `git stash push` dos 6 arquivos da story (mesma árvore, mesmo node_modules, mesma máquina) —
+      não é um baseline reconstruído de outra base.
+    resultado: "296 arquivos / 3886 passed + 6 expected fail (3892) / rc=0"
+    delta: "+14 testes. **xfail inalterado em 6** — o sinal que a mission pediu para vigiar."
+  lint:
+    comando: "pnpm turbo lint --force"
+    resultado: "8 successful. 0 erros, 30 warnings."
+    nos_arquivos_da_story: >-
+      **zero.** `grep` do log por `webhook-org|process-lead|whatsapp/route|whatsapp/__tests__` sai
+      vazio — os 30 warnings são pré-existentes e alheios.
+  type_check:
+    comando: "pnpm turbo type-check --force"
+    resultado: "8 successful, 8 total"
+  build:
+    comando: "pnpm --filter @trifold/web build"
+    resultado: "rc=0"
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 2. AS 6 MUTAÇÕES — REPRODUZIDAS, COM tsc rc=0 ANTES DE CONTAR O VERMELHO
+# ═════════════════════════════════════════════════════════════════════════════
+carrasco:
+  protocolo: >-
+    Cada mutação foi aplicada na árvore restaurada, seguida de `npx tsc --noEmit -p
+    packages/web/tsconfig.json` (rc capturado ANTES da suíte) e da suíte INTEIRA (`pnpm test`,
+    296 arquivos) — nunca de um subconjunto filtrado, que é como um vermelho some sem ninguém ver.
+    Forma da mutação: sempre COMPORTAMENTO, nunca `if (false)`/`const x = null`, que nesta base
+    quebram o `tsc` por narrowing e produzem um vermelho de compilador disfarçado de carrasco.
+  medicoes:
+    - id: M1
+      mutacao: "`route.ts`: motivo novo volta a `nenhuma_correspondencia`"
+      tsc_rc: 0
+      vermelho_medido: "1 teste / 1 arquivo"
+      declarado_pelo_dev: "1 teste"
+      confere: true
+    - id: M2
+      mutacao: "`route.ts`: `else` também emite o motivo novo (emite SEMPRE que o legado for nulo)"
+      tsc_rc: 0
+      vermelho_medido: "2 testes / 1 arquivo"
+      declarado_pelo_dev: "2 testes"
+      confere: true
+    - id: M3
+      mutacao: "`webhook-org.ts`: `nivelDoMotivo` devolve sempre `warn`"
+      tsc_rc: 0
+      vermelho_medido: "**3 testes / 3 arquivos**"
+      declarado_pelo_dev: "2 testes (2 arquivos)"
+      confere: false
+      nota: "subdeclarado — ver QA-900-55-7. Direção segura (o teste é mais forte que o alegado)."
+    - id: M3r
+      mutacao: "`webhook-org.ts`: `nivelDoMotivo` devolve sempre `error` (sentido inverso)"
+      tsc_rc: 0
+      vermelho_medido: "**8 testes / 3 arquivos**"
+      declarado_pelo_dev: "6 testes (2 arquivos)"
+      confere: false
+      nota: >-
+        subdeclarado. Um dos 8 é PRÉ-EXISTENTE (`logOrgUnresolved > é AGUARDADO (logEventOnce),
+        nunca fire-and-forget`), que assere `level` junto — colinear, inofensivo, mas precisa ficar
+        nomeado para não ser lido como regressão na próxima rodada.
+    - id: M4
+      mutacao: "o fake volta a mentir: `maybeSingle()` devolve `linhas[0]`"
+      tsc_rc: 0
+      vermelho_medido: "2 testes / 1 arquivo"
+      declarado_pelo_dev: "2 testes"
+      confere: true
+    - id: M5
+      mutacao: "`process-lead.ts`: motivo novo volta a `nenhuma_correspondencia`"
+      tsc_rc: 0
+      vermelho_medido: "1 teste / 1 arquivo"
+      declarado_pelo_dev: "1 teste"
+      confere: true
+    - id: M6
+      mutacao: "`process-lead.ts`: `else` também emite o motivo novo"
+      tsc_rc: 0
+      vermelho_medido: "4 testes / 1 arquivo"
+      declarado_pelo_dev: "4 testes"
+      confere: true
+
+  o_que_prova_de_verdade: >-
+    **Não é a contagem de vermelhos — é a DISJUNÇÃO dos conjuntos de morte nos pares de sentido
+    oposto.** M1 mata `2 empresas ativas + telefone conhecido`; M2 mata os DOIS testes de `warn` e
+    NÃO mata o de M1. M3 mata os 3 testes que exigem `error`; M3r mata 8 testes que exigem `warn` e
+    NENHUM dos 3 de M3. M5{1} × M6{4}, idem. Conjuntos disjuntos em três pares independentes: o
+    teste discrimina a direção, não apenas reage a qualquer mexida. Se M3 e M3r matassem o mesmo
+    conjunto, "subir tudo para `error`" passaria verde e o motivo novo viraria ruído — que é a
+    forma mais barata de matar justamente o sinal que esta story existe para criar.
+
+  instrumento:
+    veredicto: "🔴 confirmado — o fake é carga, e o conserto era pré-requisito, não higiene."
+    prova_por_codigo: >-
+      `lib/tenancy/__fixtures__/fake-supabase-postgrest.ts`: `resultadoMaybeSingle(linhas)` devolve
+      `{data:null, error:null, status:200}` com 0 linhas e delega a `resultadoSingular` com 1+,
+      que devolve `PGRST116`/406/`data:null` para `length !== 1`. **Com 2+ linhas o fake reproduz o
+      `PGRST116` — que é o mecanismo exato do defeito.**
+    prova_por_mutacao: >-
+      M4 (o fake volta a `linhas[0] ?? null` com `error:null`) acende exatamente os 2 testes que
+      dependem da ambiguidade — e acende porque `legacyResolveActiveConfig` deixa de devolver
+      `null`, o ramo `else` nunca é alcançado e a asserção do motivo novo fica **insatisfazível**.
+      Sob o fake antigo o teste da AC1 ficaria vermelho por causa do instrumento, ou verde medindo
+      outra coisa. O @dev está certo, e a ordem em que ele fez (instrumento primeiro) é a certa.
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 3. AS DUAS CORREÇÕES DO @DEV À STORY — AUDITADAS NO OBJETO VIVO
+# ═════════════════════════════════════════════════════════════════════════════
+correcoes_do_dev:
+  correcao_1_ac2_precisa_de_duas_chamadas:
+    veredicto: "✅ CORRETA, e a story está de fato incompleta do jeito que quebraria produção."
+    metodo: >-
+      Não li a régua do arquivo de migration. Consultei a FUNÇÃO VIVA em produção
+      (`dsopqkqjkmhytudaaolv`) por `pg_get_functiondef`, quebrada em linhas — porque um `ILIKE`
+      sobre a definição inteira dá FALSO POSITIVO no comentário: minha primeira sonda acusou
+      `promove_connected=true` para `_org_integration_write_secret`, e a linha real desmente.
+    medido:
+      _org_integration_write_secret: >-
+        única escrita é `UPDATE org_integrations SET config = p_config, secret_ref = v_secret_ref,
+        updated_at = now()`. **Nunca toca `status`.** O `'connected'` que aparece na definição está
+        num COMENTÁRIO (o achado N2(a) do @po sobre segredo vazio). Guards presentes: P0017, P0018.
+      _org_integration_mark_connected: >-
+        `UPDATE ... SET status = 'connected'`, precedido do guard **P0015** (`sem secret_ref — não
+        marca connected sem um segredo gravado`). Guards presentes: P0015, P0017.
+      resolveOrgByMetaPage: >-
+        `lib/tenancy/webhook-org.ts:221` — `.eq("status","connected")`, exigido pela 900-51/AC10. O
+        gate JÁ estava escrito no cabeçalho da função desde a 900-51 (*"A assimetria ACABOU"*), e a
+        story 900-55 não o incorporou. **Confirmado.**
+      linha_da_trifold_hoje: "`provider='meta_ads'`, `status='disconnected'`, `secret_ref` nulo."
+    consequencia: >-
+      Gravar só o `page_id` deixaria a linha `disconnected`, `resolveOrgByMetaPage` continuaria sem
+      resolver, a AC3 nunca fecharia para `meta_ads` e o corte quebraria a entrada de leads pagos —
+      exatamente o que a story existe para evitar. **A AC2 e a Task 2.2 da story precisam ser
+      corrigidas pelo @po** (eu não edito AC). O runbook §2.1 já traz as duas chamadas na ordem
+      certa; o risco é o @devops seguir o CHECKLIST da story em vez do runbook.
+  correcao_2_page_id_presente_com_valor_nulo:
+    veredicto: "✅ CORRETA."
+    medido_em_producao: >-
+      `SELECT provider, status, (config ? 'page_id'), length(coalesce(config->>'page_id',''))
+      FROM org_integrations` — a linha `meta_ads` tem `tem_chave_page_id = true` e
+      `len_page_id = 0`. As outras 5 linhas não têm a chave. **Placeholder de seed, não chave
+      ausente.** Não muda o caminho de gravação (a RPC faz `SET config = p_config`, substituindo o
+      objeto), muda o diagnóstico de quem for conferir — que é o que o @dev disse.
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 4. AS PERGUNTAS DA MISSION, RESPONDIDAS
+# ═════════════════════════════════════════════════════════════════════════════
+respostas:
+  nivel_derivado_do_motivo_e_robustez_ou_acoplamento:
+    veredicto: "**Robustez real**, com um acoplamento que é o desejado — e um preço que ninguém nomeou."
+    a_favor: >-
+      Derivar põe o mapa `motivo → nível` num ponto único e NOMEADO (`nivelDoMotivo`), e é
+      exatamente isso que torna M3/M3r expressáveis como mutação de um ponto só. Com `level` por
+      parâmetro, o controle negativo "os outros 3 motivos continuam `warn`" viraria uma asserção
+      sobre call sites, não sobre o logger — e `webhook-org.test.ts` não teria os 4 testes de mapa
+      que M3r derruba. A severidade É propriedade do estado, não do relator: quem lê o runbook §6
+      decide pelo MOTIVO, e ter o nível colado nele impede que os dois divirjam.
+    ressalva_ao_argumento_do_dev: >-
+      A justificativa escrita ("deixaria um `error` órfão mantendo metade da asserção verde") não
+      se sustenta sob a forma do teste que ele escreveu: o `toMatchObject` é ÚNICO e cobre `level` e
+      `motivo` juntos, então M1 o derruba de qualquer jeito. O ganho real é outro — é o de cima, o
+      da mutação de ponto único. Vale corrigir o texto para o motivo certo.
+    preco_nomeado: >-
+      Nenhum call site futuro poderá emitir `legado_ambiguo_novo_resolveu` em outro nível sem mexer
+      no mapa. Hoje isso é correto (o motivo tem uma semântica só). Fica registrado para quando
+      houver dois.
+  a_ac1_nao_cobre_o_modo_legacy_concorda:
+    veredicto: "**Concordo com a decisão. Discordo do motivo declarado — ele é falso para o `whatsapp`.**"
+    o_que_a_story_diz: >-
+      "Não há verdade barata disponível nesse modo (a informação que faltaria é o `error` que
+      `legacyResolveActiveConfig` descarta)."
+    o_que_eu_medi: >-
+      `legacyResolveActiveConfig` (`route.ts:65-75`) usa **`.maybeSingle()`**. Pela medição que o
+      próprio projeto fez contra `@supabase/postgrest-js@2.101.1` e registrou em
+      `fake-supabase-postgrest.ts`, `.maybeSingle()` **só erra com 2+ linhas** — com 0 devolve
+      `{data:null, error:null}`. Logo `error?.code === "PGRST116"` é um discriminante EXATO e
+      barato de ambiguidade nesse receptor, disponível em `legacy` **e** em `both`, sem computar o
+      resolver novo. A alegação vale para `meta_ads` (`legacyResolveActiveOrgId` usa `.single()`,
+      que confunde 0 com 2+), **não** para `whatsapp`.
+    por_que_ainda_concordo_em_nao_cobrir: >-
+      Produção roda `both` (medido), o corte vai para `identifier`, e o rollback da AC6 volta para
+      **`both`**, nunca para `legacy`. O modo é inalcançável no plano operacional inteiro. Cobrir
+      seria construir carrasco para um caminho que ninguém pisa.
+    por_que_o_motivo_errado_importa: >-
+      Porque a mesma verdade barata fortaleceria o ramo `both` — ver QA-900-55-4.
+  ac4_landing_page_5_webhooks_story_propria_basta:
+    veredicto: "**Não basta como está escrito.** Ver QA-900-55-6 — falta uma condição de ordem, não uma story a mais."
+  trifold_nao_muda_de_comportamento:
+    veredicto: "✅ **Provado por três caminhos independentes.**"
+    prova_1_alcancabilidade: >-
+      Com 1 org, `legacyResolveActiveConfig` sempre resolve, então o ramo `else if (novo.status ===
+      "resolvida")` — o único acrescentado — é **inalcançável**. Os ramos `identifier` e `legacy`
+      não foram tocados pelo diff.
+    prova_2_equivalencia_do_else: >-
+      O `else` trocou `novo.status === "nao_resolvida" ? novo.motivo : "nenhuma_correspondencia"`
+      por `novo.motivo`. Ele só é alcançado quando `novo.status !== "resolvida"`, isto é
+      `=== "nao_resolvida"` (o tipo `ResolucaoWhatsApp`/`ResolucaoOrg` tem exatamente 2 variantes).
+      Os dois ramos do ternário antigo colapsam no mesmo valor. Idem para `quantidadeEncontrada`.
+    prova_3_nivel_dos_motivos_antigos: >-
+      `nivelDoMotivo` devolve `warn` para os 3 motivos pré-existentes — literalmente o mesmo
+      `"warn"` que estava hardcoded antes. Nenhum evento de hoje muda de nível.
+    prova_4_medida: >-
+      Baseline 3886 → 3900 com **zero** teste pré-existente virando vermelho, e o teste explícito
+      `com UMA empresa ativa nada muda — o legado resolve e o lead nasce` (que existe para impedir
+      que um bug de "cai sempre na não-resolução" passe verde nos outros três).
+  a_nota_honesta_sobre_os_timeouts:
+    veredicto: >-
+      **Não é defeito real — e a causa declarada está errada.** Não bloqueia, mas o registro
+      precisa ser corrigido.
+    o_que_eu_fiz: >-
+      Rodei a suíte INTEIRA **10 vezes** nesta árvore: 1 sozinha, 1 baseline (mudanças guardadas),
+      **1 deliberadamente concorrente com `turbo lint --force`**, e 7 rodadas de mutação.
+      `grep -c "Test timed out"` = **0 nas dez**. A rodada concorrente saiu
+      `296 passed / 3900 passed / 6 xfail / rc=0` enquanto o `lint --force` fazia `8 successful` em
+      36,6s ao lado. **Não reproduzi a falha em nenhum cenário — inclusive no cenário que o @dev
+      culpa.**
+    a_causa_mais_provavel_que_ele_nao_viu: >-
+      **Há outra sessão de agente escrevendo NESTA mesma árvore de trabalho.** Entre dois comandos
+      meus, o arquivo `packages/web/src/lib/tenancy/__po_probe_42a.test.ts` (uma sonda do @po para a
+      story 900-42a) apareceu como `??` e existiu em disco, e minutos depois deixou de existir. Eu
+      não o criei nem o apaguei. Ele é um `*.test.ts` **dentro do `include` do vitest**
+      (`packages/web/src/**/*.test.ts`), e o conteúdo dele assere `expect(lancou).toBe(true)` sobre
+      um furo que a story 900-42a diz existir — ou seja, se estivesse presente numa rodada ele
+      **mudaria a contagem de arquivos e sairia vermelho**. Um arquivo de teste que nasce e morre
+      no meio de uma rodada explica timeout e contagem instável muito melhor que `turbo lint`.
+      A árvore também carrega trabalho não commitado de pelo menos três outras frentes
+      (`docs/stories/epics/epic-900-*.md` editado por @po/@pm sobre 900-42a e Epic 91, ~40 arquivos
+      novos de `agent-memory`, 10 drafts de story), nada disso na File List desta story.
+    o_que_muda_na_pratica: >-
+      Registrar "concorrente com `turbo lint --force`" fixa a causa errada, e é assim que o próximo
+      timeout é dispensado com um dar de ombros. O registro certo é **"agentes concorrentes numa
+      árvore de trabalho compartilhada"** — e a contramedida é rodar a régua com a árvore quieta,
+      não parar de rodar o lint.
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 5. CONCERNS — o que o @dev / @po precisa mudar
+# ═════════════════════════════════════════════════════════════════════════════
+concerns:
+  - id: QA-900-55-1
+    severidade: MEDIUM
+    bloqueia: "o texto da AC7 e do runbook §1. NÃO bloqueia o merge da AC1."
+    titulo: "O nível `error` não tem quem o entregue — o 'alarme' da AC7 é um registro passivo"
+    medido: >-
+      Único leitor de `system_events.level='error'` em toda a árvore:
+      `app/api/cron/nicole-health/route.ts:186` (`.eq("level","error")`). Ele então roda
+      `classificarErroIA(ev.message)` e faz `if (!tipo) continue`. A mensagem que `logOrgUnresolved`
+      grava é `"whatsapp: org não resolvida (legado_ambiguo_novo_resolveu)"`, e as 8 assinaturas de
+      `lib/alerts/erro-ia.ts` (`credit balance is too low`, `purchase credits`,
+      `insufficient_quota`, `authentication_error`, `invalid x-api-key`, `permission_error`,
+      `rate_limit_error`, `overloaded_error`) **não casam nenhuma** ⇒ `null` ⇒ o evento é
+      descartado ANTES de qualquer decisão de canal. `git grep WEBHOOK_ORG_UNRESOLVED` fora de
+      testes: 3 ocorrências, todas comentário ou o próprio ponto de emissão — **ninguém seleciona
+      esse `event_type`.** Consumidores de `system_events` que não são teste: `admin/email-stats`,
+      `cron/nicole-health`, `api/system-events` (filtro manual `?level=`), `lib/logger.ts`.
+      Descartei supressão por dedup: o índice único é PARCIAL
+      (`ux_system_events_dedupe_key ... WHERE metadata->>'dedupe_key' IS NOT NULL`) e
+      `logOrgUnresolved` nunca passa `dedupe_key` — todo evento entra. Em produção há **0**
+      `WEBHOOK_ORG_UNRESOLVED` em 7 dias, então não existe histórico de alguém ter notado um.
+    o_que_o_error_compra_de_fato: >-
+      (a) `console.error` em vez de `console.warn` no log da Vercel (`lib/logger.ts:22`);
+      (b) o filtro `?level=error` de `/api/system-events`, que exige um humano ir olhar. Nada mais.
+    por_que_importa: >-
+      O runbook §1 chama isso de *"o alarme atrás dela"* e a AC7 inteira se apoia nele como
+      substituto honesto da trava que não existe. **É um evento ESCRITO, não um alerta
+      ENTREGUE.** É a mesma classe de defeito que a AC1 conserta um nível acima: um artefato que
+      afirma mais do que faz. A própria AC7 diz *"Não fingir que isto é uma trava"* — o mesmo
+      padrão de honestidade precisa valer para a palavra "alarme".
+    correcao_exigida: >-
+      Uma das duas, à escolha do @po/@dev:
+      **(a) ligar a entrega** — o canal já existe (`lib/alerts/admin-whatsapp.ts`, Story 87-19);
+      basta um caminho que carregue `WEBHOOK_ORG_UNRESOLVED` com motivo
+      `legado_ambiguo_novo_resolveu`, com carrasco próprio (mutação: matar o predicado ⇒ vermelho);
+      **ou (b) reescrever** o runbook §1 e o texto da AC7 para dizer literalmente o que existe:
+      *"um registro em `system_events` de que ninguém é notificado — a detecção depende de alguém
+      abrir o painel `/api/system-events?level=error`"*. (b) é aceitável e barato; o inaceitável é
+      manter a palavra "alarme".
+
+  - id: QA-900-55-2
+    severidade: MEDIUM
+    bloqueia: "**a Task 2 (@devops). Não executar a gravação enquanto isto não fechar.**"
+    titulo: "O runbook afirma uma decisão do dono do produto que a story registra como ABERTA"
+    medido: >-
+      `docs/runbooks/900-55-corte-do-roteamento-por-identificador.md:58` — *"**Decisão do dono do
+      produto (registrada 2026-08-31):** gravar o **token real da Página** junto do `page_id` (…)
+      **Não criar a variante.**"* A story, em Dev Notes, mantém: *"**Pergunta aberta ao dono do
+      produto — bloqueia a Task 2** (…) **Sem resposta, a Task 2 não roda**"*, e a **Task 2.1
+      (`Decidir com o dono do produto qual token vai no campo de segredo (pergunta aberta)`) está
+      DESMARCADA**. `grep -rn "token real da Página" docs/` devolve **exatamente 1 ocorrência: a
+      própria linha do runbook**. Não há registro da decisão em nenhum outro lugar de `docs/`.
+    por_que_importa: >-
+      Não é inconsistência de redação. É a autorização, para o @devops, de colocar **um token real
+      de Página da Meta no Vault de produção pela primeira vez** — um segredo que, por decisão
+      explícita da régua `nao-consumo.test.ts`, **nada vai ler até a Onda 7**. Uma decisão cuja
+      única procedência é o documento que age sobre ela é alegação, não decisão. É o mesmo
+      mecanismo que a AC1 está consertando: um artefato que afirma um estado que ninguém verificou.
+    correcao_exigida: >-
+      Ou **citar a procedência** (onde e quando o dono do produto disse isso — a story ou o epic,
+      com data), ou **reverter o §2 para "pergunta aberta"** e marcar o passo como bloqueado, em
+      coerência com a Task 2.1 desmarcada. Enquanto uma das duas não acontecer, **o @devops não
+      executa a Task 2.**
+
+  - id: QA-900-55-6
+    severidade: MEDIUM
+    bloqueia: "a recomendação da AC4 como está escrita. Não bloqueia o merge da AC1."
+    titulo: "A perda de `landing_page` cai sobre a TRIFOLD, e começa no onboarding — não no flip"
+    medido: >-
+      `webhook_logs` nos 7 dias até 2026-08-31, por `source`: `imoveis_sync` 60,
+      `meta_ads` 20, **`landing_page` 5** (última 2026-08-26), `telegram` ausente. Confere com o
+      @dev. `resolveSoleOrg` lê `organizations WHERE is_active LIMIT 2` e devolve `ambigua` com 2
+      orgs — **inclusive para os leads da própria Trifold.** No caminho legado
+      (`webhooks/landing-page/route.ts:558-566`, `whatsapp_config .eq(status,active).single()`) com
+      2 linhas ativas o resultado também é `null`, então o lead se perde nos dois modos: a story
+      está certa em dizer que **o corte não é o que quebra**.
+    duas_correcoes_ao_enquadramento:
+      um: >-
+        Em `both`/`legacy` a perda é **SILENCIOSA**: `logOrgUnresolved` é deliberadamente NÃO
+        chamado ali (`landing-page/route.ts:266-269`); só há `console.error` e
+        `processing_error: "Nenhuma org ativa encontrada"`. Depois do corte, o modo `identifier`
+        **chama** `logOrgUnresolved`. Ou seja, o corte torna a perda de `landing_page` MAIS
+        observável, não neutra — é um ponto a favor do corte que a story está entregando de graça.
+      dois: >-
+        O gatilho é a segunda org, e a segunda org é exatamente o que esta story destrava. Deixar o
+        conserto como *"story própria da Onda 3"*, sem data, significa embarcar um buraco conhecido
+        de ~5 leads/semana **na operação da própria Trifold** no dia do primeiro cliente.
+    correcao_exigida: >-
+      Pequena e de sequenciamento, não de escopo: a recomendação da AC4 deve nomear a story de
+      `landing_page` como **co-requisito do primeiro onboarding**, não da "Onda 3" genérica — a
+      mesma disciplina de ordem que a AC7 já impõe ao próprio corte. E o §4 do runbook deve
+      registrar a correção (1) acima, porque hoje ele diz "não muda nada para eles" e muda.
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 6. OBSERVAÇÕES — não bloqueiam, ficam registradas
+# ═════════════════════════════════════════════════════════════════════════════
+observacoes:
+  - id: QA-900-55-3
+    severidade: LOW
+    titulo: "A ressalva do modo `legacy` é ampla demais para o receptor `whatsapp`"
+    detalhe: "Ver `respostas.a_ac1_nao_cobre_o_modo_legacy_concorda`. Conclusão certa, motivo falso."
+
+  - id: QA-900-55-4
+    severidade: LOW
+    titulo: "Em `both`, com 2 empresas e telefone desconhecido, o motivo ainda mente — e o teste consagra isso"
+    detalhe: >-
+      O ramo novo discrimina por `novo.status === "resolvida"`. Com 2 linhas ativas e um
+      `phone_number_id` que não pertence a nenhuma delas (ou ausente do payload), o árbitro loga
+      `nenhuma_correspondencia` @ `warn`, e o teste *"2 empresas ativas + telefone DESCONHECIDO ⇒
+      volta a `nenhuma_correspondencia` em `warn`"* assere isso como o comportamento correto. É
+      correto **sobre o caminho novo** e continua mudo sobre a emergência sistêmica (a conta tem
+      duas configs ativas). O `PGRST116` descartado por `legacyResolveActiveConfig`
+      (QA-900-55-3) cobriria também este caso, em uma linha. **Não bloqueia:** no caso dominante
+      (identificador presente e conhecido) o ramo dispara, e esta variante não é pior que hoje.
+
+  - id: QA-900-55-5
+    severidade: LOW
+    titulo: "A classe tem 3 árbitros, não 2 — `telegram` carrega o mesmo ternário e a story não o nomeia"
+    detalhe: >-
+      `app/api/telegram/webhook/route.ts:388-389` tem o ternário idêntico
+      (`novo.status === "nao_resolvida" ? novo.motivo : "nenhuma_correspondencia"`), no mesmo
+      formato `both` / `legado` nulo. **Provei que é inalcançável na direção mentirosa:**
+      `legacyResolveFirstOrg` (`telegram/webhook/route.ts:26-31`) é
+      `organizations.select("id").limit(1).single()` **sem filtro de `is_active`**, então só devolve
+      `null` com **0** organizações; e com 0 organizações o `resolveSoleOrg` (que filtra
+      `is_active`) devolve `nenhuma_correspondencia`, nunca `resolvida`. Por isso nada ficou
+      vermelho e nada está errado hoje. O `landing_page` não entra na classe: o árbitro legado dele
+      não tem `else` e não chama `logOrgUnresolved`. **O achado é que essa prova pertence à story:**
+      quem der o próximo `grep "nenhuma_correspondencia"` encontra uma base inconsistente e nenhuma
+      explicação. Uma linha em Dev Notes resolve.
+
+  - id: QA-900-55-7
+    severidade: LOW
+    titulo: "M3 e M3r subdeclarados no Dev Agent Record"
+    detalhe: >-
+      Medido por mim, suíte inteira, `tsc` rc=0 antes: M3 = **3 testes / 3 arquivos** (declarado
+      2/2); M3r = **8 testes / 3 arquivos** (declarado 6). As outras quatro batem exatamente.
+      Direção segura — o teste é mais forte que o alegado —, mas o número registrado deve ser o
+      medido. Registrar também que 1 dos 8 de M3r é um teste PRÉ-EXISTENTE (`é AGUARDADO
+      (logEventOnce), nunca fire-and-forget`) que assere `level` de carona: colinear, inofensivo,
+      e precisa estar nomeado para não ser lido como regressão na próxima rodada.
+
+  - id: QA-900-55-8
+    severidade: LOW
+    titulo: "O fake do `meta_ads` planta a ambiguidade em vez de produzi-la"
+    detalhe: >-
+      Em `process-lead.test.ts`, `legadoAmbiguo()` injeta à mão
+      `{data:null, error:{code:"PGRST116"}}` na fila de `whatsapp_config`, em vez de pôr 2 linhas e
+      deixar um terminal fiel produzir o erro — que é o que o teste do `whatsapp` faz. É
+      equivalente na prática (`legacyResolveActiveOrgId` só lê `data`, e `.single()` erra com 0 ou
+      2+), mas é mais fraco: **não existe análogo do M4 no lado `meta_ads`.** Dívida barata,
+      registrada.
+
+  - id: QA-900-55-9
+    severidade: INFO
+    titulo: "Árvore de trabalho suja com trabalho de outras frentes — atenção do @devops no commit"
+    detalhe: >-
+      `git status` traz, além dos 6 arquivos da File List: `docs/stories/epics/epic-900-*.md`
+      (edições do @po/@pm sobre 900-42a e Epic 91), ~40 arquivos novos de `.claude/agent-memory/`,
+      10 drafts de story (900-42a, 900-52..54, 900-56..61), `docs/ux/`, `docs/research/`,
+      `docs/architecture/ambiente-de-teste-navegavel.md` e `scripts/seed-ambiente-teste.ts`. Nada
+      disso é desta story. **O commit da 900-55 precisa ser seletivo** (a File List da story é a
+      lista certa, mais o runbook).
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 7. SEGURANÇA
+# ═════════════════════════════════════════════════════════════════════════════
+security_review:
+  veredicto: "limpo — nenhuma superfície nova"
+  verificado:
+    - >-
+      Nenhum dado novo entra no evento: `metadata` continua passando por `filtrarIdentificador`,
+      que é ALLOWLIST (`CHAVES_IDENTIFICADOR_PERMITIDAS`) e devolve os NOMES das chaves recusadas,
+      nunca os valores. Inalterado por esta story.
+    - >-
+      `quantidadeEncontrada = 1` é constante literal, não derivada de dado do lead. A `message` do
+      evento é `"<receptor>: org não resolvida (<motivo>)"` — sem PII.
+    - >-
+      `nivelDoMotivo` é `function` de módulo, não exportada: não amplia superfície de API.
+    - >-
+      Nenhuma migration, nenhum `GRANT`, nenhum segredo tocado por esta fatia de código.
+    - >-
+      Toda a medição de produção foi `SELECT` agregado/metadado via Management API com
+      `User-Agent`. Sem service-role, sem script temporário na árvore, sem leitura de conteúdo de
+      conversa, telefone ou nome. Nenhuma escrita. **O corte NÃO foi executado.**
+
+coderabbit:
+  executado: false
+  motivo: >-
+    Não executado, e isto está declarado em vez de omitido: a configuração do agente aponta para
+    uma instalação em WSL (`~/.local/bin/coderabbit` via `wsl bash -c`) e o host é `darwin`;
+    `which coderabbit` e `ls ~/.local/bin/coderabbit` falham. O gatilho real é o App do GitHub no
+    PR — que ainda não existe, porque a story não foi commitada.
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 8. ESTADO DE PRODUÇÃO — REMEDIDO POR MIM EM 2026-08-31T14:52Z
+# ═════════════════════════════════════════════════════════════════════════════
+producao:
+  metodo: "Management API, `dsopqkqjkmhytudaaolv`, somente SELECT agregado, com `User-Agent`."
+  webhook_org_resolved:
+    - { receptor: whatsapp, via: legacy, divergiu: "false", n: 115, primeiro: "2026-08-30T18:00:57Z", ultimo: "2026-08-31T14:42:58Z" }
+    - { receptor: meta_ads, via: legacy, divergiu: null,    n: 3,   primeiro: "2026-08-30T19:46:12Z", ultimo: "2026-08-31T01:42:29Z" }
+  leitura: >-
+    Modo `both` confirmado pelo par `via='legacy'` + `divergiu` não-nulo. **O `whatsapp` já cruzou
+    o `n ≥ 100` da AC3 (115/115 `false`)** — o critério dele está batido. O `meta_ads` continua em
+    `divergiu=null` (ausência de resolução), e só a Task 2 muda isso. Último evento de `whatsapp`
+    10 min antes da medição: tráfego vivo, não janela morta.
+  estado:
+    organizations_ativas_total: "1 / 1"
+    whatsapp_config_active_total: "1 / 1"
+    org_integrations_total_com_secret: "6 / 0"
+    platform_audit_log: 0
+    webhook_org_unresolved_7d: 0
+  webhook_logs_7d:
+    imoveis_sync: 60
+    meta_ads: 20
+    landing_page: 5
+    telegram: 0
+  confere_com_a_story: >-
+    Todas as contagens de estado batem com a Task 0.2 do @dev. O `n` do `whatsapp` subiu de 96 para
+    115 no intervalo, como esperado.
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 9. VEREDICTO POR AC
+# ═════════════════════════════════════════════════════════════════════════════
+acs:
+  AC1:
+    status: "✅ ATENDIDA e provada"
+    ressalvas: "QA-900-55-1 (o nível `error` não é entregue), QA-900-55-3/4/5 (LOW)"
+  AC2:
+    status: "⛔ NÃO EXECUTADA (@devops) — e a AC como escrita está INCOMPLETA"
+    acao: >-
+      @po precisa incorporar as DUAS chamadas (`write_secret_as_platform` **+**
+      `mark_connected_as_platform`) na AC2 e na Task 2.2 — eu não edito AC. O runbook §2.1 já traz
+      a ordem certa; o risco é o @devops seguir o checklist da story. **E a Task 2 está bloqueada
+      por QA-900-55-2.**
+    superado_rodada_2: >-
+      ⚠️ **As duas frases de `acao` acima estão SUPERADAS** (rodada 2, 2026-08-31), e ficam aqui
+      como registro do que valia na rodada 1. (i) O @po **incorporou** as duas chamadas —
+      `decisao_rodada_2.ac_status_atualizado.AC2` = *"prescrição correta (duas chamadas + duas
+      ações nomeadas + `config->>'page_id'` com 15 dígitos)"*. (ii) **A Task 2 está DESBLOQUEADA**:
+      QA-900-55-2 foi fechada com a procedência registrada. Ver `precedencia` e
+      `decisao.task_2_gravacao_do_page_id`.
+  AC3:
+    status: "⏳ PARCIAL — `whatsapp` batido (115/115, `n ≥ 100`), `meta_ads` pendente da Task 2"
+  AC4:
+    status: "✅ MEDIDA e comunicada — ⚠️ recomendação incompleta (QA-900-55-6)"
+  AC5:
+    status: "⛔ NÃO EXECUTADA (@devops), por desenho. Procedimento correto no runbook §5."
+  AC6:
+    status: "✅ registrada no runbook §6 — ⚠️ os gatilhos dependem de detecção que QA-900-55-1 mostra não existir"
+  AC7:
+    status: "⚠️ ATENDIDA na forma, FRÁGIL no conteúdo — o 'alarme' é um registro passivo (QA-900-55-1)"
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 10. DECISÃO
+# ═════════════════════════════════════════════════════════════════════════════
+decisao:
+  merge_da_ac1: "**LIBERADO.** Provado, sem regressão, sem mudança de comportamento para a Trifold."
+  task_2_gravacao_do_page_id:
+    estado_atual: >-
+      **DESBLOQUEADA** desde a rodada 2 (2026-08-31, gate `PASS`). `QA-900-55-2` está **fechada**:
+      o runbook §2 passou a registrar a **procedência** da autorização — pergunta ao dono do
+      produto com **três** alternativas nomeando o custo de cada uma (gravar / entender antes e
+      adiar / não gravar e deixar o `meta_ads` fora do corte), resposta **"Confirmo, pode gravar"**,
+      **2026-08-31** — e a atribuição errada anterior ficou **preservada** no próprio runbook, num
+      bloco de correção de procedência. Ver
+      `delta_rodada_2.concerns_reabertas.QA-900-55-2`. A ordem de execução vigente é
+      `decisao_rodada_2.o_que_o_devops_executa_agora`.
+    estado_anterior_superado: >-
+      *"**BLOQUEADA** até QA-900-55-2 fechar (procedência da decisão do token)."* — escrito na
+      **rodada 1** (2026-08-31, gate `CONCERNS`) e **superado pela rodada 2**, posterior e datada.
+      Preservado, não apagado: o bloqueio existiu, valeu enquanto a procedência não estava
+      registrada, e a auditoria precisa poder ver **que existiu e quando caiu**.
+    nota_de_conflito: >-
+      Esta chave era a fonte do conflito descrito em `precedencia.por_que_esta_nota_existe`: ela
+      afirmava "BLOQUEADA" enquanto `delta_rodada_2` afirmava "DESBLOQUEADA". Alinhada em
+      2026-08-31, **sem alterar veredito, severidade ou qualquer concern**.
+  task_4_o_flip:
+    estado_atual: >-
+      **AINDA BLOQUEADA, mas só pela condição (a).** Segue de pé: a Task 2 precisa fechar e a AC3
+      precisa bater para `meta_ads` (janela escopada, `n >= 3` e 100% `divergiu='false'`) — nada
+      disso foi executado. **A condição (b) CAIU na rodada 2**: `QA-900-55-1` e `QA-900-55-6` estão
+      fechadas. Sequência vigente em `decisao_rodada_2.o_que_o_devops_executa_agora`:
+      Task 2 -> registrar a âncora UTC da `mark_connected` -> Task 3.1 -> Task 4.
+    estado_anterior_superado: >-
+      *"**BLOQUEADA** até (a) a Task 2 fechar e a AC3 bater para `meta_ads`, e (b) QA-900-55-1 e
+      QA-900-55-6 terem resposta — as duas são sobre o que acontece DEPOIS do flip."* — rodada 1
+      (2026-08-31). A condição (b) foi satisfeita na rodada 2; preservada para a auditoria.
+  ordem_recomendada:
+    vigente: >-
+      Os passos (1) e (2) da lista de rodada 1 **foram executados e verificados por mim na rodada
+      2**. Restam (3) e (4), e a formulação autoritativa deles é
+      `decisao_rodada_2.o_que_o_devops_executa_agora`.
+    superada_rodada_1: >-
+      *"1) @po corrige AC2/Task 2.2 (duas chamadas) e fecha QA-900-55-2 e QA-900-55-6;
+      2) @dev fecha QA-900-55-1 (liga a entrega OU reescreve o runbook §1/AC7) e registra
+      QA-900-55-3/5/7; 3) @devops commita seletivamente e abre o PR; 4) Tasks 2 -> 3.1 -> 4."* —
+      rodada 1 (2026-08-31). Preservada, não apagada.
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ═══ RODADA 2 — DELTA (2026-08-31, @qa Quinn). GATE MUDA: CONCERNS → **PASS** ═══
+# ═══════════════════════════════════════════════════════════════════════════════
+delta_rodada_2:
+  gate_novo: PASS
+  gate_anterior: CONCERNS
+  escopo: >-
+    **Só o que mudou.** Não refiz as 6 mutações, o baseline por stash, nem as provas de
+    equivalência — estão medidas na rodada 1 e nada as invalidou. Reconferi que o
+    comportamento não mudou (ver `comportamento_inalterado`) e medi, em produção, tudo que a
+    rodada 2 afirma.
+  metodo: >-
+    Produção **só leitura**, agregados e metadados, via Management API com `User-Agent`.
+    Nenhum service-role. Nenhum arquivo temporário na árvore. Objetos de banco lidos no
+    **objeto vivo** (`pg_get_functiondef`), extraídos **por LINHA** e com `l !~ '^\s*--'` —
+    nunca `ILIKE` sobre o blob, que já me deu falso positivo antes.
+
+  comportamento_inalterado:
+    metodo: >-
+      Extraí do `git diff` dos 3 arquivos de produção **só as linhas não-comentário**
+      (`grep -vE "^[+-]\s*(\*|//|/\*)"`).
+    resultado: >-
+      São **exatamente** as da rodada 1: `MotivoNaoResolvida` + `legado_ambiguo_novo_resolveu`,
+      `nivelDoMotivo`, `level: nivel`, e os dois `else if (novo.status === "resolvida")` com o
+      colapso do ternário. **Zero linha de lógica nova.** A rodada 2 é comentário, runbook,
+      story e backlog — como declarado.
+    corroboracao_numerica: >-
+      A suíte inteira nesta árvore hoje dá **3918 + 6 xfail**, e a 900-42a (que revisei em
+      paralelo) contribui **+18** verificados por arquivo. 3918 − 18 = **3900** — idêntico ao que
+      medi na rodada 1 com os 6 arquivos da 900-55 presentes. **A rodada 2 não acrescentou nem
+      removeu um teste.** `pnpm --filter web type-check` rc=0; `pnpm type-check --force` rc=0;
+      `pnpm lint --force` rc=0 (0 erros, 30 warnings, nenhum nos arquivos da story).
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  concerns_reabertas:
+    QA-900-55-2:
+      veredito: "✅ **FECHADA.**"
+      o_que_verifiquei: >-
+        Runbook §2 ganhou seção própria *"Autorização para gravar o token — procedência"*: pergunta
+        com **três** alternativas nomeando o custo de cada uma (gravar / entender antes e adiar /
+        não gravar e deixar o `meta_ads` fora do corte), resposta **"Confirmo, pode gravar"**,
+        2026-08-31, e o que isso autoriza dito sem eufemismo ("um token real de Página da Meta
+        entra no Vault de produção pela primeira vez, e nada vai lê-lo até a Onda 7").
+      os_dois_estados_ficaram_distinguiveis: >-
+        **SIM, e é o ponto.** A atribuição errada anterior está **preservada** num bloco
+        `> Correção de procedência (QA-900-55-2 do gate) — registrada, não apagada`, que diz
+        literalmente que naquele momento a decisão fora do **coordenador**, sozinho, e repassada
+        como se fosse do dono do produto. A autorização nova é **posterior ao bloqueio** e está
+        datada. Um auditor futuro consegue reconstruir **como o consentimento chegou** — que é
+        exatamente o que eu não conseguia fazer na rodada 1. A `Task 2.1` está marcada e aponta
+        para os dois lugares.
+      residual_aceito: >-
+        A procedência final ainda é a transcrição de uma fala de sessão, não um artefato assinado.
+        É o mais forte disponível neste fluxo, e a **forma de três alternativas** é o que impede
+        que vire pergunta indutiva. Aceito.
+
+    QA-900-55-1:
+      veredito: "✅ **FECHADA pela saída (b), e o @dev achou um quarto elo pior que os meus três.**"
+      o_quarto_elo_confirmado_por_mim: >-
+        **CONFIRMADO, e ele derruba a concessão que o meu próprio gate fazia.** Eu havia concedido
+        ao nível `error` que *"sobra o filtro `?level=error` de `/api/system-events`, que exige um
+        humano ir olhar"*. **Nem isso.** Medido: `app/api/system-events/route.ts:69` faz
+        `.eq("org_id", user.orgId)`; `webhook-org.ts:465` grava `org_id: null`. Em SQL,
+        `= <uuid>` **nunca** casa `NULL` — o humano que for olhar não vê. E li a RPC no **objeto
+        vivo de produção**: `get_system_events_summary` traz, em linhas não-comentário,
+        `WHERE org_id = p_org_id` **duas vezes** (uma no bloco interno, uma no final). O agregado
+        do painel filtra igual.
+      a_medida_de_apoio_remedida_por_mim: >-
+        `select count(*), count(*) filter (where org_id is null) from system_events where
+        level='error' and created_at > now() - interval '30 days'` em produção →
+        **`{"total_error_30d":35,"org_id_nulo":22}`**. **22 de 35, exato**, como o @dev afirmou.
+        Não é uma peculiaridade deste evento: **63% dos `error` de 30 dias já são invisíveis no
+        painel pelo mesmo motivo.**
+      a_saida_b_foi_executada_de_verdade: >-
+        Runbook §1.1 (tabela dos 4 elos, com a concessão errada do meu gate corrigida em vez de
+        apagada) e §1.2 *"o que o operador tem de FAZER para ver"*, com (i) a **consulta SQL
+        literal**, (ii) o **baseline de 0 linhas** e (iii) **quando rodar** — imediatamente após
+        ativar a 2ª `whatsapp_config` e uma vez por dia na janela, declarados **passos do
+        onboarding, não sugestões**. A AC7 recebeu o texto prescrito, com os quatro elos nomeados,
+        e "ligar a entrega fica FORA, de propósito e por escrito". `webhook-org.ts` trocou
+        "audível" por **"consultável"** e nomeia os elos no arquivo onde o leitor futuro cai.
+      o_baseline_de_zero_nao_e_vacuidade_verificado: >-
+        Meu próprio padrão manda desconfiar de "zero eventos = saúde": zero só vale com o **irmão
+        de sucesso** vivo. Medido: `WEBHOOK_ORG_UNRESOLVED` = **0 de sempre**, mas
+        `WEBHOOK_ORG_RESOLVED` = **123 linhas** (120 `whatsapp` + 3 `meta_ads`), a última há
+        minutos. **O instrumento escreve.** O zero é genuíno, não um escritor morto.
+
+    QA-900-55-6:
+      veredito: "✅ **FECHADA.**"
+      o_que_verifiquei: >-
+        AC4 reenquadrada com as três correções (a perda é da **Trifold**; o gatilho é o
+        **onboarding**, não o flip; o corte torna a perda **mais observável** — ganho, não risco),
+        mais o efeito colateral que eu não citei e o @dev nomeou: no ramo `identifier` a resposta ao
+        proxy `api/lead.js` passa de **500** para **200**, então a retentativa do proxy some (o
+        desfecho não muda — a ambiguidade é determinística). E existe **entrada própria no
+        backlog** (`docs/backlog.md`, topo): P1 **com gatilho, não com data** — "vence no onboarding
+        da primeira empresa cliente, não na 'Onda 3' genérica". É exatamente a disciplina de ordem
+        que eu pedi.
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  achado_novo_do_po_auditado:
+    titulo: "A AC3 era insatisfazível para `meta_ads` — e a janela conserta sem absolver"
+    veredito: "✅ **PROCEDE. Confirmado por medição em produção, agora.**"
+    a_insatisfazibilidade_medida:
+      consulta: "`WEBHOOK_ORG_RESOLVED` agrupado por `receptor` e `divergiu`, SEM recorte de tempo"
+      resultado: >-
+        `meta_ads`: **3 linhas, `divergiu=null` em 3, `false` em 0, `true` em 0** (de
+        2026-08-30T19:46Z a 2026-08-31T01:42Z). `whatsapp`: **120 linhas, `divergiu='false'` em
+        120**, 0 `true`, 0 `null`.
+      conclusao: >-
+        **O @po está certo.** As 3 linhas `null` são **permanentes** — registram que
+        `resolveOrgByMetaPage` não tinha o que resolver antes da AC2, e nada as reescreve. Sem
+        recorte de tempo, "`divergiu='false'` em 100%" para `meta_ads` sai **0/3 hoje e no máximo
+        n/(n+3) depois** — **nunca 100%**. O operador só teria duas saídas, e as duas são a mesma:
+        não cortar nunca, ou cortar ignorando a régua.
+    a_janela_nao_vira_absolvicao:
+      veredito: "✅ **CONFIRMADO — por três razões, todas medidas, não argumentadas.**"
+      razao_1_o_que_ela_exclui: >-
+        Ela exclui **só linhas cujo valor é `null`**, e a própria AC define `null` como
+        **não-evidência nos dois sentidos** ("`divergiu=null` não conta como concordância"). Não há
+        um único `false` nem um único `true` de `meta_ads` para recortar — medido: 0 e 0.
+      razao_2_o_veto_de_true_nao_tem_janela: >-
+        A AC mantém, por escrito, que `divergiu='true'` em **qualquer** receptor veta o corte e que
+        **"isto vale sobre a consulta SEM janela também"**. O histórico inteiro continua sob o veto.
+        Hoje há **0 `true` em 123 linhas, em todos os receptores, desde sempre** — então não há
+        nada escondido, e estruturalmente não há como esconder.
+      razao_3_erro_de_ancora_e_monotonicamente_seguro: >-
+        **Esta é a prova que fecha a pergunta.** Simulei a janela ancorada em `now()`:
+        `created_at > now()` devolve **0 linhas para os DOIS receptores**. Ou seja, **a janela não
+        concede nada — ela ZERA o contador e exige prova nova.** E os dois erros de âncora são
+        conservadores: ancorar **tarde demais** encolhe a janela ⇒ menos eventos ⇒ **mais difícil**
+        bater `n ≥ 3`; ancorar **cedo demais** readmite as 3 linhas `null` ⇒ o `100% false`
+        **falha**. **Não existe valor de âncora que torne o critério mais fácil que a verdade.**
+      razao_4_auditabilidade: >-
+        A AC obriga a colar no Dev Agent Record **as duas versões da consulta** (com e sem janela).
+        A exclusão fica explícita e conferível, nunca silenciosa.
+    a_autocorrecao_do_po_confere_numericamente:
+      alegacao: "aplicar a janela ao `whatsapp` zeraria 115/115 e atrasaria um P0 em ~um dia"
+      medicao: >-
+        **Confere.** `whatsapp` está em **120/120** agora (era 115 às 15:19Z; última linha
+        15:43Z), acumulados em ~21,7h ⇒ ~5,5 eventos/h. Com a janela, o contador vai a **0** e
+        rebater `n ≥ 100` leva **~18h**. "~um dia" é o número certo, e o critério sem janela é o
+        **mais estrito** dos dois — aplicá-lo ao `whatsapp` não mediria nada de novo. A primeira
+        versão (janela para todos) era um erro real, e ele se corrigiu antes de custar o dia.
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  a_regua_derrubada:
+    pergunta: "Ele derrubou a régua que eu e o @dev sugerimos (contar linhas na trilha, `>= 1`/`>= 2`). Concordo?"
+    veredito: >-
+      ✅ **CONCORDO INTEIRAMENTE — e a régua defeituosa era a MINHA.** Verifiquei nos **objetos
+      vivos de produção**, por linha, não no arquivo de migration.
+    o_que_li_no_objeto_vivo:
+      _org_integration_write_secret: >-
+        `UPDATE org_integrations SET config = p_config, secret_ref = v_secret_ref, updated_at =
+        now()` — **`status` não aparece no `SET`.** Registra `v_action := 'org_integration.
+        secret_write'` (ou `'org_integration.page_id_reassigned_cross_org'` se outra org já tiver
+        o `page_id`). O `'connected'` que aparece na definição está em **comentário** — a extração
+        por linha com `l !~ '^\s*--'` mostra isso; um `ILIKE` sobre o blob mentiria.
+      _org_integration_mark_connected: >-
+        `UPDATE org_integrations SET status = 'connected', updated_at = now()`, registra
+        `'org_integration.marked_connected'`, e **RAISE** *"sem secret_ref — não marca connected
+        sem um segredo gravado"*. A ordem é imposta pelo banco, não pelo checklist.
+    por_que_a_minha_regua_era_verde_sob_o_defeito: >-
+      Duas chamadas de `write_secret` produzem **2 linhas** na trilha e deixam
+      `status='disconnected'`. `resolveOrgByMetaPage` exige `status='connected'` desde a 900-51 ⇒
+      **não resolve** ⇒ a AC3 nunca fecha para `meta_ads` ⇒ o corte quebra a entrada de leads
+      pagos. Uma régua `platform_audit_log >= 2` sai **VERDE exatamente nesse cenário**. É o meu
+      próprio padrão de "contador que satura" na forma de "contador que não discrimina": o número
+      certo pelo caminho errado.
+    a_regua_nova_e_correta: >-
+      **As duas ações NOMEADAS** (`org_integration.secret_write` **e**
+      `org_integration.marked_connected`) **mais** `org_integrations` com `status='connected'`,
+      `secret_ref` não nulo e `config->>'page_id'` com 15 dígitos. As duas ações são disjuntas por
+      construção (cada RPC grava a sua), então nenhuma repetição de uma cobre a ausência da outra.
+    a_terceira_perna_que_tambem_esta_certa_e_quase_ninguem_pega: >-
+      **`config->>'page_id'` (valor), não `config ? 'page_id'` (chave).** Medido AGORA em produção:
+      a linha `meta_ads` **já tem a chave** `page_id`, com valor JSON `null` —
+      `jsonb_typeof(config->'page_id')='null'`, `config->>'page_id' IS NULL`,
+      `length(coalesce(config->>'page_id','')) = 0`, e `page_id` é a **única** chave do `config`.
+      Uma régua escrita `config ? 'page_id'` estaria **VERDE hoje, antes de qualquer escrita.**
+      O runbook §2 já registra exatamente isso ("a **chave** `page_id` presente com **valor
+      nulo**"), e a AC exige os 15 dígitos. **Eles pegaram a armadilha.**
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  baselines_de_producao_remedidos_por_mim:
+    platform_audit_log: "**0 linhas** — o painel da 900-51 nunca foi usado em produção"
+    webhook_org_unresolved: "**0 de sempre**"
+    webhook_org_resolved: "**123** (120 `whatsapp` `false`, 3 `meta_ads` `null`), 0 `true`"
+    organizations_ativas: "**1**"
+    whatsapp_config_ativas: "**1**"
+    org_integrations: "6 linhas, **0 com `secret_ref`**, todas `disconnected`; só `meta_ads` tem a chave `page_id` (valor nulo)"
+    system_events_error_30d: "**35**, dos quais **22 com `org_id` nulo**"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  observacao_nova:
+    - id: QA-900-55-8
+      severidade: LOW
+      bloqueia: "nada"
+      titulo: "Com a janela, o `n >= 3` do `meta_ads` vira a restrição que manda na data do corte — e cria a mesma tentação de antes"
+      medido: >-
+        A janela começa em **0 linhas** (simulado: `created_at > now()` ⇒ 0 nos dois receptores).
+        O `whatsapp` já está batido **sem** janela (120/120), então **o `meta_ads` é a restrição
+        que amarra**. Ao volume real do receptor — **3 eventos em ~30h ≈ 0,1/h** — encher a janela
+        até `n ≥ 3` custa **~30h de tráfego** depois da `mark_connected`.
+      por_que_registro: >-
+        Se em ~30h chegarem **2** eventos, o operador cai exatamente na pressão que produziu a
+        régua de contar linhas: um número que quase bate, dentro de uma janela P0 aberta. A AC
+        justifica **por que 3** com medição (e está certa em não inventar 100), mas **não diz o que
+        fazer com 2**. Uma frase resolve, e ela pertence à AC ou ao runbook §3, não a este gate.
+      sugestao: >-
+        Acrescentar ao critério do `meta_ads`: *"com `n = 0..2` dentro da janela o critério
+        **não** está satisfeito — esperar, nunca baixar o limiar nem reabrir a janela para trás.
+        Se o receptor não produzir 3 eventos, o caminho é investigar por que o volume caiu, não
+        afrouxar a régua."*
+
+# ═════════════════════════════════════════════════════════════════════════════
+# DECISÃO DA RODADA 2
+# ═════════════════════════════════════════════════════════════════════════════
+decisao_rodada_2:
+  veredito: "**PASS.** As três concerns estão fechadas e eu verifiquei cada uma no objeto vivo ou em produção — não no texto que as declara fechadas."
+  o_que_muda_em_relacao_a_rodada_1:
+    - "`QA-900-55-2` fechada ⇒ **a Task 2 está DESBLOQUEADA**."
+    - "`QA-900-55-1` fechada pela saída (b) ⇒ a AC7 deixou de prometer alarme; e **a concessão que o meu próprio gate fazia ao `?level=error` estava errada** — o painel também não vê."
+    - "`QA-900-55-6` fechada ⇒ a AC4 é co-requisito do onboarding, com entrada própria no backlog."
+    - "A régua da AC2 mudou de contagem para **as duas ações nomeadas** — e a antiga, que era minha, era verde sob o defeito."
+    - "A AC3 ganhou janela **escopada a `meta_ads`**, que **zera o contador em vez de absolver**."
+  ac_status_atualizado:
+    AC2: "✅ prescrição correta (duas chamadas + duas ações nomeadas + `config->>'page_id'` com 15 dígitos). Execução é da Task 2, @devops."
+    AC3: "✅ critério agora **satisfazível e não absolvente**. `whatsapp` batido (120/120, sem janela); `meta_ads` pendente da Task 2 e de ~30h de janela."
+    AC4: "✅ reenquadrada + backlog com gatilho de onboarding."
+    AC7: "✅ honesta — 'registro consultável', quatro elos nomeados, runbook §1.2 com SQL, baseline e cadência."
+  o_que_o_devops_executa_agora: >-
+    Ordem inalterada e agora liberada: **Task 2** (as DUAS chamadas, nesta ordem, conferindo as
+    duas ações nomeadas + `status='connected'` + `secret_ref` + `page_id` de 15 dígitos)
+    → registrar o **timestamp UTC da `mark_connected`** (é a âncora da janela) → **Task 3.1**
+    (janela até `meta_ads` bater `n ≥ 3` e 100% `false`) → **Task 4** (o flip). **Eu não executei
+    o corte, nem escrevi nada em produção.**
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ═══ AJUSTE PÓS-RODADA 2 (2026-08-31T16:55Z, @qa Quinn) — NÃO é uma nova rodada ═
+# ═══ Veredito INALTERADO: PASS. Nenhuma concern existente reaberta ou mexida.  ═
+# ═══════════════════════════════════════════════════════════════════════════════
+ajuste_pos_rodada_2:
+  o_que_foi: >-
+    Passada de correção do **artefato**, não de revisão do código. Não reabri nada, não remedi
+    nada da rodada 2, não executei nenhum passo do runbook, e produção continuou **só leitura**.
+    Duas coisas: (1) alinhar a raiz do arquivo com a rodada 2, preservando o estado anterior
+    marcado como superado e datado; (2) registrar uma observação nova vinda do CodeRabbit.
+  o_que_mudou_no_arquivo:
+    - "`precedencia` (novo bloco no topo) — a regra de qual seção vence, e por que a nota existe."
+    - "`acs.AC2.superado_rodada_2` — marca as duas frases de rodada 1 como superadas."
+    - "`decisao.task_2_gravacao_do_page_id` — agora `estado_atual` (DESBLOQUEADA) + `estado_anterior_superado` (BLOQUEADA, rodada 1)."
+    - "`decisao.task_4_o_flip` — só a condição (a) segue de pé; (b) caiu na rodada 2."
+    - "`decisao.ordem_recomendada` — passos (1) e (2) executados; a ordem vigente é a da rodada 2."
+    - "`ajuste_pos_rodada_2.observacao_nova` — QA-900-55-**10** (LOW), abaixo."
+  o_que_NAO_mudou: >-
+    `gate: PASS`. As severidades e os textos de QA-900-55-1 a -8. Os vereditos por AC.
+    As medições das rodadas 1 e 2. **Também não corrigi as demais frases de estado da raiz**
+    (status das AC3/AC4/AC6/AC7 na seção 9), porque mexer nelas seria mexer em veredito por AC —
+    o bloco `precedencia` as redireciona para `decisao_rodada_2.ac_status_atualizado`, que é onde
+    o estado vigente está.
+
+  colisao_de_ids_preexistente_REPORTADA_nao_consertada:
+    achado: >-
+      Ao numerar a observação nova eu bati numa colisão que **já estava no arquivo**, minha, da
+      rodada 2: **`QA-900-55-8` está usado DUAS vezes**, para dois achados diferentes —
+      `observacoes[]` (*"O fake do `meta_ads` planta a ambiguidade em vez de produzi-la"*) e
+      `delta_rodada_2.observacao_nova[]` (*"Com a janela, o `n >= 3` do `meta_ads` vira a restrição
+      que manda na data do corte"*). Quem citar "QA-900-55-8" numa story de follow-up não tem como
+      saber a qual dos dois se refere.
+    por_que_nao_consertei: >-
+      Renumerar exigiria editar uma observação existente, e esta passada tem escopo explícito de
+      **não mexer em nenhuma outra concern**. Fica reportado para o @po decidir. **`QA-900-55-9`
+      também já estava ocupado** (INFO, *"Árvore de trabalho suja…"*) — por isso a observação nova
+      abaixo é a **-10**, e não a -9.
+    como_eu_peguei: >-
+      Não foi por leitura. Foi o diff semântico que rodei contra o snapshot pré-edição
+      (comparar `id` -> `severidade` antes/depois): o `QA-900-55-9` que eu ia criar apareceu como
+      *"idêntico ao anterior"* com severidade `INFO`, que não era a que eu tinha escrito. Uma régua
+      que só validasse o YAML teria passado verde nas duas colisões.
+
+  # ───────────────────────────────────────────────────────────────────────────
+  observacao_nova:
+    - id: QA-900-55-10
+      severidade: LOW
+      bloqueia: "nada"
+      origem: >-
+        CodeRabbit, no PR desta story. **É mais afiado que o meu QA-900-55-3/4** — eu tinha o
+        mecanismo na mão na rodada 1 e não tirei a consequência.
+      titulo: >-
+        Em `meta_ads`, o motivo `legado_ambiguo_novo_resolveu` pode ser gravado sem ambiguidade
+        NENHUMA: `.single()` confunde 0 linhas com 2+, e o nome afirma o que o mecanismo não sabe
+      medido: >-
+        `packages/web/src/lib/meta/process-lead.ts:755-763` — `legacyResolveActiveOrgId` é
+        `whatsapp_config.select("org_id").eq("status","active").single()`, com o `error` **nem
+        desestruturado** (`const { data } = await ...`). Pela medição que o próprio projeto fez
+        contra `postgrest-js` e registrou em `lib/tenancy/__fixtures__/fake-supabase-postgrest.ts`,
+        `.single()` erra com **0 E com 2+** (`PGRST116`/406) — logo `legado === null` significa
+        *"não é exatamente 1"*, **não** *"ambíguo"*. No ramo `both`
+        (`process-lead.ts:163`), `legado` nulo **+** `resolveOrgByMetaPage` resolvida ⇒
+        `motivoNaoResolvida = "legado_ambiguo_novo_resolveu"` e `quantidadeEncontrada = 1`. Com
+        **zero** `whatsapp_config` ativa, o registro afirma uma ambiguidade que não existiu — e
+        ainda reporta `1` como quantidade. O comentário do próprio código **admite o mecanismo**
+        (`process-lead.ts:166`: *"`.single()` em `whatsapp_config` com 0 OU 2+ linhas ativas"*);
+        quem não admite é **o nome do motivo**.
+      por_que_e_pior_que_QA-900-55-3_e_QA-900-55-4: >-
+        Na rodada 1 eu escrevi o mecanismo com todas as letras
+        (`respostas.a_ac1_nao_cobre_o_modo_legacy_concorda`: *"a alegação vale para `meta_ads`
+        (`legacyResolveActiveOrgId` usa `.single()`, que confunde 0 com 2+)"*) e **parei ali** —
+        não tirei a consequência de que o RÓTULO GRAVADO passa a mentir no caso `0`. QA-900-55-3/4
+        falam do receptor `whatsapp` e do discriminante barato que o `PGRST116` de
+        `.maybeSingle()` compraria. Este é sobre o `meta_ads`, e é estruturalmente pior por uma
+        razão que ninguém tinha escrito.
+      a_varredura_dos_tres_arbitros: >-
+        Os três árbitros da classe, medidos agora: **`whatsapp`** — os DOIS resolvedores leem a
+        **mesma** tabela (`whatsapp_config WHERE status='active'`: `legacyResolveActiveConfig` em
+        `webhook/whatsapp/route.ts:65-75` e `resolveOrgByWhatsAppPhone` em `webhook-org.ts:161`),
+        então com 0 linhas o novo devolve `nenhuma_correspondencia` e o ramo é **INALCANÇÁVEL**
+        no caso `0`; o comentário de `route.ts` que diz *"com uma empresa só isso é impossível"*
+        está certo. **`telegram`** — nem emite este motivo (manteve o ternário antigo,
+        `telegram/webhook/route.ts:388-389`), já provado inalcançável em QA-900-55-5.
+        **`meta_ads`** — os dois resolvedores leem tabelas **DIFERENTES**: o legado lê
+        `whatsapp_config`, o novo lê `org_integrations`. Os dois estados são **independentes**, e é
+        exatamente por isso que `{0 whatsapp_config ativa} x {1 org_integrations meta_ads
+        connected com o page_id}` é um estado **alcançável** — não um impossível. Um de três.
+      raio_medido: >-
+        **Duplamente inalcançável em produção neste minuto**, pelos baselines que remedi na rodada
+        2 (`baselines_de_producao_remedidos_por_mim`, 2026-08-31, e a Task 2 **não** foi executada
+        desde então): `whatsapp_config` ativas = **1** (⇒ `.single()` resolve, `legado` não é nulo)
+        **e** `org_integrations` = 6 linhas **todas `disconnected`, 0 com `secret_ref`** (⇒
+        `resolveOrgByMetaPage` exige `.eq("status","connected")` desde a 900-51/AC10 e nunca
+        resolve). **A Task 2 derruba a segunda guarda** — é literalmente ela que marca o `meta_ads`
+        como `connected`. Daí em diante o único anteparo é a invariante *"existe exatamente 1
+        `whatsapp_config` ativa"*, que é propriedade de uma tabela **sem relação nenhuma com o Meta
+        Ads**. Desativar a config de WhatsApp da Trifold (já aconteceu — o token da Página foi
+        invalidado em 2026-08-10) passaria a produzir, para cada lead pago em modo `both`, um
+        registro `error` afirmando ambiguidade sobre uma tabela com **zero** linhas.
+      por_que_NAO_bloqueia: >-
+        Três razões, todas medidas. **(1) Não toca o caminho do lead:** neste ramo `orgId` continua
+        nulo e a rota cai no mesmo `fail("no_active_org: whatsapp_config sem linha status=active")`
+        em que caía antes desta story — o rótulo muda o registro, **não o desfecho**.
+        **(2) Não toca a régua do corte:** a AC3 conta `WEBHOOK_ORG_RESOLVED` por `divergiu`; este
+        caminho emite `WEBHOOK_ORG_UNRESOLVED`, que a régua **não lê**. **(3) Não toca o modo de
+        destino:** em `identifier` o ramo `else` inteiro não executa — o defeito morre no dia do
+        flip. O único efeito real é a escalada de `warn` para `error` via `nivelDoMotivo` sobre
+        premissa falsa; e, por QA-900-55-1, esse `error` hoje não é entregue a ninguém nem aparece
+        no painel (`org_id` nulo). **Não é regressão desta story:** a 900-55 não introduziu o
+        `.single()` nem o comportamento — ela deu **nome** ao ramo, e o nome ficou maior que o
+        mecanismo.
+      por_que_registro_mesmo_assim: >-
+        Porque é **a mesma família do defeito que esta story existe para consertar**: um nome que
+        afirma mais do que o mecanismo sabe. A AC1 trocou `nenhuma_correspondencia` (que descrevia
+        o oposto do que acontecera) por `legado_ambiguo_novo_resolveu` — e no `meta_ads` o nome
+        novo erra na outra direção em um dos dois casos que o `.single()` funde. Consertar um e
+        deixar o outro é fechar meio furo com o mesmo argumento.
+      correcao_sugerida_para_o_po_decidir: >-
+        **(a), a barata e a certa:** trocar o `.single()` de `legacyResolveActiveOrgId` por
+        `.limit(2)` e **contar** — é exatamente o que `resolveOrgByMetaPage` e `resolveSoleOrg` já
+        fazem, e torna a contagem **honesta em vez de inferida**: `0` ⇒
+        `nenhuma_correspondencia` com `quantidadeEncontrada = 0`; `2+` ⇒ o motivo de ambiguidade
+        com a contagem real. ⚠️ **Não** sugerir "ler o `error.details`": ele até carrega a
+        contagem (`"Results contain N, application/vnd.pgrst.object+json requires 1 row"`), mas
+        discriminar por string de mensagem de erro é um discriminante frágil, e o projeto já tem
+        a forma boa em duas funções vizinhas. **(b), se não se quiser tocar no legado:** renomear
+        o motivo para algo que o mecanismo sustente — mas isso mexe no mapa de `nivelDoMotivo` e
+        nos carrascos M3/M3r, e compra menos que (a). **Escopo:** não é para esta story. Item
+        próprio, ou carona na story de `landing_page` que a QA-900-55-6 já fez co-requisito do
+        primeiro onboarding — que é a mesma janela em que este defeito deixa de ser inalcançável.
+      carrasco_se_virar_story: >-
+        O teste que prova a correção precisa ser o par: **0 linhas ativas** ⇒ motivo
+        `nenhuma_correspondencia` **e** `quantidadeEncontrada = 0`; **2 linhas ativas** ⇒ o motivo
+        de ambiguidade **e** a contagem real. A mutação que o mata é fundir os dois de volta num
+        rótulo só — se um único teste continuar verde sob essa mutação, o carrasco está medindo o
+        caminho, não o nome.

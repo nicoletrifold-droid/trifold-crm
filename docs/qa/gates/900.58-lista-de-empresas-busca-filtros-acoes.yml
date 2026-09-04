@@ -1,0 +1,238 @@
+schema: 1
+story: '900.58'
+story_title: 'Lista de Empresas: busca, filtros, coluna de Integrações e ações'
+gate: CONCERNS
+status_reason: >-
+  As 10 ACs estão implementadas e com carrasco; as 5 mutações declaradas reproduzem exatamente
+  (2/1/1/1/2, tsc rc=0 antes de cada), os kill sets de M3 e M4 são disjuntos, o instrumento que
+  mentiu foi reproduzido em navegador e o banco de teste está restaurado. As 4 concerns são de
+  REGISTRO e de dívida herdada, nenhuma bloqueia o merge.
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-09-01T02:05:00Z'
+
+branch: story/900-58-lista-empresas-busca-filtros
+commit: 00a3f3c6
+empilhada_sobre: story/900-56-57-console-plataforma (PR #547, aberto)
+
+# ──────────────────────────────────────────────────────────────────────────────
+# O que eu MEDI (não aceito de segunda mão)
+# ──────────────────────────────────────────────────────────────────────────────
+verificacoes:
+  dependencia_empilhada:
+    metodo: 'git cat-file -e origin/main:<path> (origin/main@1c3877a6)'
+    resultado: >-
+      Os 5 caminhos declarados AUSENTES estão ausentes em origin/main
+      (orgs/[id]/page.tsx, orgs/[id]/layout.tsx, console-visao-geral.ts, fonte-scan.ts,
+      console-fail-closed.test.ts); os 2 declarados PRESENTES estão presentes.
+      A branch tem UM commit sobre c2720149. Justificativa da pilha CONFIRMADA.
+    veredicto: confirmado
+
+  mutacoes_declaradas:
+    metodo: >-
+      Cada mutação aplicada no disco por script, tsc + vitest no escopo
+      (lib/tenancy + integrations/painel + app/platform), fonte restaurada e sha256 conferido.
+    resultado:
+      - id: M1
+        mutacao: 'filtrarOrgs: && → || entre busca e status'
+        tsc: 0
+        falhas: 2
+        kill_set: ['cada filtro sozinho corta o que deve', 'os três juntos são interseção']
+      - id: M2
+        mutacao: 'estadoDaListaDeEmpresas: remover o ramo `falhou`'
+        tsc: 0
+        falhas: 1
+        kill_set: ['`falhou` vence os dois vazios — inclusive o de partida']
+      - id: M3
+        mutacao: 'conectadas conta linha crua `connected` em vez do tile'
+        tsc: 0
+        falhas: 1
+        kill_set: ['o WhatsApp no ar conta como conectado, mesmo com org_integrations disconnected']
+      - id: M4
+        mutacao: 'emErro conta pelos tiles (perde o `google`)'
+        tsc: 0
+        falhas: 1
+        kill_set: ['`em erro` sai das LINHAS CRUAS — o `google`, que não tem tile, conta']
+      - id: M5
+        mutacao: 'page.tsx: indisponivel: integracoesIndisponiveis → false'
+        tsc: 0
+        falhas: 2
+        kill_set: ['integracoesDaOrg recebe o indisponivel', 'controle positivo homônimo']
+    disjuncao_M3_M4: >-
+      CONFIRMADA. Um teste cada, testes DIFERENTES. São os dois sentidos da mesma classe
+      (qual fonte decide cada metade da coluna) e a régua discrimina os dois, não os colapsa.
+    veredicto: 5/5 reproduzidas com o número exato declarado
+
+  sondas_proprias_do_qa:
+    metodo: 'mesmas condições; 7 mutações que a story NÃO declarou'
+    resultado:
+      - id: Q1
+        mutacao: 'âncora do platform-query-scan trocada por uma inexistente'
+        falhas: 1
+      - id: Q2
+        mutacao: 'filtrarOrgs: comPendencia.has(id) → !comPendencia.has(id)'
+        falhas: 2
+      - id: Q3
+        mutacao: 'normalizarFiltroDeStatus vira negação em vez de allowlist positiva'
+        falhas: 2
+      - id: Q4
+        mutacao: 'org-row-menu: position fixed → absolute (o achado, de volta)'
+        falhas: 2
+      - id: Q5
+        mutacao: 'tirar o `relative z-10` do embrulho do ReenviarConvite'
+        falhas: 1
+      - id: Q6
+        mutacao: 'estadoDaListaDeEmpresas: remover o ramo `sem-empresas`'
+        falhas: 1
+      - id: Q7
+        mutacao: 'page.tsx: falhou: orgsFalhou || pendenciaFalhou → orgsFalhou'
+        falhas: 3
+    veredicto: >-
+      7/7 morreram. Q5 e Q7 são justamente os "não provados" nº 4 e nº 3 — eles TÊM carrasco
+      de texto-fonte, e ele morde.
+
+  instrumento_que_mentiu:
+    metodo: >-
+      Playwright 1.60 local, sem rede, página inline: A = <ul absolute> dentro de
+      overflow:hidden vazando pela borda; B = <ul fixed> (o conserto). Viewport 800×600.
+    resultado: >-
+      A: isVisible()=true, mas elementFromPoint no centro do ÚLTIMO item devolve DIV
+      (não o LI) — inalcançável. B: isVisible()=true, elementFromPoint devolve LI — clicável.
+      isVisible() NÃO distingue os dois casos; elementFromPoint distingue.
+    a_regua_nova_depende_de_isVisible: >-
+      NÃO. A régua é de texto-fonte (position:"fixed" + getBoundingClientRect + fechar na
+      rolagem, e o par com o overflow-hidden que continua existindo), e Q4 provou que ela morde.
+    veredicto: mentira reproduzida; prova do conserto independente do instrumento mentiroso
+
+  higiene_do_banco_de_teste:
+    alvo: 'xnxvygyfyyyzwhiuoehz (trifold-crm-dev) — produção NÃO tocada'
+    resultado: >-
+      org_integrations = 18 linhas, TODAS `disconnected`; zero `connected`, zero `error`.
+      Rastro forense do rollback: exatamente as 2 linhas nomeadas na story
+      (05f914d5…/meta_ads e 05f914d5…/sienge) carregam updated_at 2026-09-01T01:08:42,
+      posterior a todas as outras — mexidas e devolvidas.
+    veredicto: restaurado
+
+  premissas_de_AC_reconferidas_no_banco:
+    - 'GET /rest/v1/organizations?select=count() → HTTP 400 PGRST123. Agregado segue desligado.'
+    - 'whatsapp_config está em PLATFORM_READABLE_TABLES; a projeção nova não pede coluna de cofre.'
+    - 'contarComTeto/TETO_POSTGREST/paginaSaturada existem em UM arquivo só (AC10, cópia única).'
+    - 'Produção (leitura): users=113, organizations=1, org_integrations=6 — longe do teto hoje.'
+
+  reguas:
+    tsc: 'pnpm --filter web type-check → rc=0 (e rc=0 antes de contar cada vermelho)'
+    lint_raiz: 'pnpm lint --force → 8/8 tasks, rc=0'
+    lint_arquivos_da_story: 'eslint nos 7 arquivos → 0 problemas'
+    build: 'pnpm --filter web build → rc=0; /platform/orgs é ƒ (dinâmica); /platform/orgs/[id] existe'
+    suite_completa: '302 arquivos / 4096 passam / 6 expected fail — bate com o declarado'
+
+# ──────────────────────────────────────────────────────────────────────────────
+top_issues:
+  - id: 'DOC-001'
+    severity: medium
+    finding: >-
+      A linha de recorte da tabela de Réguas não é reproduzível. Declarado
+      "16 → 18 arquivos, 312 → 370 testes". Medido: a base c2720149 tem 17 arquivos de teste
+      nesses diretórios (git ls-tree), não 16; e o "370" está contaminado — webhook-org.test.ts
+      carrega 136 linhas NÃO COMMITADAS de outra frente na árvore compartilhada (48 testes
+      commitados × 51+each = 53 na árvore). O estado commitado é 365. O 312 da base está exato.
+    suggested_action: >-
+      Corrigir para "17 → 18 arquivos, 312 → 365 testes" e registrar que a medição foi feita
+      numa árvore com trabalho de outra frente. O delta REAL deste commit é +1 arquivo/+53 testes.
+    files: ['docs/stories/900-58-lista-de-empresas-busca-filtros-acoes.story.md']
+
+  - id: 'DOC-002'
+    severity: low
+    finding: >-
+      O não-provado nº 5 afirma "whatsapp_config está vazia no banco de teste". Medido agora:
+      3 linhas, uma por org, todas status=inactive, criadas em 2026-08-29T21:31 e
+      2026-08-31T12:30 — TODAS anteriores ao commit (2026-09-01T01:13Z). A conclusão sobrevive
+      (nenhuma linha é `active`, então o tile não pode aparecer conectado), mas o motivo escrito
+      é falso e era falsificável com uma chamada HTTP.
+    suggested_action: >-
+      Trocar por "whatsapp_config tem 3 linhas, todas `inactive` — nenhuma `active`, então o
+      caminho do tile conectado não é alcançável no banco de teste sem escrita".
+    files: ['docs/stories/900-58-lista-de-empresas-busca-filtros-acoes.story.md']
+
+  - id: 'REL-001'
+    severity: low
+    finding: >-
+      A coluna "Usuários" é o ÚNICO contador desta tela sem declaração. `porOrg` sai de
+      platformQuery("users","org_id") e é renderizado cru — `paginaSaturada(usuarios)` nunca é
+      calculado e `usuariosFalhou` não entra em `listaIncompleta`. Com `users` no teto de 1.000,
+      aquela célula mostra um número exato que o sistema não sabe: exatamente o defeito que a
+      AC10 existe para impedir, na mesma linha da tabela. Fora da LETRA da AC10 (que nomeia só
+      org_integrations e o `users` da pendência) e longe do teto hoje (113 em produção).
+    suggested_action: >-
+      Não reabrir a 900-58. Registrar como dívida nomeada no epic 900 (ou puxar para a 900-61,
+      que já mexe em diagnóstico de integração): usar `contarComTeto` também na coluna Usuários
+      e somar `paginaSaturada(usuarios)` ao `listaIncompleta`.
+    files: ['packages/web/src/app/platform/orgs/page.tsx']
+
+  - id: 'TEST-001'
+    severity: low
+    finding: >-
+      O "fail-closed" de platform-query-scan.test.ts NÃO é portador do veredicto. Contrafactual
+      medido: com a âncora quebrada E a guarda nova removida, o teste AINDA falha —
+      "expected '\n' to match /\.eq\(\"role\", \"admin\"\)/". As duas asserções pós-slice são
+      `toMatch` POSITIVOS, então slice(-1) jamais aprovaria. A guarda melhora a MENSAGEM, não o
+      veredicto; a justificativa escrita ("poderia virar aprovação por acidente") é falsa para
+      este teste. (A forma perigosa do -1 — comparação de ordem — existe na régua da base,
+      console-fail-closed.test.ts:486, mas lá está protegida por dois
+      `ocorrenciasNoCodigo(...) === 1` logo acima. Não há furo vivo.)
+    suggested_action: >-
+      Manter a guarda (é boa higiene) e corrigir a redação para "melhora o diagnóstico quando a
+      âncora some; o veredicto já era fail-closed porque as duas asserções são positivas".
+    files: ['docs/stories/900-58-lista-de-empresas-busca-filtros-acoes.story.md']
+
+# ──────────────────────────────────────────────────────────────────────────────
+os_6_nao_provados:
+  - item: '1. Vazio de partida (exigiria banco sem empresa)'
+    julgamento: ACEITO
+    razao: >-
+      Coberto por unidade (estadoDaListaDeEmpresas) + régua de recorte DELIMITADO por ramo, com
+      controle positivo que copia o texto do vazio filtrado para o ramo de partida e prova que o
+      `toContain` ingênuo no arquivo inteiro ficaria verde. Q6 (remover o ramo) morre.
+  - item: '2. AC10 na tela (exigiria 1.000 empresas)'
+    julgamento: ACEITO
+    razao: >-
+      Unidade nos dois sentidos (saturacaoHerdada true/false) + `indisponivel` vencendo a
+      saturação. O teto de 1.000 é fato do transporte, já medido em produção na 900-56.
+  - item: '3. Leitura que não volta'
+    julgamento: ACEITO — e mais forte do que a story declara
+    razao: >-
+      Minha sonda Q7 (tirar `pendenciaFalhou` do call site) matou 3 testes, incluindo o controle
+      negativo. O sinal tem carrasco de verdade.
+  - item: '4. "Reenviar" não disparar navegação (0 botões na lista)'
+    julgamento: ACEITO — e verificado
+    razao: >-
+      As 3 empresas do banco de teste têm admin_invite_email=null e admin com auth_id — 0 botões,
+      confirmado no banco. Minha sonda Q5 (tirar o `relative z-10` do embrulho) mata a régua.
+      O mecanismo é o mesmo do `⋯`, e o `⋯` FOI medido na tela.
+  - item: '5. WhatsApp contando como conectado na tela'
+    julgamento: ACEITO com correção de motivo
+    razao: 'Ver DOC-002 — a tabela não está vazia; está toda `inactive`. A conclusão não muda.'
+  - item: '6. CodeRabbit CLI não executado'
+    julgamento: ACEITO
+    razao: >-
+      Correto por regra do repositório: o gatilho que vale é o GitHub App, na abertura do PR,
+      que é do @devops. Registrado como "não executado", nunca como "passou".
+
+ac_coverage:
+  AC1: { status: implementada, carrasco: 'casaComBusca (4 its) + form method=GET na fonte' }
+  AC2: { status: implementada, carrasco: 'allowlist positiva (Q3 mata) + casaComStatus nos 2 sentidos' }
+  AC3: { status: implementada, carrasco: 'usa pendenciasDeConvite/DeIntegracao REAIS + vivacidade size=2; Q2 mata' }
+  AC4: { status: implementada, carrasco: 'M3/M4 com kill sets DISJUNTOS; 5 platformQuery, todos fora do map (sem N+1)' }
+  AC5: { status: implementada, carrasco: 'par <tr relative> × after:inset-0; controle "apagar o href"; Q5' }
+  AC6: { status: implementada, carrasco: '3 itens + proibição de is_active/Desativar; Q4 (fixed→absolute)' }
+  AC7: { status: implementada, carrasco: 'validado na tela; sem <th>Slug</th> na fonte (só régua visual)' }
+  AC8: { status: implementada, carrasco: 'régua: <th>Plano</th> presente, name="plano"/?plano= ausentes' }
+  AC9: { status: implementada, carrasco: 'recortes delimitados por ramo + controle positivo do ramo trocado' }
+  AC10: { status: implementada, carrasco: 'cópia ÚNICA do helper (verificado por varredura); 3 its de saturação' }
+
+waiver: { active: false }
+
+recommended_status: 'Ready for Done — as 4 concerns são de registro/dívida, nenhuma bloqueia'
+proximo_passo: >-
+  @dev corrige DOC-001, DOC-002 e TEST-001 na story (3 edições de texto, sem tocar código).
+  @po/@sm registram REL-001 como dívida nomeada. Depois @devops abre o PR EMPILHADO sobre o
+  #547 — este não pode ser mergeado antes daquele.

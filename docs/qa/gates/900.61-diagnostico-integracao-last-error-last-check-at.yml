@@ -1,0 +1,351 @@
+schema: 1
+story: "900.61"
+story_title: "`org_integrations` ganha `last_error` e `last_check_at` — o painel diz desde quando e por quê"
+gate: CONCERNS
+reviewer: "Quinn (Test Architect)"
+updated: "2026-09-02T00:40:00Z"
+base: >-
+  Ponta da pilha `story/900-61-diagnostico-integracao`, HEAD `11bf1f56`, **4 commits** sobre
+  `277a264e` (o spawn dizia 3; são 4 — `8e31a17c`, `323ebcd7`, `ba87e532`, `11bf1f56`).
+  Pilha: `#547 → #549 → #554 → #555 → #557 → esta`. `merge-base` com `origin/main` = `1393fa68`,
+  32 commits à frente. Nada empurrado, nenhum PR, **nenhum `git stash`** (os 9 stashes alheios
+  seguem intactos).
+escopo_revisado: >-
+  AC1–AC7, a migration `253` (as 2 colunas + os corpos de `_org_integration_mark_error` e
+  `_org_integration_mark_connected`), o módulo novo `lib/integrations/painel/diagnostico.ts`,
+  as 2 projeções de `platformQuery("org_integrations", …)`, a fiação em `montarTilesDoPainel`,
+  o consumo em `integrations-panel.tsx`, o rabicho da Visão geral e `Pendencia.detalhe`.
+  Os 10 mutantes declarados foram **reproduzidos**, não lidos.
+
+status_reason: >-
+  **Os 10 mutantes batem exato, e a prova mais bonita da story sobrevive a uma conferência mais
+  dura do que a que o @dev fez.** Reproduzi os 10 sobre a fonte real, cada um com a suíte
+  INTEIRA e `tsc --noEmit` rc=0 antes de contar o vermelho: os contadores saíram
+  `1,3,1,2,1,3,1,2,1,2` — **idênticos à tabela do @dev, mutante a mutante**. O par exigido tem
+  **kill sets disjuntos**: M3 mata só `o tile chama linhaDeDiagnostico … nessa ORDEM`; M4 mata
+  `os três argumentos vêm do ESTADO do tile` + `controle positivo (2)`. Interseção vazia.
+  **O fuso eu provei três vezes, e nenhuma delas depende do olho de ninguém.** (i) M5 numa
+  máquina cujo `TZ` **é** `America/Sao_Paulo` — onde o teste de comportamento ficaria VERDE —
+  ainda assim mata, pela régua de texto-fonte `timeZone: FUSO,`: o carrasco não depende de
+  relógio. (ii) Sob `TZ=UTC` (Vercel/CI) o M5 acende **6** testes de comportamento a mais, e a
+  suíte sem mutação segue verde nos dois fusos. (iii) Li de `org_integrations` no
+  `trifold-crm-dev` o carimbo que a tela mostrou — `last_check_at = 2026-09-02 00:00:02.583706+00`,
+  **2 segundos depois da virada da meia-noite em UTC** — e alimentei `dataDeChecagem` com ele sob
+  `TZ=UTC`: devolve **01/09/2026**; o mesmo instante sem `timeZone` devolve **02/09/2026**.
+  A condição de fronteira é do relógio, não de fixture.
+  **AC4 está provada por estrutura, não por promessa:** o corpo VIVO de
+  `_org_integration_write_secret` no banco de teste tem **0** ocorrências de `last_`, contra 2 em
+  cada uma das outras duas — extraído por LINHA de `pg_get_functiondef`, nunca por `ILIKE` no
+  blob. E o `sha256` registrado no ledger `trifold_migrations_aplicadas` para a `253`
+  (`a1ecbc0d…`) é **igual ao do arquivo desta branch**: o que foi testado é o que vai ser
+  mergeado.
+  **O que segura o gate é uma ausência que eu medi, não um defeito vivo.** A régua do consumo
+  prende PRESENÇA e ORDEM no texto-fonte, mas não prende ALCANCE do render: mover o bloco
+  `{diagnostico && (…)}` para dentro do ramo `somenteLeitura ? (…)` — o ramo que só desenha para
+  o WhatsApp, justamente o provider cujo diagnóstico é `null` por construção — deixa `tsc` rc=0 e
+  a suíte **312 / 4318 / 6, zero vermelho**. O recurso some para os 5 providers que escrevem, e
+  nada acende.
+
+rodadas:
+  - data: "2026-09-02"
+    rodada: 1
+    base: "11bf1f56"
+    gate: CONCERNS
+    concerns: 3
+    observacoes: 4
+    defeitos_vivos: 0
+    regressoes: 0
+
+# ─────────────────────────────────────────────────────────────────────────────
+# RÉGUAS — o baseline que usei, e por que não tentei fechar a folga de 14
+# ─────────────────────────────────────────────────────────────────────────────
+reguas:
+  baseline_declarado: "LOCAL desta árvore — o mesmo que o @dev usou. NÃO usei o do CI."
+  suite: "312 arquivos · 4318 passed · 6 expected fail (4324) · rc=0 — medido por mim, bate EXATO com o declarado"
+  json_reporter: "0 asserções `failed` no baseline; `expected fail` não aparece como falha no reporter JSON"
+  delta_conferido_por_contagem: >-
+    Não fechei a folga de 14 vs CI por subtração e não inventei conta para ela — ela é anterior a
+    esta story e o @dev a manteve idêntica. O DELTA desta story eu contei arquivo a arquivo:
+    `diagnostico.test.ts` = **26** (medido rodando o arquivo sozinho) + **3** em
+    `providers.test.ts` + **3** em `console-visao-geral.test.ts` = **32**, e **+1 arquivo**.
+    Confere com `4292 → 4324` e `311 → 312` declarados.
+  arvore_contaminada: >-
+    ⚠️ A árvore tem 6 arquivos modificados de OUTRA frente (`webhook/whatsapp`, `meta/process-lead`,
+    `tenancy/webhook-org`) — 3 deles `*.test.ts` dentro do `include` do `vitest.config.ts`. É a
+    origem provável da folga de 14. Medi o baseline COM eles presentes e comparei todos os
+    mutantes contra esse mesmo baseline, então a folga não contamina nenhuma conclusão.
+  lint: "`pnpm lint --force` → 0 erros, 30 warnings, **nenhum** nos arquivos desta story (todos em `*.test.ts` pré-existentes)"
+  type_check: "`pnpm type-check --force` → 8/8 tasks successful"
+  build: "`pnpm build` → 5/5 tasks successful"
+  regua_por_contagem: >-
+    Procurei e **não existe** régua por contagem nesta story. O único `.length` é a guarda de
+    vivacidade (`fonte.length > 1000`), e o único `split` alimenta um `toEqual` sobre array
+    ORDENADO de 7 colunas — sensível a substituição e a reordenação, não a mover.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# OS 10 MUTANTES — reproduzidos, não lidos
+# ─────────────────────────────────────────────────────────────────────────────
+mutantes:
+  protocolo: >-
+    `cp` do original antes, mutação por `python3` sobre a fonte REAL, `tsc --noEmit` (exigido
+    rc=0), suíte INTEIRA com reporter JSON, restauração por `cp` (nunca `git checkout`) e
+    conferência de `sha256` antes/depois. `git diff` dos 6 arquivos ficou VAZIO ao final.
+  resultado: "10/10 mortos, 10/10 com `tsc` rc=0, contadores idênticos aos declarados"
+  tabela:
+    - id: M1
+      mutacao: "`ultimoErro: l?.last_error ?? null` → `ultimoErro: null` (a montagem descarta o dado)"
+      vermelhos: 1
+      testes: ["providers.test.ts :: as 2 colunas do diagnóstico ATRAVESSAM da linha para o tile"]
+    - id: M2
+      mutacao: "a projeção do console volta às 5 colunas antigas"
+      vermelhos: 3
+      testes: ["diagnostico.test.ts :: AC5 — projeção exata", "AC5 — as sete conferidas uma a uma", "AC5 — controle positivo"]
+    - id: M3
+      mutacao: "o componente IGNORA a função: `{diagnostico}` → `{null}` no JSX"
+      vermelhos: 1
+      testes: ["diagnostico.test.ts :: o tile chama `linhaDeDiagnostico` e desenha o retorno, nessa ORDEM"]
+    - id: M4
+      mutacao: "o argumento do call site é rebobinado: `lastError: estado.ultimoErro` → `lastError: null`"
+      vermelhos: 2
+      testes: ["diagnostico.test.ts :: os três argumentos vêm do ESTADO do tile — linha a linha, exatas", "controle positivo (2)"]
+    - id: M5
+      mutacao: "a linha `timeZone: FUSO,` sai de `dataDeChecagem`"
+      vermelhos: 1
+      testes: ["diagnostico.test.ts :: o `timeZone` está no código — e não depende do fuso da máquina"]
+      nota: >-
+        Rodado numa máquina em `America/Sao_Paulo`, onde o teste de COMPORTAMENTO fica verde.
+        Quem mata é a régua de texto-fonte. Sob `TZ=UTC` os 6 testes de comportamento também matam.
+    - id: M6
+      mutacao: "código desconhecido volta CRU, sem o rótulo `motivo não reconhecido:`"
+      vermelhos: 3
+      testes: ["(ii) código DESCONHECIDO", "(ii-b) chave de PROTÓTIPO", "console-visao-geral.test.ts :: código FORA do contrato de seis"]
+    - id: M7
+      mutacao: "`if (entrada.status !== \"error\") return null` sai de `linhaDeDiagnostico`"
+      vermelhos: 1
+      testes: ["diagnostico.test.ts :: status que não é `error` não repete erro velho"]
+    - id: M8
+      mutacao: "a Visão geral perde o rabicho: `em erro{p.detalhe}` → `em erro`"
+      vermelhos: 2
+      testes: ["AC7 — interpola `p.detalhe` colado no `em erro`", "AC7 — controle positivo"]
+    - id: M9
+      mutacao: "a projeção da Visão geral volta a `org_id, provider, status`"
+      vermelhos: 1
+      testes: ["AC7 — a projeção da Visão geral tem as 2 colunas, sem perder as 3"]
+    - id: M10
+      mutacao: "`detalhe: detalheDaPendencia({…})` → `detalhe: \"\"`"
+      vermelhos: 2
+      testes: ["com as duas colunas, a pendência carrega `desde` e o motivo TRADUZIDO", "código FORA do contrato de seis"]
+  par_exigido:
+    m3_kill_set: ["o tile chama `linhaDeDiagnostico` e desenha o retorno, nessa ORDEM"]
+    m4_kill_set: ["os três argumentos vêm do ESTADO do tile — linha a linha, exatas", "controle positivo (2)"]
+    intersecao: "VAZIA — os dois sentidos têm carrascos diferentes"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SONDAS MINHAS — o que eu tentei que o @dev não tentou
+# ─────────────────────────────────────────────────────────────────────────────
+sondas:
+  - id: P1
+    o_que: >-
+      Mover o bloco `{diagnostico && (…)}` inteiro, com o TEXTO preservado, do corpo sempre
+      renderizado para dentro do ramo `somenteLeitura ? (…)` — o ramo que só desenha para o
+      WhatsApp, cujo diagnóstico é `null` por construção em `montarTilesDoPainel`.
+    resultado: "🔴 `tsc` rc=0 e suíte **312/4318/6, ZERO vermelho**. O recurso some para os 5 providers que escrevem."
+    classe: "a régua para um degrau antes do dano — prende PRESENÇA e ORDEM, não ALCANCE do render"
+    virou: CONCERN-1
+  - id: P2
+    o_que: >-
+      Envenenar o call site real para `lastError: null` E acrescentar um objeto MORTO carregando
+      as três linhas exatas (`status:`/`lastError:`/`lastCheckAt:` de `estado.…`).
+    resultado: "🔴 `tsc` rc=0 e suíte VERDE. A régua de igualdade exata de linha é satisfeita pelo duplo morto."
+    classe: "régua de forma é cega a rebind/duplicação — todo mutante que preserva o TEXTO sobrevive"
+    virou: CONCERN-2
+  - id: P3
+    o_que: >-
+      A caça à OITAVA armadilha de comentário desta onda: `lastError: null, // lastError:
+      estado.ultimoErro,` mais um comentário JSX `{/* {diagnostico} */}` plantado antes do bloco real.
+    resultado: "✅ 2 vermelhos. Comentário NÃO resgata nenhuma régua; `linhasDeCodigo`/`codigoDe` falham FECHADO."
+    virou: "nada — não achei a oitava"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# BANCO — o que eu li (nunca escrevi)
+# ─────────────────────────────────────────────────────────────────────────────
+banco:
+  higiene: >-
+    Só LEITURA, pela Management API, com `User-Agent`. Nenhuma chave de serviço. Nenhum
+    `INSERT`/`UPDATE`/`DELETE` em nenhum dos dois bancos. Nenhuma sessão forjada.
+  teste_xnxvygyfyyyzwhiuoehz:
+    colunas: "`last_error text NULL` e `last_check_at timestamptz NULL`, sem default — como a AC1 pede"
+    funcoes_vivas: >-
+      Extraídas por LINHA de `pg_get_functiondef` (não `ILIKE` no blob, que já produziu falso
+      positivo nesta onda):
+      `_org_integration_mark_error` → `SET status = 'error', updated_at = now(), last_error = p_codigo, last_check_at = now()`;
+      `_org_integration_mark_connected` → `SET status = 'connected', updated_at = now(), last_error = NULL, last_check_at = now()`.
+    ac4_por_estrutura: "`_org_integration_write_secret` tem **0** ocorrências de `last_` no corpo vivo (as outras duas têm 2 cada)"
+    ledger: "`trifold_migrations_aplicadas` registra `253_diagnostico_integracao.sql` com `sha256 = a1ecbc0d…` — **IGUAL** ao `shasum -a 256` do arquivo desta branch"
+    fixture_preservada: >-
+      NÃO limpei. Empresa A — Teste segue com `telegram` (`token_invalid`, código do contrato) e
+      `meta_capi` (`quota_do_provider_estourada`, fora do contrato → fallback) em `error`.
+    trilha_corrobora_a_tela: >-
+      `platform_audit_log` reconstrói a sessão na ordem, e é a prova independente da AC3:
+      23:51:39 `secret_write` + `marked_connected` (telegram) → 23:51:50 `marked_error` →
+      00:00:02 `marked_error` meta_capi (**o carimbo da fronteira do fuso**) →
+      **00:00:46 `marked_connected` telegram (a RECONEXÃO)** → 00:00:57 `marked_error` (a fixture).
+      Todas com `actor_type = platform_admin`.
+  producao_dsopqkqjkmhytudaaolv:
+    colunas_novas: 0
+    o_que_medi: "só metadado e agregado: `org_integrations` tem **6 linhas**, **0** em `error`, e ainda **não** tem as 2 colunas"
+    risco_da_migration: "`ALTER TABLE ADD COLUMN` nullable sem default sobre 6 linhas — sem reescrita de tabela, sem lock relevante"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MIGRATION 253 — livre remedido
+# ─────────────────────────────────────────────────────────────────────────────
+migration:
+  numero: 253
+  livre_em:
+    - "`refs/heads` — varridas uma a uma; só esta branch tem `253`"
+    - "`refs/remotes` — `origin/main` tem `250_kanban_stages_default_unico.sql`; `251`/`252` só nesta pilha"
+    - "`git log --all --diff-filter=A` — nenhum `253` histórico"
+    - "árvore de trabalho — `249`, `251`, `252`, `253`"
+    - "os **20 PRs abertos** — todos os `headRefName` estão em `refs/remotes/origin/*`, já varridos"
+  orfa_conhecida: "`250_pausar_retomar_empresa.sql` no ledger do banco de teste é a numeração ANTIGA da 900-60 (renumerada para `251`) — desvio anterior, corretamente NÃO carregado para o PR"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# HIGIENE DO DIFF
+# ─────────────────────────────────────────────────────────────────────────────
+higiene_do_diff:
+  migrations_aplicadas_json: >-
+    ✅ **NÃO está no diff** (`git diff 277a264e..HEAD -- docs/audits/migrations-aplicadas.json`
+    devolve 0 linhas) e é **byte a byte** o da base: `sha256 90a1fc7c…` no disco == `sha256` de
+    `git show 277a264e:docs/audits/migrations-aplicadas.json`.
+  arquivos_no_diff: 12 (1 migration, 3 criados/2 novos de fonte, 6 modificados, 1 story)
+  sem_push: true
+  sem_pr: true
+  sem_stash: true
+  dado_de_cliente: "nenhum — os nomes que aparecem são `Empresa A/B — Teste` e `Org de Teste — Epic 900`"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TRACE — AC por AC
+# ─────────────────────────────────────────────────────────────────────────────
+trace:
+  AC1:
+    veredicto: PASS
+    prova: "colunas lidas no `information_schema` do banco de teste: `text`/`timestamptz`, `is_nullable=YES`, `column_default=null`. 16 das 18 linhas seguem `NULL` nas duas; as 2 que não seguem foram escritas DEPOIS por `mark_error` (com trilha)."
+  AC2:
+    veredicto: PASS
+    prova: "corpo VIVO de `_org_integration_mark_error` grava `last_error = p_codigo, last_check_at = now()`. M1/M2/M9 matam as reguas de leitura; a trilha mostra 3 `marked_error` reais."
+  AC3:
+    veredicto: PASS
+    prova: "corpo VIVO de `_org_integration_mark_connected` grava `last_error = NULL, last_check_at = now()`. E `platform_audit_log` tem um `marked_connected` (00:00:46) ENTRE dois `marked_error` — a reconexão aconteceu pela mesma porta, e M7 prova que a tela cala mesmo se o banco não limpasse."
+  AC4:
+    veredicto: PASS
+    prova: "0 ocorrências de `last_` no corpo vivo de `_org_integration_write_secret`. A migration não recria a função."
+  AC5:
+    veredicto: PASS
+    prova: "M2 (3 vermelhos) + a régua enumera as 7 colunas uma a uma com `toEqual` ordenado + a asserção de que a projeção não tem `(` nem `*` (a 900-42a não foi afrouxada)."
+  AC6:
+    veredicto: PASS
+    prova: >-
+      Os três casos, e o terceiro é o do banco: (i) `token_invalid` → frase PT-BR literal;
+      (ii) `quota_do_provider_estourada` — o valor que está GRAVADO agora em `org_integrations` —
+      → `motivo não reconhecido: quota_do_provider_estourada`, nunca `undefined`, nunca vazio,
+      nunca cru; (iii) `NULL` → `null` e o tile volta a ser o de antes. O endurecimento contra
+      `constructor`/`toString` (via `CODIGOS_DE_ERRO.includes`, e não `??`) é melhoria real sobre
+      o que a AC pedia. M6 mata 3.
+  AC7:
+    veredicto: PASS
+    prova: >-
+      A seção "Precisa de você" ganhou o rabicho (M8, M9, M10). O "card" `Integrações com erro`
+      é um CONTADOR (`contagem={integracoesComErro}`, subtexto `⚠ veja abaixo`) — não tem onde
+      pendurar data nem motivo, e aponta para a seção que os recebeu. AC7 satisfeita em substância.
+
+# ─────────────────────────────────────────────────────────────────────────────
+top_issues:
+  - id: CONCERN-1
+    severidade: medium
+    bloqueia_merge: false
+    titulo: "A régua do consumo prende PRESENÇA e ORDEM, não ALCANCE do render"
+    medido: >-
+      Sonda P1: mover o bloco `{diagnostico && (…)}` do corpo sempre renderizado para dentro do
+      ramo `somenteLeitura ? (…)` de `integrations-panel.tsx` — sem alterar UMA letra do texto —
+      deixa `tsc --noEmit` rc=0 e a suíte inteira em **312/4318/6, zero vermelho**. Como
+      `somenteLeitura` só é verdadeiro para o WhatsApp, e `montarTilesDoPainel` força
+      `ultimoErro: null` para o WhatsApp, o diagnóstico deixaria de existir na tela inteira e
+      nada acenderia. É a mesma classe da 900-62 (`a régua para um degrau antes do dano`).
+    o_que_mudar: >-
+      Uma linha em `packages/web/src/lib/integrations/painel/diagnostico.test.ts`, no `it`
+      "o tile chama `linhaDeDiagnostico` e desenha o retorno, nessa ORDEM" — âncora de ORDEM, a
+      mesma família que eles já usam:
+      `expect(codigo.indexOf("{diagnostico && ("), "o diagnóstico é desenhado ANTES do ramo somenteLeitura").toBeLessThan(codigo.indexOf("{somenteLeitura ? ("))`
+      Conferido contra a fonte real: hoje `7881 < 8049`; sob P1 a ordem inverte e a régua acende.
+  - id: CONCERN-2
+    severidade: low
+    bloqueia_merge: false
+    titulo: "A régua de igualdade exata de linha é satisfeita por um duplo MORTO"
+    medido: >-
+      Sonda P2: com o call site real envenenado para `lastError: null`, um objeto morto
+      (`const morto = { status: estado.status, lastError: estado.ultimoErro, lastCheckAt:
+      estado.ultimaChecagem }; void morto`) satisfaz `toContain` das três linhas e a suíte fica
+      VERDE. `controle positivo (2)` também passa, porque o `.replace` acerta a cópia morta.
+    o_que_mudar: >-
+      Nada obrigatório — não é defeito acidental, é o alcance medido da régua, e o conserto real
+      é um harness de render que este repositório não tem. Fica registrado para que a próxima
+      story desta família não o descubra de novo do zero.
+  - id: CONCERN-3
+    severidade: low
+    bloqueia_merge: false
+    titulo: "O registro de evidência diz 15 linhas; o banco diz 18"
+    medido: >-
+      `select count(*) from org_integrations` no `trifold-crm-dev` = **18** (3 orgs × 6 providers),
+      **todas** com `created_at` entre 2026-08-29 21:31 e 2026-08-31 12:30 — ou seja, todas
+      anteriores à migration de 2026-09-01. A story afirma "as 15 linhas que já existiam ficaram
+      `NULL`" e "as 15 linhas do ambiente nasceram `disconnected`", duas vezes.
+    por_que_importa: >-
+      A AFIRMAÇÃO é verdadeira e eu a confirmei (16 linhas seguem `NULL`; as 2 que não seguem
+      foram escritas depois, por `mark_error`, com trilha em `platform_audit_log`). Só o NÚMERO
+      está errado — mas está numa seção cuja função inteira é ser "o medido".
+    o_que_mudar: >-
+      Trocar `15` por `18` nas duas ocorrências do Dev Agent Record de
+      `docs/stories/900-61-diagnostico-integracao-last-error-last-check-at.story.md`.
+
+observacoes:
+  - >-
+    **O degrau que o botão não deu: a declaração do @dev é EXATA, e eu a conferi na fonte.**
+    `escrita.ts:128-134` chama `porta.markError` só quando `pedido.statusAtual &&
+    STATUS_JA_CONFIGURADOS.has(pedido.statusAtual)` — comentário no código: "uma digitação errada
+    não deixaria o tile vermelho para sempre". Como as linhas do ambiente nasceram `disconnected`,
+    nenhuma tentativa frustrada produz `error`. **Isso BASTA, e por dois motivos medidos:**
+    (a) as RPCs `*_as_platform` são a MESMA porta que a rota usa — a trilha mostra `secret_write`
+    e `marked_connected` com `actor_type = platform_admin`, indistinguíveis de uma escrita da
+    rota; (b) o degrau em questão (`disconnected → connected`) é PRÉ-EXISTENTE e não é território
+    desta story: nada em `last_error`/`last_check_at` muda o caminho HTTP. O @dev disse em voz
+    alta qual degrau não deu, e é o degrau certo a não dar. **Não vira concern.**
+  - >-
+    **A extração para fora do `.tsx` é real.** `linhaDeDiagnostico` e `detalheDaPendencia` têm
+    **um único call site cada** (`integrations-panel.tsx:146` e `console-visao-geral.ts:331`),
+    e os dois consomem. O `.tsx` faz só interpolação — não sobrou ternário de decisão no JSX.
+  - >-
+    **`p_codigo` continua `text` sem `CHECK`** — a AC6 manda registrar como follow-up e não
+    consertar aqui; está no cabeçalho da migration `253` e no JSDoc de `diagnostico.ts`. O
+    fallback é o contorno correto, e a escolha de `CODIGOS_DE_ERRO.includes(...)` em vez de
+    `MENSAGENS_PT_BR[c] ?? …` fecha o furo de cadeia de protótipos (`constructor` devolveria uma
+    FUNÇÃO, que o `??` aceita) — furo que a AC nem tinha previsto.
+  - >-
+    **O `/dashboard` do cliente não recebe o diagnóstico** — disclosed pelo @dev, e há um `it`
+    (`o /dashboard não pede as 2 colunas`) provando que a ausência vira `null` e não `undefined`.
+    Estender a projeção do cliente é decisão de produto. **Herdado, não desta story:** a âncora
+    `desenho: '? "—"'` da 900-57 continua satisfeita por `??` — não mexi.
+
+recommendations:
+  antes_do_PR:
+    - "CONCERN-1: a linha de âncora de ordem em `diagnostico.test.ts` (o texto exato está acima)"
+    - "CONCERN-3: `15` → `18` nas duas ocorrências do Dev Agent Record da story"
+  depois:
+    - "Follow-up já registrado: endurecer `p_codigo` com `CHECK`/enum na `_org_integration_mark_error`"
+    - "Decisão de produto: estender a projeção do `/dashboard` para o cliente também ver o diagnóstico"
+
+_decisao: >-
+  **CONCERNS — não bloqueante para merge.** Nenhum defeito vivo, nenhuma regressão, os 10
+  mutantes conferem exato, o par M3/M4 tem kill sets disjuntos, o fuso está provado contra o
+  relógio e contra o valor gravado, a AC4 está provada por estrutura e a `253` que rodou no banco
+  é byte a byte a que vai no PR. As duas edições recomendadas somam uma linha de teste e dois
+  dígitos numa story.

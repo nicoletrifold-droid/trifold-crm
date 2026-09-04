@@ -1,0 +1,405 @@
+schema: 1
+story: "900.60"
+story_title: "Pausar / Retomar empresa — a primeira mutação nova do console"
+gate: CONCERNS
+reviewer: "Quinn (Test Architect)"
+updated: "2026-09-01T20:10:00Z"
+base: >-
+  Ponta da pilha `story/900-60-pausar-retomar-empresa`, commit `750b08ec`.
+  Pilha: `#547 → #549 → story/900-56-porta-de-entrada-do-console → esta`.
+  `merge-base` com `origin/main` = `1393fa68`. Nada empurrado.
+escopo_revisado: >-
+  AC1 a AC10, mais a migration `251` e a renumeração `250→251`. A metade da porta de entrada
+  (`app/page.tsx`) foi revisada aqui por medição, mas o ACHADO DE REGISTRO dela está no gate da
+  `900.56` (seção de delta), porque o commit é `ccc10c68 [Story 900-56]`.
+
+status_reason: >-
+  **A entrega está certa em tudo que eu consegui medir, e as duas decisões contra a letra da AC
+  estão certas por razões que eu reproduzi, não aceitei.** A suíte local bate EXATO com o
+  declarado: **308 arquivos / 4187 passed / 6 expected fail (4193) / rc=0**. `tsc --noEmit` rc=0
+  medido ANTES de cada vermelho. `pnpm lint --force` rc=0 (0 erros, 30 warnings, nenhum em
+  arquivo desta story), `pnpm type-check --force` rc=0, `pnpm build` rc=0 (5/5) com
+  `ƒ /api/platform/orgs/[id]` registrada. O caminho completo foi exercitado ao vivo no banco de
+  TESTE, com login pelo formulário e as contas do arquivo entregue fora do repositório — nenhuma
+  sessão forjada, nada tocado em produção.
+  **O que segura o gate é uma ausência, não um defeito:** o desfecho de falha da AC7 — que é a AC
+  que impede o console de fingir que salvou — **não tem carrasco nenhum**. Medi: com
+  `aoFechar()` acrescentado ao ramo de erro do diálogo (fecha em cima da falha e perde o motivo
+  digitado), `tsc` rc=0 e a suíte INTEIRA fica **308 / 4187 / 6, rc=0**. O comportamento está
+  certo hoje — eu o reproduzi na tela — e é indefensável amanhã.
+
+rodadas:
+  - data: "2026-09-01"
+    rodada: 1
+    base: "750b08ec"
+    gate: CONCERNS
+    concerns: 2
+    observacoes: 3
+    defeitos_vivos: 0
+    regressoes: 0
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 1. RÉGUAS — qual baseline usei
+# ═══════════════════════════════════════════════════════════════════════════
+reguas:
+  baseline_que_usei: >-
+    A **árvore de trabalho local**, não o run do CI da `main`. Motivo: a árvore carrega, não
+    commitados e de OUTRA frente, `whatsapp/__tests__/route.test.ts`, `meta/process-lead.test.ts`
+    e `tenancy/webhook-org.test.ts` (mais os 3 arquivos de produção irmãos). Eu não os toquei e
+    não entram em commit nenhum desta pilha. Comparar contra o CI mediria a soma de duas frentes.
+  vitest_arvore_real: "308 arquivos / 4187 passed | 6 expected fail (4193) / rc=0"
+  vitest_declarado_pelo_dev: "308 / 4187 / 6 — **idêntico**, reproduzido por mim numa execução limpa"
+  ci_main_referencia: "run 33536776948 = 301 / 3946 / 6 (headSha b7a1b64b) — a distância é a pilha MAIS os +9 de outras frentes"
+  tsc_noemit: "rc=0 na árvore limpa, e rc=0 medido isoladamente antes de CADA mutante que conta"
+  pnpm_lint_force: "rc=0 — 0 erros, 30 warnings (todos pré-existentes e alheios)"
+  pnpm_type_check_force: "rc=0"
+  pnpm_build: >-
+    rc=0, 5/5 tasks. `ƒ /api/platform/orgs/[id]` na lista de rotas. O
+    `Ecmascript file had an error` do log é o aviso pré-existente de `crypto` no Edge em
+    `packages/shared/src/meta/capi-hashing.ts` — o mesmo já registrado no gate da `900.56`, alheio.
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 2. MUTAÇÕES QUE EU MESMO APLIQUEI (snapshot por `cp`, nunca `git checkout`)
+# ═══════════════════════════════════════════════════════════════════════════
+mutacoes_reproduzidas:
+  metodo: >-
+    Snapshot por CÓPIA antes de cada mutante, sha256 dos dois lados, restauro por `cp` e
+    `git diff` vazio conferido depois. Nenhum `git stash` (há 9 stashes de outras sessões neste
+    repositório). `tsc --noEmit` rc=0 medido antes de contar cada vermelho.
+  baseline_page_test: "9 passed — `app/page.tsx` sha256 `bf7d4969a0785b0964917495b4869161ed726994a40b917584a36da5709d0e7e` (bate com o declarado)"
+  A1_some_o_ramo:
+    tsc: "rc=0"
+    mortos: 2
+    quais: "METADE 1 (platform admin `admin` → /platform; platform admin `broker` → /platform)"
+  A2_if_true:
+    tsc: "rc=0"
+    mortos: 5
+    quais: >-
+      METADE 2 inteira: `broker` comum → /broker; `admin` comum → /dashboard;
+      `is_platform_admin:false` explícito; linha de `users` ausente; valor não-booleano.
+    veredicto: >-
+      **É a mutação que o pedido exigia, e ela separa mesmo "protegi" de "abri para todos".**
+      Interseção com A1 = **vazia**. Os conjuntos são disjuntos e de tamanhos diferentes (2 e 5).
+  A3_inverte:
+    tsc: "rc=0"
+    mortos: 7
+    quais: "a UNIÃO exata de A1 e A2 — 2 + 5, sem sobra e sem falta"
+  restauro: "sha256 `bf7d4969…` reproduzido byte a byte, `git diff -- packages/web/src/app/page.tsx` vazio, 9 verdes de novo"
+  MB1_literal_no_client:
+    o_que: "o `/platform` volta a ser literal DENTRO de `sidebar-nav.tsx` (`\"use client\"`) e renderiza para todo mundo"
+    tsc: "rc=0"
+    mortos: 3
+    quais: >-
+      as três da METADE 2, inclusive **`a rota não está no TEXTO-FONTE do componente`** — a
+      asserção que é especificamente sobre vazamento, não sobre pixel. METADE 1 fica verde.
+  MC1b_autoridade_true:
+    o_que: "`isPlatformAdmin()` responde `true` para todo mundo"
+    tsc: "rc=0"
+    mortos: 5
+  MB3_layout_incondicional: { tsc: "rc=0", mortos: 2 }
+  MB4_layout_nao_passa: { tsc: "rc=0", mortos: 2 }
+  C1_rotulo_desativar: { tsc: "rc=0", mortos: 3 }
+  C2_suaviza_frase_iii: { tsc: "rc=0", mortos: 3 }
+  C2b_suavizacao_sutil:
+    o_que: "`de OUTRA empresa` → `de outra empresa` (a caixa baixa que um revisor de texto faria)"
+    tsc: "rc=0"
+    mortos: 3
+    veredicto: "**o texto não pode ser amaciado nem na caixa das letras** — a régua morde a grafia exata"
+  SONDA_from_literal:
+    o_que: "`.from(\"organizations\").update(...)` dentro da rota — a AC2 ao pé da letra"
+    resultado: >-
+      **VERMELHO** em `platform-query-scan.test.ts` → *nenhum `.from(<literal>)` cru sobrevive em
+      app/platform/** e app/api/platform/***. É a prova de que a letra da AC2 não era
+      implementável sem quebrar uma régua viva.
+  SONDA_comentario_jsx:
+    o_que: "a expressão exata da ligação escrita num `{/* … */}` no call site, com a prop real removida"
+    resultado: "**VERMELHO** (2) — `codigoDe` não é satisfeito pelo comentário JSX"
+  SONDA_veneno_alvo_errado:
+    o_que: >-
+      um terceiro `botao.current?.focus()` inserido ANTES do `aoTeclar`, para que o `replace` sem
+      `g` do controle positivo acerte o alvo errado
+    resultado: "**VERMELHO** (1) — o controle positivo detecta quando o veneno erra o alvo"
+  SONDA_defeito_real_esc:
+    o_que: "remove de verdade o retorno de foco do `Esc` em `org-row-menu.tsx`"
+    resultado: "**VERMELHO** (2) — a régua estreitada continua matando o defeito que ela existe para matar"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 3. PROVA AO VIVO — banco de TESTE, login pelo formulário, zero sessão forjada
+# ═══════════════════════════════════════════════════════════════════════════
+prova_ao_vivo:
+  ambiente: "`pnpm dev`, banner `✓ Supabase ref: xnxvygyfyyyzwhiuoehz (TESTE)`, Chromium 1440×900"
+  credenciais: "arquivo `600` fora do repositório — não copiado, não impresso, lido só por script"
+  porta_de_entrada:
+    plataforma: { login: "/platform", raiz_com_sessao_viva: "/platform" }
+    empresa_a: { login: "/dashboard", raiz_com_sessao_viva: "/dashboard" }
+  menu_e_alcancabilidade:
+    itens: '["Ver empresa","Integrações","Copiar identificador","Pausar empresa"]'
+    metodo: "`document.elementFromPoint` no centro do retângulo — **`isVisible()` do Playwright NÃO foi usado**"
+    resultado: '`BUTTON[menuitem] "Pausar empresa"` — é o próprio item que está no ponto'
+  dialogo:
+    titulo: "Pausar empresa"
+    nome_da_empresa: "Empresa B — Teste"
+    frases: >-
+      as TRÊS, verbatim e na ordem: (i) crons · (ii) "Não impede login nem uso do sistema — …" ·
+      (iii) "Também altera a contagem de empresas ativas … Isso pode mudar para onde vão os leads
+      de OUTRA empresa."
+    botao_confirmar: "`disabled` com vazio = true · com **só espaços** = true · com motivo válido = false"
+  AC7_desfecho_de_falha:
+    como: >-
+      `page.route(...)` devolvendo **500** no `PATCH`. **O servidor não foi tocado** — conferido
+      depois: `organizations` continua 3/3 ativas e `platform_audit_log` tem **zero** linhas com
+      o meu motivo.
+    diálogo_aberto_depois: 1
+    mensagem_no_diálogo: '"Falha simulada pelo QA — nada foi alterado." (a mensagem do servidor, dentro do `role="alert"`)'
+    motivo_preservado: "**idêntico byte a byte** ao digitado"
+    lista: "inalterada — nada de otimismo"
+  controle_positivo_do_AC7:
+    porque: >-
+      "o diálogo ficou aberto" sozinho é indistinguível de "o botão não faz nada". Rodei o
+      caminho REAL logo depois, sem interceptação.
+    pausar: "`PATCH → 200`, `{isActive:false, isActiveAnterior:true, orgsAtivasDepois:2, action:'organization.deactivated'}`, diálogo **fechou** (0), badge `Ativa → Pausada`"
+    retomar: "`PATCH → 200`, `{isActive:true, isActiveAnterior:false, orgsAtivasDepois:3, action:'organization.activated'}`, badge `Pausada → Ativa`"
+    veredicto: "**500 mantém aberto, 200 fecha** — os dois desfechos são discriminados, não são o mesmo estado com duas roupas"
+  trilha_lida_no_banco:
+    linhas: >-
+      2, ambas `actor_type='platform_admin'`, `target_table='organizations'`,
+      `target_id=c95bc4fa-…`, `metadata` com `reason`, `actor_label`, `is_active_anterior` e
+      `orgs_ativas_depois` (2 e depois 3).
+    observacao: >-
+      As 2 linhas que EU gerei no controle positivo **permanecem** no `platform_audit_log` do
+      banco de teste. É por desenho: a tabela é append-only por atributo de nascimento (migration
+      248) e apagá-la é a operação que aquela migration existe para impedir. Estado de
+      `organizations` restaurado: **3/3 ativas**.
+  autorizacao_e_validacao_pela_rota_viva:
+    empresa_a_faz_PATCH: "**403 `FORBIDDEN`**"
+    empresa_a_abre_/platform/orgs: "redirecionada para `/dashboard`"
+    motivo_so_espacos: "400 `MOTIVO_OBRIGATORIO`"
+    org_inexistente: "404 `ORG_NOT_FOUND`"
+    isActive_string_false: "400 `IS_ACTIVE_INVALIDO` (a coerção `Boolean(...)` teria pausado)"
+    orgId_no_corpo_vs_parametro_de_rota: >-
+      404 — o parâmetro de rota vence. Mandei `orgId` e `id` no corpo apontando para a Empresa B
+      e a rota para uma org inexistente: **nada foi alterado**.
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 4. DECISÕES CONTRA A LETRA DA AC — julgadas
+# ═══════════════════════════════════════════════════════════════════════════
+decisoes_contra_a_letra:
+  - id: "D1 — o `UPDATE` foi para a RPC `organization_set_active_as_platform` (AC2)"
+    veredicto: "**CERTA**, e as três razões foram medidas por mim, não aceitas"
+    provas:
+      razao_1_mesma_transacao: >-
+        Verificável no SQL da `251`: `SELECT … FOR UPDATE` → `UPDATE` → `count(*)` → `platform_audit()`,
+        tudo antes do `COMMIT`. Ler a contagem pela rota seriam duas viagens, e a trilha registraria
+        um número que nunca existiu. A AC10 existe exatamente para explicar o roteamento meses depois.
+      razao_2_contagem_inalcancavel: >-
+        **Medido contra o `trifold-crm-dev` pelo PostgREST:** `?select=count()` →
+        **HTTP 400 `PGRST123` "Use of aggregate functions is not allowed"**. E `platformQuery()`
+        (lido) é `(table, columns, orgId?)` chamando `.select(columns)` **sem objeto de opções** —
+        `count`/`head` não têm por onde entrar — e `columns.includes("(")` recusa `count()` antes
+        disso. As duas portas estão fechadas.
+      razao_3_from_literal_proibido: >-
+        **Medido por mutação:** pôr `.from("organizations").update(...)` na rota deixa
+        `platform-query-scan.test.ts` **VERMELHO**. A letra da AC2 não era implementável.
+    ressalva: >-
+      A AC2 pede `createAdminClient()`, e ele **está** na rota — é ele quem chama a `.rpc()`, e a
+      rota está registrada em `docs/audits/admin-client-allowlist.json` seção `plataforma`. O que
+      mudou de lugar foi o `UPDATE`, não o cliente. A catraca `TOTAL_ESPERADO` foi de **242 → 243**
+      e eu **recontei a união das 5 seções do JSON: 243**, com
+      `src/app/api/platform/orgs/[id]/route.ts` presente em `plataforma`.
+  - id: "D2 — `503 LEITURA_FALHOU` separado de `404 ORG_NOT_FOUND`"
+    veredicto: "**CERTA**. Um 404 sobre leitura que falhou manda o operador procurar a empresa em vez da rede. Os carrascos existem e são disjuntos (B1 e B8 no registro do @dev)."
+  - id: "D3 — o texto do diálogo mora em `.ts`, fora do JSX"
+    veredicto: >-
+      **CERTA, e é o que torna a AC8 defensável.** `vitest.config.ts` inclui
+      `packages/web/src/**/*.test.ts` — **não `.tsx`**. Texto dentro do componente é texto que esta
+      suíte não alcança. É exatamente por isso que a AC7 (que ficou no `.tsx`) não tem carrasco —
+      ver QA-900-60-1.
+  - id: "D5 — rótulo muda, valor da URL (`?status=inativas`) não"
+    veredicto: "**CERTA.** O valor é contrato de URL já compartilhada desde a `900-58`; o rótulo é a promessa ao humano, e era ela que mentia."
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 5. O RÓTULO (AC8) — confirmado que não pode ser amaciado
+# ═══════════════════════════════════════════════════════════════════════════
+rotulo:
+  decisao_do_po_aprovada_pelo_dono: "Pausar / Retomar · badge Ativa / Pausada"
+  fundamento_verificado_no_codigo: >-
+    `lib/supabase/middleware.ts` e `lib/api-auth.ts` leem **`users.is_active`** — outra tabela,
+    outra granularidade. `organizations.is_active` não aparece em nenhum dos dois. "Desativar"
+    prometeria um bloqueio de acesso que o sistema não aplica.
+  mutacoes_que_medem:
+    C1_volta_para_Desativar: "3 mortos"
+    C2_suaviza_a_frase_iii: "3 mortos"
+    C2b_so_a_caixa_das_letras: "3 mortos"
+  veredicto: "**CONFIRMADO** — nenhuma das três formas de amaciar sobrevive."
+  orgs_ativas_depois: >-
+    Verificado no código vivo: `resolveSoleOrg()` (`webhook-org.ts`) lê a coluna como
+    **contagem** (`.eq(\"is_active\", true).limit(2)`), então pausar A muda o roteamento de B.
+    A trilha grava o número, e eu o vi cair de 3 para 2 e voltar para 3, na mesma linha do motivo.
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 6. MIGRATION — a colisão e o conserto, reconferidos por mim
+# ═══════════════════════════════════════════════════════════════════════════
+migration:
+  numero_final: "251_pausar_retomar_empresa.sql"
+  livre_reconferido_por_mim:
+    metodo: >-
+      `git fetch --prune` e depois `git ls-tree -r --name-only <ref> -- supabase/migrations`
+      sobre **TODAS** as refs (`refs/heads` + `refs/remotes`), não só a `main`.
+    refs_varridas: 181
+    arquivos_distintos: 279
+    resultado: >-
+      O único `251_*` em ref nenhuma é o desta pilha. `250_kanban_stages_default_unico.sql`
+      (da `main`) e `250_pausar_retomar_empresa.sql` **não coexistem mais** — o `250_pausar`
+      sumiu de toda ref, e `grep -rn "250_pausar"` só devolve as duas linhas da própria story que
+      NARRAM a colisão. **Livre confirmado.**
+  colisao_de_conteudo: >-
+    **Não há.** A `250` da `main` cria `kanban_stages_default_unico_por_org` (índice único
+    parcial), a função `kanban_stages_default_unico()` e o trigger
+    `trg_kanban_stages_default_unico` — tudo em `kanban_stages`. A `251` cria
+    `organization_set_active_as_platform` e escreve em `organizations`/`platform_audit_log`.
+    Zero objetos em comum, zero ordem exigida.
+  aplicada_no_banco_de_teste:
+    pergunta_do_pedido: "está aplicada no banco de teste?"
+    resposta: "**SIM** — confirmado ANTES de testar a rota, por leitura direta do catálogo."
+    evidencia: >-
+      `pg_proc`: `organization_set_active_as_platform(p_org_id uuid, p_is_active boolean,
+      p_reason text, p_actor_user_id uuid)`, `prosecdef = true`.
+      `has_function_privilege` na assinatura exata: **anon `false` · authenticated `false` ·
+      service_role `true` · postgres `true`** — a REVOKE/GRANT da migration está viva, não só
+      escrita no arquivo.
+  producao: >-
+    **NÃO aplicada, e é assim que tem de estar.** É do `@devops`, na ordem do deploy: a `251`
+    ANTES do código, senão a rota responde erro de função inexistente.
+  observacao_de_registro: >-
+    `docs/audits/migrations-aplicadas.json` não foi regenerado (declarado pelo @dev). Regenerá-lo
+    capturaria `246`/`247`/`249` como PENDENTE por causa de outras frentes — o diff não seria
+    desta story. Concordo com a decisão.
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 7. OS DOIS AUTOACHADOS DO @dev — o conserto pegou?
+# ═══════════════════════════════════════════════════════════════════════════
+autoachados_do_dev:
+  - id: "perda de `app/page.tsx` por `git checkout --`"
+    conserto_declarado: "refazer a bateria com snapshot por `cp`, sha256 dos dois lados"
+    minha_verificacao: >-
+      **PEGOU.** Refiz a bateria inteira eu mesmo, com `cp`. O sha256 do baseline que eu medi
+      (`bf7d4969a0785b0964917495b4869161ed726994a40b917584a36da5709d0e7e`) é o mesmo que ele
+      declarou. Os conjuntos de morte que eu obtive são **2 e 5, disjuntos**, e a inversão é a
+      união exata (7). O sintoma que denunciou a bateria corrompida — mutantes diferentes com o
+      mesmo número de mortos — **não reaparece**. Restaurei por `cp` e o `git diff` do arquivo
+      ficou vazio.
+    nota: >-
+      O @dev registra a bateria refeita como "2 e 7" (A1 e a inversão). Eu medi as **três** (2, 5
+      e 7) — a de `if (true)` é a que o pedido exigia, e é ela que fecha o par disjunto com a A1.
+  - id: "réguas de outras stories MOVIDAS"
+    minha_verificacao: "**nenhuma ficou mais fraca.** Verificação item a item:"
+    itens:
+      - regua: "`scripts/admin-client-allowlist.test.ts` — `TOTAL_ESPERADO` 242 → 243"
+        veredicto: "**MOVEU, não afrouxou.** A asserção é a mesma (`uniao.size`/`PERMITIDOS.size` contra a constante). Recontei a união das 5 seções do JSON real: **243**. O que mudou junto foram dois NOMES de `it` que ainda diziam `240` enquanto a asserção já usava `TOTAL_ESPERADO` — o nome estava obsoleto antes desta story; passou a dizer `TOTAL_ESPERADO`. Isso é conserto de rótulo, não de força."
+      - regua: "`console-lista-empresas.test.ts` AC5 — call site do `<OrgRowMenu>`"
+        veredicto: "**MAIS FORTE.** Era 1 `toContain` sobre a linha formatada; virou recorte fail-closed (`trechoDelimitado` + `not.toBe(\"\")`) mais **4** asserções de prop, incluindo as duas novas (`nome`, `isActive`)."
+      - regua: "`console-lista-empresas.test.ts` AC6 — `expect(fonte).not.toContain(\"is_active\")`"
+        veredicto: >-
+          **CADUCOU LEGITIMAMENTE.** Era fronteira de cronograma ("o quarto item é da 900-60"),
+          não propriedade do produto — e a `900-60` chegou. O que a substitui são **3 asserções
+          positivas** (`textoDaConfirmacao(isActive).rotuloDoMenu`, `setDialogo(true)`,
+          `setAberto(false)`) mais a proibição que **sobrevive** e agora é sobre o produto
+          (`codigo` sem `Desativar`). ⚠️ Conferi o ponto que mais me preocuparia: a proibição de
+          `Desativar` **já era** sobre `codigo` (não `fonte`) no commit anterior `098bf4de` — não
+          houve troca de escopo escondida no meio da mudança.
+      - regua: "`console-lista-empresas.test.ts` — controle positivo do `Esc`"
+        veredicto: >-
+          **MAIS FORTE, e eu provei os dois lados.** O escopo da unicidade foi de "arquivo
+          inteiro" para "o trecho do `aoTeclar`", mantendo `toBe(1)` — necessário, porque o
+          arquivo passou a ter duas devoluções de foco legítimas. **(a)** o defeito real continua
+          morrendo: apaguei o `botao.current?.focus()` do `aoTeclar` em produção → **2 vermelhos**.
+          **(b)** a asserção NOVA ("o veneno acertou o alvo certo") não é enfeite: inseri um
+          terceiro `botao.current?.focus()` ANTES do `aoTeclar`, para que o `replace` sem `g`
+          errasse o alvo → **VERMELHO**. Sem a mudança de escopo o `toBe(1)` teria virado falso
+          sem nada ter quebrado; com ela, e com a asserção nova, a régua mede exatamente o que
+          dizia medir.
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 8. CONCERNS
+# ═══════════════════════════════════════════════════════════════════════════
+concerns:
+  - id: QA-900-60-1
+    severidade: media
+    titulo: "A AC7 — o desfecho de falha — não tem carrasco nenhum. Medido."
+    onde: "`packages/web/src/app/platform/orgs/_components/pausar-empresa-dialog.tsx`"
+    o_que_medi: >-
+      Acrescentei `aoFechar()` ao ramo `if (!res.ok)` do `confirmar()` — o diálogo passa a FECHAR
+      em cima da falha, perdendo o motivo digitado e convidando à segunda pausa num 5xx que na
+      verdade gravou. **`tsc --noEmit` rc=0** e a suíte INTEIRA: **308 arquivos / 4187 passed /
+      6 expected fail / rc=0**. Verde. Restaurei o arquivo.
+    porque_acontece: >-
+      Não é descuido: `vitest.config.ts` inclui `packages/web/src/**/*.test.ts` e **não `.tsx`**,
+      não há `environment: "jsdom"` nem `@testing-library/react` no repositório. O @dev tirou o
+      TEXTO do JSX exatamente por isso (Decisão 3) — mas a **máquina de estados do envio** ficou
+      dentro do componente, e ela é o que a AC7 promete.
+    impacto: >-
+      Nenhum defeito vivo: o comportamento está certo hoje, e eu o reproduzi na tela (500 mantém
+      aberto e preserva o motivo; 200 fecha). O que falta é proteção contra regressão da AC que o
+      próprio pedido chama de "a AC que impede o console de fingir que salvou".
+    conserto_sugerido_e_mensuravel: >-
+      Duas opções, qualquer uma resolve. (a) **Extrair a decisão para `.ts`**: uma função pura
+      `decidirDesfecho(res.ok, corpo)` → `{ fecha: boolean, erro: string | null }`, com carrasco
+      em `console-pausa-empresa.test.ts`; o mutante acima passa a matar. (b) **Régua de FORMA
+      sobre a fonte do diálogo**, no padrão que este repositório já usa (`codigoDe` +
+      `trechoDelimitado`): `aoFechar()` aparece **exatamente uma vez** dentro de `confirmar()`, e
+      dentro do trecho que vem DEPOIS de `router.refresh()`; e o trecho do `if (!res.ok)` contém
+      `setErro(` e `return` e **não** contém `aoFechar()`. A (a) é melhor — é comportamento, não
+      forma. Critério de aceite: o mutante `aoFechar()` no ramo de erro tem de ficar VERMELHO.
+  - id: QA-900-60-2
+    severidade: baixa
+    titulo: "A ordem do deploy é um pré-requisito da rota, e ela só está escrita em prosa"
+    o_que: >-
+      A `251` não está em produção. Se o código subir antes dela, o `PATCH` responde **500
+      `ESCRITA_FALHOU`** com a mensagem do Postgres sobre função inexistente — e o operador vê
+      "Não foi possível concluir" numa tela que parece pronta. O `STATUS_POR_CODIGO_SQL` não tem
+      entrada para `42883`/`PGRST202`, então cai no `?? 500` genérico.
+    conserto_sugerido: >-
+      Não é código: é a ordem no runbook do `@devops` — **`251` primeiro, deploy depois** — e
+      confirmar por `pg_proc` no banco de produção (leitura de metadado, permitido) antes de
+      liberar a tela. Se o dono do produto quiser rede: mapear o código de função inexistente
+      para uma mensagem que diga "esta função ainda não foi publicada no banco".
+
+observacoes:
+  - id: OBS-1
+    titulo: "As 2 linhas de trilha do meu controle positivo ficam no banco de teste"
+    detalhe: >-
+      `platform_audit_log` é append-only por atributo de nascimento (migration 248). As linhas
+      têm `reason` começando com `QA 900-60 controle positivo`. `organizations` foi restaurada:
+      **3/3 ativas**. Não removi nada — remover seria a operação que a `248` existe para impedir.
+  - id: OBS-2
+    titulo: "Concorrência real continua não medida — e eu concordo com o limite declarado"
+    detalhe: >-
+      O `SELECT … FOR UPDATE` é o mecanismo certo e está lá, mas duas pausas simultâneas não foram
+      disparadas. A afirmação é sobre o SQL, não sobre uma medição. Custo alto, risco baixo (um
+      operador humano por vez).
+  - id: OBS-3
+    titulo: "O efeito de `resolveSoleOrg` no roteamento continua latente, não observado"
+    detalhe: >-
+      `decidirModoRoteamento()` devolve `\"both\"` na ausência de `WEBHOOK_ORG_ROUTING`, e a env
+      não existe em arquivo de env nenhum do repositório. O @dev provou o MECANISMO
+      (`orgs_ativas_depois` 3→2→3), não o efeito. Forçar `identifier` seria executar a `900-55`
+      dentro desta story. O item de backlog da AC9.2 existe (`docs/backlog.md`, "[Epic 900] 🟠 O
+      diálogo de «Pausar empresa» diz «pode» mudar…") e aponta para `FRASE_DO_ROTEAMENTO`.
+
+acs:
+  AC1: { status: ATENDIDA, nota: "rota `PATCH`, `reason` obrigatório sem mínimo inventado, org do parâmetro — 400/404/403 medidos ao vivo" }
+  AC2: { status: "ATENDIDA COM DIVERGÊNCIA JUSTIFICADA", nota: "`UPDATE` na RPC; `createAdminClient()` na rota e na allowlist (243). As 3 razões medidas — ver D1" }
+  AC3: { status: ATENDIDA, nota: "as três frases verbatim na tela, botão `disabled` com vazio E com só espaços" }
+  AC4: { status: ATENDIDA, nota: "2 linhas lidas no `platform_audit_log` do banco de teste, `actor_type='platform_admin'`, ações corretas" }
+  AC5: { status: ATENDIDA, nota: "os dois sentidos pela mesma rota, medidos: `deactivated` e `activated`" }
+  AC6: { status: ATENDIDA, nota: "4º item no menu; `elementFromPoint` devolve o próprio item" }
+  AC7: { status: "ATENDIDA, SEM CARRASCO", nota: "reproduzida na tela (500 mantém aberto + preserva o motivo; 200 fecha). Sem proteção de regressão — QA-900-60-1" }
+  AC8: { status: ATENDIDA, nota: "3 mutações de amaciamento, 3 vermelhas — inclusive a de caixa baixa" }
+  AC9: { status: ATENDIDA, nota: "modo `both` confirmado no código; item de backlog existe em `docs/backlog.md`" }
+  AC10: { status: ATENDIDA, nota: "`orgs_ativas_depois` na mesma transação; visto cair 3→2 e voltar 3→ na trilha e no retorno da RPC" }
+
+recomendacao:
+  merge: "LIBERADO"
+  antes_do_deploy: "aplicar a migration `251` em produção ANTES do código (@devops) — QA-900-60-2"
+  antes_do_proximo_pr_que_tocar_este_dialogo: "QA-900-60-1"
+  proximo_agente: "@dev para QA-900-60-1; @devops para o push e a ordem do deploy"
