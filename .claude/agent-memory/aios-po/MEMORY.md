@@ -11,3 +11,4 @@
 - [Validar o conserto no mundo pós-fix](feedback_validar_conserto_no_mundo_pos_fix.md) — story com 2 consertos: rodar a fixture no papel com o conserto A já aplicado
 - [Mitigação delegada a ferramenta](feedback_mitigacao_delegada_a_ferramenta.md) — story diz que o tsc/lint "pega sozinho"? rode a ferramenta, com contraprova
 - [PR #517 carrega duas stories](project_87_17_87_18_pr517.md) — 87-17 Fatia 1 + 87-18, deploy único; a base é a branch, não main; 87-19 é P1
+- [Abrir a analogia do AC](feedback_abrir_a_analogia_do_ac.md) — "mesmo tratamento de X" tem que ser conferido no arquivo; pode ser span inline, não coluna
