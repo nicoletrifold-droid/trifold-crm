@@ -1,0 +1,152 @@
+schema: 1
+story: '75-373'
+story_title: 'O relatório impresso de brindes escapa HTML: 9 sítios e uma régua que pega o próximo'
+gate: PASS
+status_reason: >-
+  SEC-001 (MEDIUM) está fechado para a superfície de ataque atual: os 9 sítios escapados,
+  régua de alcance provada reprovando um sítio NOVO (mutação do @qa), e HTML byte-idêntico
+  ao de origin/main para dado limpo. Os dois residuais são falsos-verdes futuros da régua,
+  não vulnerabilidades vivas — viram backlog.
+reviewer: 'Quinn'
+updated: '2026-09-04T14:05:00Z'
+
+branch: story/75-373-escapar-html-relatorio-brindes
+commit: 4a25e17c
+base: 3b809946 (origin/main; PR #570 MERGED em 2026-09-04T13:18:29Z — base alternativa prevista pela AC8)
+
+checks:
+  code_review: PASS
+  unit_tests: PASS
+  acceptance_criteria: PASS # 9/9
+  no_regression: PASS
+  performance: PASS
+  security: PASS # era CONCERNS na 75-372 — SEC-001 fechado
+  documentation: PASS
+
+gates_reexecutados_sem_cache:
+  - cmd: 'TURBO_FORCE=true pnpm type-check'
+    exit: 0
+    saida: '8 successful, 8 total / Cached: 0 cached, 8 total'
+  - cmd: 'TURBO_FORCE=true pnpm lint'
+    exit: 0
+    saida: '30 problems (0 errors, 30 warnings) / 0 cached, 8 total; grep print-modal na saída = exit 1'
+  - cmd: 'TURBO_FORCE=true pnpm test'
+    exit: 0
+    saida: '327 files passed / 4633 passed | 6 expected fail'
+  - cmd: 'npx vitest run print-modal.test.ts'
+    exit: 0
+    saida: '22 passed (22)'
+
+mutacoes_do_qa:
+  - id: QM1
+    o_que: '${escapeHtml(resumo)} → ${resumo} (sítio 9 — sítio DIFERENTE do que o @dev mutou)'
+    exit: 1
+    vermelho: "régua da AC6 NOMEANDO a expressão: expected [ 'resumo' ] to deeply equal []; + sítio 9, sítio 6 e duplo-escape. 4 failed | 18 passed"
+  - id: QM2
+    o_que: 'ABERTURA do recorte → "function buildPrintHtmlQueNaoExiste" (reprodução da mutação (b) do @dev)'
+    exit: 1
+    vermelho: >-
+      sinal de vida (expected 0 to be greater than or equal to 25) + "nenhum perdão declarado
+      está morto". CONFIRMADO: o expect(naoCobertas).toEqual([]) ficou VERDE — recorte vazio
+      aprova tudo. O sinal de vida é load-bearing, não decoração.
+  - id: QM3
+    o_que: 'sítio NOVO de dado cru acrescentado: <td class="cep">${d.endereco_cep}</td>'
+    exit: 1
+    vermelho: "régua da AC6: expected [ 'd.endereco_cep' ] to deeply equal [] — a promessa central da AC6 (pegar o próximo), que nenhuma mutação do @dev havia provado"
+  - id: QM4
+    o_que: 'sítio novo ESCAPADO mas em atributo SEM ASPAS: data-x=${escapeHtml(d.nome)}'
+    exit: 0
+    verde: 'régua VERDE (22/22) com o HTML emitindo onmouseover=alert(1) vivo — residual 1 do @dev CONFIRMADO por medição, não por afirmação'
+  - id: QM5
+    o_que: 'drible por concatenação: ${escapeHtml(d.obra_nome) + (d.endereco_cep ?? "")}'
+    exit: 0
+    verde: 'régua VERDE (22/22) com d.endereco_cep cru — residual 3 do @dev CONFIRMADO'
+  - id: QM6
+    o_que: 'sinal de vida declarado 25→26 e 23→24 (mede a contagem mutando o DECLARADO, sem replicar o scanner)'
+    exit: 1
+    vermelho: 'expected 25 to be greater than or equal to 26 / expected 23 to be greater than or equal to 24 — contagem CRAVADA em exatamente 25 e 23'
+
+evidencias_independentes:
+  paridade_por_bytes: >-
+    Sonda própria do @qa (criada, medida, removida): compilou o buildPrintHtml de
+    origin/main (cópia temporária, só com `export` acrescentado) ao lado do de HEAD e
+    comparou sha256 do HTML para dado limpo em 2 cenários (sem data/sem filtros; com data
+    + 2 filtros) — IDÊNTICO nos dois. Contraprova no mesmo arquivo: dado com `&`/`<`
+    DIVERGE, então a sonda é capaz de reprovar. exit 0. Árvore restaurada.
+  brinde_tamanho_intocado: >-
+    sha256 da árvore == sha256 do blob de origin/main
+    (4725a29411efa123b1b7bafaf0efa44258161f738e77a2a645f4fcaa359951df) e
+    `git diff origin/main...HEAD` desses 4 arquivos = 0 bytes.
+  perdoes_auditados: >-
+    As 14 SEGURAS_DECLARADAS foram auditadas uma a uma pelo @qa (o teste só exige motivo
+    NÃO-VAZIO, não motivo CORRETO). A única que perdoa dado CRU é
+    `TIPO_LABEL[d.tipo] ?? d.tipo`, e está dupla-trancada: CHECK (tipo IN
+    ('mae','pai','outro')) em 031:36 intacto (o único DROP CONSTRAINT da família, 165:13,
+    é de brindes_tipos) MAIS validação de aplicação nos 3 endpoints de escrita
+    (destinatarios/route.ts:87, [id]/route.ts:31, import/route.ts:49) — defesa que a
+    story não citou. STATUS_LABEL/TIPO_LABEL são dicionários de literais (types.ts:61,
+    print-modal.tsx:18).
+  next_build: >-
+    NÃO rodado, e por um motivo novo: `pnpm --filter @trifold/web build:teste` sai exit 1
+    porque packages/web/.env.development não existe nesta máquina, e um `next build` nu
+    resolveria packages/web/.env.local — que nesta máquina aponta para PRODUÇÃO. Substituído
+    por duas medições: (a) precedente em origin/main — lancamento-board.tsx:1 é "use client"
+    e exporta initials(:38)/avatarBg(:41)/formatDue(:59); (b) nenhuma aresta nova para
+    código de servidor — o único importador de print-modal é brindes-table.tsx:13, ele
+    mesmo "use client", e os 4 exports novos têm zero consumidores fora do teste.
+
+top_issues:
+  - id: 'SEC-002'
+    severity: low
+    finding: >-
+      A régua da AC6 prende a PRESENÇA de `escapeHtml(`, não a SUFICIÊNCIA do contexto.
+      Medido pelo @qa (QM4): um sítio novo escapado dentro de atributo SEM aspas passa
+      VERDE emitindo `onmouseover=alert(1)` vivo. Nenhum sítio de hoje está em atributo —
+      não é vulnerabilidade viva, é falso-verde para o próximo autor.
+    suggested_action: >-
+      Backlog: escape por contexto (atributo/URL/JS) ou uma régua que proíba `${` fora de
+      contexto de texto dentro de buildPrintHtml. Não bloqueia esta story.
+  - id: 'TEST-002'
+    severity: low
+    finding: >-
+      `startsWith("escapeHtml(")` é driblável por concatenação — medido pelo @qa (QM5):
+      `${escapeHtml(a) + b}` passa VERDE com `b` cru. É o desenho literal do AC6 item 3,
+      cravado pelo @po, não uma divergência do @dev.
+    suggested_action: 'Mesmo backlog do SEC-002 — endurecer a régua para exigir que a expressão INTEIRA seja uma chamada de escape.'
+  - id: 'MNT-001'
+    severity: low
+    finding: >-
+      A régua varre só o recorte de `buildPrintHtml`. HTML montado em outra função e passado
+      a `document.write` não é visto. Hoje `win.document.write(html)` (print-modal.tsx:266)
+      recebe exclusivamente a saída de `buildPrintHtml`, e `document.write(` tem 1 único
+      sítio de código em toda a app — reconfirmado pelo @qa.
+    suggested_action: 'Aceito como residual. Se um segundo document.write nascer, a régua precisa nascer com ele.'
+
+fora_do_escopo_desta_story:
+  - id: 'ENV-001'
+    severity: high
+    finding: >-
+      `packages/web/.env.local` EXISTE nesta máquina (807 bytes, 30/07, anterior à Story
+      900-3b), aponta para o Supabase de PRODUÇÃO (dsopqkqjkmhytudaaolv) e carrega
+      SUPABASE_SERVICE_ROLE_KEY. `.env.local` vence qualquer outro arquivo de env no Next,
+      e `packages/web/.env.development` NÃO existe — ou seja, `pnpm dev` nesta máquina roda
+      contra PRODUÇÃO, exatamente o risco que o CLAUDE.md declara eliminado ("`.env.local`
+      não existe mais").
+    suggested_action: >-
+      @devops: renomear/remover o arquivo e criar packages/web/.env.development a partir do
+      .example. NÃO é achado desta story — é estado da máquina, e foi encontrado por
+      acidente ao tentar rodar `next build`.
+
+recommendations:
+  immediate: []
+  future:
+    - 'Story de escape por contexto (atributo/URL/JS) fechando SEC-002 + TEST-002.'
+    - 'Se um segundo `document.write` aparecer na app, a régua de alcance tem que cobri-lo (MNT-001).'
+
+decisao_sobre_os_2_it_extras: >-
+  MANTER. Não é escopo excedido: em QM2 o `it` "nenhum perdão declarado está morto" ficou
+  VERMELHO junto com o sinal de vida, por mecanismo INDEPENDENTE — é um segundo detector do
+  recorte sabotado, que é o modo de falha nº 1 dessa régua. O `it` do motivo não-vazio guarda
+  a única propriedade que o `Record<string, string>` não guarda (aceita `""`). 8 linhas.
+
+waiver: { active: false }
