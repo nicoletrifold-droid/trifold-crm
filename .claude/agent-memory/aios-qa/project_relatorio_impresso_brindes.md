@@ -1,6 +1,6 @@
 ---
 name: relatorio-impresso-brindes
-description: print-modal.tsx de brindes é o ÚNICO arquivo da app com document.write — XSS same-origin real, não cosmético; e como medir a folha A4 de verdade (largura útil 673,5px)
+description: print-modal.tsx de brindes é o ÚNICO arquivo da app com document.write — XSS same-origin real (fechado na 75-373, com 2 furos medidos na régua); e como medir a folha A4 de verdade (largura útil 673,5px)
 metadata:
   type: project
 ---
@@ -21,6 +21,29 @@ então é MEDIUM e escalada lateral, não vetor anônimo. `escapeHtml` **não ex
 **How to apply:** se alguém propor "escapar só o campo novo", recuse — não fecha o vetor. O
 conserto é um helper de ~4 linhas + os 6 call sites, tudo dentro deste arquivo. Aceitável como
 dívida num gate de escopo mínimo, mas exigindo redação honesta do impacto e story própria.
+
+## FECHADO na Story 75-373 (gate PASS, 2026-09-04) — e os 2 furos que sobraram, medidos
+
+`escapeHtml` agora existe, **local e exportado em `print-modal.tsx`** (não em `lib/`), e cobre
+**9** sítios (os 6 da linha + `titulo` na origem, cobrindo `<title>` e `<h1>` + rótulos de filtro
++ `resumo`). `brinde-tamanho.ts` ficou **intocado de propósito**: `buildTamanhoOptions` do mesmo
+módulo alimenta `<option value>` comparado por **igualdade exata** contra o banco — escapar lá
+quebraria o filtro por tamanho com `&`.
+
+A régua de alcance (`print-modal.test.ts`) exige que toda interpolação do recorte de
+`buildPrintHtml` esteja em `SEGURAS_DECLARADAS` (14, com motivo) **ou** comece com `escapeHtml(`,
+com sinal de vida cravado em **25 interpolações / 23 únicas**. **Dois furos que eu medi e que
+ficam VERDES** — nenhum é vulnerabilidade viva hoje, mas os dois enganam o próximo autor:
+1. **Atributo sem aspas.** `data-x=${escapeHtml(d.nome)}` passa 22/22 emitindo
+   `onmouseover=alert(1)` vivo. `escapeHtml` cobre `"`/`'`, logo atributo **com** aspas é seguro;
+   sem aspas e contexto de URL (`javascript:`) não são cobertos por escape de HTML.
+2. **Concatenação.** `${escapeHtml(a) + b}` passa porque a régua é `startsWith("escapeHtml(")`.
+Registrados como `SEC-002`/`TEST-002` (low) no gate `docs/qa/gates/75-373-*.yml`.
+
+O único perdão que libera **dado cru** é `TIPO_LABEL[d.tipo] ?? d.tipo`, e é legítimo: `CHECK
+(tipo IN ('mae','pai','outro'))` em `031_controle_brindes.sql:36` intacto **mais** validação de
+aplicação nos 3 endpoints de escrita (`destinatarios/route.ts:87`, `[id]/route.ts:31`,
+`import/route.ts:49`).
 
 ## Medir a folha A4 de verdade (AC de layout de impressão)
 
