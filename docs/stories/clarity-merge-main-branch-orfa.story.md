@@ -1,6 +1,6 @@
 # Story (Hotfix/Infra) — Resgatar Microsoft Clarity da branch órfã e trazer pra `main`
 
-**Status:** InReview
+**Status:** Done
 **Tipo:** Hotfix / Git hygiene / Infra-Deploy
 **Epic:** N/A (avulsa — achado operacional do @devops durante deploy da Story 90-1, não é trabalho de SEO)
 **Complexidade:** XS (nenhuma lógica nova — reconstituir 3 trechos já conhecidos e comprovadamente em produção; o trabalho real é git hygiene, não desenvolvimento)
@@ -412,5 +412,15 @@ Provas byte a byte, não só presença (produção **já** tinha o Clarity antes
 
 Ambos os deploys eram **no-op de conteúdo** por desenho — o objetivo era eliminar a divergência entre produção e o versionado, não mudar o site. É por isso que a prova relevante é "servido == fonte mergeada", e não "algo mudou".
 
-### Por que continua `InReview` e não `Done`
+### Fechamento (2026-09-04) — `Done`
+
+Ciclo completo. `docs(story)` do registro de deploy mergeado em `main` como `8e04dccb` (PR #578).
+
+**Branch órfã `feat/86-12-yarden-conteudo-definitivo` (AC4) — remota DELETADA.** Conferência que fiz antes de apagar, contra a `main` **já com os dois merges**: nenhum PR foi jamais aberto a partir dela (é órfã de fato, não uma branch de PR esquecida); dos 33 arquivos tocados desde o merge-base `412eb2cf`, **27 são byte-a-byte idênticos** a `main` (subiu de 24 para 27 porque os 3 do Clarity agora estão lá) e **6 divergem, com `main` estritamente à frente** em todos — o trabalho deles chegou por outras rotas (PR #553 e o fix do webhook). O número que decide é **0 arquivos ausentes de `main`**: não há nada na branch que não exista em `main`. Ref recuperável: `b4e7c8d3`.
+
+**A branch LOCAL continua existindo, de propósito.** Ela é o `HEAD` ativo da checkout principal (`/Users/lucasprado/trifold-crm`), que tem **30 arquivos modificados e 58 untracked** de trabalho em andamento de outros agentes (Epic 90). `git branch -D` é recusado pelo git nesse estado, e forçar exigiria trocar o branch da checkout alheia — risco desnecessário para um ganho nulo, já que a deleção da remota é o que impede alguém de partir dela. Apagar a local quando a checkout principal estiver livre.
+
+**Resposta ao apontamento do CodeRabbit no PR #578** (o registro provaria só a paridade dos arquivos versionados, não a procedência dos gitignored `assets/`/`uploads/`): a objeção é válida em tese e fica respondida por medição — o HTML servido é **bit a bit idêntico antes e depois** dos dois deploys (`trifold.eng.br/` = `3aa57eaabcc4628b`, `vind-residence.vercel.app/` = `b420fc898adf0be5`, medidos antes de publicar e de novo depois). Sendo a saída idêntica, os inputs gitignored não introduziram nada — a procedência deles não pôde afetar o resultado. Isso confirma, por medição, que os dois deploys foram **no-op de conteúdo**, que era exatamente o objetivo.
+
+### Continua fora de escopo (não fechado por esta story)
 `Done` é decisão do usuário. Segue em aberto: deleção da branch órfã `feat/86-12-yarden-conteudo-definitivo` (AC4 — o @qa provou que é seguro: dos 33 arquivos, 24 idênticos a `main`, 3 capturados por este PR, 6 onde `main` está à frente) e os débitos já registrados em Out of Scope (consentimento do Clarity, sessões de bot do Playwright).
