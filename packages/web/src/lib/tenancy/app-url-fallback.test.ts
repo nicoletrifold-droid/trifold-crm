@@ -25,7 +25,7 @@
  *    nu**, no arquivo inteiro como texto: não há aspa nem quebra de linha que a driblem.
  * 3. **O nome do arquivo perdoando o sítio que mora nele.** Achado do gate (QA-900-66-1) e MEDIDO:
  *    um conjunto de NOMES fica verde quando o defeito exato que esta story fecha — o literal cru
- *    de volta — cai num arquivo que já estava na lista por outro motivo. Dois dos seis declarados
+ *    de volta — cai num arquivo que já estava na lista por outro motivo. Dois dos sete declarados
  *    hospedam sítios migrados (`lib/notificacoes.ts` ×3, `billing-reminders` ×1): eram 4 dos 29
  *    sítios descobertos, e são justamente os avisos ao CLIENTE FINAL. Daí a CONTAGEM ao lado de
  *    cada nome — o perdão é do literal declarado, nunca do arquivo.
@@ -173,11 +173,20 @@ const MODULO = "lib/tenancy/app-url-fallback.ts"
 /**
  * Os arquivos de produção que AINDA contêm o host, **quantas vezes cada um**, e por que pode.
  *
- * Cinco vêm da tabela "O que fica FORA" da story, um por linha dela. O sexto é o módulo criado
- * por esta story — a **única declaração** do literal, que é o ponto: o valor passou a ter um dono.
+ * São **sete**, em três famílias, e cada entrada abaixo carrega o motivo do seu próprio perdão:
+ * cinco vêm da tabela "O que fica FORA" da Story 900-66, um por linha dela; o sexto é o módulo
+ * criado por ela — a **única declaração** do literal, que é o ponto: o valor passou a ter um dono;
+ * o sétimo é a denylist de segurança `HOSTS_DE_TENANT` da Story 900-65, que não é candidata a
+ * migrar para o resolver (o motivo mora na entrada).
  *
  * ⚠️ A AC10.4 listou cinco, porque foi escrita antes de o resolver existir. O sexto não é uma
  * exclusão a mais: é o destino para onde os 28 literais migraram. Registrado no Dev Agent Record.
+ *
+ * ⚠️ O sétimo entrou depois, pela Story 900-68: `lib/tenancy/papel-do-host.ts` (PR #569) foi
+ * mergeado DEPOIS desta régua (PR #565) e deixou `main` vermelha — que é exatamente o serviço que
+ * a AC10 presta. A régua estava certa; faltava declarar o arquivo novo. Se um oitavo aparecer, o
+ * caminho é o mesmo: declarar aqui, com o motivo, e nunca afrouxar a asserção — um cabeçalho que
+ * conta errado é o primeiro passo para alguém "arrumar" o mapa apagando a entrada que sobra.
  *
  * ⚠️ É um MAPA, não uma lista, por causa da cegueira 3 do cabeçalho: `lib/notificacoes.ts` e
  * `billing-reminders` hospedam sítios JÁ migrados, e sob uma lista de nomes o literal cru podia
@@ -202,6 +211,13 @@ const RESIDUAL_DECLARADO: Record<string, number> = {
   "app/broker/instalar/page.tsx": 3,
   // Linha 6: texto exibido no passo a passo de cadastro de corretor.
   "app/dashboard/configuracoes/corretores/novo/page.tsx": 1,
+  // Story 900-65: aqui o literal está dentro de `HOSTS_DE_TENANT`, uma DENYLIST DE SEGURANÇA —
+  // hosts de inquilino que NUNCA podem ser promovidos a host de console admin, nem que
+  // `PLATFORM_ADMIN_HOSTS` mande. É lista estática, avaliada em import-time, e responde à pergunta
+  // oposta à do resolver ("quais hosts nunca viram admin?" vs. "para onde mando quem não tem
+  // URL?"): não é candidata a consumir `tentarAppUrl`. As outras 3 ocorrências do arquivo estão em
+  // JSDoc e `linhasDeCodigo()` as descarta — por isso 1, e não "o arquivo está perdoado".
+  "lib/tenancy/papel-do-host.ts": 1,
 }
 
 describe("AC10 — nenhum sítio de fallback ficou para trás", () => {
@@ -219,8 +235,8 @@ describe("AC10 — nenhum sítio de fallback ficou para trás", () => {
     expect(arquivos.length).toBeGreaterThan(100)
   })
 
-  it("a lista declarada tem exatamente os seis arquivos autorizados", () => {
-    expect(Object.keys(RESIDUAL_DECLARADO)).toHaveLength(6)
+  it("a lista declarada tem exatamente os sete arquivos autorizados", () => {
+    expect(Object.keys(RESIDUAL_DECLARADO)).toHaveLength(7)
   })
 
   it("o residual é EXATAMENTE o declarado — arquivo E contagem", () => {
