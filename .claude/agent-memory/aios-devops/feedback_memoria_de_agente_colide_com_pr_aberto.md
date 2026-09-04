@@ -28,7 +28,15 @@ existia para desbloquear. Sem as memórias, o merge contra o #570 é limpo (`mer
   ```
   `git merge-tree --messages` imprime `CONFLICT (content)` com o nome de cada arquivo. É prova,
   não estimativa — e não precisa de worktree.
-- **Se conflitar, exclua a categoria inteira** do PR (não faça stage parcial de arquivo novo sem
+- **Rode o CONTROLE antes de concluir qualquer coisa** (refinamento de 2026-09-04, PR #576):
+  simule também `main` × `<head-do-outro-PR>` **sem** as suas memórias. Se o conflito já aparece
+  aí, ele é **pré-existente** — a outra branch é que está velha — e tirar a sua memória do PR
+  **não compra nada**, só deixa memória órfã na árvore. Medido: controle `main` × `e571aeeb`
+  (#518, branch de memória de 87-17/87-18) → exit 1, 1 `CONFLICT` em `aios-devops/MEMORY.md`; com
+  a minha leva → exit 1, **o mesmo e único** conflito. Incluí a leva e declarei a tabela dos dois
+  exits no corpo do PR. A regra abaixo (excluir) vale quando a simulação mostra conflito que
+  **só existe por causa da sua leva**.
+- **Se conflitar por sua causa, exclua a categoria inteira** do PR (não faça stage parcial de arquivo novo sem
   a linha de índice — memória sem entrada no `MEMORY.md` é memória morta). Declare no corpo do PR
   o que ficou de fora, com a saída medida do `merge-tree`, e mande num `chore(memory)` próprio
   depois que o outro PR mergear.
