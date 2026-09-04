@@ -14,6 +14,9 @@
 - [landing-pages/* runtime](project_landing_pages_runtime.md) — projetos Vercel standalone: sem bundler, deploy manual, um tracked e outro não, e o trap de IP via proxy
 - [Carrasco declarado é afirmação testável](feedback_carrasco_declarado_e_afirmacao.md) — rode a mutação antes de escrever a frase; `try/catch` e `if (error)` são metades distintas
 - [Webhook WhatsApp: texto sintético vira fala do lead](project_webhook_whatsapp_texto_sintetico.md) — o `text` montado pelo webhook é enviado ao cliente pela Nicole; duas flags, não uma
+- [Prova de filtro e de layout](feedback_prova_de_filtro_e_de_layout.md) — `.eq` em embed sem `!inner` não filtra nada; A4 se mede, não se olha
+- [Sem ambiente de teste neste checkout](project_env_sem_ambiente_de_teste.md) — `packages/web/.env.local` aponta para PRODUÇÃO, contra o que o CLAUDE.md diz
+- [Nota de dívida calibrada](feedback_nota_de_divida_calibrada.md) — mecânica sem consequência+pré-condições subdimensiona; meça o alcance antes de dizer "fora de alcance"
 
 ## Key Patterns
 

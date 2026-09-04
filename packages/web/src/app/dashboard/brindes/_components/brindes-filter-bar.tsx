@@ -9,15 +9,19 @@ export interface BrindesFilters {
   nome: string
   cidade: string
   estado: string
+  /** Story 75-372: tamanho do brinde do cadastro (`brindes_tipos.tamanho`). */
+  tamanho: string
 }
 
 interface FilterBarProps {
   filters: BrindesFilters
   onFiltersChange: (f: BrindesFilters) => void
   obraOptions: string[]
+  /** Valores distintos de `brindes_tipos.tamanho` do catálogo, já ordenados. */
+  tamanhoOptions: string[]
 }
 
-export function BrindesFilterBar({ filters, onFiltersChange, obraOptions }: FilterBarProps) {
+export function BrindesFilterBar({ filters, onFiltersChange, obraOptions, tamanhoOptions }: FilterBarProps) {
   const [localNome, setLocalNome] = useState(filters.nome)
   const [localCidade, setLocalCidade] = useState(filters.cidade)
 
@@ -45,10 +49,11 @@ export function BrindesFilterBar({ filters, onFiltersChange, obraOptions }: Filt
   function clear() {
     setLocalNome("")
     setLocalCidade("")
-    onFiltersChange({ obra_nome: "", tipo: "", nome: "", cidade: "", estado: "" })
+    onFiltersChange({ obra_nome: "", tipo: "", nome: "", cidade: "", estado: "", tamanho: "" })
   }
 
-  const hasFilters = filters.obra_nome || filters.tipo || filters.nome || filters.cidade || filters.estado
+  const hasFilters =
+    filters.obra_nome || filters.tipo || filters.nome || filters.cidade || filters.estado || filters.tamanho
 
   return (
     <div className="flex flex-wrap items-end gap-2">
@@ -112,6 +117,20 @@ export function BrindesFilterBar({ filters, onFiltersChange, obraOptions }: Filt
           <option value="">UF</option>
           {UF_OPTIONS.map((uf) => (
             <option key={uf} value={uf}>{uf}</option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-stone-400">Tamanho</label>
+        <select
+          value={filters.tamanho}
+          onChange={(e) => onFiltersChange({ ...filters, tamanho: e.target.value })}
+          className="rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
+        >
+          <option value="">Todos</option>
+          {tamanhoOptions.map((t) => (
+            <option key={t} value={t}>{t}</option>
           ))}
         </select>
       </div>
