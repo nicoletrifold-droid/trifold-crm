@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { sendEmail } from "@web/lib/email"
 import { renderBaseLayout, renderButton } from "@web/lib/email-layout"
+import { tentarAppUrl } from "@web/lib/tenancy/app-url-fallback"
 
 const CRON_SECRET = process.env.CRON_SECRET
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://crm.trifold.eng.br"
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization")
@@ -71,7 +71,6 @@ export async function GET(request: NextRequest) {
 
       const propertyName = property?.name ?? ""
       const leadName = lead?.name ?? "Lead"
-      const cancelUrl = `${siteUrl}/agendar/cancelar/${appointment.cancel_token}`
 
       // E-mail ao corretor
       if (broker?.email) {
@@ -80,7 +79,7 @@ export async function GET(request: NextRequest) {
           <p>Passando para lembrar que você tem uma visita ao decorado <strong>${propertyName}</strong> agendada para amanhã, <strong>${data}</strong>, às <strong>${hora}</strong>, com <strong>${leadName}</strong>.</p>
           <p><strong>Endereço:</strong> Av. Nildo Ribeiro, 1337 - Maringá - PR</p>
           <p>Até lá! ☕</p>`,
-          { orgName: "Trifold" }
+          { orgName: "Trifold", orgId: appointment.org_id }
         )
         const result = await sendEmail({
           to: broker.email,
@@ -93,7 +92,16 @@ export async function GET(request: NextRequest) {
       }
 
       // E-mail ao lead
-      if (lead?.email) {
+      // Story 900-66 (AC4) — só o e-mail AO LEAD carrega link (o botão de cancelar). Sem URL
+      // base ele NÃO sai; o lembrete ao corretor acima, que não tem link, continua saindo, e os
+      // demais compromissos do laço seguem.
+      const baseCancel = lead?.email
+        ? tentarAppUrl(process.env.NEXT_PUBLIC_SITE_URL, "cron/appointment-email-reminders", {
+            orgId: appointment.org_id,
+          })
+        : { ok: false as const }
+      if (lead?.email && baseCancel.ok) {
+        const cancelUrl = `${baseCancel.url}/agendar/cancelar/${appointment.cancel_token}`
         const cancelButtonHtml = renderButton("Cancelar compromisso", cancelUrl)
         const leadHtml = renderBaseLayout(
           `<p>Olá, ${leadName}!</p>
@@ -101,7 +109,7 @@ export async function GET(request: NextRequest) {
           <p><strong>Endereço:</strong> Av. Nildo Ribeiro, 1337 - Maringá - PR</p>
           <p>Te esperamos com muito carinho! Em caso de dúvidas, é só responder este e-mail. ☕</p>
           <p style="margin-top:16px">${cancelButtonHtml}</p>`,
-          { orgName: "Trifold" }
+          { orgName: "Trifold", orgId: appointment.org_id }
         )
         const result = await sendEmail({
           to: lead.email,

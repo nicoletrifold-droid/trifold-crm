@@ -42,3 +42,7 @@
 - [Commit de outro agente direto em main local](feedback_mover_commit_de_main_local_para_branch.md) — `switch -c` + `branch -f main`; `reset --hard` apaga o gate do @qa que ainda não foi commitado
 - [Story fatiada fica InProgress](feedback_story_fatiada_status_inprogress.md) — autorização é `next_action` + `must_fix: []` do gate, não o status; diga no PR o que a fatia NÃO conserta
 - [`.agents/` + skills-lock.json](project_agents_dir_skill_installer.md) — instalador de skill de terceiro (symlink em `.claude/skills/`); não é lixo nem escopo da branch — deixar untracked
+- [Main vermelha por colisão 900-65/900-66](project_main_vermelha_900_65_66.md) — RESOLVIDO pelo #572; teste de lista fechada (#565) x arquivo novo (#569); ❌ da CI não é do PR
+- [Memória de agente colide com PR aberto](feedback_memoria_de_agente_colide_com_pr_aberto.md) — `MEMORY.md` é índice append-only: simule com `merge-tree` + índice temporário antes de stageer `.claude/agent-memory/`
+- [Corpo do PR pode estar no gate](reference_corpo_do_pr_no_gate.md) — campo `corpo_do_pr` do `docs/qa/gates/*.yml`; nem todo gate tem (75-373 não tinha), confira antes de compor
+- [main sem branch protection](reference_main_sem_branch_protection.md) — nao ha required check no GitHub; `gh pr merge` aceita UNSTABLE, a trava e o julgamento do agente

@@ -2,6 +2,7 @@ import "server-only"
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { sendPushToUser } from "@web/lib/server/push-service"
+import { tentarAppUrl } from "@web/lib/tenancy/app-url-fallback"
 
 // Story 75-86 — Push aos gerentes de relacionamento (Samara) quando um cliente
 // responde numa conversa JÁ marcada como relacionamento (o 1º roteamento da Nicole
@@ -10,7 +11,6 @@ import { sendPushToUser } from "@web/lib/server/push-service"
 // Push-only (sendPushToUser direto — sem email/WhatsApp). Best-effort: NUNCA lança;
 // uma falha aqui não pode afetar o webhook/pipeline.
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://crm.trifold.eng.br"
 
 export interface NotifyRelationshipParams {
   /** Admin client por parâmetro (facilita testes). */
@@ -51,7 +51,13 @@ export async function notifyRelationshipOnReply(
 
     if (!managers?.length) return
 
-    const payload = buildRelationshipPushPayload({ contactName, messageExcerpt, appUrl: APP_URL, conversationId })
+    // Story 900-66 (AC4) — o push É um deep link para a conversa; sem URL base ele não sai.
+    const base = tentarAppUrl(process.env.NEXT_PUBLIC_APP_URL, "lib/relacionamento/notify-relationship-on-reply", {
+      orgId,
+      conversationId,
+    })
+    if (!base.ok) return
+    const payload = buildRelationshipPushPayload({ contactName, messageExcerpt, appUrl: base.url, conversationId })
     await Promise.all(
       (managers as Array<{ id: string }>).map((m) =>
         sendPushToUser(supabase, m.id, payload).catch((e: unknown) =>

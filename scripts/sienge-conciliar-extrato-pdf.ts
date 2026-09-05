@@ -68,7 +68,7 @@ if (envFile && !loadEnv(resolve(envFile))) {
   process.exit(1)
 }
 // Complementa: variáveis "sensitive" voltam vazias do `vercel env pull`.
-loadEnv(resolve(__dirname, "../packages/web/.env.local"))
+loadEnv(resolve(__dirname, "../packages/web/.env.producao.local"))
 
 const REQUIRED = ["SIENGE_SUBDOMAIN", "SIENGE_USERNAME", "SIENGE_PASSWORD"]
 const missing = REQUIRED.filter((k) => !process.env[k])

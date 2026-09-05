@@ -4,6 +4,7 @@ import { sendPushToUser } from "@web/lib/server/push-service"
 import { logWhatsappSend } from "@web/lib/whatsapp/log-send"
 import { logFinancialNotification, marcoToTipo } from "@web/lib/financeiro/log-financial-notification"
 import { roleEligibleForCapability } from "@web/lib/capabilities"
+import { tentarAppUrl } from "@web/lib/tenancy/app-url-fallback"
 
 // Janela de coalescing anti-flood. Dentro dela, só o 1º evento do mesmo GRUPO (ver
 // COALESCE_GROUP) dispara envio; os demais são suprimidos (o cliente vê tudo no portal).
@@ -229,9 +230,13 @@ export async function notifyClientes(
 
     const prefKey = EVENTO_PREF_KEY[evento] as keyof NotifPrefs
     const descricao = EVENTO_LABEL[evento]
-    const appUrl =
-      process.env.NEXT_PUBLIC_APP_URL ?? "https://crm.trifold.eng.br"
-    const link = `${appUrl}/cliente/${obraId}`
+    // Story 900-66 (AC4) — sem URL base, nenhum dos 3 canais sai: o link é o corpo do aviso.
+    // `return` é o mesmo desfecho que a pausa do portal já usa acima.
+    const base = tentarAppUrl(process.env.NEXT_PUBLIC_APP_URL, "lib/notificacoes:notifyClientes", {
+      obraId,
+    })
+    if (!base.ok) return
+    const link = `${base.url}/cliente/${obraId}`
 
     for (const user of usersRes.data ?? []) {
       // Story 20.9 (AC 7): pula clientes em distrato nesta obra (todos os
@@ -269,7 +274,7 @@ export async function notifyClientes(
         sendPushToUser(admin, user.id, {
           title: descricao,
           body: `Atualização em ${obraName}`,
-          url: `${appUrl}/cliente/${obraId}${EVENTO_URL_PATH[evento]}`,
+          url: `${base.url}/cliente/${obraId}${EVENTO_URL_PATH[evento]}`,
         }).catch((err) => console.error("[notificacoes] push error:", err))
       }
     }
@@ -315,8 +320,13 @@ export async function notifyNovoBoleto(params: NovoBoletoParams): Promise<void> 
       .maybeSingle()
     const pref = (prefRow as Pick<NotifPrefs, "email_enabled" | "whatsapp_enabled" | "push_enabled"> | null) ?? DEFAULT_PREFS
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://crm.trifold.eng.br"
-    const link = `${appUrl}/cliente/boleto/${obraId}`
+    // Story 900-66 (AC4) — sem URL base o aviso de boleto não sai por canal nenhum.
+    const base = tentarAppUrl(process.env.NEXT_PUBLIC_APP_URL, "lib/notificacoes:notifyNovoBoleto", {
+      orgId,
+      obraId,
+    })
+    if (!base.ok) return
+    const link = `${base.url}/cliente/boleto/${obraId}`
 
     // Log financeiro (Notificações Financeiras) — 1 linha por canal disparado.
     const logFin = (canal: "whatsapp" | "email" | "push", status: "sent" | "failed", detail?: string) =>
@@ -426,8 +436,13 @@ export async function notifyBoletoLembrete(params: BoletoLembreteParams): Promis
       .maybeSingle()
     const pref = (prefRow as Pick<NotifPrefs, "email_enabled" | "whatsapp_enabled" | "push_enabled"> | null) ?? DEFAULT_PREFS
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://crm.trifold.eng.br"
-    const link = `${appUrl}/cliente/boleto/${obraId}`
+    // Story 900-66 (AC4) — sem URL base o lembrete de boleto não sai por canal nenhum.
+    const base = tentarAppUrl(process.env.NEXT_PUBLIC_APP_URL, "lib/notificacoes:notifyBoletoLembrete", {
+      orgId,
+      obraId,
+    })
+    if (!base.ok) return
+    const link = `${base.url}/cliente/boleto/${obraId}`
     const copy = lembreteCopy(marco, quantidade)
 
     // Log financeiro (Notificações Financeiras) — 1 linha por canal disparado.

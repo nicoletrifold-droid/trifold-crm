@@ -4,13 +4,13 @@ import { createAdminClient } from "@web/lib/supabase/admin"
 import { syncFutureVisitsWithLeadOwner } from "@web/lib/appointments/sync-visit-owner"
 import { sendPushToUser } from "@web/lib/server/push-service"
 import { leadDeepLink } from "@web/lib/leads/lead-url"
+import { tentarAppUrl } from "@web/lib/tenancy/app-url-fallback"
 
 // Story 75-84 (Epic 75) — admin/supervisor transfere a conversa de um lead para outro
 // usuário (corretor OU atendente de chat). Reatribui o dono (assigned_broker_id), roteia
 // a conversa (corretor → /broker; chat → /dashboard/chat via is_relationship), registra o
 // motivo (obrigatório) em activities e notifica o destino por push.
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://crm.trifold.eng.br"
 
 export async function POST(
   request: NextRequest,
@@ -100,12 +100,21 @@ export async function POST(
     metadata: { from_user_id: lead.assigned_broker_id, to_user_id: targetUserId, motivo },
   })
 
-  const url = isRelationship ? `${APP_URL}/dashboard/chat` : leadDeepLink(APP_URL, target.role as string, id)
-  void sendPushToUser(admin, targetUserId, {
-    title: "Conversa transferida para você",
-    body: `${lead.name ?? "Um lead"} foi transferido para você. Motivo: ${motivo}`,
-    url,
-  }).catch((e: unknown) => console.error("[transferir] push:", e))
+  // Story 900-66 (AC4) — sem URL base o push não sai; a transferência já foi gravada e a
+  // resposta não muda (o push sempre foi best-effort).
+  const base = tentarAppUrl(process.env.NEXT_PUBLIC_APP_URL, "api/leads/[id]/transferir", {
+    orgId: lead.org_id,
+  })
+  if (base.ok) {
+    const url = isRelationship
+      ? `${base.url}/dashboard/chat`
+      : leadDeepLink(base.url, target.role as string, id)
+    void sendPushToUser(admin, targetUserId, {
+      title: "Conversa transferida para você",
+      body: `${lead.name ?? "Um lead"} foi transferido para você. Motivo: ${motivo}`,
+      url,
+    }).catch((e: unknown) => console.error("[transferir] push:", e))
+  }
 
   return NextResponse.json({ ok: true, isRelationship })
 }

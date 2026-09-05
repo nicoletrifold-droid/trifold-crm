@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { sendPushToUser } from "@web/lib/server/push-service"
 import { brokerSentRecently } from "@web/lib/broker/broker-takeover-status"
 import { leadDeepLink } from "@web/lib/leads/lead-url"
+import { tentarAppUrl } from "@web/lib/tenancy/app-url-fallback"
 
 /**
  * Story 63-12 (Epic 63) — Push ao corretor quando o lead responde + deep-link.
@@ -99,8 +100,10 @@ export async function notifyBrokerOnReply(
     if (!brokerSentRecently(brokerMsgs ?? [])) return
 
     // 3. Enviar push (Q2 — sem debounce: 1 push por inbound; sem mutar metadata).
-    const appUrl =
-      process.env.NEXT_PUBLIC_APP_URL ?? "https://crm.trifold.eng.br"
+    // Story 900-66 (AC4) — o push É um deep link para a conversa; sem URL base ele não sai.
+    const base = tentarAppUrl(process.env.NEXT_PUBLIC_APP_URL, "lib/broker/notify-on-reply", { leadId })
+    if (!base.ok) return
+    const appUrl = base.url
     const owner = Array.isArray(lead.owner) ? lead.owner[0] : lead.owner
     const payload = buildReplyPushPayload({
       leadName: (lead.name as string | null) ?? null,

@@ -3,6 +3,7 @@ import { requireAuth, requireCapability } from "@web/lib/api-auth"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { sendEmail } from "@web/lib/email"
 import { renderPasswordActionEmail } from "@web/lib/email-layout"
+import { tentarAppUrl } from "@web/lib/tenancy/app-url-fallback"
 
 export async function POST(
   _request: NextRequest,
@@ -28,7 +29,19 @@ export async function POST(
     return NextResponse.json({ error: "Usuário não encontrado." }, { status: 404 })
   }
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://crm.trifold.eng.br"
+  // Story 900-66 (AC4) — rota staff-autenticada e síncrona: sem URL base o e-mail NÃO sai, e a
+  // resposta diz por quê. Resolvido ANTES de criar conta no Auth: falhar depois deixaria um
+  // usuário criado sem o convite que justificava a criação.
+  const base = tentarAppUrl(process.env.NEXT_PUBLIC_SITE_URL, "api/users/[id]/reset-password", {
+    orgId: appUser.org_id,
+  })
+  if (!base.ok) {
+    return NextResponse.json(
+      { error: "URL da aplicação indisponível para esta organização — e-mail não enviado." },
+      { status: 503 }
+    )
+  }
+  const siteUrl = base.url
   const adminSupabase = createAdminClient()
 
   // Usuário sem auth_id (fluxo legado) — cria conta no Supabase Auth antes de gerar o link.
@@ -70,6 +83,7 @@ export async function POST(
     actionLink,
     siteUrl,
     mode: "reset",
+    orgId: appUser.org_id,
   })
 
   await sendEmail({

@@ -45,8 +45,18 @@ vi.mock("next/link", () => ({
   default: ({ children, ...resto }: Record<string, unknown> & { children?: unknown }) =>
     createElement("a", resto as Record<string, unknown>, children as never),
 }))
+// Story 900-64 (AC13) — o mock repassa `className`. Enquanto ele só repassava `src`/`alt`, a
+// classe NUNCA chegava ao HTML: uma asserção "o logo do cliente não tem `brightness-0`" passaria
+// idêntica com a `className` deixada incondicional no componente. A régua nasceria verde
+// desligada. A contraprova está registrada no Dev Agent Record da story.
+//
+// `onError` continua sendo descartado, e isso é uma LACUNA NOMEADA (AC4): `renderToStaticMarkup`
+// não executa handler de evento, então nem repassá-lo produziria carrasco. A EXECUÇÃO da fiação
+// `onError → setImgFailed → resolveSidebarBrand` segue sem carrasco neste arquivo; o que ganhou
+// régua é a DELEÇÃO e a REALOCAÇÃO das duas linhas — ver o último `describe`, "(AC4 via AC12)".
 vi.mock("next/image", () => ({
-  default: ({ src, alt }: { src: string; alt: string }) => createElement("img", { src, alt }),
+  default: ({ src, alt, className }: { src: string; alt: string; className?: string }) =>
+    createElement("img", { src, alt, className }),
 }))
 vi.mock("next/navigation", () => ({ usePathname: () => "/dashboard" }))
 vi.mock("./logout-button", () => ({
@@ -62,13 +72,19 @@ const AQUI = path.dirname(fileURLToPath(import.meta.url))
 const SRC = path.resolve(AQUI, "../..") // packages/web/src
 const FONTE_DA_BARRA = path.join(SRC, "components/layout/sidebar-nav.tsx")
 const LAYOUT_DO_CRM = path.join(SRC, "app/dashboard/layout.tsx")
+// Story 900-64 — o SEGUNDO consumidor do componente. O arquivo só conhecia o do dashboard, e uma
+// régua que vigia um dos dois layouts deixa o outro sair sem props e sem vermelho.
+const LAYOUT_DO_CORRETOR = path.join(SRC, "app/broker/layout.tsx")
 
 const ITENS = [
   { href: "/dashboard", label: "Dashboard", icon: null },
   { href: "/dashboard/leads", label: "Leads", icon: null },
 ]
 
-function renderizar(atalho?: { href: string; label: string } | null): string {
+function renderizar(
+  atalho?: { href: string; label: string } | null,
+  marca?: { orgName?: string | null; orgLogoUrl?: string | null }
+): string {
   return renderToStaticMarkup(
     createElement(SidebarNav, {
       items: ITENS,
@@ -76,8 +92,22 @@ function renderizar(atalho?: { href: string; label: string } | null): string {
       userRole: "admin",
       basePath: "/dashboard",
       ...(atalho === undefined ? {} : { atalhoDoConsole: atalho }),
+      ...(marca ?? {}),
     })
   )
+}
+
+/**
+ * As tags `<img …>` do HTML, em ordem de documento: `[0]` é o da barra lateral do desktop,
+ * `[1]` é o da barra superior do mobile.
+ *
+ * Recortar a tag é o que impede a família de defeito de `toContain` sobre o documento inteiro:
+ * `not.toContain("brightness-0")` no HTML todo seria satisfeito por qualquer outro elemento da
+ * página, e `toContain("object-contain")` também. Quem chama afirma o COMPRIMENTO antes de
+ * indexar — um recorte que não achou nada nunca pode virar aprovação.
+ */
+function imagens(html: string): string[] {
+  return [...html.matchAll(/<img[^>]*>/g)].map((m) => m[0])
 }
 
 /** Quantas vezes `agulha` aparece em `texto`. */
@@ -195,5 +225,192 @@ describe("a ligação no layout do CRM — quem calcula o booleano", () => {
     expect(codigo).toContain('from "@web/lib/platform"')
     expect(codigo).not.toContain("lib/tenancy/platform-guard")
     expect(codigo).not.toContain("lib/tenancy/platform-query")
+  })
+})
+
+
+/**
+ * Story 900-64 — **a marca da empresa aparece no lugar da Trifold**, na barra lateral do CRM e do
+ * app do corretor. Login e e-mails transacionais continuam dizendo Trifold para toda empresa, por
+ * decisão declarada da story (a org só é conhecida DEPOIS do login; os 10 pontos de chamada de
+ * e-mail passam `orgName` literal). Nenhum resumo pode omitir esse qualificador.
+ *
+ * Estas asserções só medem alguma coisa porque o mock de `next/image` deste arquivo passou a
+ * repassar `className` (AC13). Antes disso a classe nunca chegava ao HTML.
+ */
+describe("Story 900-64 — sem logo da empresa, a marca é a da Trifold, byte a byte como hoje", () => {
+  const html = renderizar()
+
+  it("as duas imagens são o asset da Trifold, com as classes de filtro de HOJE", () => {
+    const imgs = imagens(html)
+    expect(imgs).toHaveLength(2) // fail-closed: sem as duas, nada abaixo mede o que diz medir
+    expect(imgs[0]).toBe(
+      '<img src="/logo-trifold.webp" alt="Trifold" class="brightness-0 dark:brightness-0 dark:invert"/>'
+    )
+    expect(imgs[1]).toBe(
+      '<img src="/logo-trifold.webp" alt="Trifold" class="dark:brightness-0 dark:invert"/>'
+    )
+  })
+
+  it("o rótulo de texto ao lado do logo continua na barra do mobile", () => {
+    expect(html).toContain(
+      '<span class="text-sm font-semibold text-stone-900 dark:text-stone-100">Trifold</span>'
+    )
+  })
+
+  it("a palavra aparece exatamente 3 vezes: os dois `alt` e o rótulo do mobile", () => {
+    // O par desta contagem é o `toBe(0)` do caso com logo. Uma sozinha não distingue "troquei a
+    // marca" de "apaguei a barra".
+    expect(html.length).toBeGreaterThan(500)
+    expect(ocorrencias(html, "Trifold")).toBe(3)
+  })
+
+  it.each([
+    ["string vazia", ""],
+    ["nulo", null],
+  ])("`orgLogoUrl` %s não é um logo: a barra segue com a marca da Trifold", (_rotulo, orgLogoUrl) => {
+    const semLogo = renderizar(null, { orgName: "Construtora Aurora", orgLogoUrl })
+    const imgs = imagens(semLogo)
+    expect(imgs).toHaveLength(2)
+    for (const img of imgs) expect(img).toContain('src="/logo-trifold.webp"')
+    expect(ocorrencias(semLogo, "Construtora Aurora")).toBe(0)
+  })
+})
+
+describe("Story 900-64 — com logo da empresa, a marca é a dela, sem filtro e dentro da caixa", () => {
+  const URL_DO_LOGO =
+    "https://xnxvygyfyyyzwhiuoehz.supabase.co/storage/v1/object/public/org-logos/aurora/logo.png?v=0123456789abcdef"
+  const html = renderizar(null, { orgName: "Construtora Aurora", orgLogoUrl: URL_DO_LOGO })
+
+  it("as duas imagens são o logo da empresa, com a trava de caixa e sem filtro monocromático", () => {
+    const imgs = imagens(html)
+    expect(imgs).toHaveLength(2)
+    expect(imgs[0]).toBe(
+      `<img src="${URL_DO_LOGO}" alt="Construtora Aurora" class="h-auto max-h-12 w-auto max-w-full object-contain"/>`
+    )
+    expect(imgs[1]).toBe(
+      `<img src="${URL_DO_LOGO}" alt="Construtora Aurora" class="h-auto max-h-8 w-auto max-w-32 object-contain"/>`
+    )
+  })
+
+  it("nenhuma das duas superfícies carrega `brightness-0`/`invert` — nem o desktop nem o mobile", () => {
+    // Repete o que o `toBe` acima já implica, de propósito e com outra duração de vida: aquele
+    // morre no dia em que a classe de caixa mudar, este continua reprovando o filtro que
+    // pintaria de preto o logo colorido de um cliente. O `dark:` do mobile foi o furo que quase
+    // sobreviveu à primeira versão da story.
+    const imgs = imagens(html)
+    expect(imgs).toHaveLength(2)
+    for (const [rotulo, img] of [
+      ["desktop", imgs[0]],
+      ["mobile", imgs[1]],
+    ] as const) {
+      expect(img, rotulo).not.toContain("brightness-0")
+      expect(img, rotulo).not.toContain("invert")
+      expect(img, rotulo).toContain("object-contain")
+    }
+    expect(imgs[0]).toContain("max-h-12") // 48 px dentro do contêiner `h-20` do desktop
+    expect(imgs[1]).toContain("max-h-8") //  32 px dentro do contêiner `h-14` do mobile
+  })
+
+  it("a marca da Trifold some do HTML inteiro — inclusive o rótulo de texto do mobile", () => {
+    expect(html.length).toBeGreaterThan(500) // vivacidade: HTML vazio também teria zero
+    expect(html).toContain("Marcos Teste")
+    expect(ocorrencias(html, "Trifold")).toBe(0)
+    expect(html).not.toContain(">Trifold</span>")
+  })
+
+  it("sem nome de empresa, o texto alternativo é genérico — nunca vazio", () => {
+    const semNome = renderizar(null, { orgName: null, orgLogoUrl: URL_DO_LOGO })
+    const imgs = imagens(semNome)
+    expect(imgs).toHaveLength(2)
+    for (const img of imgs) expect(img).toContain('alt="Logo da empresa"')
+  })
+})
+
+describe("Story 900-64 (AC12) — as DUAS ligações de layout", () => {
+  /**
+   * O elo que o render não alcança, pela mesma razão do `atalhoDoConsole` acima: os dois layouts
+   * são server components `async`. Sem esta régua, a mutação "o layout não passa prop nenhuma"
+   * deixa o helper e o componente VERDES e a story inteira invisível — exatamente o desfecho que
+   * ela existe para evitar.
+   *
+   * A asserção é sobre a EXPRESSÃO inteira, não sobre a presença do nome da prop: passar outra
+   * fonte de verdade (`user.name`, um literal) apaga a forma e reprova. O texto vem de
+   * `callSiteDe`/`ocorrenciasNoCodigo`, então nem um comentário citando a linha nem um segundo
+   * call site a satisfazem.
+   *
+   * Um `it` por layout de propósito: os conjuntos de morte precisam ser DISJUNTOS. Apagar a prop
+   * de um dos arquivos tem de reprovar só a linha daquele arquivo — senão a régua não distingue
+   * "os dois passam" de "um passa".
+   */
+  const LIGACOES = ["orgName={orgBrand?.name}", "orgLogoUrl={orgBrand?.logo_url}"] as const
+  const LAYOUTS = [
+    ["o CRM", LAYOUT_DO_CRM],
+    ["o app do corretor", LAYOUT_DO_CORRETOR],
+  ] as const
+
+  it.each(LAYOUTS)("%s passa nome e logo da empresa no call site da barra", (_rotulo, caminho) => {
+    const fonte = fs.readFileSync(caminho, "utf8")
+    const callSite = callSiteDe(fonte, "<SidebarNav")
+    expect(callSite.length).toBeGreaterThan(0) // fail-closed: recorte vazio aprovaria em silêncio
+    expect(ocorrencias(callSite, "<SidebarNav")).toBe(1) // o recorte é UM call site, não dois
+    for (const ligacao of LIGACOES) expect(callSite).toContain(ligacao)
+  })
+
+  it.each(LAYOUTS)("%s faz cada ligação UMA vez no código — nem zero, nem duplicada", (_rotulo, caminho) => {
+    const fonte = fs.readFileSync(caminho, "utf8")
+    for (const ligacao of LIGACOES) expect(ocorrenciasNoCodigo(fonte, ligacao)).toBe(1)
+  })
+
+  it.each(LAYOUTS)("%s lê `logo_url` da própria org da sessão, sem `.single()`", (_rotulo, caminho) => {
+    // O insumo da ligação acima. A projeção sozinha não prova nada (o valor pode ser descartado na
+    // fiação) e a fiação sozinha também não compila sem ela — as duas juntas fecham a pergunta.
+    // `.maybeSingle()` porque zero linhas não é erro nesta leitura.
+    const codigo = codigoDe(fs.readFileSync(caminho, "utf8"))
+    expect(codigo).toContain('.select("name, logo_url")')
+    // `codigoDe` trima cada linha: a quebra é o que separa esta leitura da de `settings`, que
+    // usa `.single()` no MESMO arquivo com o mesmo `.eq`.
+    expect(codigo).toContain('.eq("id", user.orgId)\n.maybeSingle()')
+  })
+})
+
+describe("Story 900-64 (AC4 via AC12) — a fiação `onError` das DUAS imagens", () => {
+  /**
+   * O que esta régua cobre, e o que ela NÃO cobre — a distinção é a razão de ela existir.
+   *
+   * NÃO cobre a fiação em EXECUÇÃO. O mock de `next/image` descarta `onError` e
+   * `renderToStaticMarkup` não dispara handler de evento: nada neste arquivo prova que
+   * `onError → setImgFailed → resolveSidebarBrand` devolve o fallback. A AC4 segue com a lacuna
+   * comportamental que a story declarou, e ninguém pode declarar a fiação coberta.
+   *
+   * COBRE a DELEÇÃO e a REALOCAÇÃO dessa fiação, que até aqui passavam em silêncio. Medido no
+   * gate 900.64 e reproduzido: apagar as duas linhas `onError` é uma deleção de 2 linhas que
+   * compila (`tsc --noEmit` rc=0 — `setImgFailed` continua ligado no `useState`) e deixava a
+   * suíte INTEIRA verde. Um logo de cliente que falhasse ao carregar mostraria imagem quebrada
+   * em vez da marca da Trifold, e nenhuma régua do repositório reprovaria.
+   *
+   * Duas asserções, e não uma, porque CONTAGEM É INVARIANTE SOB MOVER: as duas linhas realocadas
+   * para outro elemento mantêm o `2` e recriam o defeito idêntico. A segunda prende cada fiação à
+   * imagem da SUA superfície pela linha de `className` que só aquela imagem tem — `codigoDe` junta
+   * as linhas de código já trimadas com quebra, o mesmo recorte por adjacência que a leitura de
+   * `.maybeSingle()` usa acima.
+   *
+   * Reordenar os atributos da imagem deixa a segunda asserção VERMELHA sem que haja defeito. É
+   * sobra, não falta: falso alarme é visível e se conserta na hora; falso verde é exatamente o que
+   * esta régua nasceu para eliminar.
+   */
+  const FIACAO = "onError={() => setImgFailed(true)}"
+
+  it("a fiação existe DUAS vezes no código — some por inteiro se apagarem as duas linhas", () => {
+    const fonte = fs.readFileSync(FONTE_DA_BARRA, "utf8")
+    expect(ocorrenciasNoCodigo(fonte, FIACAO)).toBe(2) // desktop e mobile; nenhuma em comentário
+  })
+
+  it("cada fiação está presa à imagem da SUA superfície — desktop e mobile", () => {
+    const codigo = codigoDe(fs.readFileSync(FONTE_DA_BARRA, "utf8"))
+    for (const superficie of ["DESKTOP", "MOBILE"] as const) {
+      const classe = `className={brand.isCustom ? CLASSES_LOGO_CLIENTE_${superficie} : CLASSES_LOGO_TRIFOLD_${superficie}}`
+      expect(codigo, superficie).toContain(`${classe}\n${FIACAO}`)
+    }
   })
 })

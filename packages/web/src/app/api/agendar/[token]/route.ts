@@ -10,9 +10,7 @@ import { overlaps } from "@web/lib/appointments/governance"
 import { mirrorCreate } from "@web/lib/appointments/google-mirror"
 import { normalizePhoneBR, STAGE_IDS } from "@trifold/shared"
 import { advanceVisitaAgendadaComTrilha } from "@web/lib/leads/advance-visita-agendada"
-
-// Deep-link do push — SEMPRE o domínio custom (cookie de sessão; ver memória 75-152).
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://crm.trifold.eng.br"
+import { tentarAppUrl } from "@web/lib/tenancy/app-url-fallback"
 
 // Story 81-4 (Epic 81) — endpoint PÚBLICO do link de agendamento por imobiliária.
 // Token = imobiliarias.booking_token (uuid não-enumerável; NULL = revogado).
@@ -289,23 +287,32 @@ export async function POST(
     hour: "2-digit",
     minute: "2-digit",
   })
-  void (async () => {
-    const { data: imobUsers } = await admin
-      .from("users")
-      .select("id")
-      .eq("org_id", imob.org_id)
-      .eq("role", "imob")
-      .eq("is_active", true)
-    await Promise.all(
-      (imobUsers ?? []).map((u) =>
-        sendPushToUser(admin, u.id as string, {
-          title: `Nova visita — ${imob.nome}`,
-          body: `${clientName} · ${when} · ${location}${brokerName ? ` · corr. ${brokerName}` : ""}`,
-          url: `${APP_URL}/dashboard/agenda`,
-        }).catch((e: unknown) => console.error("[agendar-imob] push:", e))
+  // Deep-link do push — SEMPRE o domínio custom (cookie de sessão; ver memória 75-152).
+  // Story 900-66 (AC4): sem URL base o push aos usuários imob não sai. O agendamento já está
+  // gravado e o WhatsApp abaixo (que não usa link) continua saindo — o push sempre foi
+  // best-effort (`void ... .catch`).
+  const basePush = tentarAppUrl(process.env.NEXT_PUBLIC_APP_URL, "api/agendar/[token]:push-imob", {
+    orgId: imob.org_id,
+  })
+  if (basePush.ok) {
+    void (async () => {
+      const { data: imobUsers } = await admin
+        .from("users")
+        .select("id")
+        .eq("org_id", imob.org_id)
+        .eq("role", "imob")
+        .eq("is_active", true)
+      await Promise.all(
+        (imobUsers ?? []).map((u) =>
+          sendPushToUser(admin, u.id as string, {
+            title: `Nova visita — ${imob.nome}`,
+            body: `${clientName} · ${when} · ${location}${brokerName ? ` · corr. ${brokerName}` : ""}`,
+            url: `${basePush.url}/dashboard/agenda`,
+          }).catch((e: unknown) => console.error("[agendar-imob] push:", e))
+        )
       )
-    )
-  })()
+    })()
+  }
   void notifyImobVisitWhatsApp(admin, imob.org_id, {
     leadName: clientName,
     whenLabel: when,

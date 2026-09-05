@@ -1,0 +1,249 @@
+schema: 1
+story: "900-68"
+story_title: "A régua da AC10 volta a ficar verde: `papel-do-host.ts` entra no `RESIDUAL_DECLARADO`"
+epic: 900
+gate: PASS
+verdict: PASS
+review_round: 1
+reviewer: "Quinn (Test Architect)"
+updated: "2026-09-04T12:45:00Z"
+branch: "fix/900-68-residual-declarado-papel-do-host"
+commit_avaliado: "9e0d87ce (sobre origin/main = 19843658)"
+tipo: "Correção de régua declarativa — P0, desbloqueia o CI de todo PR do repositório"
+migrations: ["nenhuma"]
+
+status_reason: >-
+  A régua da AC10 continua com todo o poder de alcance que a 900-66 lhe deu, e isso foi provado por
+  mutação, não afirmado: remover a entrada nova, subir sua contagem, injetar o host nu em arquivo
+  não declarado e injetar uma SEGUNDA ocorrência em arquivo JÁ declarado deixam a suíte vermelha
+  (4/4 exit 1). A contagem `1` foi remedida pelo scanner real e não pelo relato do @dev. Nenhum
+  arquivo de produção foi tocado, os três gates do CI saem exit 0 com cache do turbo forçado, e a
+  `main` vermelha foi reproduzida por contraprova antes de eu declarar o verde.
+
+escopo: >
+  P0. `origin/main` reprova o check bloqueante `type-check · lint · test` desde que o #569
+  (Story 900-65) mergeou `lib/tenancy/papel-do-host.ts` depois da régua AC10 do #565 (Story 900-66),
+  sem declarar o arquivo novo no mapa `RESIDUAL_DECLARADO`. Isso cega o sinal de CI de TODO PR do
+  repositório, inclusive o #570, aberto e em revisão. O escopo real da entrega é um único arquivo de
+  teste: `packages/web/src/lib/tenancy/app-url-fallback.test.ts` (+26/−5). Zero produção, zero
+  migration.
+
+reguas:
+  - nome: "`.toEqual` sobre o mapa INTEIRO (o carrasco de alcance)"
+    linha: "app-url-fallback.test.ts:247"
+    estado: "INTACTA — a forma não mudou uma letra no diff; ficou verde só porque o mapa mudou"
+    prova: "mutação M1/M2/C1/C2, todas exit 1"
+  - nome: "contagem ao lado de cada nome (o perdão é do literal, não do arquivo)"
+    estado: "INTACTA — sete entradas, sete números; nenhum arquivo perdoado sem contagem"
+    prova: "mutação C2 — segunda ocorrência em `lib/notificacoes.ts` (declarado 1) → exit 1, `- 1 / + 2`"
+  - nome: "`expect(arquivos.length).toBeGreaterThan(100)` (sinal de vida da varredura)"
+    linha: "app-url-fallback.test.ts:235"
+    estado: "INTACTA — fora de qualquer hunk do diff"
+  - nome: "régua irmã de PRESENÇA `{arquivosComChamada: 24, chamadas: 30}`"
+    linha: "app-url-fallback.test.ts:266"
+    estado: "INTACTA — não aparece no diff; verde na base e no final"
+  - nome: "os 6 `it`s do segundo describe (o detector: aspas simples, multilinha, comentário de linha, bloco, continuação, código depois do comentário)"
+    linhas: "271, 275, 279, 290, 294, 299"
+    estado: "INTACTOS — seis `it`s contados no arquivo final, nenhum no diff"
+  - nome: "`fonte-scan.ts` (`linhasDeCodigo`/`ocorrenciasNoCodigo`)"
+    estado: "INTACTO — `git diff --exit-code origin/main HEAD -- fonte-scan.ts` = 0"
+
+reproducoes:
+  - id: "CONTRAPROVA — a `main` está de fato vermelha"
+    como: >-
+      Escrevi a versão de `origin/main` do arquivo de teste sobre a árvore atual (que é byte a byte
+      igual a `origin/main` em produção, verificado) e rodei o alvo.
+    resultado: >-
+      EXIT=1. `expected { …(7) } to deeply equal { …(6) }`, `+ "lib/tenancy/papel-do-host.ts": 1`.
+      É defeito de `main`, e a régua é quem o denuncia. Sem esta contraprova, o verde da branch
+      poderia ser apenas "o teste não roda".
+  - id: "MEDIÇÃO INDEPENDENTE — a contagem é 1"
+    como: >-
+      Não conferi o número pelo relato. Subi a contagem declarada de `1` para `2` e li o que o
+      scanner REAL devolve no lado `Received` da assertion.
+    resultado: >-
+      EXIT=1, `- "lib/tenancy/papel-do-host.ts": 2` / `+ ... : 1`. Medido pelo `ocorrenciasNoCodigo()`
+      de verdade, não por réplica nem por `grep`. Cru: 4 ocorrências (linhas 42, 78, 104, 105); 3 em
+      JSDoc, 1 em código (linha 78, dentro de `HOSTS_DE_TENANT`). O `1` declarado é a medida certa.
+
+mutacoes_de_controle:
+  - id: "M2 (= A do @dev) — remover a sétima entrada"
+    exit: 1
+    vermelho: "2 `it`s — `expected [ …(6) ] to have a length of 7 but got 6` E `expected { …(7) } to deeply equal { …(6) }`"
+    leitura: "a régua reprova exatamente o defeito que motivou a story; o verde não é acidente de números que batem"
+  - id: "M1 (= B) — subir a contagem declarada de 1 para 2"
+    exit: 1
+    vermelho: "`- \"lib/tenancy/papel-do-host.ts\": 2` / `+ ... : 1`"
+    leitura: "a contagem é comparada, não ignorada — e ela mede 1"
+  - id: "C1 — host nu em CÓDIGO num arquivo de produção NÃO declarado"
+    exit: 1
+    vermelho: "`expected { …(8) } to deeply equal { …(7) }`, `+ \"lib/tenancy/_qa-900-68-temp.ts\": 1`"
+    leitura: >-
+      mimetiza o defeito do #569 — um arquivo novo chegando de outro PR com o literal ainda dispara a
+      régua. Usei arquivo NOVO em vez de sujar um arquivo existente.
+  - id: "C2 — SEGUNDA ocorrência em CÓDIGO num arquivo JÁ declarado (`lib/notificacoes.ts`, declarado 1)"
+    exit: 1
+    vermelho: "`- \"lib/notificacoes.ts\": 1` / `+ \"lib/notificacoes.ts\": 2`"
+    leitura: >-
+      **A que importa.** Confirmada por conta própria, não aceita do relato: o perdão continua sendo
+      do LITERAL DECLARADO, nunca do arquivo. A cegueira nº 3 do cabeçalho segue fechada depois desta
+      story. Se essa propriedade tivesse se perdido, o veredito seria FAIL.
+  restauracao: >-
+    Todas restauradas e a restauração PROVADA: `shasum -c` OK nos dois arquivos tocados
+    (`app-url-fallback.test.ts`, `notificacoes.ts`), o arquivo temporário removido,
+    `git status --short -- packages/` **vazio** e `git diff --stat HEAD -- packages/` **vazio**. A
+    sujeira que resta na árvore (memórias de agente, story 75-373 untracked) é alheia a esta story e
+    já estava lá.
+
+acceptance_criteria:
+  AC1: "MET — sétima entrada `\"lib/tenancy/papel-do-host.ts\": 1`, valor remedido por mim (mutação M1). Comentário de justificativa no padrão das outras 6, e o motivo é verdadeiro no código."
+  AC1.1: "MET — o JSDoc do mapa passa a contar sete em três famílias (5 da tabela 'O que fica FORA' + o módulo dono do literal + a denylist da 900-65). A aritmética fecha: 5+1+1=7."
+  AC2: "MET — `it` renomeado para 'sete' e `toHaveLength(6)`→`(7)`. O `it` do `.toEqual` não mudou de forma (confirmado no diff), como o AC manda."
+  AC3: "MET — nada enfraquecido. Conferido item por item da lista de proibições, por leitura E por mutação. Ver seção `reguas`."
+  AC4: "MET — `git diff --exit-code origin/main HEAD` em `papel-do-host.ts`, `fonte-scan.ts` e `app-url-fallback.ts` = 0; `git diff origin/main HEAD --name-only` fora de `docs/` lista UM arquivo: o de teste."
+  AC5: "MET — os três gates do CI, exit code isolado, cache do turbo forçado. Ver `gates`."
+
+gates:
+  - comando: "TURBO_FORCE=true pnpm type-check"
+    exit: 0
+    saida: "8/8 successful, `Cached: 0 cached, 8 total` — 23.8s"
+  - comando: "TURBO_FORCE=true pnpm lint"
+    exit: 0
+    saida: "8/8 successful, `Cached: 0 cached, 8 total`; `@trifold/web:lint ✖ 30 problems (0 errors, 30 warnings)`"
+    nota: >-
+      Os 30 warnings são pré-existentes e de OUTROS arquivos — conferi a lista de arquivos citados no
+      log e `app-url-fallback.test.ts` **não aparece nenhuma vez**.
+  - comando: "pnpm test (= vitest run)"
+    exit: 0
+    saida: "`Test Files 324 passed (324)` / `Tests 4599 passed | 6 expected fail (4605)` — 98.2s"
+  - comando: "npx vitest run app-url-fallback.test.ts (alvo)"
+    exit: 0
+    saida: "24 passed (24)"
+  nota_de_falso_vermelho: >-
+    O @dev registra que `pnpm test --force` sai 1 com `CACError: Unknown option --force` e
+    `pnpm type-check -- --force` sai 1 com `TS5093`. Confirmo a leitura: nenhum dos dois é
+    reprovação de código — o `test` da raiz é `vitest run` direto (sem turbo) e o `--force` do
+    segundo chega no `tsc`. Por isso usei `TURBO_FORCE=true` como variável de ambiente, que é o
+    caminho que de fato invalida o cache (`Cached: 0 cached` nos dois).
+
+decisao_de_desenho:
+  pergunta: "declarar o residual ou rotear `papel-do-host.ts` pelo `tentarAppUrl`?"
+  veredito: "declarar — e a razão está verificada no código, não só na prosa da story"
+  prova: >-
+    `HOSTS_DE_TENANT` (papel-do-host.ts:77) tem um único consumidor:
+    `hostsAdminDeclarados()` (linha 134, `HOSTS_DE_TENANT.includes(host)` na 140), que alimenta
+    `decidirNoHostAdmin` (linha 162) a cada requisição. Do outro lado,
+    `resolveAppUrlFallback` (app-url-fallback.ts:96) LÊ env (`falhaFechadaLigada()`) e **lança**
+    `AppUrlIndisponivelError`. Rotear a denylist pelo resolver colocaria leitura de env e um caminho
+    que lança dentro de uma guarda de segurança avaliada por requisição, hoje estática e resolvida em
+    import-time. A decisão do @po está certa e não foi reaberta.
+
+auto_decision_avaliada:
+  o_que: >-
+    Além do JSDoc do mapa (que o AC1.1 nomeia), o @dev corrigiu "Dois dos **seis** declarados" →
+    "sete" no cabeçalho do arquivo, linha 28.
+  veredito: "CERTA — aprovada"
+  por_que: >-
+    A linha 28 é uma contagem DA LISTA DECLARADA, exatamente a mesma classe de mentira aritmética que
+    o AC1.1 existe para matar, no mesmo arquivo, e ela ficou falsa no instante em que a sétima entrada
+    entrou. Pior: a linha 28 é justamente o parágrafo que EXPLICA por que a contagem ao lado de cada
+    nome existe (cegueira nº 3) — deixá-la contando errado anularia metade do valor do AC1.1, cuja
+    própria justificativa ("um cabeçalho que conta errado é o primeiro passo para alguém 'arrumar' o
+    mapa apagando uma entrada") se aplica verbatim a ela. Verifiquei que a frase corrigida continua
+    VERDADEIRA: dois dos sete declarados (`lib/notificacoes.ts` e `billing-reminders`) seguem sendo os
+    que hospedam sítios migrados. Custo: uma palavra em comentário, zero asserção, zero dado — não
+    colide com o AC3, que proíbe enfraquecer régua, não corrigir prosa.
+
+linha_14_avaliada:
+  o_que: >-
+    O cabeçalho diz, na linha 14, que `.has` "fica verde com **sete** arquivos a mais que ninguém
+    migrou". O @dev não mexeu, e registrou a colisão visual com o sete real do mapa.
+  veredito: "DEIXAR COMO ESTÁ — o @dev acertou em não mexer"
+  por_que: >-
+    Aquele "sete" não é contagem do mapa: é o número retórico do argumento das linhas 6-7 do mesmo
+    cabeçalho ("alcançar 21 dos 28 sítios e esquecer 7"). Ele é rastreável e não ficou falso com esta
+    story. Mais importante para o julgamento: o risco que o AC1.1 protege é alguém APAGAR uma entrada
+    porque o cabeçalho discorda do mapa — e a linha 14 não afirma nada sobre quantas entradas o mapa
+    tem, então não pode induzir esse erro. É prosa herdada da 900-66, não introduzida aqui.
+  follow_up_opcional: >-
+    Numa story futura de prosa (não neste P0), remover o numeral: "fica verde com arquivos a mais que
+    ninguém migrou". O número não acrescenta nada ao argumento e a colisão visual desaparece. Não
+    vale inflar o diff de um P0 nem gastar outra rodada de 4 minutos de gate por isso.
+
+sete_checks:
+  code_review: "PASS — um arquivo de teste, diff legível, comentário da entrada nova no padrão das outras 6 e factualmente verdadeiro (4 ocorrências cruas, 3 em JSDoc, 1 em código)."
+  unit_tests: "PASS — 324 arquivos / 4599 passed + 6 expected fail, exit 0; alvo 24/24; e 4 mutações de controle provam que o teste é capaz de reprovar."
+  acceptance_criteria: "PASS — AC1, AC1.1, AC2, AC3, AC4, AC5 todos MET, cada um verificado por mim."
+  no_regressions: "PASS — produção byte a byte igual a `origin/main` (provado por `git diff --exit-code`), logo não há comportamento de runtime a regredir. Suíte inteira verde."
+  performance: "PASS — nenhuma mudança de runtime. A varredura da AC10 já custava os ~1035 arquivos; uma chave a mais no mapa é O(1). Suíte completa em 98.2s."
+  security: "PASS — nenhuma superfície nova. A saída escolhida PRESERVA a denylist estática de segurança em import-time em vez de injetar leitura de env + caminho que lança numa guarda por requisição (ver `decisao_de_desenho`)."
+  documentation: "PASS — JSDoc do mapa e cabeçalho do arquivo atualizados e verdadeiros; story com evidência reproduzível. Uma observação DOC-001 de baixa severidade, não bloqueante."
+
+top_issues:
+  - id: "DOC-001"
+    severity: low
+    category: docs
+    finding: >-
+      A linha 14 do cabeçalho usa o numeral "sete" em sentido retórico ("`.has` fica verde com sete
+      arquivos a mais"), que agora colide visualmente com as sete entradas reais do mapa.
+    suggested_action: >-
+      NÃO corrigir nesta story. Remover o numeral numa story futura de prosa. Não é falso, não afirma
+      contagem do mapa e não pode induzir a exclusão de uma entrada — o risco que o AC1.1 fecha.
+    bloqueia_merge: false
+
+waiver: { active: false }
+
+merge:
+  recomendacao: "MERGEAR IMEDIATAMENTE"
+  base: "main"
+  empilhamento: "NENHUM — `git merge-base origin/main HEAD` = `19843658` = `origin/main`. A branch está em cima da ponta; não precisa rebase nem retarget."
+  urgencia: >-
+    Enquanto isso não mergear, o check bloqueante do repositório continua vermelho por um motivo que
+    não é o PR de ninguém, e o sinal de CI de todo PR aberto (inclusive o #570) segue cego.
+  recommended_status: "Ready for Review → Done, após o merge por @devops."
+
+corpo_do_pr: |
+  ## O que este PR faz
+  Declara `lib/tenancy/papel-do-host.ts` no mapa `RESIDUAL_DECLARADO` da régua AC10
+  (`packages/web/src/lib/tenancy/app-url-fallback.test.ts`) e devolve o check bloqueante
+  `type-check · lint · test` ao verde em `main`.
+
+  **Um único arquivo de teste. Zero arquivo de produção. Zero migration.**
+
+  ## Por que `main` está vermelha
+  O #565 (Story 900-66) criou a régua AC10: um mapa `arquivo → nº de ocorrências do host nu
+  `crm.trifold.eng.br` em CÓDIGO`, comparado com `.toEqual` contra a varredura de
+  `packages/web/src`. O #569 (Story 900-65) mergeou depois e trouxe `papel-do-host.ts`, que contém
+  o literal 1× em código (4× no arquivo cru; 3 em JSDoc, descartadas por `linhasDeCodigo()`).
+
+  **A régua funcionou exatamente como projetada** — ela existe para pegar todo arquivo novo que
+  passe a conter o host. Faltava declarar a entrada. A régua não foi enfraquecida em nada.
+
+  ## O que NÃO mudou (e foi verificado item por item)
+  `.toEqual` sobre o mapa inteiro (nunca `.has`) · a contagem ao lado de cada nome ·
+  `toBeGreaterThan(100)` · `{arquivosComChamada: 24, chamadas: 30}` da régua irmã · os 6 `it`s do
+  detector · `fonte-scan.ts` · `papel-do-host.ts`.
+
+  ## Por que declarar, e não rotear pelo `tentarAppUrl`
+  Ali o literal está dentro de `HOSTS_DE_TENANT`, uma **denylist de segurança** avaliada em
+  import-time e consumida por `hostsAdminDeclarados()` a cada requisição. `resolveAppUrlFallback`
+  lê env e **lança** — semântica oposta. Rotear a denylist pelo resolver colocaria leitura de env e
+  um caminho que lança dentro de uma guarda de segurança. Decisão fechada pelo @po e verificada no
+  código pelo gate.
+
+  ## Evidência (QA, rodada 1 — PASS)
+  - **Contraprova:** a versão de `origin/main` do teste, contra esta árvore, sai **exit 1** com a
+    assertion descrita. `main` está de fato vermelha.
+  - **Contagem remedida pelo scanner real** (não por `grep`, não pelo relato): **1**.
+  - **4 mutações de controle, todas exit 1**, todas restauradas com `shasum -c` + `git status`
+    vazio: remover a entrada (2 `it`s vermelhos) · contagem `1`→`2` · host nu em arquivo de
+    produção não declarado · **segunda ocorrência em arquivo já declarado** (`- 1 / + 2`) — esta
+    última prova que o perdão continua sendo do *literal declarado*, não do *arquivo*.
+  - **Gates com cache do turbo forçado (`Cached: 0 cached`):** `type-check` **0** · `lint` **0**
+    (0 errors, 30 warnings pré-existentes, nenhum no arquivo alterado) · `test` **0**
+    (324 arquivos, 4599 passed + 6 expected fail).
+  - **AC4 provado:** `git diff --exit-code` = 0 em `papel-do-host.ts`, `fonte-scan.ts` e
+    `app-url-fallback.ts`.
+
+  Gate: PASS → `docs/qa/gates/900.68-declara-papel-do-host-no-residual-ac10.yml`
+  Story: `docs/stories/900-68-declara-papel-do-host-no-residual-ac10.story.md`

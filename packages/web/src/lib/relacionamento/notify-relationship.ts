@@ -1,6 +1,7 @@
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { sendEmail } from "@web/lib/email"
 import { sendPushToUser } from "@web/lib/server/push-service"
+import { tentarAppUrl } from "@web/lib/tenancy/app-url-fallback"
 
 /**
  * Story 76-2 — Notifica a(s) gerente(s) de relacionamento (Samara) quando um cliente
@@ -23,8 +24,13 @@ export async function notifyRelationshipManagers(
 
   if (!users?.length) return
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://crm.trifold.eng.br"
-  const url = `${appUrl}/dashboard/chat`
+  // Story 900-66 (AC4) — push e e-mail levam ao Chat de Relacionamento: sem URL base nenhum dos
+  // dois sai (o e-mail é literalmente um `<a href>` para esta URL).
+  const base = tentarAppUrl(process.env.NEXT_PUBLIC_APP_URL, "lib/relacionamento/notify-relationship", {
+    orgId,
+  })
+  if (!base.ok) return
+  const url = `${base.url}/dashboard/chat`
   const nome = params.clienteNome ?? "Cliente"
   const obra = params.obraNome ? ` (${params.obraNome})` : ""
   const title = "Novo contato de cliente"

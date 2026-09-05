@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@web/lib/supabase/admin"
 import { sendEmail } from "@web/lib/email"
+import { tentarAppUrl } from "@web/lib/tenancy/app-url-fallback"
 import { hojeSaoPaulo, toIsoDate, type SaoPauloDate } from "@web/lib/billing/reminder-schedule"
 import {
   mesAnterior,
@@ -30,7 +31,6 @@ import {
 
 export const dynamic = "force-dynamic"
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://crm.trifold.eng.br"
 const PG_UNIQUE_VIOLATION = "23505"
 
 type ServiceMeta = { slug: string; name: string }
@@ -52,6 +52,8 @@ function svcOf(row: SnapshotJoinRow): ServiceMeta | null {
 }
 
 function buildHtml(params: {
+  /** Story 900-66 — a base do link chega por parâmetro: quem resolve é o handler, que sabe abortar. */
+  appUrl: string
   periodo: string
   porServicoMoeda: Array<{ nome: string; slug: string; currency: string; total: number }>
   totalPorMoeda: Map<string, number>
@@ -99,7 +101,7 @@ function buildHtml(params: {
     `<h3>Total consolidado (infraestrutura, por moeda)</h3><ul>${linhasTotal}</ul>` +
     blocoMetaAds +
     blocoTecnico +
-    `<p><a href="${APP_URL}/dashboard">Abrir o painel</a></p>`
+    `<p><a href="${params.appUrl}/dashboard">Abrir o painel</a></p>`
   )
 }
 
@@ -180,7 +182,15 @@ export async function GET(request: NextRequest) {
     total: t.total,
   }))
 
-  const html = buildHtml({ periodo, porServicoMoeda, totalPorMoeda, metaAds, tecnico })
+  // Story 900-66 (AC4) — quem não tem URL não envia: o resumo inteiro é abandonado (nada de
+  // e-mail com link quebrado), sem reivindicar o dedup do período — assim, ligada a URL, o mês
+  // seguinte volta a ser enviável.
+  const base = tentarAppUrl(process.env.NEXT_PUBLIC_APP_URL, "cron/billing-monthly-summary")
+  if (!base.ok) {
+    return NextResponse.json({ ok: true, skipped: "app_url_indisponivel", period: periodo })
+  }
+
+  const html = buildHtml({ appUrl: base.url, periodo, porServicoMoeda, totalPorMoeda, metaAds, tecnico })
   const subject = `Resumo de billing — ${periodo}`
 
   // ── Dry-run: não envia nem grava dedup ──

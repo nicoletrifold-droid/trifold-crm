@@ -74,8 +74,15 @@
 - [project_epic_86_qa_patterns.md](project_epic_86_qa_patterns.md) — Epic 86 (Pixel+CAPI) QA: 5 checks de tracking silencioso (cadeia de IP, ADAPT que muda superfície dos outros chamadores, hashing, PII em webhook_logs, dedup) + gotcha de rebase do trifold-design-system
 - [Webhook do WhatsApp — armadilhas de QA](project_webhook_whatsapp_qa_patterns.md) — texto sintético vira turno do lead na Nicole; trigger 038 já cuida de last_message_at; snapshot é de prod; gate:tenancy suja a árvore
 - [Baseline do trifold-design-system](project_trifold_design_system_baseline.md) — `.dc.html` untracked de propósito: baseline é a produção via `curl`, não o git; sem lint/typecheck; falso positivo de `{{ }}`
+- [Relatório impresso de brindes](project_relatorio_impresso_brindes.md) — único `document.write` da app: XSS same-origin real (fechado na 75-373, 2 furos medidos); A4 útil = 673,5px (viewport 734, não 794)
+- [Layout de env deste checkout](project_layout_de_env_deste_checkout.md) — RESOLVIDO 04/09: `.env.local` do web morreu (é `.env.producao.local`); o `.env.local` da RAIZ é outro arquivo (só `VERCEL_OIDC_TOKEN`)
 - [Auditar as landings estáticas](project_landing_yarden_qa_patterns.md) — prova por blob e sha de blocos, extrator próprio de assets, reverter o fix p/ ver o bug voltar, pior pixel da banda; `.focus()` não ativa `:focus-visible`
 
 ## Método de QA
 
 - [feedback_reverificacao_focada.md](feedback_reverificacao_focada.md) — re-verificação de gate: `turbo --force` (cache hit não é evidência), `git diff` vazio prova "não tocado", teste vacuoso, `-t` do vitest é regex e zero match sai EXIT=0, metadata vem do `git`
+- [A ponte do client não provada](feedback_ponte_do_client_nao_provada.md) — teste do `.eq()` + medição por URL crua deixam o supabase-js sem prova; feche capturando a URL real com `fetch` falso
+- [Mutação de alcance acrescenta sítio](feedback_mutacao_de_alcance_acrescenta_sitio.md) — remover escape prova presença; só ACRESCENTAR sítio novo prova alcance; `startsWith("marcador(")` nunca prova suficiência
+- [Réguas declarativas (AC10 do host nu)](project_reguas_declarativas_ac10.md) — colisão entre PRs deixa main vermelha sem culpa de PR; medir contagem mutando o declarado, não replicando o scanner; `TURBO_FORCE=true`
+- [Sentinela de exit prova carregamento](feedback_sentinela_de_exit_prova_carregamento.md) — `process.on('exit')` via `NODE_OPTIONS` mede o arquivo REAL; `tsx` imprime 3 linhas e só uma vale
+- [scripts/ da raiz sem gate estático](project_scripts_da_raiz_sem_gate_estatico.md) — nem `tsc` nem eslint alcançam `scripts/*.ts`; "gates verdes" não cobrem nada ali
