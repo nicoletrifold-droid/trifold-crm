@@ -1481,6 +1481,211 @@ inexistente (`tracking-browser.test.ts` verde).
 
 ## QA Results
 
+### Re-gate (leva 0.5, ajuste visual): ✅ **PASS** — @qa (Quinn), 2026-09-05
+
+**Gate file:** `docs/qa/gates/86-13-landing-yarden-secoes-institucionais.yml`
+(seção `re_review_0_5`)
+**Escopo revisado:** commit `ac25b3bc` isolado (base `6a7cd470`), **não pushado**
+**Nenhum bloqueador.** 2 achados `low` + 1 `info`, todos não-bloqueantes.
+
+> **Método:** nenhum número do @dev foi aceito por relato. Refiz cada medição com
+> harness próprio (Playwright/chromium, `getBoundingClientRect` normalizado por
+> `scrollX/scrollY`, `getComputedStyle` inclusive de `::before`), em **11 larguras**
+> (390, 768, 979, 980, 1024, 1280, 1440, 1728, 1920, 2560, 3440 — 3 a mais do que o
+> @dev usou), com **contraprova de determinismo** do próprio harness antes de
+> confiar em qualquer diferença.
+
+---
+
+#### 1. Prova por bytes — o que mudou foi só o `<style>`
+
+Refeita por mim, com extrator próprio (regex `<style…>…</style>`, comparação do
+resto byte a byte):
+
+| Medida | `6a7cd470` (antes) | `ac25b3bc` (depois) |
+|---|---|---|
+| Arquivo inteiro | 74.874 B | 79.130 B |
+| Blocos `<style>` | 1 (25.868 B) | 1 (30.124 B) |
+| **Tudo fora do `<style>`** | **49.006 B** | **49.006 B** |
+| **sha256 do resto** | `7a84281e…31b08a9` | `7a84281e…31b08a9` |
+| `diff` do resto | — | **vazio** |
+
+Os 4 blocos `<script>` (528 / 6.448 / 8.393 / 3.093 B) e os 3 `<form>` têm
+**sha256 individual idêntico** antes e depois. ⇒ AC10 e AC14 sem regressão possível,
+por construção.
+
+⚠️ **Discrepância de narrativa (não de substância):** o @dev alegou "37.600 bytes
+fora do CSS". Meu número é **49.006 B**. Não consegui reproduzir 37.600 por nenhum
+recorte razoável (com/sem placeholder, com/sem `<script>`). A alegação
+*substantiva* — "idêntico byte a byte" — **está provada e confere**; só o número
+citado não bate. Registrado como `86.13-QA-006` (`low`, docs).
+
+#### 2. Respiro entre "Onde a natureza" e "Lazer" — medido, não observado
+
+Distância vertical entre o **rodapé da foto do lounge** e o **topo da faixa bege**
+da Lazer, em px:
+
+| Largura | Antes | Depois |
+|---|---|---|
+| 390 | 40 | **40** (inalterado) |
+| 768 | 52 | **52** (inalterado) |
+| 979 | 52 | **52** (inalterado) |
+| 980 | 31,38 | **96,58** |
+| 981 | 31,26 | **96,54** |
+| 1440 | **0** | **92,16** |
+| 1920 | **0** | **94,00** |
+| 2560 | 14,45 | **94,00** |
+
+O bug era real e eu o reproduzi: a **0 px** de folga a 1440 e 1920 (foto e faixa
+bege encostando no mesmo pixel). O screenshot de 2560 do estado anterior mostra
+algo pior do que o relatado — a **última linha do parágrafo da natureza
+transbordava para dentro da faixa bege** (`…leveza, presença e sofisticação no dia
+a dia.` renderizada sobre fundo `--tan`). Depois do fix, nenhuma sobreposição em
+nenhuma das 11 larguras.
+
+#### 3. Fotos coladas na borda da viewport — medido
+
+Distância da borda da viewport até a foto (px):
+
+| Largura | `.lazer-img` direita | `.split--natureza` img direita | `.split--invista` img esquerda |
+|---|---|---|---|
+| 390 | 0 → **0** | 18 → 18 | 18 → 18 |
+| 768 | 0 → **0** | 20 → 20 | 20 → 20 |
+| 979 | 0 → **0** | 20 → 20 | 20 → 20 |
+| 1440 | 0 → **40** | 38,30 → **40** | 34,41 → **40** |
+| 1920 | 0 → **276** | 279,06 → **276** | 273,88 → 273,88 |
+| 2560 | 0 → **596** | 616,09 → **596** | 609,17 → **596** |
+
+A alegação de que "as três fotos passam a terminar na mesma linha vertical" é
+**verdadeira a 1440 e a 2560** (40/40/40 e 596/596/596). A **1920 sobra uma
+assimetria de 2,12 px** entre a direita da natureza (276) e a esquerda da invista
+(273,88), porque os percentuais de origem são diferentes (`2,66%` vs `2,39%`) e o
+`clamp` satura em pontos distintos. Imperceptível; registrado como
+`86.13-QA-005` (`low`, code).
+
+O `0 px` remanescente a 390/768/979 é o full-bleed de mobile — comportamento
+esperado e explicitamente fora do escopo do pedido.
+
+#### 4. Mobile intocado — provado por pixel, não por relato
+
+Três provas independentes, todas minhas:
+
+1. **Geometria:** deep-diff de **199 campos medidos** por largura (rects de 8
+   elementos, paddings computados, `text-align` de 7 seletores, caixas dos 6
+   blocos da Localização, `::before` do `li`, `scrollWidth/clientWidth`):
+   **0 campos diferentes** a 390, 768 **e 979** (o último pixel do breakpoint —
+   largura que o @dev não conferiu).
+2. **Inventário de seções:** 14 seções de topo medidas, **0 com geometria
+   alterada** a 390/768/979; `document.scrollHeight` idêntico (6891 / 7634 / 8332).
+3. **Pixel:** screenshots das duas regiões afetadas, harness determinístico →
+   **`px_diferentes = 0` (0,000%)** em 390/768/979, nas duas regiões (6/6).
+
+> **Nota de método — falso positivo que eu mesmo produzi e derrubei.** A primeira
+> rodada de screenshots acusou **66% de pixels diferentes no mobile**, o que
+> contradizia a geometria. Antes de reportar, rodei a contraprova óbvia:
+> *before vs. before*. Deu **66,95% de diferença também** — ou seja, o defeito era
+> do meu harness, não do código. Causa: `html{scroll-behavior:smooth}` faz o
+> `window.scrollTo` aterrissar em `scrollY` diferente a cada execução (1740 / 1714
+> / 1738). Com `scroll-behavior:auto` forçado e `img.decode()` aguardado, a
+> contraprova *before vs. before* foi a **0,000%** e só então os 0,000% do
+> mobile passaram a significar alguma coisa.
+
+#### 5. Alinhamento da Localização — `getComputedStyle`, desktop e mobile
+
+| Elemento | ≤979px (antes → depois) | ≥980px (antes → depois) |
+|---|---|---|
+| `.kicker` | left → **left** | `start` → **right** |
+| `.titulo-secao` | left → **left** | right → right |
+| `.texto-secao` | left → **left** | right → right |
+| `.loc-endereco` | left → **left** | `start` → **right** |
+| `.loc-maps-linha` | left → **left** | `start` → **right** |
+| `.loc-pontos` | left → **left** | left → **right** |
+| `.loc-pontos li` | left → **left** | left → **right** |
+
+Confirmado também pela caixa real do `<a>` do Maps a 1440: antes `L=815`
+(encostado à esquerda), depois `R=1240,28` — coincide com a borda direita da
+coluna, igual ao H2 e ao parágrafo. Os 6 blocos da coluna terminam **todos** em
+`x=1240,28`.
+
+**Ponto dourado:** espelhado, não removido. `::before` vai de `left:0` para
+`right:0` e o `li` de `padding:9px 0 9px 20px` para `9px 20px 9px 0`, só no
+desktop. Cor inalterada (`rgb(253,217,150)` = `--dourado`) e **adjacente ao
+texto** — o texto termina 20 px antes da borda do `li` e o ponto (8 px) ocupa
+essa faixa: 12 px de respiro, não órfão. Conferido também a olho no screenshot
+("Catedral •", "Bosque II •"). No mobile, `left:0 / padding-left:20px` — idêntico
+ao baseline, como o item 4 provou por pixel.
+
+#### 6. Costura do breakpoint 979/980/981
+
+Sem salto anômalo e **sem sobreposição**: testei colisão de retângulos entre
+`.lazer-txt` × `.lazer-img` e entre a foto da natureza × a seção `.lazer` em
+979/980/981/1440/1920/2560 → **`sobrepõe=false` em todos**. A variação de folga
+979→980 (52 → 96,58) é a troca de modo do próprio breakpoint (empilhado →
+grid `1fr 1fr`), que já existia antes (52 → 31,38); 980→981 difere em **0,04 px**.
+
+#### 7. Não-regressão fora das duas seções
+
+Inventário de 14 seções de topo em 11 larguras:
+
+- Nenhuma seção **acima** da natureza (header, hero, `#empreendimento`) mudou em
+  nenhuma largura.
+- Das 10 seções abaixo, **9 só se deslocaram verticalmente** (`left` e `width`
+  idênticos). A única com `left`/`width` alterados é a `.lazer` — que é o alvo do
+  fix (a ≥1920 passa de `L=0,W=viewport` para `L=(vw−1464)/2, W=1464`).
+- **Zero overflow horizontal** (`scrollWidth == clientWidth`) nas 11 larguras,
+  inclusive 3440.
+- **Console: 0 erro** antes e depois, nas 11 larguras.
+
+#### 8. Sobre o "a 1464px nada muda"
+
+Verifiquei o limiar em 1200/1400/1464/1500/1600/1800. O `min()` de fato **não
+altera nada perceptível** em `--max`: a 1464 os valores saem 87,09→87 / 202,03→202
+(diferença sub-pixel). Mas o **piso de 40 px é uma mudança de comportamento em
+todo o desktop**, não só acima de 1464: a 1200 o `padding-right` da natureza vai
+de 31,91 → 40 e o `padding-left` da invista de 28,67 → 40. Isso está descrito no
+corpo da mensagem de commit ("piso de 40px… que estavam a 38px e 34px da borda a
+1440"), então **não é omissão** — mas o comentário no CSS, lido isolado, sugere
+neutralidade abaixo de `--max` que não existe. Registrado como `86.13-QA-007`
+(`info`, docs).
+
+#### 9. Suíte, type-check, lint — rodados por mim
+
+| Comando | Resultado |
+|---|---|
+| `npx vitest run landing-pages/yarden` | **89/89** (3 arquivos) |
+| `npx vitest run` (suíte inteira) | 4569 passed / **71 failed** / 6 expected-fail, em **3 arquivos** |
+| `npx turbo type-check --force` | **12 erros**, 7/8 tasks OK, 0 cache |
+| `npx turbo lint --force` | **0 erros / 30 avisos**, 8/8 tasks, 0 cache |
+
+**Prova de que as 71 falhas e os 12 erros são pré-existentes** — não por leitura,
+por diff: `git diff --quiet ac25b3bc^ ac25b3bc -- packages/` **retorna 0**, ou
+seja, `packages/` é byte a byte idêntico entre a base e esta leva. Os 3 arquivos
+que falham vivem todos em `packages/web/` e os últimos commits que os tocaram são
+de 2026-08-27, 2026-08-29 e 2026-09-02. As falhas são de **resolução de módulo**
+(`Cannot find package '@trifold/ai/src/flows/loop-breaker'`), não de asserção.
+
+#### 10. Higiene
+
+- `git status --short` **vazio** ao fim da revisão; `sha256` do `index.html` no
+  disco idêntico ao do commit — **eu não toquei em nenhum arquivo de código**.
+- **Nenhum push aconteceu:** `origin/fix/86-12-yarden-lancamento-mapa` aponta para
+  `6a7cd470` (a base); `ac25b3bc` só existe local. 14 commits aguardando @devops.
+
+#### Veredito
+
+**PASS.** Os três diagnósticos de causa raiz do @dev conferem com o que eu medi, e
+os dois problemas que o usuário reportou estão **corrigidos de fato** (não apenas
+editados): folga de 0 → 92–96 px, fotos de 0 → 40/276/596 px da borda, e a coluna
+inteira da Localização à direita com o ponto dourado espelhado. O mobile está
+**pixel-idêntico** ao baseline em 390/768/979. Nenhum AC anterior regrediu.
+
+**Status:** mantido em `Ready for Review` — não promovo para `Done` (T12/T13 de
+infraestrutura da 86-12 seguem pendentes com @devops e
+`https://trifold.eng.br/yarden/` continua offline).
+**Próximo agente:** `@devops *push`.
+
+---
+
 ### Gate: ✅ **PASS** — @qa (Quinn), 2026-09-04
 
 **Gate file:** `docs/qa/gates/86-13-landing-yarden-secoes-institucionais.yml`
