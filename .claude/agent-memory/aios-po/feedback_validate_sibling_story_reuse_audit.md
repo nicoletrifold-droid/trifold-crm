@@ -47,3 +47,27 @@ exige um teste explícito de assert positivo (`toBe("novo")`, não só `not.toBe
 Segundo item do corolário: conferir os **QA issues OPEN da story-irmã** — herdar um defeito
 conhecido num arquivo novo é regressão *introduzida*, não herdada, e o AC deve proibir a
 clonagem dele nominalmente.
+
+## Corolário 2: o destino pode ter invariantes que a irmã VIOLA
+
+Quando a story manda "seguir o padrão da irmã", conferir se o **destino** tem teste/lint que a
+irmã não tem. Duas landings do mesmo epic não têm a mesma malha de garantias, e "copie a irmã"
+pode ser literalmente a instrução de quebrar o alvo.
+
+**Why:** Na 86-13 (Yarden espelhando o Vind Residence), 4 ACs mandavam adaptar o padrão do Vind.
+Só que `landing-pages/yarden/tracking-browser.test.ts` — que roda de verdade, porque o
+`vitest.config.ts` da raiz inclui `landing-pages/**/*.test.ts` — exige que **todo arquivo de
+`assets/` seja referenciado por atributo HTML** (`expect(orfaos).toEqual([])`), e o extrator dele
+só lê `src|srcset|href|content`. O Vind serve galeria como `<img src="…webp">` avulso (deixa o par
+`.jpg` sem referência) e fundo de seção por CSS `background-image` (invisível ao extrator). Seguir
+o Vind reprovaria o teste em 3 pontos. A story ainda dizia "não é esperado rodar `pnpm vitest`"
+— o oposto do necessário. Nada disso aparecia lendo só a story.
+
+**How to apply:** (1) `grep` o `vitest.config.ts`/CI pelo caminho do diretório da story — "é
+HTML estático, não tem teste" é presunção, não fato; (2) rodar a suíte para ter **baseline
+numérico** antes de validar (medi 23/23) e registrá-lo na story, para o @dev distinguir
+regressão de ruído; (3) quando um teste tem extrator próprio (regex de referências, allowlist),
+**copiar o extrator para um script à parte e rodar os cenários da story nele** — contraprova
+executada, não leitura. Foi o que separou "acho que quebra" de "quebra nestes 3 casos e passa
+neste". Ver [[mitigacao-delegada-a-ferramenta]] para o princípio inverso (story que delega a
+garantia a uma ferramenta que ninguém rodou).

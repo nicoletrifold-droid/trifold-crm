@@ -1,5 +1,6 @@
 - [Vercel project setup](project_vercel_setup.md) — rootDirectory is `packages/web`, not repo root; affects .vercelignore placement
 - [Quality gate signals for trifold-crm](feedback_quality_gate_signals.md) — `next build` é canônico; lint/tsc standalone dão falso positivo; `exit 137` no turbo = OOM, não erro de tipo
+- [Esperar CI: CodeRabbit é commit status](feedback_ci_wait_coderabbit_commit_status.md) — sem campo `.status`, loop ingênuo sai cedo; feche em `mergeStateStatus CLEAN` + `reviewDecision APPROVED`
 - [Meta subscription state (prod)](project_meta_subscription.md) — leadgen subscription validada 2026-06-08; verify token sufixo `...a387d2f`
 - [Migration 074 — leads.metadata JSONB](project_leads_metadata_migration_074.md) — bloqueio root-cause attribution Meta; PR #5 (draft) com idempotencia
 - [Vercel env source of truth](reference_vercel_env_source_of_truth.md) — `vercel env pull` para producao; `.env.local` locais podem divergir

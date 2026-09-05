@@ -74,6 +74,7 @@
 - [project_epic_86_qa_patterns.md](project_epic_86_qa_patterns.md) — Epic 86 (Pixel+CAPI) QA: 5 checks de tracking silencioso (cadeia de IP, ADAPT que muda superfície dos outros chamadores, hashing, PII em webhook_logs, dedup) + gotcha de rebase do trifold-design-system
 - [Webhook do WhatsApp — armadilhas de QA](project_webhook_whatsapp_qa_patterns.md) — texto sintético vira turno do lead na Nicole; trigger 038 já cuida de last_message_at; snapshot é de prod; gate:tenancy suja a árvore
 - [Baseline do trifold-design-system](project_trifold_design_system_baseline.md) — `.dc.html` untracked de propósito: baseline é a produção via `curl`, não o git; sem lint/typecheck; falso positivo de `{{ }}`
+- [Auditar as landings estáticas](project_landing_yarden_qa_patterns.md) — prova por blob e sha de blocos, extrator próprio de assets, reverter o fix p/ ver o bug voltar, pior pixel da banda; `.focus()` não ativa `:focus-visible`
 
 ## Método de QA
 
