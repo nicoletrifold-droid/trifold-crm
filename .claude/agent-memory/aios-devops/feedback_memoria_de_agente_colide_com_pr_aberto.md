@@ -42,6 +42,14 @@ existia para desbloquear. Sem as memórias, o merge contra o #570 é limpo (`mer
   depois que o outro PR mergear.
 - **Num P0 isso não é opcional.** A regra de ouro: um PR de desbloqueio nunca introduz atrito no
   PR que ele desbloqueia.
+- **Colidiu com `main` (não com PR irmão)? Aí a saída é MERGE, não excluir.** Excluir a memória do
+  PR só ajuda quando o conflito é com uma branch **que ainda vai mergear**. Se `main` já absorveu as
+  linhas novas do índice, tirar a sua memória não conserta nada — a branch continua `DIRTY`.
+  Faça `git merge origin/main` e resolva mantendo **os dois lados**: `MEMORY.md` é lista
+  append-only, então "ours + theirs" é sempre a resolução correta, nunca escolher um lado.
+  Medido em 2026-09-05 no PR #567 (86-12/86-13): `mergeable` era `MERGEABLE` **antes** dos meus
+  3 commits e virou `CONFLICTING` **depois**, em `aios-po/MEMORY.md` e `aios-qa/MEMORY.md` — e em
+  mais nada. Zero conflito no código de produto. Ver [[merge-main-na-branch-nao-rebase]].
 - O precedente oposto (memória num `chore(memory)` no mesmo PR, como no #570) só vale quando
   **nenhum** outro PR aberto tocou os mesmos índices.
 

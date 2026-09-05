@@ -46,3 +46,4 @@
 - [Memória de agente colide com PR aberto](feedback_memoria_de_agente_colide_com_pr_aberto.md) — `MEMORY.md` é índice append-only: simule com `merge-tree` + índice temporário antes de stageer `.claude/agent-memory/`
 - [Corpo do PR pode estar no gate](reference_corpo_do_pr_no_gate.md) — campo `corpo_do_pr` do `docs/qa/gates/*.yml`; nem todo gate tem (75-373 não tinha), confira antes de compor
 - [main sem branch protection](reference_main_sem_branch_protection.md) — nao ha required check no GitHub; `gh pr merge` aceita UNSTABLE, a trava e o julgamento do agente
+- [PR aberto absorve a story seguinte](feedback_pr_aberto_absorve_story_seguinte.md) — "a branch está podre, reconstrua" pode ser premissa falsa; confira `mergedAt` antes — PR aberto = push + `gh pr edit`, nunca branch nova
