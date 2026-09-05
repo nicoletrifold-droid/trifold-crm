@@ -1,0 +1,188 @@
+storyId: "86-13-landing-yarden-secoes-institucionais"
+title: "Landing do Yarden: seções institucionais completas (Overview, Lazer, Galeria, Sobre a Trifold, Nav, Banda CTA)"
+epic: 86
+verdict: PASS
+readiness: 10/10
+reviewer: "@qa (Quinn)"
+date: 2026-09-04
+branch: fix/86-12-yarden-lancamento-mapa
+commits: [083526d8, ab60ffb0, a1a47d56]
+base_commit: 06e9ecfa
+pushed: false   # confirmado: origin/fix/86-12-yarden-lancamento-mapa aponta para bd44d299 (86-12)
+
+checks:
+  code_review: PASS         # 4º bloco <script> isolado; zero acoplamento com tracking/CONFIG/formulário
+  unit_tests: PASS          # landing-pages 103/103; tracking-browser.test.ts 23/23 e arquivo INTOCADO (blob idêntico)
+  acceptance_criteria: PASS # AC1-AC15 verificadas uma a uma, em runtime
+  regressions: PASS         # 3 <script>, 2 <noscript> e 3 <form> byte-idênticos (sha256 conferido pelo QA)
+  performance: PASS         # maior asset novo 196KB (teto 330KB); 15 imagens servidas em webp; todas lazy
+  security: PASS            # link externo com rel="noopener"; nenhum iframe; nenhum domínio novo
+  documentation: PASS       # README 13→35 arquivos; File List completo; Dev Agent Record preenchido
+
+# ---------------------------------------------------------------------------
+# O que o QA MEDIU (nada aceito por relato do @dev)
+# ---------------------------------------------------------------------------
+evidencia:
+  ac15_testes_intocados:
+    metodo: "git rev-parse do blob em 06e9ecfa vs HEAD"
+    tracking_browser_test: "d89c4fc5... == d89c4fc5...  (0 linhas de diff)"
+    api_proxy_test: "8d200d24... == 8d200d24...  (0 linhas de diff)"
+    baseline: "npx vitest run landing-pages/yarden/tracking-browser.test.ts -> 23/23"
+
+  tracking_intacto:
+    metodo: "extração dos blocos <script>/<noscript>/<form> de old.html (06e9ecfa) e new.html (HEAD) + sha256"
+    script_0: "sha 1718484caaba2d4c == 1718484caaba2d4c (528 B)"
+    script_1: "sha fae3adae3c21483b == fae3adae3c21483b (6376 B)"
+    script_2: "sha 91c53f52fed102b3 == 91c53f52fed102b3 (8260 B)"
+    noscript: "2 blocos, ambos sha idêntico"
+    forms: "leadForm aa7f5dab / leadFormMobile ce1ab784 / leadFormSaber 28e38b3b — todos idênticos"
+    script_novo: "4º bloco (3056 B) — sem fbq, sem TrifoldTracking, sem leadEndpoint, sem leadForm"
+    pixel_id: "1337310707164669 em 3 pontos, mesma contagem antes e depois (head comentário, fbq init, noscript)"
+
+  integridade_assets:
+    metodo: "extrator independente do QA (src|srcset|href|content|poster|data-src + url() do CSS)"
+    disco: 35
+    referenciados_por_atributo: 35
+    orfaos: []
+    inexistentes: []
+    css_url_sem_correspondencia_em_atributo: []
+    origem_verificada: "as 11 fontes alegadas no File List existem no Google Drive com o nome exato"
+
+  mutacoes_executadas_pelo_qa:   # provar que os testes não são vacuosos
+    - "srcset -> assets/galeria-99.webp (inexistente)          -> 3 testes FALHARAM"
+    - "asset órfão no disco (sobra-curadoria.jpg)              -> tracking-browser 1 FALHOU (22/23)"
+    - "chip 'Yoga' -> 'Pilates'                                -> 1 FALHOU"
+    - "fundo da banda -> assets/banda-fundo.jpg (exclusivo)    -> 2 FALHARAM"
+    - "remover html{scroll-padding-top}                        -> 1 FALHOU"
+
+  contraprova_visual_dos_2_bugs:  # Playwright, medição geométrica, não impressão
+    bug_1_celula_vazia_galeria:
+      com_fix: "375px -> grid 2col x 5lin, BURACOS = nenhum"
+      sem_fix: "removido .g-wide{grid-column:span 1} -> BURACOS = [linha1/col2, linha2/col2]"
+      veredito: "corrigido de fato, não apenas editado"
+    bug_2_texto_sob_whatsapp:
+      com_fix: "1440px -> <p> 528px de largura, right=1208, wa.left=1360, COLIDE=false"
+      sem_fix: "removido max-width:62ch -> <p> 739px, right=1420 > wa.left=1360, COLIDE=true"
+      veredito: "corrigido de fato, não apenas editado"
+
+  contraste_banda_cta:
+    metodo: "PIL + luminância relativa WCAG, medida pelo QA — não o número do @dev"
+    galeria_05_luminancia_media: "106.6 / 255 (a MAIS escura das 9; @dev relatou 107 — confere)"
+    contraste_texto_branco_com_overlay_0_55: "13.30:1"
+    contraste_texto_branco_com_overlay_0_68: "15.96:1"
+    pior_pixel_da_imagem_inteira_com_overlay_0_55: "5.53:1 (ainda acima do AA 4.5:1)"
+    veredito: "contraste suficiente com folga em todo ponto da imagem"
+
+  curadoria_galeria_D3:
+    fachada: 1     # galeria-02 <- Fachada/Fachada_2 (g-wide, 1200x545 = 2.20:1 [L])
+    rooftop: 3     # galeria-01 Terraço (g-tall, 900x900 [Q]), 03 Sport bar, 04 Pilates
+    terreo: 3      # galeria-05 Piscina privativa gourmet (g-wide [L]), 06 Salão de Festas, 07 Fireplace
+    decorado: 2    # galeria-08 sala estar+cozinha, 09 suíte (ambos de "Decorado 1")
+    humanizadas: 0 # as 4 são .png de plantas; nenhum .png foi gerado — proibição respeitada
+    slots: "2 g-wide receberam [L] (ratio 2.20); 1 g-tall recebeu [Q] (ratio 1.00) — conforme a restrição vinculante"
+    conferencia: "as 9 imagens foram ABERTAS e o conteúdo bate com o alt de cada uma"
+
+  nav_fixo:
+    metodo: "Playwright: clicar cada link do nav e medir topoSeção vs fundoHeader"
+    "1440px": "header 67.2px, scroll-padding-top 72px — folga do 1º elemento textual: 85.6 / 106.5 / 85.4 / 107.3 / 194.3px"
+    "375px":  "header 57.6px — folga: 66.6 / 337.9 / 66.7 / 325.6 / 345.4px"
+    "768px":  "header 57.6px — folga: 66.8 / 338.8 / 66.6 / 612.4 / 639.9px"
+    veredito: "nenhuma âncora esconde o topo da seção atrás do header, nos 3 breakpoints"
+
+  runtime:
+    console: "limpo — 0 erro JS, 0 pageerror. Único warning: Meta pixel indisponível em localhost (ambiental)"
+    overflow_horizontal: "ausente em 320 / 375 / 768 / 1440px (scrollWidth == clientWidth)"
+    imagens: "20 no DOM, 0 quebradas, 15 servidas em .webp, 0 sem alt"
+    lightbox: "abre no clique, usa currentSrc (.webp), fecha com Escape e no clique no fundo"
+    menu_mobile: "aria-expanded false->true->false; 5 links + CTA; fecha ao clicar em link"
+    foco_visivel: "Tab real -> outline 2px solid var(--dourado) via :focus-visible nos 6 itens do nav"
+    ac14_initiate_checkout: "1 disparo após 3 focos distintos (trava de uma vez só preservada)"
+
+  qualidade:
+    lint: "turbo lint --force -> 8/8 tasks OK, 0 errors, 30 warnings (todos pré-existentes em packages/web)"
+    type_check_landing: "tsc --strict sobre secoes-institucionais.test.ts + tracking-browser.test.ts -> 0 erros"
+
+# ---------------------------------------------------------------------------
+issues:
+  - severity: low
+    category: requirements
+    id: "86.13-QA-001"
+    description: >
+      Stat 5 da seção Overview traz o número grande "2 subsolos + rooftop" com a legenda
+      "lazer completo em dois níveis". Pela Ficha Técnica os 2 subsolos são de garagem;
+      o lazer está no térreo e no rooftop. A legenda pode sugerir que o lazer ocupa os
+      subsolos.
+    recommendation: >
+      NÃO é defeito de implementação — o texto está literalmente conforme a AC3, travada
+      pelo stakeholder em 2026-09-03 (D1). Levar ao @po/stakeholder se quiser precisão
+      ("térreo + rooftop"). O @dev não tem autoridade para alterar AC travada.
+    blocking: false
+
+  - severity: low
+    category: code
+    id: "86.13-QA-002"
+    description: >
+      `.banda{background-attachment:fixed}` só volta a `scroll` no @media (max-width:560px).
+      Entre 561px e 979.98px (tablets/iPad) o `fixed` permanece — e o iOS Safari o ignora
+      em qualquer largura.
+    recommendation: >
+      Cosmético. Herdado do padrão do `.band` da landing irmã e explicitamente autorizado
+      pela AC7. Screenshot a 768px conferido pelo QA: banda legível, sem distorção.
+      Registrar como dívida menor, não corrigir nesta story.
+    blocking: false
+
+  - severity: low
+    category: docs
+    id: "86.13-QA-003"
+    description: >
+      O File List não menciona os 3 arquivos de `.claude/agent-memory/aios-dev/` alterados
+      nos commits 083526d8 e a1a47d56.
+    recommendation: >
+      Sem impacto de produto. Conformidade literal com a DoD #5 mantida (nada de código
+      fora de `landing-pages/yarden/`). Anotar no próximo commit de memória.
+    blocking: false
+
+  - severity: info
+    category: tests
+    id: "86.13-QA-004"
+    description: >
+      A suíte completa da raiz mostra 71 asserções falhas em 3 arquivos de `packages/web`
+      e 12 erros em `turbo type-check`. Nenhum tem relação com esta story.
+    recommendation: >
+      Causa provada pelo QA, não presumida: (1) `git log merge-base..HEAD -- packages/`
+      é VAZIO — a branch inteira nunca tocou `packages/`; (2) os 4 arquivos envolvidos têm
+      blob idêntico entre 06e9ecfa e HEAD; (3) `node_modules` desta worktree é symlink para
+      `/Users/lucasprado/trifold-crm/node_modules`, instalado para o estado de `main`, que
+      está 18 commits à frente — daí `@trifold/ai/src/flows/loop-breaker` e os símbolos de
+      `@trifold/shared` não resolverem. Artefato de ambiente, não regressão.
+    blocking: false
+
+waivers: []
+
+acceptance_criteria_trace:
+  AC1:  "PASS — header#topo fixo, z-index 50, 5 links + CTA, fundo var(--marrom) (rgb(141,120,97)) ao passar de 60px, hambúrguer com aria-label/aria-expanded, scroll-padding-top:72px."
+  AC2:  "PASS — header transparente sobre o Hero (rgba(0,0,0,0)); zero sobreposição de .hero-brand/.hero-form/.hero-form--estatico em 1440/768/375px."
+  AC3:  "PASS — 6 stats exatos e na ordem travada; zero 'R$', zero 'entrada', zero 79,81 / 1.344 / 6.128; fundo --navy."
+  AC4:  "PASS — 6 chips exatos e na ordem travada; foto via <picture> (lazer-terreo.{jpg,webp}), não por background-image."
+  AC5:  "PASS — 9 fotos, 2 g-wide [L] + 1 g-tall [Q], todas por <picture> com as 2 URLs em atributo; maior arquivo 181KB; lightbox com currentSrc + Escape; CTA âncora #cadastro."
+  AC6:  "PASS — id=localizacao + kicker; endereço literal; maps.app.goo.gl/RFibC7xZ7KZx6cwQA com target=_blank rel=noopener; 5 POIs como <li> visíveis em 2 colunas; alt do mapa continua listando os marcos; nenhum iframe."
+  AC7:  "PASS — .banda entre Localização e Sobre; fundo galeria-05.jpg (já referenciada por atributo na Galeria, zero asset novo); contraste medido 13.3–15.96:1."
+  AC8:  "PASS — kicker + H2 + parágrafo institucional idênticos por igualdade estrita de string; trifold-fachada servida nos DOIS formatos; sem CTA próprio."
+  AC9:  "PASS — nav.fnav com os 5 links, posicionada entre os logos e o parágrafo de direitos; nada removido do footer."
+  AC10: "PASS — zero evento/formulário/event_id novo; script de interface isolado sem fbq/TrifoldTracking/leadEndpoint; todo CTA é âncora HTML."
+  AC11: "PASS — inventário de literais hex: zero cor nova fora do :root; 1 família de fonte (Montserrat); 2 SVGs, os mesmos de antes."
+  AC12: "PASS — nenhuma estrutura de depoimentos, nenhum placeholder; a única ocorrência de 'iframe' no arquivo é um comentário explicando o veto da AC6."
+  AC13: "PASS — sem overflow em 320/375/768/1440; todas as imagens novas com alt >25 chars, loading=lazy e decoding=async; foco visível confirmado com Tab real."
+  AC14: "PASS — 3 forms com os mesmos ids, 3 live regions, 6 campos presentes, InitiateCheckout dispara 1x após 3 focos distintos; os 3 <form> são byte-idênticos."
+  AC15: "PASS — 35/35 assets referenciados por atributo, 0 órfão, 0 inexistente; tracking-browser.test.ts 23/23 com blob idêntico ao base; ambas as asserções provadas vivas por mutação executada pelo QA."
+
+status_recommendation:
+  from: "Ready for Review"
+  to: "InReview"
+  reason: >
+    Normalizar a nomenclatura para o vocabulário do story-lifecycle.md. NÃO promover para
+    `Done`: as tarefas T12/T13 de infraestrutura da 86-12 seguem pendentes com @devops e
+    `https://trifold.eng.br/yarden/` continua offline — mesma lógica das rodadas anteriores
+    do Epic 86.
+
+next_agent: "@devops (*push) — nenhum bloqueador de qualidade"

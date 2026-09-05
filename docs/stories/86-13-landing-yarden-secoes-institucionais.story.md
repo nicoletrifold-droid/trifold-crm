@@ -1476,4 +1476,196 @@ inexistente (`tracking-browser.test.ts` verde).
 
 ## QA Results
 
-_A preencher pelo @qa após a implementação._
+### Gate: ✅ **PASS** — @qa (Quinn), 2026-09-04
+
+**Gate file:** `docs/qa/gates/86-13-landing-yarden-secoes-institucionais.yml`
+**Escopo revisado:** `06e9ecfa..a1a47d56` (3 commits, nenhum pushado)
+**Nenhum bloqueador.** 3 achados `low` + 1 `info`, todos não-bloqueantes.
+
+> **Método:** nada foi aceito por relato do @dev. Cada afirmação do Change Log 0.4
+> que eu podia medir, eu medi de novo — por hash, por mutação, por medição
+> geométrica no navegador e por leitura de pixel. Onde meu número bateu com o do
+> @dev, digo que bateu; onde eu não repeti o método dele, digo isso também.
+
+---
+
+#### 1. AC15 — os dois testes existentes estão intocados (verificação bloqueante)
+
+Não por `git diff` só, mas por identidade de blob:
+
+| Arquivo | blob em `06e9ecfa` | blob em `HEAD` | diff |
+|---|---|---|---|
+| `tracking-browser.test.ts` | `d89c4fc5…` | `d89c4fc5…` | **0 linhas** |
+| `api-proxy.test.ts` | `8d200d24…` | `8d200d24…` | **0 linhas** |
+
+`git diff --name-status 06e9ecfa..HEAD -- 'landing-pages/**/*.test.ts'` devolve
+**um único** arquivo, e é `A` (adicionado): `secoes-institucionais.test.ts`.
+Baseline confirmado por execução: **23/23**. A estratégia de arquivo separado
+funcionou como a AC15 exigia.
+
+**Prova de que os dois guardas da AC15 estão vivos** — mutações que eu mesmo apliquei
+e depois reverti (árvore restaurada a 0 linhas de diff em todas):
+
+| Mutação | Resultado |
+|---|---|
+| `srcset` → `assets/galeria-99.webp` (inexistente) | **3 testes falharam**, incluindo "não referencia asset que não existe no disco" |
+| criar `assets/sobra-curadoria.jpg` sem referência | **tracking-browser 22/23** — pegou o órfão pelo nome |
+| chip `Yoga` → `Pilates` | 1 falhou |
+| fundo da banda → `assets/banda-fundo.jpg` (exclusivo) | 2 falharam |
+| remover `html{scroll-padding-top}` | 1 falhou |
+
+#### 2. Integridade de assets — extrator independente, não o do teste
+
+Escrevi meu próprio extrator (mais amplo que o do teste: inclui `poster` e
+`data-src`, e cruza também os `url()` do CSS):
+
+- **35** arquivos no disco · **35** referenciados por atributo HTML
+- **órfãos: `[]`** · **inexistentes: `[]`**
+- único `url()` do CSS: `galeria-05.jpg` — e ele **está** referenciado por
+  atributo na Galeria, então não cria arquivo próprio (era exatamente a armadilha da AC7/AC15)
+- nenhum asset com `vind` no nome
+- maior arquivo novo: **196KB** (`lazer-terreo.jpg`), teto 330KB
+- as **11 origens** alegadas no File List existem no Google Drive com o nome exato
+
+#### 3. Tracking intacto — por sha256 dos blocos, medido por mim
+
+Extraí `<script>`, `<noscript>` e `<form>` de `06e9ecfa` e de `HEAD` e comparei hash:
+
+| Bloco | sha (antes) | sha (depois) |
+|---|---|---|
+| script Pixel (528 B) | `1718484caaba2d4c` | `1718484caaba2d4c` |
+| script tracking (6376 B) | `fae3adae3c21483b` | `fae3adae3c21483b` |
+| script envio (8260 B) | `91c53f52fed102b3` | `91c53f52fed102b3` |
+| `<noscript>` ×2 | `25d18d70…` / `bd4a7032…` | idênticos |
+| `leadForm` / `leadFormMobile` / `leadFormSaber` | `aa7f5dab` / `ce1ab784` / `28e38b3b` | idênticos |
+
+*(Os números do @dev — 511/6.359/8.243 — são os mesmos menos os 17 bytes de
+`<script></script>`. Convergem.)*
+
+O 4º bloco `<script>` (3056 B, novo) foi lido linha a linha: **sem** `fbq`, **sem**
+`TrifoldTracking`, **sem** `leadEndpoint`, **sem** `leadForm`.
+
+Dataset do Pixel `1337310707164669`: **3 ocorrências antes, 3 depois** — comentário
+do `<head>`, `window.TRIFOLD_PIXEL_ID` e a URL do `<noscript>`.
+
+#### 4. Os 2 bugs — corrigidos de fato, provado por contraprova
+
+Não bastava ver que estavam bons agora; reverti cada fix e medi o bug reaparecer:
+
+| Bug | Com o fix | **Sem o fix** (contraprova) |
+|---|---|---|
+| Célula vazia no grid mobile | 375px → 2col×5lin, **buracos: nenhum** | removido `.g-wide{grid-column:span 1}` → **buracos: linha1/col2, linha2/col2** |
+| Texto do "Sobre" sob o WhatsApp | 1440px → `<p>` 528px, `right=1208` < `wa.left=1360`, **colide=false** | removido `max-width:62ch` → `<p>` **739px**, `right=1420` > `1360`, **colide=true** |
+
+#### 5. Curadoria D3/D3.1 — composição conferida foto a foto
+
+Abri as 9 imagens e confirmei que o conteúdo bate com cada `alt`:
+
+| Slot | Arquivo | Categoria | Proporção |
+|---|---|---|---|
+| `.g-tall` | `galeria-01` Terraço | Rooftop | 900×900 **[Q]** ✓ |
+| `.g-wide` | `galeria-02` Fachada_2 | **Fachada** | 1200×545 **[L]** ✓ |
+| — | `galeria-03` Sport bar | Rooftop | [L] |
+| — | `galeria-04` Pilates | Rooftop | [L] |
+| `.g-wide` | `galeria-05` Piscina privativa gourmet | Térreo | 1200×545 **[L]** ✓ |
+| — | `galeria-06` Salão de Festas | Térreo | [L] |
+| — | `galeria-07` Fireplace | Térreo | [L] |
+| — | `galeria-08` Decorado 1 sala+cozinha | Decorado | [L] |
+| — | `galeria-09` Decorado 1 suíte | Decorado | [L] |
+
+**1 Fachada + 3 Rooftop + 3 Térreo + 2 Decorado = 9.** Zero Humanizadas — as 4 são
+`.png` no Drive e **nenhum `.png` foi gerado**. Nenhuma `[Q]` em slot largo. Nenhum
+`Rooftop/Lounge` nem `Térreo/Piscina`, como a AC5 orientava.
+
+**Contraste da banda (D3.1) — medi eu mesmo, com luminância relativa WCAG:**
+
+| Foto | Luminância média | | |
+|---|---|---|---|
+| **`galeria-05`** | **106,6** | ← a mais escura das 9 | |
+| `galeria-02` | 127,0 | | |
+| `galeria-06` | 165,4 | ← a mais clara | |
+
+Com o overlay `rgba(0,0,0,.55)→.68` que a `.banda` aplica, o contraste do texto
+branco fica em **13,30:1 a 15,96:1**. E o **pixel mais claro da imagem inteira**,
+sob o overlay mais fraco, ainda dá **5,53:1** — acima do AA (4,5:1). A escolha
+está correta e o número 107 do @dev confere.
+
+#### 6. Chips do Lazer — os 6 exatos
+
+`Sports bar (rooftop)` · `Yoga` · `Brinquedoteca` · `Petcare` ·
+`Espaço gourmet com piscina privativa` · `E muito mais` — conferidos no DOM e em
+screenshot a 1440px. Nenhum sétimo.
+
+#### 7. Localização redesenhada
+
+Endereço em destaque (`Rua Carlos Meneghetti, 168 — Gleba Itororó, Maringá`), link
+`https://maps.app.goo.gl/RFibC7xZ7KZx6cwQA` com `target="_blank" rel="noopener"`,
+e os 5 POIs como `<li>` **visíveis** em 2 colunas (Catedral · Parque do Ingá ·
+Av. JK | Bosque II · Av. Itororó) — confirmado em screenshot, não só no DOM. O `alt`
+do mapa continua listando os marcos. Nenhum `<iframe>` na página (a única ocorrência
+da palavra é um comentário explicando o veto).
+
+#### 8. Nav fixo — medido em 3 breakpoints
+
+| Viewport | Altura do header | Folga do 1º elemento textual em cada uma das 5 âncoras |
+|---|---|---|
+| 1440px | 67,2px | 85,6 / 106,5 / 85,4 / 107,3 / 194,3px |
+| 768px | 57,6px | 66,8 / 338,8 / 66,6 / 612,4 / 639,9px |
+| 375px | 57,6px | 66,6 / 337,9 / 66,7 / 325,6 / 345,4px |
+
+`scroll-padding-top:72px` > header em todos. **Nenhuma âncora esconde o topo da
+seção.** Header transparente sobre o Hero, `rgb(141,120,97)` = `--marrom` ao passar
+de 60px, e zero sobreposição de `.hero-brand`/`.hero-form`/`.hero-form--estatico`.
+
+#### 9. Suíte, typecheck, lint
+
+- `landing-pages/`: **103/103** (23 tracking-browser + 27 api-proxy Yarden + 39 novos + 14 Vind)
+- `turbo lint --force`: **8/8 tasks, 0 errors**, 30 warnings pré-existentes
+- `tsc --strict` sobre `secoes-institucionais.test.ts` **e** `tracking-browser.test.ts`: **0 erros**
+- Runtime (Playwright): console **sem erro JS**; 0 imagens quebradas; 15 servidas em
+  `.webp`; 0 sem `alt`; sem overflow horizontal em 320/375/768/1440; lightbox abre com
+  `currentSrc` e fecha no `Escape`; menu mobile alterna `aria-expanded` e fecha ao clicar
+  em link; foco visível (`outline 2px var(--dourado)`) com **Tab real**;
+  `InitiateCheckout` dispara **1×** após 3 focos distintos.
+
+**Sobre as 71 falhas em `packages/web`** (e os 12 erros de `type-check`): **não são
+desta story, e provei em vez de presumir.** `git log $(git merge-base origin/main HEAD)..HEAD -- packages/`
+é **vazio** — a branch inteira nunca tocou `packages/`. Os 4 arquivos envolvidos têm
+blob idêntico entre `06e9ecfa` e `HEAD`. E a causa é o `node_modules` desta worktree
+ser symlink para o da raiz, instalado para um `main` que está **18 commits à frente** —
+daí `@trifold/ai/src/flows/loop-breaker` e os símbolos de `@trifold/shared` não
+resolverem. Artefato de ambiente, o mesmo já visto em rodadas anteriores.
+
+#### 10. Nenhum push
+
+`git ls-remote origin fix/86-12-yarden-lancamento-mapa` → **`bd44d299`** (último commit
+da 86-12). Os 3 commits da 86-13 **não saíram da máquina**. ✅
+
+---
+
+### Achados (nenhum bloqueante)
+
+| ID | Sev | Achado | Encaminhamento |
+|---|---|---|---|
+| 86.13-QA-001 | low | Stat 5: número `2 subsolos + rooftop` com legenda `lazer completo em dois níveis`. Pela Ficha, os 2 subsolos são **garagem** — o lazer é térreo + rooftop. | **Não é defeito de implementação:** está literalmente conforme a AC3 travada pelo stakeholder (D1). Se quiser precisar, é decisão do @po/stakeholder, não do @dev. |
+| 86.13-QA-002 | low | `.banda{background-attachment:fixed}` só volta a `scroll` abaixo de 560px; entre 561–979,98px (iPad) o `fixed` fica, e o iOS o ignora. | Cosmético, herdado do `.band` da landing irmã e autorizado pela AC7. Conferi a 768px em screenshot: legível, sem distorção. Dívida menor. |
+| 86.13-QA-003 | low | File List não cita os 3 arquivos de `.claude/agent-memory/aios-dev/` alterados nos commits. | Sem impacto de produto; a DoD #5 (nada de código fora de `landing-pages/yarden/`) continua satisfeita. |
+| 86.13-QA-004 | info | 71 falhas de vitest + 12 erros de type-check em `packages/web`. | Ambiental e pré-existente — causa provada acima. Não abrir defeito nesta story. |
+
+### Traço AC → veredito
+
+`AC1` ✅ · `AC2` ✅ · `AC3` ✅ · `AC4` ✅ · `AC5` ✅ · `AC6` ✅ · `AC7` ✅ · `AC8` ✅
+`AC9` ✅ · `AC10` ✅ · `AC11` ✅ · `AC12` ✅ · `AC13` ✅ · `AC14` ✅ · **`AC15` ✅**
+
+### Recomendação de status
+
+`Ready for Review` → **`InReview`** (normalização de vocabulário do `story-lifecycle.md`).
+
+⚠️ **NÃO promover para `Done`.** As tarefas T12/T13 de infraestrutura da 86-12 seguem
+pendentes com @devops e `https://trifold.eng.br/yarden/` continua offline — mesma
+lógica das rodadas anteriores do Epic 86. A qualidade do código está aprovada; o que
+falta é deploy, e deploy não é gate de QA.
+
+**Próximo passo:** `@devops *push` — nenhum bloqueador de qualidade.
+
+— Quinn, guardião da qualidade 🛡️
