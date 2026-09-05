@@ -8,7 +8,16 @@
        em 2026-08-28 (mockup "Yarden LP v1.png") e substituíram o placeholder
        estrutural. NADA de copy foi inventado aqui: cada texto é transcrição
        literal do mockup, com as 2 correções ortográficas registradas no Change
-       Log da story. Os assets de `assets/` são recortes do próprio mockup. -->
+       Log da story. Os assets de `assets/` são recortes do próprio mockup.
+
+       Story 86-13: as 6 seções institucionais (header/nav, O Empreendimento,
+       Lazer, Galeria, banda CTA, Sobre a Trifold), o redesenho da seção de
+       Localização e a nav do rodapé. Nenhuma linha de tracking mudou — zero
+       evento novo, zero formulário novo. Cada número da seção "O
+       Empreendimento" é citação literal da Ficha Técnica oficial; os chips de
+       Lazer são itens literais da mesma Ficha; as 22 imagens novas vêm do book
+       de renders oficial; e o texto de "Sobre a Trifold" é reuso verbatim da
+       landing irmã. Nada de copy sobre o empreendimento foi inventado. -->
   <meta name="description" content="Cadastre-se para receber informações sobre o empreendimento Yarden, da Trifold." />
 
   <!-- =====================================================================
@@ -231,16 +240,20 @@
       --erro:#b23b3b;
 
       --fonte:'Montserrat', -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
-      /* "EM BREVE" é serifado no mockup. A face exata não está no IDV do
-         empreendimento e são 8 glifos decorativos — não vale uma segunda
-         requisição de webfont, então usa a serifada do sistema. */
+      /* O rótulo acima do wordmark é serifado no mockup. A face exata não está
+         no IDV do empreendimento e são poucos glifos decorativos — não vale uma
+         segunda requisição de webfont, então usa a serifada do sistema. */
       --fonte-serif:Georgia, 'Times New Roman', serif;
 
       --max:1464px;             /* largura do mockup a 1x (2928 / 2) */
     }
 
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-    html{scroll-behavior:smooth}
+    /* `scroll-padding-top` (Story 86-13, AC1): o header é fixo, então sem isto
+       o clique numa âncora do nav para o scroll com o topo da seção JÁ escondido
+       atrás dele. Declarado uma vez no `html` em vez de `scroll-margin-top` em
+       cada seção — vale para as 6 âncoras de uma vez, inclusive as futuras. */
+    html{scroll-behavior:smooth;scroll-padding-top:72px}
     body{
       font-family:var(--fonte);
       color:var(--cinza-texto);
@@ -251,6 +264,52 @@
     }
     img{max-width:100%}
     a{color:inherit}
+
+    /* ================= HEADER / NAV (Story 86-13, AC1) =================
+       Transparente sobre o Hero; ganha fundo sólido a partir de 60px de scroll
+       (mesmo limiar da landing irmã).
+
+       O fundo ao rolar é `--marrom`, não `--navy`: marrom é a cor que a página
+       repete no card do hero, nos títulos de seção e no botão da seção "Quer
+       saber mais?", então o header reforça a identidade ao rolar. `--navy` fica
+       reservado ao rodapé, que é o único bloco escuro-frio da página.
+
+       `z-index:50` fica acima do conteúdo do Hero e abaixo do WhatsApp
+       flutuante (60) e do lightbox (100). */
+    .topo{
+      position:fixed;top:0;left:0;right:0;z-index:50;
+      display:flex;align-items:center;justify-content:space-between;gap:16px;
+      padding:14px clamp(18px,2.2vw,32px);
+      transition:background .3s ease,box-shadow .3s ease;
+    }
+    .topo.rolado{background:var(--marrom);box-shadow:0 6px 20px rgba(0,0,0,.25)}
+    /* A sombra no logo é o que o mantém legível sobre a parte clara da foto do
+       hero, enquanto o header ainda está transparente. */
+    .topo-logo{height:26px;width:auto;display:block;filter:drop-shadow(0 2px 6px rgba(0,0,0,.45))}
+    .topo-links{display:flex;align-items:center;gap:clamp(14px,1.9vw,28px)}
+    .topo-links a{
+      color:var(--branco);font-size:clamp(12px,.89vw,13px);font-weight:500;
+      letter-spacing:.04em;text-decoration:none;opacity:.92;
+      text-shadow:0 1px 6px rgba(0,0,0,.45);
+    }
+    .topo-links a:hover{opacity:1}
+    .topo-links .btn-topo{
+      background:var(--dourado);color:var(--dourado-tinta);opacity:1;
+      padding:10px 22px;border-radius:999px;font-weight:700;text-shadow:none;
+      transition:filter .18s;
+    }
+    .topo-links .btn-topo:hover{filter:brightness(.95)}
+    .topo-toggle{
+      display:none;background:none;border:0;color:var(--branco);
+      font-size:1.6rem;line-height:1;cursor:pointer;padding:2px 6px;
+      text-shadow:0 1px 6px rgba(0,0,0,.45);
+    }
+    /* Foco visível explícito (AC13): sobre foto ou sobre `--marrom` o anel
+       padrão do navegador some; o dourado é a única cor da paleta que contrasta
+       nos dois fundos. */
+    .topo-links a:focus-visible,
+    .topo-toggle:focus-visible,
+    .fnav a:focus-visible{outline:2px solid var(--dourado);outline-offset:3px;border-radius:3px}
 
     /* ================= HERO =================
        A foto é servida em tamanho natural (`width:100%;height:auto`), sem
@@ -270,7 +329,10 @@
     }
     .hero-overlay{position:absolute;inset:0}
 
-    /* marca "EM BREVE | yarden" — x 402..1241, y 710..930 no mockup */
+    /* marca "{rótulo} | yarden" — x 402..1241, y 710..930 no mockup.
+       O mockup escreve "EM BREVE"; o rótulo publicado é "LANÇAMENTO" por
+       decisão do stakeholder (o empreendimento saiu do pré-lançamento).
+       Geometria e estilo seguem o mockup — só o texto divergiu. */
     .hero-brand{
       position:absolute;left:13.7%;top:38.6%;width:28.7%;
       display:flex;align-items:stretch;gap:4.2%;
@@ -343,17 +405,43 @@
       max-width:var(--max);margin:0 auto;
       display:grid;align-items:center;
     }
+    /* --- Respiro das seções `.split` (ajuste de 2026-09-05) ---------------
+       Os percentuais abaixo são geometria do mockup (2928px de largura) e
+       ficam como estavam ATÉ 1464px. O que mudou foi o comportamento acima
+       disso e o rodapé da seção 2:
+
+       1) Percentual de padding resolve contra a largura do BLOCO CONTINENTE
+          (o `<main>`/viewport), mas a própria `.split` para de crescer em
+          `max-width:1464px`. Acima de ~1464px o padding continuava crescendo
+          DENTRO de uma caixa que não crescia: a 2560px o `padding-left` de
+          13.8% virava 353px de uma caixa de 1464px, espremendo o conteúdo
+          contra a direita e abrindo um vazio à esquerda. O `min()` congela
+          cada percentual no valor que ele tem quando a seção atinge `--max`
+          — a 1464px nada muda, acima disso a seção renderiza igual a 1464px.
+
+       2) O piso de 40px nos lados onde a imagem sangra (`right` na natureza,
+          `left` na invista) impede que a foto fique a 34–38px da borda da
+          viewport a 1440px. É o mesmo piso usado no recuo da `.lazer`, então
+          as três fotos ficam na mesma linha vertical a partir da borda.
+
+       3) O `padding-bottom:0` da natureza vinha da 86-12, quando a seção
+          seguinte era a `.split--invista` (que traz `padding-top` próprio) —
+          o respiro era EMPRESTADO da vizinha. A 86-13 inseriu a `.lazer`
+          entre as duas, e a `.lazer` não tem padding no container: a foto do
+          lounge passou a terminar no MESMO pixel em que a faixa bege começa
+          (medido: 0px a 1440/1728/1920 e 14px a 2560). Agora o respiro é da
+          própria seção. */
     /* seção 2 — texto à esquerda, imagem sangrando à direita */
     .split--natureza{
       grid-template-columns:394fr 776fr;
-      gap:3.55%;
-      padding:5.95% 2.66% 0 13.8%;
+      gap:min(3.55%,52px);
+      padding:min(5.95%,87px) clamp(40px,2.66%,48px) min(6.4%,94px) min(13.8%,202px);
     }
     /* seção 3 — imagem sangrando à esquerda, texto à direita */
     .split--invista{
       grid-template-columns:635fr 421fr;
-      gap:11.54%;
-      padding:7.1% 13.87% 8% 2.39%;
+      gap:min(11.54%,169px);
+      padding:min(7.1%,104px) min(13.87%,203px) min(8%,117px) clamp(40px,2.39%,48px);
     }
     .split img{display:block;width:100%;height:auto}
 
@@ -363,8 +451,170 @@
       margin-bottom:1.6em;
     }
     .texto-secao{font-size:clamp(14px,1.03vw,16px);line-height:1.5}
+    /* Coluna de texto da Localização alinhada à direita — a coluna INTEIRA.
+       Até 2026-09-05 só o H2 e o parágrafo estavam aqui; o kicker, o
+       endereço, a linha do Maps e a lista de pontos ficavam à esquerda, num
+       bloco que o resto da coluna alinhava à direita. O reset de mobile logo
+       abaixo (`@media (max-width:979.98px)`) já listava kicker/endereço/Maps
+       desde a 86-13 — ou seja, o alinhamento à direita deles era o esperado e
+       só faltava a regra de desktop. */
+    .split--invista .kicker,
     .split--invista .titulo-secao,
-    .split--invista .texto-secao{text-align:right}
+    .split--invista .texto-secao,
+    .split--invista .loc-endereco,
+    .split--invista .loc-maps-linha,
+    .split--invista .loc-pontos{text-align:right}
+
+    /* Rótulo curto maiúsculo acima do H2, comum às seções novas (Story 86-13).
+       As 3 seções que já existiam não tinham nenhum — "invista" ganha o seu na
+       AC6; "natureza" e "quer saber mais" seguem sem, de propósito. */
+    .kicker{
+      display:block;color:var(--marrom);
+      font-size:clamp(11px,.82vw,12px);font-weight:600;
+      letter-spacing:.18em;text-transform:uppercase;margin-bottom:1em;
+    }
+
+    /* CTA de seção — mesma forma do botão da seção "Quer saber mais?"
+       (`--marrom` sobre claro), como link em vez de <button>: é navegação por
+       âncora para `#cadastro`, não submissão (AC10). */
+    .btn-secao{
+      display:inline-block;background:var(--marrom);color:var(--branco);
+      text-decoration:none;padding:15px 34px;border-radius:3px;
+      font-weight:700;font-size:clamp(14px,1.16vw,18px);transition:filter .18s;
+    }
+    .btn-secao:hover{filter:brightness(1.08)}
+
+    /* ================= SEÇÃO NOVA — O EMPREENDIMENTO (AC3) =================
+       Os 6 números são citação literal da Ficha Técnica oficial (ver AC3 da
+       story 86-13). NÃO existe stat de preço/entrada: a Ficha não traz o dado
+       em nenhuma das 7 páginas, e importar o do empreendimento irmão seria
+       inventar (Artigo IV). */
+    .visao{background:var(--navy);color:var(--branco);text-align:center;padding:clamp(52px,5.6vw,88px) 20px}
+    .visao-wrap{max-width:var(--max);margin:0 auto}
+    .visao .kicker{color:var(--dourado)}
+    .visao h2{
+      font-family:var(--fonte);color:var(--creme);font-weight:400;
+      text-transform:uppercase;letter-spacing:.06em;
+      font-size:clamp(26px,3.2vw,44px);line-height:1.1;
+    }
+    .visao .local{
+      color:rgba(255,255,255,.72);font-size:clamp(12px,1.03vw,15px);
+      letter-spacing:.08em;margin-top:.7em;
+    }
+    .numeros{
+      display:grid;grid-template-columns:repeat(3,1fr);
+      gap:clamp(12px,1.4vw,20px);margin-top:clamp(28px,3.4vw,48px);
+    }
+    .numero{
+      padding:clamp(20px,2.2vw,30px) 16px;border-radius:5px;
+      background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);
+    }
+    .numero-grande{color:var(--branco);font-size:clamp(19px,2.1vw,30px);font-weight:600;line-height:1.15}
+    .numero-legenda{color:rgba(255,255,255,.72);font-size:clamp(12px,.96vw,14px);line-height:1.4;margin-top:.7em}
+
+    /* ================= SEÇÃO NOVA — LAZER (AC4) =================
+       Split texto/foto. A foto vai por <picture> na marcação e é posicionada
+       por CSS (`object-fit:cover` numa caixa absoluta) — NÃO por
+       `background-image`: um arquivo referenciado só pelo CSS é invisível para
+       o extrator de `tracking-browser.test.ts` e contaria como asset órfão
+       (AC15). */
+    .lazer{display:grid;grid-template-columns:1fr 1fr;align-items:stretch}
+    .lazer-txt{
+      background:var(--tan);display:flex;flex-direction:column;justify-content:center;
+      padding:clamp(44px,5.4vw,84px) clamp(20px,4.6vw,72px);
+    }
+    /* `--cinza-texto` sobre `--tan` fica com contraste insuficiente (dois
+       tons médios) — sobre o creme a página já usa marrom, como na seção
+       "Quer saber mais?". */
+    .lazer-txt .texto-secao{color:var(--marrom-escuro)}
+    .lazer-img{position:relative;min-height:clamp(300px,34vw,520px)}
+    .lazer-img picture{position:absolute;inset:0;display:block}
+    .lazer-img img{display:block;width:100%;height:100%;object-fit:cover}
+    .chips{display:flex;flex-wrap:wrap;gap:10px;margin-top:1.9em}
+    .chip{
+      background:var(--branco);border:1px solid var(--marrom);border-radius:999px;
+      padding:8px 16px;font-size:clamp(12px,.96vw,14px);color:var(--marrom);font-weight:500;
+    }
+
+    /* ================= SEÇÃO NOVA — GALERIA (AC5) ================= */
+    .galeria{padding:clamp(52px,5.6vw,88px) 20px;text-align:center}
+    .galeria-wrap{max-width:var(--max);margin:0 auto}
+    .galeria .texto-secao{max-width:62ch;margin:0 auto}
+    .galeria-grid{
+      display:grid;grid-template-columns:repeat(4,1fr);grid-auto-rows:220px;
+      gap:14px;margin-top:clamp(28px,3.4vw,44px);
+    }
+    .galeria-grid figure{position:relative;overflow:hidden;border-radius:5px;cursor:zoom-in}
+    .galeria-grid picture{display:block;width:100%;height:100%}
+    .galeria-grid img{display:block;width:100%;height:100%;object-fit:cover;transition:transform .5s ease}
+    .galeria-grid figure:hover img{transform:scale(1.07)}
+    /* Nenhum render do book é retrato: o slot alto sempre recorta. As duas
+       imagens quadradas do book são as que perdem menos ali, e os 2 slots
+       largos recebem obrigatoriamente paisagem 4000x1818 (AC5, Risco #5). */
+    .g-tall{grid-row:span 2}
+    .g-wide{grid-column:span 2}
+    .galeria .btn-secao{margin-top:clamp(24px,2.8vw,40px)}
+
+    /* ================= LOCALIZAÇÃO — acréscimos da AC6 =================
+       Endereço, link do Maps e os 5 pontos de referência como TEXTO VISÍVEL.
+       Antes desta story eles existiam só no `alt` da imagem do mapa — que
+       continua listando os marcos: a lista é acréscimo, não substituição. */
+    .loc-endereco{color:var(--marrom-escuro);font-weight:600;font-size:clamp(14px,1.16vw,18px);margin-top:1.7em}
+    .loc-maps-linha{margin-top:.5em}
+    .loc-maps{color:var(--marrom);font-size:clamp(12px,.96vw,14px);font-weight:600;text-decoration:underline}
+    .loc-pontos{list-style:none;columns:2;column-gap:24px;margin-top:1.7em;text-align:left}
+    .loc-pontos li{
+      position:relative;padding:9px 0 9px 20px;break-inside:avoid;
+      font-size:clamp(13px,1.03vw,15px);border-bottom:1px solid rgba(0,0,0,.08);
+    }
+    .loc-pontos li::before{
+      content:"";position:absolute;left:0;top:1.05em;
+      width:8px;height:8px;border-radius:50%;background:var(--dourado);
+    }
+    /* Com a coluna alinhada à direita, o ponto dourado troca de lado junto
+       com o texto — senão ele fica órfão, a 20px de distância da palavra que
+       marca. É espelhamento, não remoção: o ponto continua visível e na mesma
+       cor. O reset para a esquerda está no breakpoint de mobile. */
+    .split--invista .loc-pontos li{padding:9px 20px 9px 0}
+    .split--invista .loc-pontos li::before{left:auto;right:0}
+
+    /* ================= SEÇÃO NOVA — BANDA CTA (AC7) =================
+       O fundo reaproveita `galeria-05`, que a Galeria já referencia por
+       <picture> — então este `background-image` não cria arquivo novo nem
+       arquivo órfão (AC15). Foi a escolhida por contraste: das 9, é a de menor
+       luminância média (107 de 255) e a mais "calma" entre as escuras, medido
+       arquivo por arquivo, não a olho.
+       `fixed` só no desktop: no mobile o parallax é ignorado (iOS) e a imagem
+       estica — o override para `scroll` está no breakpoint de 560px. */
+    .banda{
+      color:var(--branco);text-align:center;padding:clamp(64px,8vw,120px) 20px;
+      background:linear-gradient(rgba(0,0,0,.55),rgba(0,0,0,.68)),
+                 url('assets/galeria-05.jpg') center/cover fixed no-repeat;
+    }
+    .banda h2{
+      font-family:var(--fonte);color:var(--branco);font-weight:400;
+      text-transform:uppercase;letter-spacing:.04em;
+      font-size:clamp(21px,2.6vw,36px);line-height:1.2;
+    }
+    .banda p{max-width:54ch;margin:1.1em auto 0;color:rgba(255,255,255,.92);font-size:clamp(14px,1.03vw,16px)}
+    .banda .btn-secao{margin-top:2em;background:var(--dourado);color:var(--dourado-tinta)}
+    .banda .btn-secao:hover{filter:brightness(.95)}
+
+    /* ================= SEÇÃO NOVA — SOBRE A TRIFOLD (AC8) =================
+       Texto e foto são reuso VERBATIM da landing irmã (decisão D4 do
+       stakeholder): mesma empresa, mesmo prédio, texto já publicado. Sem CTA
+       próprio — a seção seguinte já é um formulário. */
+    .sobre{padding:clamp(52px,5.6vw,88px) 20px}
+    .sobre-grid{
+      max-width:var(--max);margin:0 auto;display:grid;
+      grid-template-columns:.9fr 1.1fr;gap:clamp(28px,4vw,56px);align-items:center;
+    }
+    .sobre-img img{display:block;width:100%;height:auto;border-radius:5px}
+    /* Medida de linha limitada: sem isto o parágrafo institucional chega a
+       ~700px de linha e a última linha corre POR BAIXO do botão flutuante de
+       WhatsApp (fixo em `right:22px`), que fica exatamente na altura dele
+       nesta seção. Verificado em screenshot a 1440px. */
+    .sobre .texto-secao{max-width:62ch}
 
     /* ================= SEÇÃO 4 — QUER SABER MAIS? ================= */
     .saber{background:var(--tan)}
@@ -408,7 +658,21 @@
       max-width:var(--max);margin:0 auto;
       display:flex;align-items:center;justify-content:center;flex-wrap:wrap;
       gap:clamp(24px,8.9%,130px);
+      /* O `gap` acima chega a 130px, o que como espaço ENTRE LINHAS ficaria
+         absurdo depois que a `.fnav` da AC9 passou a quebrar linha. */
+      row-gap:18px;
     }
+    /* Nav do rodapé (Story 86-13, AC9) — os mesmos links do header, inserida
+       ENTRE os logos e o texto de direitos. `flex:1 0 100%` a põe na própria
+       linha: numa linha só com os 2 logos e o parágrafo ela estouraria. */
+    .fnav{
+      flex:1 0 100%;order:2;
+      display:flex;justify-content:center;flex-wrap:wrap;
+      gap:clamp(14px,2.2vw,28px);font-size:clamp(11px,.89vw,13px);
+    }
+    .fnav a{text-decoration:none;opacity:.85}
+    .fnav a:hover{opacity:1;text-decoration:underline}
+    .rodape .direitos{order:3}
     .rodape .logo-trifold{height:18px;width:auto;display:block}
     .rodape .logo-yarden{height:24px;width:auto;display:block}
     .rodape .direitos{font-size:clamp(11px,.89vw,13px);line-height:1.4;text-align:center;max-width:24ch}
@@ -425,10 +689,42 @@
     .wa-float:hover{transform:scale(1.08)}
     .wa-float svg{width:30px;height:30px;fill:#fff}
 
+    /* ================= LIGHTBOX DA GALERIA (Story 86-13, AC5) =================
+       `z-index:100` — acima do header fixo (50) e do WhatsApp flutuante (60),
+       senão os dois aparecem por cima da foto ampliada. */
+    .lb{
+      position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.9);
+      display:none;align-items:center;justify-content:center;padding:24px;
+    }
+    .lb.open{display:flex}
+    .lb img{max-width:92vw;max-height:88vh;border-radius:5px}
+    .lb .fechar{
+      position:absolute;top:12px;right:20px;background:none;border:0;
+      color:var(--branco);font-size:2.4rem;line-height:1;cursor:pointer;padding:4px 10px;
+    }
+    .lb .fechar:focus-visible{outline:2px solid var(--dourado);outline-offset:2px}
+
     /* ================= DESKTOP ================= */
     @media (min-width:980px){
       .hero-img{aspect-ratio:2928/1802}
       .hero-form--estatico{display:none}
+
+      /* Recuo lateral da `.lazer` no desktop (ajuste de 2026-09-05).
+         A seção nasceu na 86-13 como cópia do padrão full-bleed da `.amen`
+         da landing irmã: grid `1fr 1fr` sem `max-width` e sem padding, então
+         a foto do térreo encostava na borda DIREITA da viewport em todas as
+         larguras (medido `0px` de 390 a 2560) e a 2560px virava uma foto de
+         1280px sangrando na tela inteira. O padrão é intencional na irmã, mas
+         a decisão aqui foi conter: o mesmo `max-width:var(--max)` das outras
+         seções (`.split`, `.visao-wrap`, `.galeria-wrap`, `.sobre-grid`) mais
+         o piso lateral de 40px das `.split` — assim a foto da Lazer e a foto
+         da natureza terminam na MESMA linha vertical.
+         Só no desktop: no mobile a `.lazer` empilha e a foto de borda a borda
+         continua correta (e o `.lazer-txt` já tem seu próprio padding). */
+      .lazer{
+        max-width:var(--max);margin:0 auto;
+        padding:0 clamp(40px,2.66%,48px);
+      }
     }
 
     /* ================= MOBILE / TABLET =================
@@ -450,8 +746,43 @@
         padding:52px 20px;
       }
       .split--invista .titulo-secao,
-      .split--invista .texto-secao{text-align:left}
+      .split--invista .texto-secao,
+      .split--invista .kicker,
+      .split--invista .loc-endereco,
+      .split--invista .loc-maps-linha,
+      .split--invista .loc-pontos{text-align:left}
+      /* Par do espelhamento do desktop: em coluna estreita a lista volta a
+         alinhar à esquerda, então o ponto dourado volta para a esquerda. */
+      .split--invista .loc-pontos li{padding:9px 0 9px 20px}
+      .split--invista .loc-pontos li::before{left:0;right:auto}
       .titulo-secao{margin-bottom:1em}
+
+      /* --- Story 86-13: seções novas no mobile/tablet ------------------- */
+      /* O painel lateral do nav é `position:fixed`, então nasce fora da tela e
+         não é cortado pelo `overflow-x:hidden` do body. */
+      .topo-links{
+        position:fixed;top:0;right:0;height:100vh;width:74%;max-width:320px;
+        flex-direction:column;justify-content:center;gap:26px;
+        background:var(--marrom);padding:40px;
+        transform:translateX(100%);transition:transform .3s ease;
+      }
+      .topo-links.aberto{transform:translateX(0)}
+      .topo-links a{text-shadow:none}
+      .topo-toggle{display:block;position:relative;z-index:2}
+      .numeros{grid-template-columns:repeat(2,1fr)}
+      .lazer{grid-template-columns:1fr}
+      /* Foto antes do texto: no empilhamento ela é o que ancora a seção. */
+      .lazer-img{order:-1;min-height:280px}
+      .galeria-grid{grid-template-columns:repeat(2,1fr);grid-auto-rows:180px}
+      /* Em 2 colunas o slot largo tem de virar 1 coluna. Medido: com
+         `span 2` o auto-placement não consegue encaixar a 2ª foto ao lado da
+         1ª (que ocupa 2 linhas), joga-a para a linha seguinte e deixa uma
+         célula VAZIA de 170x310 no canto superior direito. A landing irmã tem
+         exatamente esse buraco em produção — é o que não copiar aqui.
+         Com `span 1`: 1 alta (2 células) + 8 normais = 10 = 5 linhas x 2, sem
+         sobra. */
+      .g-wide{grid-column:span 1}
+      .sobre-grid{grid-template-columns:1fr;gap:28px}
       .saber-grid{
         grid-template-columns:1fr;gap:0;
         padding-left:0;padding-right:0;
@@ -467,6 +798,13 @@
       .split--invista{padding:40px 18px}
       .saber-copy{padding:40px 18px 32px}
       .rodape .direitos{max-width:none;flex:1 0 100%;order:3}
+
+      /* --- Story 86-13 --- */
+      .numeros{grid-template-columns:1fr}
+      .loc-pontos{columns:1}
+      .galeria-grid{grid-auto-rows:150px;gap:10px}
+      /* `background-attachment:fixed` é ignorado no iOS e estica a imagem. */
+      .banda{background-attachment:scroll}
     }
   </style>
 </head>
@@ -478,6 +816,24 @@
        O id TEM que ser o mesmo do `fbq('init', ...)` acima. -->
   <noscript><img height="1" width="1" style="display:none" alt=""
     src="https://www.facebook.com/tr?id=1337310707164669&ev=PageView&noscript=1" /></noscript>
+
+  <!-- ===================== HEADER / NAV (Story 86-13, AC1) =====================
+       Os 5 links são as âncoras das seções, na mesma ordem da landing irmã. O
+       nav NÃO dispara evento de tracking nenhum: é só navegação (AC10). -->
+  <header class="topo" id="topo">
+    <a href="#cadastro" aria-label="Yarden — ir para o cadastro">
+      <img class="topo-logo" src="assets/logo-yarden-creme.svg" alt="Yarden" width="298" height="62" />
+    </a>
+    <button class="topo-toggle" id="topoToggle" type="button" aria-label="Menu" aria-expanded="false" aria-controls="topoLinks">&#9776;</button>
+    <nav class="topo-links" id="topoLinks" aria-label="Navegação principal">
+      <a href="#empreendimento">O Empreendimento</a>
+      <a href="#lazer">Lazer</a>
+      <a href="#galeria">Galeria</a>
+      <a href="#localizacao">Localização</a>
+      <a href="#sobre">A Trifold</a>
+      <a href="#cadastro" class="btn-topo">Cadastre-se</a>
+    </nav>
+  </header>
 
   <main>
     <!-- ===================== 1. HERO ===================== -->
@@ -496,7 +852,7 @@
           <div class="hero-brand">
             <span class="hero-brand-rule" aria-hidden="true"></span>
             <div class="hero-brand-txt">
-              <span class="hero-eyebrow">EM BREVE</span>
+              <span class="hero-eyebrow">LANÇAMENTO</span>
               <img class="hero-wordmark" src="assets/logo-yarden-creme.svg"
                    alt="Yarden" width="298" height="62" />
             </div>
@@ -506,7 +862,7 @@
                tracking da story: `leadForm`, `nome`, `whats`, `email`,
                `empresa`, `formMsg`. -->
           <div class="hero-form hero-form--sobreposto">
-            <h2>Antecipe-se ao lançamento</h2>
+            <h2>Cadastre-se para mais informações</h2>
             <form id="leadForm" novalidate>
               <!-- honeypot anti-spam: invisível para humanos, bots costumam preencher -->
               <input type="text" name="empresa" id="empresa" autocomplete="off" tabindex="-1" aria-hidden="true" style="position:absolute;left:-9999px;top:-9999px" />
@@ -542,7 +898,7 @@
            dos dois está visível por vez, por media query — nunca os dois, para
            não duplicar `id` ativos na página. -->
       <div class="hero-form hero-form--estatico">
-        <h2>Antecipe-se ao lançamento</h2>
+        <h2>Cadastre-se para mais informações</h2>
         <form id="leadFormMobile" novalidate>
           <input type="text" name="empresa" id="empresaMobile" autocomplete="off" tabindex="-1" aria-hidden="true" style="position:absolute;left:-9999px;top:-9999px" />
           <div class="campo">
@@ -562,6 +918,49 @@
           <div class="form-msg" id="formMsgMobile" role="status" aria-live="polite"></div>
           <p class="aviso">Prometemos não utilizar suas informações de contato para enviar qualquer tipo de SPAM.</p>
         </form>
+      </div>
+    </section>
+
+    <!-- ============ O EMPREENDIMENTO (Story 86-13, AC3) ============
+         Os 6 números são CITAÇÃO LITERAL da Ficha Técnica oficial do Yarden,
+         na ordem travada pelo stakeholder (decisão D1). Duas coisas que NÃO
+         estão aqui, por decisão e não por esquecimento:
+         - a segunda metragem de área privativa (79,81 m²): a Ficha traz as
+           duas, e a D1.1 fixou 1 stat só, com a maior;
+         - qualquer valor de preço/entrada: a Ficha não traz esse dado em
+           nenhuma das 7 páginas (D1.2). Importar o da landing irmã seria
+           publicar número de OUTRO empreendimento. -->
+    <section class="visao" id="empreendimento">
+      <div class="visao-wrap">
+        <span class="kicker">O empreendimento</span>
+        <h2>Yarden</h2>
+        <p class="local">Maringá &middot; Gleba Itororó</p>
+        <div class="numeros">
+          <div class="numero">
+            <div class="numero-grande">60</div>
+            <div class="numero-legenda">unidades</div>
+          </div>
+          <div class="numero">
+            <div class="numero-grande">83,66 m²</div>
+            <div class="numero-legenda">de área privativa</div>
+          </div>
+          <div class="numero">
+            <div class="numero-grande">2 suítes</div>
+            <div class="numero-legenda">e lavabo</div>
+          </div>
+          <div class="numero">
+            <div class="numero-grande">15</div>
+            <div class="numero-legenda">pavimentos</div>
+          </div>
+          <div class="numero">
+            <div class="numero-grande">2 subsolos + rooftop</div>
+            <div class="numero-legenda">lazer completo em dois níveis</div>
+          </div>
+          <div class="numero">
+            <div class="numero-grande">4</div>
+            <div class="numero-legenda">apartamentos por pavimento</div>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -586,15 +985,163 @@
       </picture>
     </section>
 
-    <!-- ============ 3. INVISTA NO NOVO CENTRO URBANO DE MARINGÁ ============ -->
-    <section class="split split--invista">
+    <!-- ============ LAZER (Story 86-13, AC4) ============
+         Os 6 chips estão travados pela decisão D2 do stakeholder. Os 5
+         primeiros são item LITERAL da lista de lazer da Ficha Técnica (os
+         quatro primeiros sob "Rooftop"/"Térreo", o quinto igual à Ficha); o
+         6º é o coringa de fechamento, mesmo padrão da landing irmã. Não
+         acrescentar chip: os outros 19 candidatos ficaram fora por decisão. -->
+    <section class="lazer" id="lazer">
+      <div class="lazer-txt">
+        <span class="kicker">Lazer</span>
+        <h2 class="titulo-secao">Lazer completo em dois níveis.</h2>
+        <p class="texto-secao">
+          Desfrute de momentos com toda a família em espaços pensados para o
+          seu bem-estar — do térreo ao rooftop, do relaxamento à convivência.
+        </p>
+        <div class="chips">
+          <span class="chip">Sports bar (rooftop)</span>
+          <span class="chip">Yoga</span>
+          <span class="chip">Brinquedoteca</span>
+          <span class="chip">Petcare</span>
+          <span class="chip">Espaço gourmet com piscina privativa</span>
+          <span class="chip">E muito mais</span>
+        </div>
+      </div>
+      <div class="lazer-img">
+        <picture>
+          <source type="image/webp" srcset="assets/lazer-terreo.webp" />
+          <img src="assets/lazer-terreo.jpg"
+               alt="Vista aérea da área de lazer do térreo do Yarden, com piscina, deck, palmeiras e praça de convivência"
+               width="1200" height="545" loading="lazy" decoding="async" />
+        </picture>
+      </div>
+    </section>
+
+    <!-- ============ GALERIA (Story 86-13, AC5) ============
+         9 renders oficiais do book do Yarden, na composição travada pela
+         decisão D3: 1 Fachada + 3 Rooftop + 3 Térreo + 2 Decorado. As 4
+         "Humanizadas" do book NÃO entram — são plantas baixas, não ambientes.
+
+         Cada par jpg+webp vai por <picture> com as DUAS URLs em atributo. A
+         galeria da landing irmã usa `<img src="…webp">` avulso; copiar isso
+         aqui deixaria os 9 `.jpg` sem referência HTML e reprovaria
+         `tracking-browser.test.ts`, que trata asset não referenciado como
+         sobra de clone (AC15).
+
+         Proporção por slot (AC5): os 2 `.g-wide` recebem paisagem larga
+         (4000x1818 na origem) e o `.g-tall` recebe a quadrada — nenhum render
+         do book é retrato, então o slot alto sempre recorta, e a quadrada é a
+         que perde menos ali. -->
+    <section class="galeria" id="galeria">
+      <div class="galeria-wrap">
+        <span class="kicker">Galeria</span>
+        <h2 class="titulo-secao">Conheça os ambientes do Yarden.</h2>
+        <p class="texto-secao">
+          Renders oficiais das áreas comuns — térreo e rooftop — e do
+          apartamento decorado. Clique em qualquer foto para ampliar.
+        </p>
+        <div class="galeria-grid">
+          <figure class="g-tall">
+            <picture>
+              <source type="image/webp" srcset="assets/galeria-01.webp" />
+              <img src="assets/galeria-01.jpg"
+                   alt="Terraço do rooftop do Yarden, com sofá amplo, mesa baixa de madeira e vista da cidade"
+                   width="900" height="900" loading="lazy" decoding="async" />
+            </picture>
+          </figure>
+          <figure class="g-wide">
+            <picture>
+              <source type="image/webp" srcset="assets/galeria-02.webp" />
+              <img src="assets/galeria-02.jpg"
+                   alt="Fachada do Yarden vista da rua, com palmeiras e jardim na entrada"
+                   width="1200" height="545" loading="lazy" decoding="async" />
+            </picture>
+          </figure>
+          <figure>
+            <picture>
+              <source type="image/webp" srcset="assets/galeria-03.webp" />
+              <img src="assets/galeria-03.jpg"
+                   alt="Sports bar do rooftop do Yarden, com sofá, balcão alto e banquetas junto às janelas"
+                   width="1200" height="545" loading="lazy" decoding="async" />
+            </picture>
+          </figure>
+          <figure>
+            <picture>
+              <source type="image/webp" srcset="assets/galeria-04.webp" />
+              <img src="assets/galeria-04.jpg"
+                   alt="Sala de pilates do rooftop do Yarden, com aparelhos e parede de madeira"
+                   width="1200" height="545" loading="lazy" decoding="async" />
+            </picture>
+          </figure>
+          <figure class="g-wide">
+            <picture>
+              <source type="image/webp" srcset="assets/galeria-05.webp" />
+              <img src="assets/galeria-05.jpg"
+                   alt="Espaço gourmet com piscina privativa do Yarden, iluminado à noite, com jardim vertical e espreguiçadeiras"
+                   width="1200" height="545" loading="lazy" decoding="async" />
+            </picture>
+          </figure>
+          <figure>
+            <picture>
+              <source type="image/webp" srcset="assets/galeria-06.webp" />
+              <img src="assets/galeria-06.jpg"
+                   alt="Salão de festas do Yarden, com mesas compridas, cadeiras claras e lustres circulares"
+                   width="1200" height="545" loading="lazy" decoding="async" />
+            </picture>
+          </figure>
+          <figure>
+            <picture>
+              <source type="image/webp" srcset="assets/galeria-07.webp" />
+              <img src="assets/galeria-07.jpg"
+                   alt="Fire place do térreo do Yarden ao anoitecer, com sofás em torno da lareira e guarda-sóis"
+                   width="1200" height="545" loading="lazy" decoding="async" />
+            </picture>
+          </figure>
+          <figure>
+            <picture>
+              <source type="image/webp" srcset="assets/galeria-08.webp" />
+              <img src="assets/galeria-08.jpg"
+                   alt="Living do apartamento decorado do Yarden, com sofá, cozinha integrada e mesa de jantar"
+                   width="1200" height="545" loading="lazy" decoding="async" />
+            </picture>
+          </figure>
+          <figure>
+            <picture>
+              <source type="image/webp" srcset="assets/galeria-09.webp" />
+              <img src="assets/galeria-09.jpg"
+                   alt="Suíte do apartamento decorado do Yarden, com cama de casal, painel de madeira e penteadeira"
+                   width="1200" height="545" loading="lazy" decoding="async" />
+            </picture>
+          </figure>
+        </div>
+        <a href="#cadastro" class="btn-secao">Agende sua visita</a>
+      </div>
+    </section>
+
+    <!-- ============ 3. INVISTA NO NOVO CENTRO URBANO DE MARINGÁ ============
+         Story 86-13 (AC6): esta seção — que já era, na prática, a de
+         localização — passa a ser a seção `#localizacao` de fato. O título, o
+         parágrafo e a imagem do mapa NÃO mudaram; o que entrou em volta deles:
+         `id`, kicker, endereço em destaque, link do Maps e os 5 pontos de
+         referência como texto visível.
+
+         Os 5 pontos continuam no `alt` da imagem — a lista é ACRÉSCIMO, não
+         substituição: antes disso eles só existiam ali, invisíveis para leitor
+         de tela e para busca, e era esse o ganho da decisão D5.
+
+         Sem iframe de mapa interativo (veto explícito da AC6): o Yarden tem
+         imagem de mapa própria, com os pins já desenhados — mais rápida e sem
+         adicionar um terceiro domínio à CSP. -->
+    <section class="split split--invista" id="localizacao">
       <picture>
         <source type="image/webp" srcset="assets/mapa-gleba-itororo.webp" />
         <img src="assets/mapa-gleba-itororo.jpg"
-             alt="Vista aérea de Maringá com a localização do Yarden na Gleba Itororó e pontos de referência: Catedral, Parque do Ingá, Av. JK, Bosque II e Av. Itororó"
-             width="900" height="637" loading="lazy" decoding="async" />
+             alt="Vista aérea de Maringá com o render do Yarden na Rua Carlos Meneghetti, 168, Gleba Itororó, e pontos de referência: Catedral, Parque do Ingá, Av. JK, Bosque II e Av. Itororó"
+             width="900" height="636" loading="lazy" decoding="async" />
       </picture>
       <div>
+        <span class="kicker">Localização</span>
         <h2 class="titulo-secao">Invista no novo centro urbano de Maringá.</h2>
         <p class="texto-secao">
           Mais do que uma localização valorizada, a Gleba Itororó se tornou
@@ -603,6 +1150,70 @@
           centro do que vem para transformar o jeito de se morar, com
           sofisticação, conveniência e valorização garantida.
         </p>
+        <!-- Endereço literal da Ficha Técnica — logradouro sem abreviação. -->
+        <p class="loc-endereco">Rua Carlos Meneghetti, 168 &mdash; Gleba Itororó, Maringá</p>
+        <p class="loc-maps-linha">
+          <!-- URL oficial que a própria Ficha Técnica traz. Não é busca por
+               nome nem por coordenada: é o link curto do empreendimento. -->
+          <a class="loc-maps" href="https://maps.app.goo.gl/RFibC7xZ7KZx6cwQA"
+             target="_blank" rel="noopener">Ver no Google Maps &rarr;</a>
+        </p>
+        <ul class="loc-pontos">
+          <li>Catedral</li>
+          <li>Parque do Ingá</li>
+          <li>Av. JK</li>
+          <li>Bosque II</li>
+          <li>Av. Itororó</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============ BANDA CTA (Story 86-13, AC7) ============
+         Sem `id`: não é destino de âncora nenhuma do nav. O fundo é a foto
+         `galeria-05`, reaproveitada da Galeria — portanto NÃO cria arquivo
+         novo em `assets/` (AC15). Escolhida por contraste para o texto branco:
+         das 9, é a de menor luminância média e a mais uniforme entre as
+         escuras (medido, não estimado — ver Dev Agent Record).
+
+         A copy é a voz já publicada da página: "Deixe seu contato e receba
+         informações exclusivas" é a mesma linha da seção "Quer saber mais?". -->
+    <section class="banda">
+      <h2>Quer conhecer o Yarden de perto?</h2>
+      <p>Deixe seu contato e receba informações exclusivas sobre o empreendimento.</p>
+      <a href="#cadastro" class="btn-secao">Cadastre-se</a>
+    </section>
+
+    <!-- ============ SOBRE A TRIFOLD (Story 86-13, AC8) ============
+         Kicker, H2 e parágrafo são reuso VERBATIM da landing irmã, palavra por
+         palavra (decisão D4, opção A): é a mesma empresa e o texto já está
+         publicado em produção. O @dev não reescreve texto institucional.
+
+         A foto é o MESMO arquivo da landing irmã, copiado para `assets/` (é o
+         mesmo prédio). Os DOIS formatos vão por <picture>: a landing irmã
+         serve só o `.webp`, e imitar isso deixaria o `.jpg` órfão (AC15).
+
+         Sem CTA próprio, ao contrário da irmã: a seção logo abaixo já é um
+         formulário — um segundo CTA aqui seria redundante. -->
+    <section class="sobre" id="sobre">
+      <div class="sobre-grid">
+        <div class="sobre-img">
+          <picture>
+            <source type="image/webp" srcset="assets/trifold-fachada.webp" />
+            <img src="assets/trifold-fachada.jpg" alt="Sede da Trifold"
+                 width="1000" height="750" loading="lazy" decoding="async" />
+          </picture>
+        </div>
+        <div>
+          <span class="kicker">Sobre a Trifold</span>
+          <h2 class="titulo-secao">Referência no conceito de morar bem</h2>
+          <p class="texto-secao">
+            Fundada em 2019 com a união de uma equipe experiente — atuante em
+            conjunto no mercado desde 1997 — a Trifold trabalha na orçamentação
+            e execução de obras residenciais, comerciais, industriais e
+            hospitalares, além da incorporação e execução de empreendimentos
+            próprios que reúnem alta qualidade.
+          </p>
+        </div>
       </div>
     </section>
 
@@ -653,6 +1264,15 @@
     <div class="rodape">
       <img class="logo-trifold" src="assets/logo-trifold-branco.svg" alt="Trifold" width="225" height="24" />
       <img class="logo-yarden" src="assets/logo-yarden-creme.svg" alt="Yarden" width="298" height="62" />
+      <!-- Nav do rodapé (Story 86-13, AC9) — os mesmos destinos do header,
+           entre os logos e o texto de direitos. Nada foi removido daqui. -->
+      <nav class="fnav" aria-label="Navegação do rodapé">
+        <a href="#empreendimento">O Empreendimento</a>
+        <a href="#lazer">Lazer</a>
+        <a href="#galeria">Galeria</a>
+        <a href="#localizacao">Localização</a>
+        <a href="#cadastro">Cadastre-se</a>
+      </nav>
       <p class="direitos">
         Todos os direitos reservados &copy;<a class="politica" href="assets/politica-de-privacidade.pdf" target="_blank" rel="noopener">Política de Privacidade.</a>
       </p>
@@ -663,6 +1283,14 @@
   <a class="wa-float" id="waFloat" href="#" target="_blank" rel="noopener" aria-label="Fale no WhatsApp">
     <svg viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163a11.867 11.867 0 01-1.587-5.945C.16 5.335 5.495 0 12.05 0a11.817 11.817 0 018.413 3.488 11.824 11.824 0 013.48 8.414c-.003 6.557-5.338 11.892-11.893 11.892a11.9 11.9 0 01-5.688-1.448L.057 24zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884a9.86 9.86 0 001.599 5.319l-.999 3.648 3.9-1.766zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.767.967-.94 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg>
   </a>
+
+  <!-- Lightbox da galeria (Story 86-13, AC5).
+       O <img> nasce SEM `src`: um `src=""` faz o navegador requisitar a própria
+       página como imagem. O `src` só é escrito no clique. -->
+  <div class="lb" id="lightbox" role="dialog" aria-modal="true" aria-label="Foto ampliada">
+    <button class="fechar" id="lbFechar" type="button" aria-label="Fechar">&times;</button>
+    <img id="lbImg" alt="" />
+  </div>
 
   <script>
     /* =====================================================================
@@ -831,6 +1459,71 @@
         var el = document.getElementById(id);
         if (el) el.addEventListener('focus', aoFocar, { once:true });
       });
+    })();
+  </script>
+
+  <script>
+    /* =====================================================================
+       Interface — Story 86-13 (AC1, AC5)
+
+       Bloco SEPARADO do script de captação de propósito: nada aqui toca
+       formulário, `CONFIG` ou tracking, e assim o diff do script de envio
+       fica em zero linha. Nenhum evento de Pixel/CAPI é disparado daqui — o
+       nav é navegação por âncora e o lightbox é visualização (AC10).
+       ===================================================================== */
+    (function(){
+      /* --- header: transparente no Hero, sólido a partir de 60px (AC1) --- */
+      var topo = document.getElementById('topo');
+      if (topo) {
+        var aoRolar = function(){ topo.classList.toggle('rolado', window.scrollY > 60); };
+        /* Chamada imediata: quem recarrega a página no meio dela (ou chega por
+           uma âncora) já começa rolado — sem isto o header nasceria
+           transparente sobre conteúdo claro, ilegível até o primeiro scroll. */
+        aoRolar();
+        window.addEventListener('scroll', aoRolar, { passive:true });
+      }
+
+      /* --- menu mobile: hambúrguer abre/fecha, link fecha (AC1, AC13) ---- */
+      var toggle = document.getElementById('topoToggle');
+      var links = document.getElementById('topoLinks');
+      if (toggle && links) {
+        toggle.addEventListener('click', function(){
+          var aberto = links.classList.toggle('aberto');
+          toggle.setAttribute('aria-expanded', aberto ? 'true' : 'false');
+        });
+        /* Fechar ao clicar em QUALQUER link do painel: o scroll suave da
+           âncora aconteceria atrás de um painel ainda aberto. */
+        links.querySelectorAll('a').forEach(function(a){
+          a.addEventListener('click', function(){
+            links.classList.remove('aberto');
+            toggle.setAttribute('aria-expanded', 'false');
+          });
+        });
+      }
+
+      /* --- lightbox da galeria (AC5) ------------------------------------- */
+      var lb = document.getElementById('lightbox');
+      var lbImg = document.getElementById('lbImg');
+      var fecharBotao = document.getElementById('lbFechar');
+      if (!lb || !lbImg) return;
+
+      function fechar(){ lb.classList.remove('open'); }
+
+      document.querySelectorAll('.galeria-grid img').forEach(function(img){
+        img.addEventListener('click', function(){
+          /* `currentSrc` e não `src`: com <picture> é ele que traz o arquivo
+             que o navegador REALMENTE escolheu (o .webp onde há suporte); o
+             `src` do <img> aponta sempre para o fallback .jpg. */
+          lbImg.src = img.currentSrc || img.src;
+          lbImg.alt = img.alt;
+          lb.classList.add('open');
+        });
+      });
+
+      if (fecharBotao) fecharBotao.addEventListener('click', fechar);
+      /* Só o clique no fundo fecha — clicar na própria foto, não. */
+      lb.addEventListener('click', function(e){ if (e.target === lb) fechar(); });
+      document.addEventListener('keydown', function(e){ if (e.key === 'Escape') fechar(); });
     })();
   </script>
 </body>

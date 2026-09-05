@@ -5,16 +5,17 @@ metadata:
   type: project
 ---
 
-`landing-pages/vind-residence/` e `landing-pages/trifold-design-system/` são projetos
-Vercel **standalone**, fora do workspace pnpm, sem bundler e sem CI.
+`landing-pages/vind-residence/`, `landing-pages/yarden/` e
+`landing-pages/trifold-design-system/` são projetos Vercel **standalone**, fora do
+workspace pnpm, sem bundler e sem CI.
 
 **Why:** foram criados como réplicas estáticas de landings externas (GreatPages/WordPress),
 não como pacotes do monorepo. Isso muda o que é possível implementar ali e como o código
 chega em produção — nada disso é visível lendo só o código.
 
 **How to apply:**
-- `vind-residence/` **é versionado no git** (PRs #478/#483/#494); `trifold-design-system/`
-  **é untracked de propósito** — nunca forçar `git add` nele. Quando uma mudança vive só
+- `vind-residence/` (PRs #478/#483/#494) e `yarden/` **são versionados no git**;
+  `trifold-design-system/` **é untracked de propósito** — nunca forçar `git add` nele. Quando uma mudança vive só
   lá (ex.: CSP), registrar o conteúdo final no Dev Agent Record da story: não haverá diff
   versionado para auditar depois.
 - Nenhum dos dois passa por CI. Publicação é sempre manual:
@@ -27,6 +28,18 @@ chega em produção — nada disso é visível lendo só o código.
 - Tudo dentro de `api/` vira função serverless. Arquivos de teste ficam FORA de `api/` e
   entram no `.vercelignore`. As funções são CommonJS comum e são testáveis pela suíte da
   raiz via `createRequire` (`landing-pages/**/*.test.ts` está no `vitest.config.ts`).
+- **`npm run lint` não alcança `landing-pages/`** (o `pnpm-workspace.yaml` só tem
+  `packages/*`), então lint verde ali não significa nada — ele nem foi executado
+  (o turbo sai `FULL TURBO`, tudo em cache). Para conferir um `.ts` novo de teste
+  dessas pastas: `tsc --strict` com o `tsconfig.json` da raiz, apontando
+  `typeRoots` para o `@types/node` do `.pnpm` (na worktree o root
+  `node_modules/@types` não existe).
+- **Processar imagem nesta máquina:** `sips` do macOS **não** exporta WebP
+  (`sips -s format webp` falha), e não há `cwebp` nem ImageMagick instalados. O que
+  funciona é `python3` + `PIL` 11.3.0 (com WebP). Para caber num teto de KB, buscar
+  a qualidade por ladder decrescente em vez de chutar um número — e, quando a
+  qualidade cai a ponto de borrar, **reduzir a largura** em vez de continuar
+  baixando qualidade.
 
 **Trap de atribuição (Epic 86), e a faca de dois gumes:** o browser chama
 `api/lead.js`/`api/track.js`, e ESSES proxies chamam o CRM servidor-a-servidor. O

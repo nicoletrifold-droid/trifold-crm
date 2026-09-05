@@ -76,6 +76,7 @@
 - [Baseline do trifold-design-system](project_trifold_design_system_baseline.md) — `.dc.html` untracked de propósito: baseline é a produção via `curl`, não o git; sem lint/typecheck; falso positivo de `{{ }}`
 - [Relatório impresso de brindes](project_relatorio_impresso_brindes.md) — único `document.write` da app: XSS same-origin real (fechado na 75-373, 2 furos medidos); A4 útil = 673,5px (viewport 734, não 794)
 - [Layout de env deste checkout](project_layout_de_env_deste_checkout.md) — RESOLVIDO 04/09: `.env.local` do web morreu (é `.env.producao.local`); o `.env.local` da RAIZ é outro arquivo (só `VERCEL_OIDC_TOKEN`)
+- [Auditar as landings estáticas](project_landing_yarden_qa_patterns.md) — prova por blob e sha de blocos, extrator próprio de assets, reverter o fix p/ ver o bug voltar, pior pixel da banda; `.focus()` não ativa `:focus-visible`
 
 ## Método de QA
 

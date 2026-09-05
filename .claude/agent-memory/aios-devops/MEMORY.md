@@ -1,5 +1,6 @@
 - [Vercel project setup](project_vercel_setup.md) — rootDirectory is `packages/web`, not repo root; affects .vercelignore placement
 - [Quality gate signals for trifold-crm](feedback_quality_gate_signals.md) — `next build` é canônico; lint/tsc standalone dão falso positivo; `exit 137` no turbo = OOM, não erro de tipo
+- [Esperar CI: CodeRabbit é commit status](feedback_ci_wait_coderabbit_commit_status.md) — sem campo `.status`, loop ingênuo sai cedo; feche em `mergeStateStatus CLEAN` + `reviewDecision APPROVED`
 - [Meta subscription state (prod)](project_meta_subscription.md) — leadgen subscription validada 2026-06-08; verify token sufixo `...a387d2f`
 - [Migration 074 — leads.metadata JSONB](project_leads_metadata_migration_074.md) — bloqueio root-cause attribution Meta; PR #5 (draft) com idempotencia
 - [Vercel env source of truth](reference_vercel_env_source_of_truth.md) — `vercel env pull` para producao; `.env.local` locais podem divergir
@@ -45,3 +46,4 @@
 - [Memória de agente colide com PR aberto](feedback_memoria_de_agente_colide_com_pr_aberto.md) — `MEMORY.md` é índice append-only: simule com `merge-tree` + índice temporário antes de stageer `.claude/agent-memory/`
 - [Corpo do PR pode estar no gate](reference_corpo_do_pr_no_gate.md) — campo `corpo_do_pr` do `docs/qa/gates/*.yml`; nem todo gate tem (75-373 não tinha), confira antes de compor
 - [main sem branch protection](reference_main_sem_branch_protection.md) — nao ha required check no GitHub; `gh pr merge` aceita UNSTABLE, a trava e o julgamento do agente
+- [PR aberto absorve a story seguinte](feedback_pr_aberto_absorve_story_seguinte.md) — "a branch está podre, reconstrua" pode ser premissa falsa; confira `mergedAt` antes — PR aberto = push + `gh pr edit`, nunca branch nova

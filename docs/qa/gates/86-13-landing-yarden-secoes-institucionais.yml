@@ -1,0 +1,372 @@
+storyId: "86-13-landing-yarden-secoes-institucionais"
+title: "Landing do Yarden: seções institucionais completas (Overview, Lazer, Galeria, Sobre a Trifold, Nav, Banda CTA)"
+epic: 86
+verdict: PASS
+readiness: 10/10
+reviewer: "@qa (Quinn)"
+date: 2026-09-05          # re-gate da leva 0.5; gate original em 2026-09-04 (ver historico)
+branch: fix/86-12-yarden-lancamento-mapa
+commits: [083526d8, ab60ffb0, a1a47d56, ac25b3bc]
+base_commit: 06e9ecfa
+pushed: false   # reconfirmado em 2026-09-05: origin/fix/86-12-yarden-lancamento-mapa aponta para 6a7cd470; ac25b3bc so existe local
+
+# ===========================================================================
+# RE-REVIEW — leva 0.5 (ajuste visual pos-gate), commit ac25b3bc
+# ===========================================================================
+re_review_0_5:
+  date: 2026-09-05
+  verdict: PASS
+  scope: "commit ac25b3bc isolado, base 6a7cd470 — 2 arquivos: index.html (so CSS) + a story"
+  pushed: false
+  blockers: 0
+  novos_achados: [86.13-QA-005 (low), 86.13-QA-006 (low), 86.13-QA-007 (info)]
+
+  metodo: >
+    Nada aceito por relato. Harness proprio em Playwright/chromium: rects
+    normalizados por scrollX/scrollY, getComputedStyle (inclusive ::before),
+    11 larguras (390/768/979/980/1024/1280/1440/1728/1920/2560/3440 — 3 a mais
+    que o @dev), com contraprova de determinismo do harness antes de confiar em
+    qualquer delta.
+
+  prova_por_bytes:
+    metodo: "extrator proprio: regex <style…>…</style>, resto comparado byte a byte"
+    arquivo_inteiro: "74874 B -> 79130 B"
+    bloco_style: "1 bloco, 25868 B -> 30124 B"
+    fora_do_style: "49006 B -> 49006 B"
+    sha256_do_resto: "7a84281e7b060cef2da8aceba3c143822b35bc6ee3fd8de50394b4fb031b08a9 (identico)"
+    diff_do_resto: "VAZIO"
+    scripts: "4 blocos (528/6448/8393/3093 B) — sha256 individual identico"
+    forms: "3 blocos — sha256 individual identico"
+    conclusao: "AC10 e AC14 sem regressao possivel, por construcao"
+
+  respiro_natureza_para_lazer:   # px entre o rodape da foto do lounge e o topo da faixa bege
+    "390":  "40 -> 40      (inalterado)"
+    "768":  "52 -> 52      (inalterado)"
+    "979":  "52 -> 52      (inalterado)"
+    "980":  "31.38 -> 96.58"
+    "981":  "31.26 -> 96.54"
+    "1440": "0 -> 92.16"
+    "1920": "0 -> 94.00"
+    "2560": "14.45 -> 94.00"
+    bug_reproduzido: "sim — 0px a 1440 e 1920 no estado anterior"
+    achado_extra_do_qa: >
+      No screenshot de 2560 do estado ANTERIOR a ultima linha do paragrafo da
+      natureza transbordava para dentro da faixa bege (texto renderizado sobre
+      --tan). Pior do que o relatado. Ausente depois do fix em todas as 11 larguras.
+
+  fotos_vs_borda_da_viewport:    # px da borda ate a foto
+    lazer_img_direita: "390:0->0 | 768:0->0 | 979:0->0 | 1440:0->40 | 1920:0->276 | 2560:0->596"
+    natureza_img_direita: "1440:38.30->40 | 1920:279.06->276 | 2560:616.09->596"
+    invista_img_esquerda: "1440:34.41->40 | 1920:273.88->273.88 | 2560:609.17->596"
+    mesma_linha_vertical: "VERDADE a 1440 (40/40/40) e a 2560 (596/596/596); a 1920 sobra 2.12px -> 86.13-QA-005"
+    zero_no_mobile: "esperado — full-bleed de mobile, explicitamente fora do escopo do pedido"
+
+  mobile_intocado:               # 3 provas independentes
+    prova_1_geometria: "deep-diff de 199 campos medidos por largura -> 0 campos diferentes a 390, 768 E 979"
+    prova_2_secoes: "14 secoes de topo -> 0 com geometria alterada a 390/768/979; scrollHeight identico (6891/7634/8332)"
+    prova_3_pixel: "screenshots das 2 regioes, harness deterministico -> px_diferentes = 0 (0.000%) em 6/6 casos"
+    cobertura_extra: "979px (ultimo pixel do breakpoint) conferido — o @dev so alegou 390 e 768"
+
+  falso_positivo_derrubado_pelo_qa:
+    sintoma: "primeira rodada de screenshots acusou 66% de pixels diferentes no MOBILE, contradizendo a geometria"
+    contraprova: "before vs before -> 66.95% de diferenca tambem => defeito do harness, nao do codigo"
+    causa: "html{scroll-behavior:smooth} faz window.scrollTo aterrissar em scrollY diferente a cada run (1740/1714/1738)"
+    correcao: "scroll-behavior:auto forcado + img.decode() aguardado -> contraprova before-vs-before a 0.000%"
+    licao: "so depois de a contraprova zerar os 0.000% do mobile passaram a significar alguma coisa"
+
+  alinhamento_localizacao:       # getComputedStyle('text-align')
+    desktop_ge_980:
+      kicker: "start -> right"
+      titulo_secao: "right -> right"
+      texto_secao: "right -> right"
+      loc_endereco: "start -> right"
+      loc_maps_linha: "start -> right"
+      loc_pontos: "left -> right"
+      loc_pontos_li: "left -> right"
+    mobile_le_979: "os 7 seletores: left -> left (identico)"
+    caixa_do_link_maps_1440: "antes L=815 (encostado a esquerda) -> depois R=1240.28 (coincide com H2/paragrafo)"
+    borda_direita_comum: "os 6 blocos da coluna terminam todos em x=1240.28 a 1440px"
+    ponto_dourado:
+      espelhamento: "::before left:0 -> right:0; li padding 9px 0 9px 20px -> 9px 20px 9px 0 (so desktop)"
+      cor: "rgb(253,217,150) = var(--dourado), inalterada"
+      orfao: "NAO — texto termina 20px antes da borda do li, ponto ocupa 8px: 12px de respiro"
+      mobile: "left:0 / padding-left:20px — identico ao baseline (provado por pixel)"
+
+  costura_do_breakpoint:
+    colisao_retangulos: "lazer-txt x lazer-img e natureza-img x .lazer -> sobrepoe=false em 979/980/981/1440/1920/2560"
+    salto_979_para_980: "52 -> 96.58 — e a troca de modo do proprio breakpoint (empilhado -> grid 1fr 1fr); ja existia antes (52 -> 31.38)"
+    continuidade_980_981: "diferenca de 0.04px"
+
+  nao_regressao_fora_do_alvo:
+    secoes_acima_da_natureza: "header, hero, #empreendimento — inalteradas em todas as 11 larguras"
+    secoes_abaixo: "9 de 10 so deslocaram verticalmente (left e width identicos)"
+    unica_com_left_width_alterados: ".lazer — que e o alvo do fix (>=1920 passa de L=0,W=viewport para L=(vw-1464)/2, W=1464)"
+    overflow_horizontal: "ausente nas 11 larguras (scrollWidth == clientWidth), inclusive 3440"
+    console: "0 erro antes e depois, nas 11 larguras"
+
+  limiar_do_min:
+    metodo: "computed padding em 1200/1400/1464/1500/1600/1800"
+    min_em_1464: "87.09->87 e 202.03->202 — diferenca sub-pixel, a alegacao do @dev confere"
+    piso_de_40px: >
+      MUDA o comportamento em TODO o desktop, nao so acima de --max: a 1200 o
+      padding-right da natureza vai de 31.91 -> 40 e o padding-left da invista de
+      28.67 -> 40. Esta descrito no corpo da mensagem de commit (nao e omissao),
+      mas o comentario no CSS lido isolado sugere neutralidade que nao existe.
+      -> 86.13-QA-007
+
+  qualidade_rodada_pelo_qa:
+    vitest_landing_yarden: "89/89 (3 arquivos)"
+    vitest_suite_inteira: "4569 passed / 71 failed / 6 expected-fail, em 3 arquivos"
+    type_check: "npx turbo type-check --force -> 12 erros, 7/8 tasks OK, 0 cache"
+    lint: "npx turbo lint --force -> 0 erros / 30 avisos, 8/8 tasks, 0 cache"
+    prova_de_pre_existencia: >
+      Nao por leitura, por diff: `git diff --quiet ac25b3bc^ ac25b3bc -- packages/`
+      retorna 0 => packages/ e byte a byte identico entre a base e esta leva. Os 3
+      arquivos que falham vivem todos em packages/web/ e foram tocados pela ultima
+      vez em 2026-08-27, 2026-08-29 e 2026-09-02. As falhas sao de RESOLUCAO DE
+      MODULO (Cannot find package '@trifold/ai/src/flows/loop-breaker'), nao de
+      assercao. Nenhuma assercao precisou mudar nesta leva.
+
+  higiene:
+    working_tree: "git status --short VAZIO ao fim da revisao"
+    integridade: "sha256 do index.html no disco identico ao do commit — o QA nao tocou em nenhum arquivo de codigo"
+    push: "NAO ocorreu — origin/fix/86-12-yarden-lancamento-mapa = 6a7cd470 (a base); ac25b3bc so existe local; 14 commits aguardando @devops"
+
+  ac_regredido: nenhum
+  status_recommendation:
+    manter_em: "Ready for Review"
+    nao_promover_para: "Done"
+    reason: "T12/T13 de infraestrutura da 86-12 seguem pendentes com @devops; trifold.eng.br/yarden/ continua offline"
+  next_agent: "@devops (*push) — nenhum bloqueador de qualidade"
+
+# ===========================================================================
+# GATE ORIGINAL — 2026-09-04, commits 083526d8..a1a47d56
+# ===========================================================================
+
+checks:
+  code_review: PASS         # 4º bloco <script> isolado; zero acoplamento com tracking/CONFIG/formulário
+  unit_tests: PASS          # landing-pages 103/103; tracking-browser.test.ts 23/23 e arquivo INTOCADO (blob idêntico)
+  acceptance_criteria: PASS # AC1-AC15 verificadas uma a uma, em runtime
+  regressions: PASS         # 3 <script>, 2 <noscript> e 3 <form> byte-idênticos (sha256 conferido pelo QA)
+  performance: PASS         # maior asset novo 196KB (teto 330KB); 15 imagens servidas em webp; todas lazy
+  security: PASS            # link externo com rel="noopener"; nenhum iframe; nenhum domínio novo
+  documentation: PASS       # README 13→35 arquivos; File List completo; Dev Agent Record preenchido
+
+# ---------------------------------------------------------------------------
+# O que o QA MEDIU (nada aceito por relato do @dev)
+# ---------------------------------------------------------------------------
+evidencia:
+  ac15_testes_intocados:
+    metodo: "git rev-parse do blob em 06e9ecfa vs HEAD"
+    tracking_browser_test: "d89c4fc5... == d89c4fc5...  (0 linhas de diff)"
+    api_proxy_test: "8d200d24... == 8d200d24...  (0 linhas de diff)"
+    baseline: "npx vitest run landing-pages/yarden/tracking-browser.test.ts -> 23/23"
+
+  tracking_intacto:
+    metodo: "extração dos blocos <script>/<noscript>/<form> de old.html (06e9ecfa) e new.html (HEAD) + sha256"
+    script_0: "sha 1718484caaba2d4c == 1718484caaba2d4c (528 B)"
+    script_1: "sha fae3adae3c21483b == fae3adae3c21483b (6376 B)"
+    script_2: "sha 91c53f52fed102b3 == 91c53f52fed102b3 (8260 B)"
+    noscript: "2 blocos, ambos sha idêntico"
+    forms: "leadForm aa7f5dab / leadFormMobile ce1ab784 / leadFormSaber 28e38b3b — todos idênticos"
+    script_novo: "4º bloco (3056 B) — sem fbq, sem TrifoldTracking, sem leadEndpoint, sem leadForm"
+    pixel_id: "1337310707164669 em 3 pontos, mesma contagem antes e depois (head comentário, fbq init, noscript)"
+
+  integridade_assets:
+    metodo: "extrator independente do QA (src|srcset|href|content|poster|data-src + url() do CSS)"
+    disco: 35
+    referenciados_por_atributo: 35
+    orfaos: []
+    inexistentes: []
+    css_url_sem_correspondencia_em_atributo: []
+    origem_verificada: "as 11 fontes alegadas no File List existem no Google Drive com o nome exato"
+
+  mutacoes_executadas_pelo_qa:   # provar que os testes não são vacuosos
+    - "srcset -> assets/galeria-99.webp (inexistente)          -> 3 testes FALHARAM"
+    - "asset órfão no disco (sobra-curadoria.jpg)              -> tracking-browser 1 FALHOU (22/23)"
+    - "chip 'Yoga' -> 'Pilates'                                -> 1 FALHOU"
+    - "fundo da banda -> assets/banda-fundo.jpg (exclusivo)    -> 2 FALHARAM"
+    - "remover html{scroll-padding-top}                        -> 1 FALHOU"
+
+  contraprova_visual_dos_2_bugs:  # Playwright, medição geométrica, não impressão
+    bug_1_celula_vazia_galeria:
+      com_fix: "375px -> grid 2col x 5lin, BURACOS = nenhum"
+      sem_fix: "removido .g-wide{grid-column:span 1} -> BURACOS = [linha1/col2, linha2/col2]"
+      veredito: "corrigido de fato, não apenas editado"
+    bug_2_texto_sob_whatsapp:
+      com_fix: "1440px -> <p> 528px de largura, right=1208, wa.left=1360, COLIDE=false"
+      sem_fix: "removido max-width:62ch -> <p> 739px, right=1420 > wa.left=1360, COLIDE=true"
+      veredito: "corrigido de fato, não apenas editado"
+
+  contraste_banda_cta:
+    metodo: "PIL + luminância relativa WCAG, medida pelo QA — não o número do @dev"
+    galeria_05_luminancia_media: "106.6 / 255 (a MAIS escura das 9; @dev relatou 107 — confere)"
+    contraste_texto_branco_com_overlay_0_55: "13.30:1"
+    contraste_texto_branco_com_overlay_0_68: "15.96:1"
+    pior_pixel_da_imagem_inteira_com_overlay_0_55: "5.53:1 (ainda acima do AA 4.5:1)"
+    veredito: "contraste suficiente com folga em todo ponto da imagem"
+
+  curadoria_galeria_D3:
+    fachada: 1     # galeria-02 <- Fachada/Fachada_2 (g-wide, 1200x545 = 2.20:1 [L])
+    rooftop: 3     # galeria-01 Terraço (g-tall, 900x900 [Q]), 03 Sport bar, 04 Pilates
+    terreo: 3      # galeria-05 Piscina privativa gourmet (g-wide [L]), 06 Salão de Festas, 07 Fireplace
+    decorado: 2    # galeria-08 sala estar+cozinha, 09 suíte (ambos de "Decorado 1")
+    humanizadas: 0 # as 4 são .png de plantas; nenhum .png foi gerado — proibição respeitada
+    slots: "2 g-wide receberam [L] (ratio 2.20); 1 g-tall recebeu [Q] (ratio 1.00) — conforme a restrição vinculante"
+    conferencia: "as 9 imagens foram ABERTAS e o conteúdo bate com o alt de cada uma"
+
+  nav_fixo:
+    metodo: "Playwright: clicar cada link do nav e medir topoSeção vs fundoHeader"
+    "1440px": "header 67.2px, scroll-padding-top 72px — folga do 1º elemento textual: 85.6 / 106.5 / 85.4 / 107.3 / 194.3px"
+    "375px":  "header 57.6px — folga: 66.6 / 337.9 / 66.7 / 325.6 / 345.4px"
+    "768px":  "header 57.6px — folga: 66.8 / 338.8 / 66.6 / 612.4 / 639.9px"
+    veredito: "nenhuma âncora esconde o topo da seção atrás do header, nos 3 breakpoints"
+
+  runtime:
+    console: "limpo — 0 erro JS, 0 pageerror. Único warning: Meta pixel indisponível em localhost (ambiental)"
+    overflow_horizontal: "ausente em 320 / 375 / 768 / 1440px (scrollWidth == clientWidth)"
+    imagens: "20 no DOM, 0 quebradas, 15 servidas em .webp, 0 sem alt"
+    lightbox: "abre no clique, usa currentSrc (.webp), fecha com Escape e no clique no fundo"
+    menu_mobile: "aria-expanded false->true->false; 5 links + CTA; fecha ao clicar em link"
+    foco_visivel: "Tab real -> outline 2px solid var(--dourado) via :focus-visible nos 6 itens do nav"
+    ac14_initiate_checkout: "1 disparo após 3 focos distintos (trava de uma vez só preservada)"
+
+  qualidade:
+    lint: "turbo lint --force -> 8/8 tasks OK, 0 errors, 30 warnings (todos pré-existentes em packages/web)"
+    type_check_landing: "tsc --strict sobre secoes-institucionais.test.ts + tracking-browser.test.ts -> 0 erros"
+
+# ---------------------------------------------------------------------------
+issues:
+  - severity: low
+    category: requirements
+    id: "86.13-QA-001"
+    description: >
+      Stat 5 da seção Overview traz o número grande "2 subsolos + rooftop" com a legenda
+      "lazer completo em dois níveis". Pela Ficha Técnica os 2 subsolos são de garagem;
+      o lazer está no térreo e no rooftop. A legenda pode sugerir que o lazer ocupa os
+      subsolos.
+    recommendation: >
+      NÃO é defeito de implementação — o texto está literalmente conforme a AC3, travada
+      pelo stakeholder em 2026-09-03 (D1). Levar ao @po/stakeholder se quiser precisão
+      ("térreo + rooftop"). O @dev não tem autoridade para alterar AC travada.
+    blocking: false
+
+  - severity: low
+    category: code
+    id: "86.13-QA-002"
+    description: >
+      `.banda{background-attachment:fixed}` só volta a `scroll` no @media (max-width:560px).
+      Entre 561px e 979.98px (tablets/iPad) o `fixed` permanece — e o iOS Safari o ignora
+      em qualquer largura.
+    recommendation: >
+      Cosmético. Herdado do padrão do `.band` da landing irmã e explicitamente autorizado
+      pela AC7. Screenshot a 768px conferido pelo QA: banda legível, sem distorção.
+      Registrar como dívida menor, não corrigir nesta story.
+    blocking: false
+
+  - severity: low
+    category: docs
+    id: "86.13-QA-003"
+    description: >
+      O File List não menciona os 3 arquivos de `.claude/agent-memory/aios-dev/` alterados
+      nos commits 083526d8 e a1a47d56.
+    recommendation: >
+      Sem impacto de produto. Conformidade literal com a DoD #5 mantida (nada de código
+      fora de `landing-pages/yarden/`). Anotar no próximo commit de memória.
+    blocking: false
+
+  - severity: info
+    category: tests
+    id: "86.13-QA-004"
+    description: >
+      A suíte completa da raiz mostra 71 asserções falhas em 3 arquivos de `packages/web`
+      e 12 erros em `turbo type-check`. Nenhum tem relação com esta story.
+    recommendation: >
+      Causa provada pelo QA, não presumida: (1) `git log merge-base..HEAD -- packages/`
+      é VAZIO — a branch inteira nunca tocou `packages/`; (2) os 4 arquivos envolvidos têm
+      blob idêntico entre 06e9ecfa e HEAD; (3) `node_modules` desta worktree é symlink para
+      `/Users/lucasprado/trifold-crm/node_modules`, instalado para o estado de `main`, que
+      está 18 commits à frente — daí `@trifold/ai/src/flows/loop-breaker` e os símbolos de
+      `@trifold/shared` não resolverem. Artefato de ambiente, não regressão.
+    blocking: false
+
+  # ---- achados da leva 0.5 (re-review de 2026-09-05) ----
+  - severity: low
+    category: code
+    id: "86.13-QA-005"
+    origem: "re_review_0_5"
+    description: >
+      A 1920px sobra 2,12px de assimetria entre a borda direita da foto da
+      natureza (276px da viewport) e a borda esquerda da foto da invista
+      (273,88px). A causa e que os percentuais de origem sao diferentes
+      (2,66% na natureza vs 2,39% na invista) e o clamp satura em pontos
+      distintos. A 1440 e a 2560 as tres fotos coincidem (40/40/40 e 596/596/596).
+      Arquivo: landing-pages/yarden/index.html, regras .split--natureza e
+      .split--invista dentro do bloco <style>.
+    recommendation: >
+      Cosmetico e imperceptivel (2px em 1920). Se quiser simetria exata, usar o
+      mesmo percentual nos dois lados sangrantes. Nao corrigir nesta story.
+    blocking: false
+
+  - severity: low
+    category: docs
+    id: "86.13-QA-006"
+    origem: "re_review_0_5"
+    description: >
+      O @dev alegou "37600 bytes fora do CSS, mesmo sha256". A alegacao
+      SUBSTANTIVA (identidade byte a byte fora do <style>) esta provada e confere.
+      Mas o numero citado nao reproduz: minha medicao da 49006 B, e nao consegui
+      chegar a 37600 por nenhum recorte razoavel (com/sem placeholder do <style>,
+      com/sem os blocos <script>).
+    recommendation: >
+      Sem impacto de produto — a conclusao continua correta. Ao citar numero de
+      bytes numa prova, registrar tambem o comando exato que o produziu, para que
+      o proximo revisor possa reproduzir em vez de precisar reconstruir o metodo.
+    blocking: false
+
+  - severity: info
+    category: docs
+    id: "86.13-QA-007"
+    origem: "re_review_0_5"
+    description: >
+      O comentario no CSS diz que o min() "congela cada percentual no valor que
+      ele tem quando a secao atinge --max — a 1464px nada muda". Sobre o min()
+      isso confere (diferenca sub-pixel: 87,09->87 e 202,03->202). Mas o PISO DE
+      40px introduzido na mesma linha muda o layout em todo o desktop, nao so
+      acima de 1464: a 1200px o padding-right da natureza vai de 31,91 -> 40 e o
+      padding-left da invista de 28,67 -> 40.
+    recommendation: >
+      Nao e omissao — o corpo da mensagem de commit descreve o piso separadamente.
+      Mas o comentario no codigo, lido isolado, sugere neutralidade abaixo de
+      --max que nao existe. Ajustar a redacao num commit futuro de manutencao.
+    blocking: false
+
+waivers: []
+
+acceptance_criteria_trace:
+  AC1:  "PASS — header#topo fixo, z-index 50, 5 links + CTA, fundo var(--marrom) (rgb(141,120,97)) ao passar de 60px, hambúrguer com aria-label/aria-expanded, scroll-padding-top:72px."
+  AC2:  "PASS — header transparente sobre o Hero (rgba(0,0,0,0)); zero sobreposição de .hero-brand/.hero-form/.hero-form--estatico em 1440/768/375px."
+  AC3:  "PASS — 6 stats exatos e na ordem travada; zero 'R$', zero 'entrada', zero 79,81 / 1.344 / 6.128; fundo --navy."
+  AC4:  "PASS — 6 chips exatos e na ordem travada; foto via <picture> (lazer-terreo.{jpg,webp}), não por background-image."
+  AC5:  "PASS — 9 fotos, 2 g-wide [L] + 1 g-tall [Q], todas por <picture> com as 2 URLs em atributo; maior arquivo 181KB; lightbox com currentSrc + Escape; CTA âncora #cadastro."
+  AC6:  "PASS — id=localizacao + kicker; endereço literal; maps.app.goo.gl/RFibC7xZ7KZx6cwQA com target=_blank rel=noopener; 5 POIs como <li> visíveis em 2 colunas; alt do mapa continua listando os marcos; nenhum iframe."
+  AC7:  "PASS — .banda entre Localização e Sobre; fundo galeria-05.jpg (já referenciada por atributo na Galeria, zero asset novo); contraste medido 13.3–15.96:1."
+  AC8:  "PASS — kicker + H2 + parágrafo institucional idênticos por igualdade estrita de string; trifold-fachada servida nos DOIS formatos; sem CTA próprio."
+  AC9:  "PASS — nav.fnav com os 5 links, posicionada entre os logos e o parágrafo de direitos; nada removido do footer."
+  AC10: "PASS — zero evento/formulário/event_id novo; script de interface isolado sem fbq/TrifoldTracking/leadEndpoint; todo CTA é âncora HTML."
+  AC11: "PASS — inventário de literais hex: zero cor nova fora do :root; 1 família de fonte (Montserrat); 2 SVGs, os mesmos de antes."
+  AC12: "PASS — nenhuma estrutura de depoimentos, nenhum placeholder; a única ocorrência de 'iframe' no arquivo é um comentário explicando o veto da AC6."
+  AC13: "PASS — sem overflow em 320/375/768/1440; todas as imagens novas com alt >25 chars, loading=lazy e decoding=async; foco visível confirmado com Tab real."
+  AC14: "PASS — 3 forms com os mesmos ids, 3 live regions, 6 campos presentes, InitiateCheckout dispara 1x após 3 focos distintos; os 3 <form> são byte-idênticos."
+  AC15: "PASS — 35/35 assets referenciados por atributo, 0 órfão, 0 inexistente; tracking-browser.test.ts 23/23 com blob idêntico ao base; ambas as asserções provadas vivas por mutação executada pelo QA."
+
+status_recommendation:
+  from: "Ready for Review"
+  to: "InReview"
+  reason: >
+    Normalizar a nomenclatura para o vocabulário do story-lifecycle.md. NÃO promover para
+    `Done`: as tarefas T12/T13 de infraestrutura da 86-12 seguem pendentes com @devops e
+    `https://trifold.eng.br/yarden/` continua offline — mesma lógica das rodadas anteriores
+    do Epic 86.
+
+next_agent: "@devops (*push) — nenhum bloqueador de qualidade"
