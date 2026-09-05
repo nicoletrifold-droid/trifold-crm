@@ -405,17 +405,43 @@
       max-width:var(--max);margin:0 auto;
       display:grid;align-items:center;
     }
+    /* --- Respiro das seções `.split` (ajuste de 2026-09-05) ---------------
+       Os percentuais abaixo são geometria do mockup (2928px de largura) e
+       ficam como estavam ATÉ 1464px. O que mudou foi o comportamento acima
+       disso e o rodapé da seção 2:
+
+       1) Percentual de padding resolve contra a largura do BLOCO CONTINENTE
+          (o `<main>`/viewport), mas a própria `.split` para de crescer em
+          `max-width:1464px`. Acima de ~1464px o padding continuava crescendo
+          DENTRO de uma caixa que não crescia: a 2560px o `padding-left` de
+          13.8% virava 353px de uma caixa de 1464px, espremendo o conteúdo
+          contra a direita e abrindo um vazio à esquerda. O `min()` congela
+          cada percentual no valor que ele tem quando a seção atinge `--max`
+          — a 1464px nada muda, acima disso a seção renderiza igual a 1464px.
+
+       2) O piso de 40px nos lados onde a imagem sangra (`right` na natureza,
+          `left` na invista) impede que a foto fique a 34–38px da borda da
+          viewport a 1440px. É o mesmo piso usado no recuo da `.lazer`, então
+          as três fotos ficam na mesma linha vertical a partir da borda.
+
+       3) O `padding-bottom:0` da natureza vinha da 86-12, quando a seção
+          seguinte era a `.split--invista` (que traz `padding-top` próprio) —
+          o respiro era EMPRESTADO da vizinha. A 86-13 inseriu a `.lazer`
+          entre as duas, e a `.lazer` não tem padding no container: a foto do
+          lounge passou a terminar no MESMO pixel em que a faixa bege começa
+          (medido: 0px a 1440/1728/1920 e 14px a 2560). Agora o respiro é da
+          própria seção. */
     /* seção 2 — texto à esquerda, imagem sangrando à direita */
     .split--natureza{
       grid-template-columns:394fr 776fr;
-      gap:3.55%;
-      padding:5.95% 2.66% 0 13.8%;
+      gap:min(3.55%,52px);
+      padding:min(5.95%,87px) clamp(40px,2.66%,48px) min(6.4%,94px) min(13.8%,202px);
     }
     /* seção 3 — imagem sangrando à esquerda, texto à direita */
     .split--invista{
       grid-template-columns:635fr 421fr;
-      gap:11.54%;
-      padding:7.1% 13.87% 8% 2.39%;
+      gap:min(11.54%,169px);
+      padding:min(7.1%,104px) min(13.87%,203px) min(8%,117px) clamp(40px,2.39%,48px);
     }
     .split img{display:block;width:100%;height:auto}
 
@@ -425,8 +451,19 @@
       margin-bottom:1.6em;
     }
     .texto-secao{font-size:clamp(14px,1.03vw,16px);line-height:1.5}
+    /* Coluna de texto da Localização alinhada à direita — a coluna INTEIRA.
+       Até 2026-09-05 só o H2 e o parágrafo estavam aqui; o kicker, o
+       endereço, a linha do Maps e a lista de pontos ficavam à esquerda, num
+       bloco que o resto da coluna alinhava à direita. O reset de mobile logo
+       abaixo (`@media (max-width:979.98px)`) já listava kicker/endereço/Maps
+       desde a 86-13 — ou seja, o alinhamento à direita deles era o esperado e
+       só faltava a regra de desktop. */
+    .split--invista .kicker,
     .split--invista .titulo-secao,
-    .split--invista .texto-secao{text-align:right}
+    .split--invista .texto-secao,
+    .split--invista .loc-endereco,
+    .split--invista .loc-maps-linha,
+    .split--invista .loc-pontos{text-align:right}
 
     /* Rótulo curto maiúsculo acima do H2, comum às seções novas (Story 86-13).
        As 3 seções que já existiam não tinham nenhum — "invista" ganha o seu na
@@ -534,6 +571,12 @@
       content:"";position:absolute;left:0;top:1.05em;
       width:8px;height:8px;border-radius:50%;background:var(--dourado);
     }
+    /* Com a coluna alinhada à direita, o ponto dourado troca de lado junto
+       com o texto — senão ele fica órfão, a 20px de distância da palavra que
+       marca. É espelhamento, não remoção: o ponto continua visível e na mesma
+       cor. O reset para a esquerda está no breakpoint de mobile. */
+    .split--invista .loc-pontos li{padding:9px 20px 9px 0}
+    .split--invista .loc-pontos li::before{left:auto;right:0}
 
     /* ================= SEÇÃO NOVA — BANDA CTA (AC7) =================
        O fundo reaproveita `galeria-05`, que a Galeria já referencia por
@@ -665,6 +708,23 @@
     @media (min-width:980px){
       .hero-img{aspect-ratio:2928/1802}
       .hero-form--estatico{display:none}
+
+      /* Recuo lateral da `.lazer` no desktop (ajuste de 2026-09-05).
+         A seção nasceu na 86-13 como cópia do padrão full-bleed da `.amen`
+         da landing irmã: grid `1fr 1fr` sem `max-width` e sem padding, então
+         a foto do térreo encostava na borda DIREITA da viewport em todas as
+         larguras (medido `0px` de 390 a 2560) e a 2560px virava uma foto de
+         1280px sangrando na tela inteira. O padrão é intencional na irmã, mas
+         a decisão aqui foi conter: o mesmo `max-width:var(--max)` das outras
+         seções (`.split`, `.visao-wrap`, `.galeria-wrap`, `.sobre-grid`) mais
+         o piso lateral de 40px das `.split` — assim a foto da Lazer e a foto
+         da natureza terminam na MESMA linha vertical.
+         Só no desktop: no mobile a `.lazer` empilha e a foto de borda a borda
+         continua correta (e o `.lazer-txt` já tem seu próprio padding). */
+      .lazer{
+        max-width:var(--max);margin:0 auto;
+        padding:0 clamp(40px,2.66%,48px);
+      }
     }
 
     /* ================= MOBILE / TABLET =================
@@ -689,7 +749,12 @@
       .split--invista .texto-secao,
       .split--invista .kicker,
       .split--invista .loc-endereco,
-      .split--invista .loc-maps-linha{text-align:left}
+      .split--invista .loc-maps-linha,
+      .split--invista .loc-pontos{text-align:left}
+      /* Par do espelhamento do desktop: em coluna estreita a lista volta a
+         alinhar à esquerda, então o ponto dourado volta para a esquerda. */
+      .split--invista .loc-pontos li{padding:9px 0 9px 20px}
+      .split--invista .loc-pontos li::before{left:0;right:auto}
       .titulo-secao{margin-bottom:1em}
 
       /* --- Story 86-13: seções novas no mobile/tablet ------------------- */
